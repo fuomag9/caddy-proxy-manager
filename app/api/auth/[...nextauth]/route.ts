@@ -3,18 +3,13 @@ import type { NextRequest } from "next/server";
 import { handlers } from "@/src/lib/auth";
 import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
 
+export const dynamic = 'force-dynamic';
+
 export const { GET } = handlers;
 
 function getClientIp(request: NextRequest): string {
-  // Use Next.js request.ip which provides the actual client IP
-  // This is more secure than trusting X-Forwarded-For header
-  const ip = request.ip;
-  if (ip) {
-    return ip;
-  }
-
-  // Fallback to headers only if request.ip is not available
-  // This may happen in development environments
+  // Get client IP from headers
+  // In production, ensure your reverse proxy (Caddy) sets these headers correctly
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
     return forwarded.split(",")[0]?.trim() || "unknown";
