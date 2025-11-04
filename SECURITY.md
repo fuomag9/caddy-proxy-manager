@@ -30,11 +30,10 @@ We will respond within 48 hours and provide regular updates on the fix progress.
 Our CI/CD pipeline implements multiple security layers:
 
 1. **Fork PR Protection**: Pull requests from forks require manual approval (via `safe-to-build` label) before builds run
-2. **Vulnerability Scanning**: All images are scanned with Trivy for CRITICAL and HIGH vulnerabilities
-3. **SBOM Generation**: Software Bill of Materials is generated for all builds
-4. **Provenance Attestation**: Build provenance is recorded for supply chain security
-5. **Limited Permissions**: Workflows use minimal required permissions
-6. **No Push from PRs**: Pull requests only build images locally, never push to registry
+2. **SBOM Generation**: Software Bill of Materials is generated for all builds
+3. **Provenance Attestation**: Build provenance is recorded for supply chain security
+4. **Limited Permissions**: Workflows use minimal required permissions
+5. **No Push from PRs**: Pull requests only build images locally, never push to registry
 
 ### Container Security
 
@@ -64,10 +63,8 @@ When contributing:
 
 Our repository includes:
 
-- **Trivy vulnerability scanning** on every build
 - **Dependabot** for dependency updates
 - **GitHub Security Advisories** monitoring
-- **SARIF upload** to GitHub Security tab for vulnerability tracking
 
 ## Safe-to-Build Label
 

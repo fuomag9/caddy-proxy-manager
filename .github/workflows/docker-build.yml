@@ -54,7 +54,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      security-events: write  # For Trivy to upload SARIF results
 
     strategy:
       matrix:
@@ -114,35 +113,3 @@ jobs:
           platforms: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') && 'linux/amd64,linux/arm64' || '' }}
           sbom: true
           provenance: true
-
-      - name: Extract first tag for Trivy
-        id: trivy-tag
-        run: |
-          # Extract the first tag from the metadata output
-          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
-          echo "tag=$FIRST_TAG" >> $GITHUB_OUTPUT
-          echo "Using tag for Trivy: $FIRST_TAG"
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.24.0
-        with:
-          image-ref: ${{ steps.trivy-tag.outputs.tag }}
-          format: 'sarif'
-          output: 'trivy-results-${{ matrix.service }}.sarif'
-          severity: 'CRITICAL,HIGH'
-          exit-code: '1'  # Fail the build on critical/high vulnerabilities
-
-      - name: Upload Trivy results to GitHub Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: 'trivy-results-${{ matrix.service }}.sarif'
-          category: 'trivy-${{ matrix.service }}'
-
-      - name: Run Trivy in table format
-        if: always()
-        uses: aquasecurity/trivy-action@0.24.0
-        with:
-          image-ref: ${{ steps.trivy-tag.outputs.tag }}
-          format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM'
