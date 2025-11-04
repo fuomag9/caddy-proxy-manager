@@ -191,20 +191,29 @@ function writeCertificateFiles(cert: CertificateRow) {
 
 function collectCertificateUsage(rows: ProxyHostRow[], certificates: Map<number, CertificateRow>) {
   const usage = new Map<number, CertificateUsage>();
+  const autoManagedDomains = new Set<string>();
 
   for (const row of rows) {
-    if (!row.enabled || !row.certificate_id) {
-      continue;
-    }
-
-    const cert = certificates.get(row.certificate_id);
-    if (!cert) {
+    if (!row.enabled) {
       continue;
     }
 
     const domains = parseJson<string[]>(row.domains, []).map((domain) => domain?.trim().toLowerCase());
     const filteredDomains = domains.filter((domain): domain is string => Boolean(domain));
     if (filteredDomains.length === 0) {
+      continue;
+    }
+
+    // Handle auto-managed certificates (certificate_id is null)
+    if (!row.certificate_id) {
+      for (const domain of filteredDomains) {
+        autoManagedDomains.add(domain);
+      }
+      continue;
+    }
+
+    const cert = certificates.get(row.certificate_id);
+    if (!cert) {
       continue;
     }
 
@@ -221,13 +230,14 @@ function collectCertificateUsage(rows: ProxyHostRow[], certificates: Map<number,
     }
   }
 
-  return usage;
+  return { usage, autoManagedDomains };
 }
 
 function buildProxyRoutes(
   rows: ProxyHostRow[],
   accessAccounts: Map<number, AccessListEntryRow[]>,
-  tlsReadyCertificates: Set<number>
+  tlsReadyCertificates: Set<number>,
+  autoManagedDomains: Set<string>
 ): CaddyHttpRoute[] {
   const routes: CaddyHttpRoute[] = [];
 
@@ -236,7 +246,11 @@ function buildProxyRoutes(
       continue;
     }
 
-    if (!row.certificate_id || !tlsReadyCertificates.has(row.certificate_id)) {
+    // Allow hosts with certificate_id = null (Caddy Auto) or with valid certificate IDs
+    const isAutoManaged = !row.certificate_id;
+    const hasValidCertificate = row.certificate_id && tlsReadyCertificates.has(row.certificate_id);
+
+    if (!isAutoManaged && !hasValidCertificate) {
       continue;
     }
 
@@ -471,10 +485,21 @@ function buildDeadRoutes(rows: DeadHostRow[]): CaddyHttpRoute[] {
 
 function buildTlsConnectionPolicies(
   usage: Map<number, CertificateUsage>,
-  managedCertificatesWithAutomation: Set<number>
+  managedCertificatesWithAutomation: Set<number>,
+  autoManagedDomains: Set<string>
 ) {
   const policies: Record<string, unknown>[] = [];
   const readyCertificates = new Set<number>();
+
+  // Add policy for auto-managed domains (certificate_id = null)
+  if (autoManagedDomains.size > 0) {
+    const domains = Array.from(autoManagedDomains);
+    policies.push({
+      match: {
+        sni: domains
+      }
+    });
+  }
 
   for (const [id, entry] of usage.entries()) {
     const domains = Array.from(entry.domains);
@@ -518,13 +543,16 @@ function buildTlsConnectionPolicies(
 
 async function buildTlsAutomation(
   usage: Map<number, CertificateUsage>,
+  autoManagedDomains: Set<string>,
   options: { acmeEmail?: string }
 ) {
   const managedEntries = Array.from(usage.values()).filter(
     (entry) => entry.certificate.type === "managed" && Boolean(entry.certificate.auto_renew)
   );
 
-  if (managedEntries.length === 0) {
+  const hasAutoManagedDomains = autoManagedDomains.size > 0;
+
+  if (managedEntries.length === 0 && !hasAutoManagedDomains) {
     return {
       managedCertificateIds: new Set<number>()
     };
@@ -536,6 +564,40 @@ async function buildTlsAutomation(
   const managedCertificateIds = new Set<number>();
   const policies: Record<string, unknown>[] = [];
 
+  // Add policy for auto-managed domains (certificate_id = null)
+  if (hasAutoManagedDomains) {
+    const subjects = Array.from(autoManagedDomains);
+
+    // Build issuer configuration
+    const issuer: Record<string, unknown> = {
+      module: "acme"
+    };
+
+    if (options.acmeEmail) {
+      issuer.email = options.acmeEmail;
+    }
+
+    // Use DNS-01 challenge if Cloudflare is configured, otherwise use HTTP-01
+    if (hasCloudflare) {
+      const providerConfig: Record<string, string> = {
+        name: "cloudflare",
+        api_token: cloudflare.apiToken
+      };
+
+      issuer.challenges = {
+        dns: {
+          provider: providerConfig
+        }
+      };
+    }
+
+    policies.push({
+      subjects,
+      issuers: [issuer]
+    });
+  }
+
+  // Add policies for explicitly managed certificates
   for (const entry of managedEntries) {
     const subjects = Array.from(entry.domains);
     if (subjects.length === 0) {
@@ -555,13 +617,10 @@ async function buildTlsAutomation(
 
     // Use DNS-01 challenge if Cloudflare is configured, otherwise use HTTP-01
     if (hasCloudflare) {
-      // The caddy-dns/cloudflare module only accepts api_token
-      // See: https://github.com/caddy-dns/cloudflare
       const providerConfig: Record<string, string> = {
         name: "cloudflare",
         api_token: cloudflare.apiToken
       };
-      // Note: zone_id and account_id are not supported by caddy-dns/cloudflare module
 
       issuer.challenges = {
         dns: {
@@ -569,7 +628,6 @@ async function buildTlsAutomation(
         }
       };
     }
-    // If no Cloudflare, Caddy will use HTTP-01 challenge by default
 
     policies.push({
       subjects,
@@ -718,18 +776,19 @@ async function buildCaddyDocument() {
     return map;
   }, new Map());
 
-  const certificateUsage = collectCertificateUsage(proxyHostRows, certificateMap);
+  const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
   const generalSettings = await getGeneralSettings();
-  const { tlsApp, managedCertificateIds } = await buildTlsAutomation(certificateUsage, {
+  const { tlsApp, managedCertificateIds } = await buildTlsAutomation(certificateUsage, autoManagedDomains, {
     acmeEmail: generalSettings?.acmeEmail
   });
   const { policies: tlsConnectionPolicies, readyCertificates } = buildTlsConnectionPolicies(
     certificateUsage,
-    managedCertificateIds
+    managedCertificateIds,
+    autoManagedDomains
   );
 
   const httpRoutes: CaddyHttpRoute[] = [
-    ...buildProxyRoutes(proxyHostRows, accessMap, readyCertificates),
+    ...buildProxyRoutes(proxyHostRows, accessMap, readyCertificates, autoManagedDomains),
     ...buildRedirectRoutes(redirectHostRows),
     ...buildDeadRoutes(deadHostRows)
   ];
