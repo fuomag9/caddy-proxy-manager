@@ -40,12 +40,16 @@ jobs:
           fi
 
   build-and-push:
-    needs: [security-check]
-    # Only run on non-fork PRs, or if manually approved (has 'safe-to-build' label)
+    needs: security-check
+    # Run on push/tag events (security-check is skipped but that's ok)
+    # For PRs, only run on non-fork PRs or manually approved fork PRs
     if: |
-      github.event_name != 'pull_request' ||
-      needs.security-check.outputs.is_fork == 'false' ||
-      (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe-to-build'))
+      always() && (
+        github.event_name == 'push' ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'pull_request' && needs.security-check.result == 'success' && needs.security-check.outputs.is_fork == 'false') ||
+        (github.event_name == 'pull_request_target' && contains(github.event.pull_request.labels.*.name, 'safe-to-build'))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -106,7 +110,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          # Only specify platforms for push (multi-platform), not for load (single-platform only)
+          platforms: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') && 'linux/amd64,linux/arm64' || '' }}
           sbom: true
           provenance: true
 
