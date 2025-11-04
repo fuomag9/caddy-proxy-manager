@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-FROM node:20-slim AS base
+FROM node:25-slim AS base
 WORKDIR /app
 
 FROM base AS deps
