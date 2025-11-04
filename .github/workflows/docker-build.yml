@@ -106,14 +106,22 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          platforms: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           sbom: true
           provenance: true
+
+      - name: Extract first tag for Trivy
+        id: trivy-tag
+        run: |
+          # Extract the first tag from the metadata output
+          FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          echo "tag=$FIRST_TAG" >> $GITHUB_OUTPUT
+          echo "Using tag for Trivy: $FIRST_TAG"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: ${{ steps.meta.outputs.tags }}
+          image-ref: ${{ steps.trivy-tag.outputs.tag }}
           format: 'sarif'
           output: 'trivy-results-${{ matrix.service }}.sarif'
           severity: 'CRITICAL,HIGH'
@@ -130,6 +138,6 @@ jobs:
         if: always()
         uses: aquasecurity/trivy-action@0.24.0
         with:
-          image-ref: ${{ steps.meta.outputs.tags }}
+          image-ref: ${{ steps.trivy-tag.outputs.tag }}
           format: 'table'
           severity: 'CRITICAL,HIGH,MEDIUM'
