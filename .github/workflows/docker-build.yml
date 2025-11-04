@@ -111,5 +111,6 @@ jobs:
           cache-to: type=gha,mode=max
           # Only specify platforms for push (multi-platform), not for load (single-platform only)
           platforms: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') && 'linux/amd64,linux/arm64' || '' }}
-          sbom: true
-          provenance: true
+          # SBOM and provenance create manifest lists, incompatible with load (PRs)
+          sbom: ${{ github.event_name != 'pull_request' && github.event_name != 'pull_request_target' }}
+          provenance: ${{ github.event_name != 'pull_request' && github.event_name != 'pull_request_target' }}
