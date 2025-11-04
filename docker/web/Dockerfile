@@ -21,7 +21,8 @@ ENV DATABASE_PATH=/tmp/build.db
 ENV DATABASE_URL=file:/tmp/build.db
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate
+# Build the application (includes prisma generate as per Prisma best practices)
+# Real Prisma client will be regenerated at runtime to ensure engine availability
 RUN npx prisma db push --skip-generate
 RUN npm run build && rm -f /tmp/build.db
 
@@ -30,8 +31,11 @@ ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
 
-# Install gosu for privilege dropping
-RUN apt-get update && apt-get install -y --no-install-recommends gosu && rm -rf /var/lib/apt/lists/*
+# Install gosu for privilege dropping and openssl for Prisma
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gosu \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 1001 nodejs && useradd -r -u 1001 -g nodejs nextjs
 

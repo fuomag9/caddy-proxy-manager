@@ -18,6 +18,16 @@ gosu nextjs sh -c '
     # Set npm cache to writable directory
     export NPM_CONFIG_CACHE=/tmp/.npm
 
+    # Generate real Prisma client at runtime (replaces build-time stub)
+    echo "Generating Prisma client..."
+    npx prisma generate || {
+        echo "Warning: Prisma generate failed, attempting with checksum ignore..."
+        PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 npx prisma generate || {
+            echo "Error: Failed to generate Prisma client"
+            exit 1
+        }
+    }
+
     if [ ! -f "$DB_PATH" ]; then
         echo "Database not found, initializing..."
         npx prisma db push --skip-generate
