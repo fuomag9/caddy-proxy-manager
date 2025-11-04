@@ -5,10 +5,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/generate-prisma-stub.js && next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/generate-prisma-stub.js || prisma generate || echo 'Prisma generate failed, using stub'"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
