@@ -33,9 +33,8 @@ Our CI/CD pipeline implements multiple security layers:
 2. **Vulnerability Scanning**: All images are scanned with Trivy for CRITICAL and HIGH vulnerabilities
 3. **SBOM Generation**: Software Bill of Materials is generated for all builds
 4. **Provenance Attestation**: Build provenance is recorded for supply chain security
-5. **SHA-Pinned Actions**: All GitHub Actions are pinned to specific SHA commits
-6. **Limited Permissions**: Workflows use minimal required permissions
-7. **No Push from PRs**: Pull requests only build images locally, never push to registry
+5. **Limited Permissions**: Workflows use minimal required permissions
+6. **No Push from PRs**: Pull requests only build images locally, never push to registry
 
 ### Container Security
 
