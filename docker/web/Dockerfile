@@ -19,6 +19,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Set a temporary database path for build
 ENV DATABASE_PATH=/tmp/build.db
 ENV DATABASE_URL=file:/tmp/build.db
+# Install openssl for Prisma query engine
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Build the application (includes prisma generate as per Prisma best practices)
