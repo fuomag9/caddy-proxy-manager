@@ -14,6 +14,10 @@ chown -R nextjs:nodejs "$DB_DIR"
 # Ensure node_modules is owned by nextjs user for Prisma client generation
 chown -R nextjs:nodejs /app/node_modules
 
+# Remove old Prisma client to avoid permission issues during regeneration
+echo "Cleaning old Prisma client..."
+rm -rf /app/node_modules/.prisma/client
+
 # Switch to nextjs user and initialize database if needed
 gosu nextjs sh -c '
     DB_PATH="'"$DB_PATH"'"
