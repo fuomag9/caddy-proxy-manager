@@ -9,8 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    openssl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
+# Copy prisma schema before npm ci so postinstall can generate if needed
+COPY prisma ./prisma
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 FROM base AS builder
@@ -25,8 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Build the application (includes prisma generate as per Prisma best practices)
-# Real Prisma client will be regenerated at runtime to ensure engine availability
+# Build the application (prisma client already generated in deps stage with engines)
+# Use db push to create schema without regenerating client
 RUN npx prisma db push --skip-generate
 RUN npm run build && rm -f /tmp/build.db
 
