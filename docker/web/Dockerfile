@@ -13,9 +13,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
-# Copy prisma schema before npm ci so postinstall can generate if needed
+# Copy prisma schema before npm ci so postinstall can generate
 COPY prisma ./prisma
+# Set temporary DATABASE_URL for Prisma CLI
+ENV DATABASE_URL=file:/tmp/dev.db
+# Install dependencies (postinstall will run prisma generate)
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Explicitly verify Prisma client is generated
+RUN npx prisma generate
 
 FROM base AS builder
 ENV NODE_ENV=production
@@ -29,9 +34,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Build the application (prisma client already generated in deps stage with engines)
-# Use db push to create schema without regenerating client
-RUN npx prisma db push --skip-generate
+# Generate Prisma client (ensures it's available in this stage)
+RUN npx prisma generate
+# Push schema to temporary database for build-time data access
+RUN npx prisma db push
+# Build the Next.js application
 RUN npm run build && rm -f /tmp/build.db
 
 FROM base AS runner
