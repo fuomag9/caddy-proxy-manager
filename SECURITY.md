@@ -37,7 +37,7 @@ Our CI/CD pipeline implements multiple security layers:
 
 ### Container Security
 
-- Multi-architecture support (amd64, arm64)
+- Verified amd64 image builds
 - Regular base image updates
 - Minimal attack surface
 - Non-root user execution where possible

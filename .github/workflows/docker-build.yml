@@ -109,8 +109,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # Only specify platforms for push (multi-platform), not for load (single-platform only)
-          platforms: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') && 'linux/amd64,linux/arm64' || '' }}
+          # Build amd64 images on pushes; PR builds stay single-platform
+          platforms: ${{ (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') && 'linux/amd64' || '' }}
           # SBOM and provenance create manifest lists, incompatible with load (PRs)
           sbom: ${{ github.event_name != 'pull_request' && github.event_name != 'pull_request_target' }}
           provenance: ${{ github.event_name != 'pull_request' && github.event_name != 'pull_request_target' }}
