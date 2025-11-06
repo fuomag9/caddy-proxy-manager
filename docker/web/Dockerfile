@@ -9,9 +9,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    openssl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+# Set Prisma to download engines during install and ignore checksum errors
+ENV PRISMA_CLI_BINARY_TARGETS=native,debian-openssl-3.0.x
+ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
 COPY package.json package-lock.json* ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Explicitly generate Prisma client with engines during deps stage
+COPY prisma ./prisma
+RUN npx prisma generate
 
 FROM base AS builder
 ENV NODE_ENV=production
@@ -19,14 +27,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Set a temporary database path for build
 ENV DATABASE_PATH=/tmp/build.db
 ENV DATABASE_URL=file:/tmp/build.db
+# Skip Prisma engine checksum validation and downloads (engines already bundled from deps stage)
+ENV PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
 # Install openssl for Prisma query engine
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Build the application (includes prisma generate as per Prisma best practices)
-# Real Prisma client will be regenerated at runtime to ensure engine availability
+# Build the application (prisma client already generated in deps stage with engines)
 RUN npx prisma db push --skip-generate
 RUN npm run build && rm -f /tmp/build.db
 
