@@ -408,15 +408,68 @@ function buildProxyRoutes(
     }
 
     if (authentik) {
+      // Build handle_response routes for copying headers on 2xx status
+      const handleResponseRoutes = [
+        {
+          handle: [{ handler: "vars" }]
+        }
+      ];
+
+      // Add header copying for each configured header
+      for (const headerName of authentik.copyHeaders) {
+        handleResponseRoutes.push({
+          handle: [
+            {
+              handler: "headers",
+              request: {
+                set: {
+                  [headerName]: [`{http.reverse_proxy.header.${headerName}}`]
+                }
+              }
+            }
+          ],
+          match: [
+            {
+              not: [
+                {
+                  vars: {
+                    [`{http.reverse_proxy.header.${headerName}}`]: [""]
+                  }
+                }
+              ]
+            }
+          ]
+        });
+      }
+
+      // Create the forward auth reverse_proxy handler
       handlers.push({
-        handler: "forward_auth",
+        handler: "reverse_proxy",
         upstreams: [
           {
             dial: authentik.outpostUpstream
           }
         ],
-        uri: authentik.authEndpoint,
-        copy_headers: authentik.copyHeaders,
+        rewrite: {
+          method: "GET",
+          uri: authentik.authEndpoint
+        },
+        headers: {
+          request: {
+            set: {
+              "X-Forwarded-Method": ["{http.request.method}"],
+              "X-Forwarded-Uri": ["{http.request.uri}"]
+            }
+          }
+        },
+        handle_response: [
+          {
+            match: {
+              status_code: [2]
+            },
+            routes: handleResponseRoutes
+          }
+        ],
         trusted_proxies: authentik.trustedProxies
       });
     }
