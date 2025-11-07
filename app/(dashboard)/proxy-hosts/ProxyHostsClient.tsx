@@ -113,6 +113,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists }: P
               <TableCell sx={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.7)" }}>Name</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.7)" }}>Domains</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.7)" }}>Upstreams</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.7)" }}>Certificate</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.7)" }}>Status</TableCell>
               <TableCell align="right" sx={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.7)" }}>Actions</TableCell>
             </TableRow>
@@ -120,79 +121,91 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists }: P
           <TableBody>
             {hosts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} align="center" sx={{ py: 6, color: "text.secondary" }}>
+                <TableCell colSpan={6} align="center" sx={{ py: 6, color: "text.secondary" }}>
                   No proxy hosts configured. Click "Create Host" to add one.
                 </TableCell>
               </TableRow>
             ) : (
-              hosts.map((host) => (
-                <TableRow
-                  key={host.id}
-                  sx={{
-                    "&:hover": { bgcolor: "rgba(255, 255, 255, 0.02)" }
-                  }}
-                >
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: "rgba(255, 255, 255, 0.9)" }}>
-                      {host.name}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.7)", fontSize: "0.8125rem" }}>
-                      {host.domains.slice(0, 2).join(", ")}
-                      {host.domains.length > 2 && ` +${host.domains.length - 2} more`}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.7)", fontSize: "0.8125rem" }}>
-                      {host.upstreams.slice(0, 2).join(", ")}
-                      {host.upstreams.length > 2 && ` +${host.upstreams.length - 2} more`}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={host.enabled ? "Enabled" : "Disabled"}
-                      size="small"
-                      sx={{
-                        bgcolor: host.enabled ? "rgba(34, 197, 94, 0.15)" : "rgba(148, 163, 184, 0.15)",
-                        color: host.enabled ? "rgba(34, 197, 94, 1)" : "rgba(148, 163, 184, 0.8)",
-                        border: "1px solid",
-                        borderColor: host.enabled ? "rgba(34, 197, 94, 0.3)" : "rgba(148, 163, 184, 0.3)",
-                        fontWeight: 500,
-                        fontSize: "0.75rem"
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                      <Tooltip title="Edit">
-                        <IconButton
-                          size="small"
-                          onClick={() => setEditHost(host)}
-                          sx={{
-                            color: "rgba(99, 102, 241, 0.8)",
-                            "&:hover": { bgcolor: "rgba(99, 102, 241, 0.1)" }
-                          }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton
-                          size="small"
-                          onClick={() => setDeleteHost(host)}
-                          sx={{
-                            color: "rgba(239, 68, 68, 0.8)",
-                            "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" }
-                          }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))
+              hosts.map((host) => {
+                const certificate = host.certificate_id
+                  ? certificates.find(c => c.id === host.certificate_id)
+                  : null;
+                const certName = certificate?.name ?? "Managed by Caddy (Auto)";
+
+                return (
+                  <TableRow
+                    key={host.id}
+                    sx={{
+                      "&:hover": { bgcolor: "rgba(255, 255, 255, 0.02)" }
+                    }}
+                  >
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: "rgba(255, 255, 255, 0.9)" }}>
+                        {host.name}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.7)", fontSize: "0.8125rem" }}>
+                        {host.domains.slice(0, 2).join(", ")}
+                        {host.domains.length > 2 && ` +${host.domains.length - 2} more`}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.7)", fontSize: "0.8125rem" }}>
+                        {host.upstreams.slice(0, 2).join(", ")}
+                        {host.upstreams.length > 2 && ` +${host.upstreams.length - 2} more`}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.7)", fontSize: "0.8125rem" }}>
+                        {certName}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={host.enabled ? "Enabled" : "Disabled"}
+                        size="small"
+                        sx={{
+                          bgcolor: host.enabled ? "rgba(34, 197, 94, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                          color: host.enabled ? "rgba(34, 197, 94, 1)" : "rgba(148, 163, 184, 0.8)",
+                          border: "1px solid",
+                          borderColor: host.enabled ? "rgba(34, 197, 94, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                          fontWeight: 500,
+                          fontSize: "0.75rem"
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        <Tooltip title="Edit">
+                          <IconButton
+                            size="small"
+                            onClick={() => setEditHost(host)}
+                            sx={{
+                              color: "rgba(99, 102, 241, 0.8)",
+                              "&:hover": { bgcolor: "rgba(99, 102, 241, 0.1)" }
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            onClick={() => setDeleteHost(host)}
+                            sx={{
+                              color: "rgba(239, 68, 68, 0.8)",
+                              "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" }
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

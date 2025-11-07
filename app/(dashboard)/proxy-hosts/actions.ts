@@ -120,8 +120,12 @@ export async function updateProxyHostAction(
         name: formData.get("name") ? String(formData.get("name")) : undefined,
         domains: formData.get("domains") ? parseCsv(formData.get("domains")) : undefined,
         upstreams: formData.get("upstreams") ? parseCsv(formData.get("upstreams")) : undefined,
-        certificate_id: formData.get("certificate_id") ? Number(formData.get("certificate_id")) : undefined,
-        access_list_id: formData.get("access_list_id") ? Number(formData.get("access_list_id")) : undefined,
+        certificate_id: formData.has("certificate_id")
+          ? (formData.get("certificate_id") ? Number(formData.get("certificate_id")) : null)
+          : undefined,
+        access_list_id: formData.has("access_list_id")
+          ? (formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null)
+          : undefined,
         hsts_subdomains: boolField("hsts_subdomains"),
         skip_https_hostname_validation: boolField("skip_https_hostname_validation"),
         enabled: boolField("enabled"),
