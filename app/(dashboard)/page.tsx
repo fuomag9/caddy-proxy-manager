@@ -1,6 +1,15 @@
-import prisma from "@/src/lib/db";
+import db, { toIso } from "@/src/lib/db";
 import { requireUser } from "@/src/lib/auth";
 import OverviewClient from "./OverviewClient";
+import {
+  accessLists,
+  auditEvents,
+  certificates,
+  deadHosts,
+  proxyHosts,
+  redirectHosts
+} from "@/src/lib/db/schema";
+import { count, desc } from "drizzle-orm";
 
 type StatCard = {
   label: string;
@@ -10,14 +19,19 @@ type StatCard = {
 };
 
 async function loadStats(): Promise<StatCard[]> {
-  const [proxyHostsCount, redirectHostsCount, deadHostsCount, certificatesCount, accessListsCount] =
+  const [proxyHostCountResult, redirectHostCountResult, deadHostCountResult, certificateCountResult, accessListCountResult] =
     await Promise.all([
-      prisma.proxyHost.count(),
-      prisma.redirectHost.count(),
-      prisma.deadHost.count(),
-      prisma.certificate.count(),
-      prisma.accessList.count()
+      db.select({ value: count() }).from(proxyHosts),
+      db.select({ value: count() }).from(redirectHosts),
+      db.select({ value: count() }).from(deadHosts),
+      db.select({ value: count() }).from(certificates),
+      db.select({ value: count() }).from(accessLists)
     ]);
+  const proxyHostsCount = proxyHostCountResult[0]?.value ?? 0;
+  const redirectHostsCount = redirectHostCountResult[0]?.value ?? 0;
+  const deadHostsCount = deadHostCountResult[0]?.value ?? 0;
+  const certificatesCount = certificateCountResult[0]?.value ?? 0;
+  const accessListsCount = accessListCountResult[0]?.value ?? 0;
 
   return [
     { label: "Proxy Hosts", icon: "⇄", count: proxyHostsCount, href: "/proxy-hosts" },
@@ -31,24 +45,24 @@ async function loadStats(): Promise<StatCard[]> {
 export default async function OverviewPage() {
   const session = await requireUser();
   const stats = await loadStats();
-  const recentEvents = await prisma.auditEvent.findMany({
-    select: {
-      action: true,
-      entityType: true,
-      summary: true,
-      createdAt: true
-    },
-    orderBy: { createdAt: "desc" },
-    take: 8
-  });
+  const recentEvents = await db
+    .select({
+      action: auditEvents.action,
+      entityType: auditEvents.entityType,
+      summary: auditEvents.summary,
+      createdAt: auditEvents.createdAt
+    })
+    .from(auditEvents)
+    .orderBy(desc(auditEvents.createdAt))
+    .limit(8);
 
   return (
     <OverviewClient
       userName={session.user.name ?? session.user.email ?? "Admin"}
       stats={stats}
-      recentEvents={recentEvents.map((event: { action: string; entityType: string; summary: string | null; createdAt: Date }) => ({
+      recentEvents={recentEvents.map((event) => ({
         summary: event.summary ?? `${event.action} on ${event.entityType}`,
-        created_at: event.createdAt.toISOString()
+        created_at: toIso(event.createdAt)!
       }))}
     />
   );

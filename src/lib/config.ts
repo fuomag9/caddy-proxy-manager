@@ -1,62 +1,127 @@
 const DEV_SECRET = "dev-secret-change-in-production-12345678901234567890123456789012";
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin";
-const DISALLOWED_SESSION_SECRETS = new Set([DEV_SECRET, "change-me-in-production"]);
+const DISALLOWED_SESSION_SECRETS = new Set([
+  "change-me-in-production",
+  "dev-secret-change-in-production-12345678901234567890123456789012"
+]);
 const DEFAULT_CADDY_URL = process.env.NODE_ENV === "development" ? "http://localhost:2019" : "http://caddy:2019";
 const MIN_SESSION_SECRET_LENGTH = 32;
 const MIN_ADMIN_PASSWORD_LENGTH = 12;
 
 const isProduction = process.env.NODE_ENV === "production";
 const isNodeRuntime = process.env.NEXT_RUNTIME === "nodejs";
-const allowDevFallback = !isProduction || !isNodeRuntime;
-const isRuntimeProduction = isProduction && isNodeRuntime;
+const isDevelopment = process.env.NODE_ENV === "development";
+// Only enforce strict validation in actual production runtime, not during build
+const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build" || !process.env.NEXT_RUNTIME;
+const isRuntimeProduction = isProduction && isNodeRuntime && !isBuildPhase;
 
 function resolveSessionSecret(): string {
   const rawSecret = process.env.SESSION_SECRET ?? null;
   const secret = rawSecret?.trim();
 
-  // Always return a value (build phase needs this)
-  if (!secret) {
+  // In development, allow missing secret
+  if (isDevelopment && !secret) {
     return DEV_SECRET;
   }
 
-  // Only validate in actual runtime production (not during build)
+  // In production build phase, allow temporary value
+  if (isProduction && !isNodeRuntime && !secret) {
+    return DEV_SECRET;
+  }
+
+  // Use provided secret or dev secret
+  const finalSecret = secret || DEV_SECRET;
+
+  // Strict validation in production runtime
   if (isRuntimeProduction) {
+    if (!secret) {
+      throw new Error(
+        "SESSION_SECRET environment variable is required in production. " +
+        "Generate a secure secret with: openssl rand -base64 32"
+      );
+    }
     if (DISALLOWED_SESSION_SECRETS.has(secret)) {
-      throw new Error("SESSION_SECRET is using a known insecure placeholder value. Provide a unique secret.");
+      throw new Error(
+        "SESSION_SECRET is using a known insecure placeholder value. " +
+        "Generate a secure secret with: openssl rand -base64 32"
+      );
     }
     if (secret.length < MIN_SESSION_SECRET_LENGTH) {
-      throw new Error(`SESSION_SECRET must be at least ${MIN_SESSION_SECRET_LENGTH} characters long in production.`);
+      throw new Error(
+        `SESSION_SECRET must be at least ${MIN_SESSION_SECRET_LENGTH} characters long in production. ` +
+        "Generate a secure secret with: openssl rand -base64 32"
+      );
     }
   }
 
-  return secret;
+  return finalSecret;
 }
 
 function resolveAdminCredentials() {
-  const rawUsername = process.env.ADMIN_USERNAME ?? DEFAULT_ADMIN_USERNAME;
-  const rawPassword = process.env.ADMIN_PASSWORD ?? DEFAULT_ADMIN_PASSWORD;
-  const username = rawUsername?.trim();
-  const password = rawPassword?.trim();
+  const rawUsername = process.env.ADMIN_USERNAME ?? null;
+  const rawPassword = process.env.ADMIN_PASSWORD ?? null;
+  const username = rawUsername?.trim() || DEFAULT_ADMIN_USERNAME;
+  const password = rawPassword?.trim() || DEFAULT_ADMIN_PASSWORD;
 
-  // Always return values (build phase needs this)
-  if (!username || !password) {
-    return { username: DEFAULT_ADMIN_USERNAME, password: DEFAULT_ADMIN_PASSWORD };
+  // In development, allow defaults
+  if (isDevelopment) {
+    if (username === DEFAULT_ADMIN_USERNAME || password === DEFAULT_ADMIN_PASSWORD) {
+      console.log("Using default admin credentials for development (admin/admin)");
+    }
+    return { username, password };
   }
 
-  // Only validate in actual runtime production (not during build)
+  // In production build phase, allow defaults temporarily
+  if (isProduction && !isNodeRuntime) {
+    return { username, password };
+  }
+
+  // Strict validation in production runtime
   if (isRuntimeProduction) {
-    if (username === DEFAULT_ADMIN_USERNAME) {
-      throw new Error("ADMIN_USERNAME must be changed from the default value when running in production.");
+    const errors: string[] = [];
+
+    // Username validation - just ensure it's set
+    if (!rawUsername || !username) {
+      errors.push(
+        "ADMIN_USERNAME must be set"
+      );
     }
-    if (password === DEFAULT_ADMIN_PASSWORD) {
-      throw new Error("ADMIN_PASSWORD must be changed from the default value when running in production.");
+
+    // Password validation - strict requirements
+    if (!rawPassword || password === DEFAULT_ADMIN_PASSWORD) {
+      errors.push(
+        "ADMIN_PASSWORD must be set to a custom value in production (not 'admin')"
+      );
+    } else {
+      if (password.length < MIN_ADMIN_PASSWORD_LENGTH) {
+        errors.push(
+          `ADMIN_PASSWORD must be at least ${MIN_ADMIN_PASSWORD_LENGTH} characters long`
+        );
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password)) {
+        errors.push(
+          "ADMIN_PASSWORD must include both uppercase and lowercase letters"
+        );
+      }
+      if (!/[0-9]/.test(password)) {
+        errors.push(
+          "ADMIN_PASSWORD must include at least one number"
+        );
+      }
+      if (!/[^A-Za-z0-9]/.test(password)) {
+        errors.push(
+          "ADMIN_PASSWORD must include at least one special character"
+        );
+      }
     }
-    if (password.length < MIN_ADMIN_PASSWORD_LENGTH) {
-      throw new Error(`ADMIN_PASSWORD must be at least ${MIN_ADMIN_PASSWORD_LENGTH} characters long in production.`);
-    }
-    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
-      throw new Error("ADMIN_PASSWORD must include both letters and numbers for adequate complexity.");
+
+    if (errors.length > 0) {
+      throw new Error(
+        "Admin credentials validation failed:\n" +
+        errors.map(e => `  - ${e}`).join("\n") +
+        "\n\nSet secure credentials using ADMIN_USERNAME and ADMIN_PASSWORD environment variables."
+      );
     }
   }
 

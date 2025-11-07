@@ -1,4 +1,5 @@
-import prisma, { nowIso } from "./db";
+import db, { nowIso } from "./db";
+import { auditEvents } from "./db/schema";
 
 export function logAuditEvent(params: {
   userId?: number | null;
@@ -8,18 +9,18 @@ export function logAuditEvent(params: {
   summary?: string | null;
   data?: unknown;
 }) {
-  prisma.auditEvent.create({
-    data: {
+  try {
+    db.insert(auditEvents).values({
       userId: params.userId ?? null,
       action: params.action,
       entityType: params.entityType,
       entityId: params.entityId ?? null,
       summary: params.summary ?? null,
       data: params.data ? JSON.stringify(params.data) : null,
-      createdAt: new Date(nowIso())
-    }
-  }).catch((error: unknown) => {
+      createdAt: nowIso()
+    }).run();
+  } catch (error) {
     // Log error but don't throw to avoid breaking the main flow
     console.error("Failed to log audit event:", error);
-  });
+  }
 }

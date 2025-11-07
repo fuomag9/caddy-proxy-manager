@@ -13,14 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
-# Copy prisma schema before npm ci so postinstall can generate
-COPY prisma ./prisma
-# Set temporary DATABASE_URL for Prisma CLI
-ENV DATABASE_URL=file:/tmp/dev.db
-# Install dependencies (postinstall will run prisma generate)
+# Install dependencies
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
-# Explicitly verify Prisma client is generated
-RUN npx prisma generate
 
 FROM base AS builder
 ENV NODE_ENV=production
@@ -28,16 +22,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Set a temporary database path for build
 ENV DATABASE_PATH=/tmp/build.db
 ENV DATABASE_URL=file:/tmp/build.db
-# Install openssl for Prisma query engine
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssl \
-    && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Generate Prisma client (ensures it's available in this stage)
-RUN npx prisma generate
-# Push schema to temporary database for build-time data access
-RUN npx prisma db push
 # Build the Next.js application
 RUN npm run build && rm -f /tmp/build.db
 
@@ -46,10 +32,9 @@ ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
 
-# Install gosu for privilege dropping and openssl for Prisma
+# Install gosu for privilege dropping
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gosu \
-    openssl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 1001 nodejs && useradd -r -u 1001 -g nodejs nextjs
@@ -63,11 +48,8 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/.next/server/instrumentation.js ./.next/server/instrumentation.js
 COPY --from=builder /app/.next/server/instrumentation ./.next/server/instrumentation
 COPY --from=builder /app/.next/server/chunks/ ./.next/server/chunks/
-
-# Copy Prisma client
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder /app/prisma ./prisma
+# Copy Drizzle migrations for runtime schema management
+COPY --from=builder /app/drizzle ./drizzle
 
 # Create data directory for SQLite database
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data

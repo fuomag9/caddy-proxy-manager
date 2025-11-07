@@ -1,6 +1,8 @@
-import prisma, { nowIso } from "../db";
+import db, { nowIso, toIso } from "../db";
 import { logAuditEvent } from "../audit";
 import { applyCaddyConfig } from "../caddy";
+import { certificates } from "../db/schema";
+import { desc, eq } from "drizzle-orm";
 
 export type CertificateType = "managed" | "imported";
 
@@ -27,18 +29,9 @@ export type CertificateInput = {
   private_key_pem?: string | null;
 };
 
-function parseCertificate(row: {
-  id: number;
-  name: string;
-  type: string;
-  domainNames: string;
-  autoRenew: boolean;
-  providerOptions: string | null;
-  certificatePem: string | null;
-  privateKeyPem: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): Certificate {
+type CertificateRow = typeof certificates.$inferSelect;
+
+function parseCertificate(row: CertificateRow): Certificate {
   return {
     id: row.id,
     name: row.name,
@@ -48,21 +41,19 @@ function parseCertificate(row: {
     provider_options: row.providerOptions ? JSON.parse(row.providerOptions) : null,
     certificate_pem: row.certificatePem,
     private_key_pem: row.privateKeyPem,
-    created_at: row.createdAt.toISOString(),
-    updated_at: row.updatedAt.toISOString()
+    created_at: toIso(row.createdAt)!,
+    updated_at: toIso(row.updatedAt)!
   };
 }
 
 export async function listCertificates(): Promise<Certificate[]> {
-  const certificates = await prisma.certificate.findMany({
-    orderBy: { createdAt: "desc" }
-  });
-  return certificates.map(parseCertificate);
+  const rows = await db.select().from(certificates).orderBy(desc(certificates.createdAt));
+  return rows.map(parseCertificate);
 }
 
 export async function getCertificate(id: number): Promise<Certificate | null> {
-  const cert = await prisma.certificate.findUnique({
-    where: { id }
+  const cert = await db.query.certificates.findFirst({
+    where: (table, { eq }) => eq(table.id, id)
   });
   return cert ? parseCertificate(cert) : null;
 }
@@ -80,9 +71,10 @@ function validateCertificateInput(input: CertificateInput) {
 
 export async function createCertificate(input: CertificateInput, actorUserId: number) {
   validateCertificateInput(input);
-  const now = new Date(nowIso());
-  const record = await prisma.certificate.create({
-    data: {
+  const now = nowIso();
+  const [record] = await db
+    .insert(certificates)
+    .values({
       name: input.name.trim(),
       type: input.type,
       domainNames: JSON.stringify(
@@ -95,8 +87,13 @@ export async function createCertificate(input: CertificateInput, actorUserId: nu
       createdAt: now,
       updatedAt: now,
       createdBy: actorUserId
-    }
-  });
+    })
+    .returning();
+
+  if (!record) {
+    throw new Error("Failed to create certificate");
+  }
+
   logAuditEvent({
     userId: actorUserId,
     action: "create",
@@ -126,10 +123,10 @@ export async function updateCertificate(id: number, input: Partial<CertificateIn
 
   validateCertificateInput(merged);
 
-  const now = new Date(nowIso());
-  await prisma.certificate.update({
-    where: { id },
-    data: {
+  const now = nowIso();
+  await db
+    .update(certificates)
+    .set({
       name: merged.name.trim(),
       type: merged.type,
       domainNames: JSON.stringify(Array.from(new Set(merged.domain_names))),
@@ -138,8 +135,8 @@ export async function updateCertificate(id: number, input: Partial<CertificateIn
       certificatePem: merged.certificate_pem ?? null,
       privateKeyPem: merged.private_key_pem ?? null,
       updatedAt: now
-    }
-  });
+    })
+    .where(eq(certificates.id, id));
 
   logAuditEvent({
     userId: actorUserId,
@@ -158,9 +155,7 @@ export async function deleteCertificate(id: number, actorUserId: number) {
     throw new Error("Certificate not found");
   }
 
-  await prisma.certificate.delete({
-    where: { id }
-  });
+  await db.delete(certificates).where(eq(certificates.id, id));
   logAuditEvent({
     userId: actorUserId,
     action: "delete",

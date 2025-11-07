@@ -1,4 +1,6 @@
-import prisma, { nowIso } from "../db";
+import db, { nowIso, toIso } from "../db";
+import { users } from "../db/schema";
+import { and, asc, count, eq } from "drizzle-orm";
 
 export type User = {
   id: number;
@@ -14,19 +16,9 @@ export type User = {
   updated_at: string;
 };
 
-function parseDbUser(user: {
-  id: number;
-  email: string;
-  name: string | null;
-  passwordHash: string | null;
-  role: string;
-  provider: string;
-  subject: string;
-  avatarUrl: string | null;
-  status: string;
-  createdAt: Date;
-  updatedAt: Date;
-}): User {
+type DbUser = typeof users.$inferSelect;
+
+function parseDbUser(user: DbUser): User {
   return {
     id: user.id,
     email: user.email,
@@ -37,38 +29,34 @@ function parseDbUser(user: {
     subject: user.subject,
     avatar_url: user.avatarUrl,
     status: user.status,
-    created_at: user.createdAt.toISOString(),
-    updated_at: user.updatedAt.toISOString()
+    created_at: toIso(user.createdAt)!,
+    updated_at: toIso(user.updatedAt)!
   };
 }
 
 export async function getUserById(userId: number): Promise<User | null> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId }
+  const user = await db.query.users.findFirst({
+    where: (table, { eq }) => eq(table.id, userId)
   });
   return user ? parseDbUser(user) : null;
 }
 
 export async function getUserCount(): Promise<number> {
-  return await prisma.user.count();
+  const result = await db.select({ value: count() }).from(users);
+  return result[0]?.value ?? 0;
 }
 
 export async function findUserByProviderSubject(provider: string, subject: string): Promise<User | null> {
-  const user = await prisma.user.findFirst({
-    where: {
-      provider,
-      subject
-    }
+  const user = await db.query.users.findFirst({
+    where: (table, operators) => and(operators.eq(table.provider, provider), operators.eq(table.subject, subject))
   });
   return user ? parseDbUser(user) : null;
 }
 
 export async function findUserByEmail(email: string): Promise<User | null> {
   const normalizedEmail = email.trim().toLowerCase();
-  const user = await prisma.user.findFirst({
-    where: {
-      email: normalizedEmail
-    }
+  const user = await db.query.users.findFirst({
+    where: (table, { eq }) => eq(table.email, normalizedEmail)
   });
   return user ? parseDbUser(user) : null;
 }
@@ -82,12 +70,13 @@ export async function createUser(data: {
   avatar_url?: string | null;
   passwordHash?: string | null;
 }): Promise<User> {
-  const now = new Date(nowIso());
+  const now = nowIso();
   const role = data.role ?? "user";
   const email = data.email.trim().toLowerCase();
 
-  const user = await prisma.user.create({
-    data: {
+  const [user] = await db
+    .insert(users)
+    .values({
       email,
       name: data.name ?? null,
       passwordHash: data.passwordHash ?? null,
@@ -98,8 +87,8 @@ export async function createUser(data: {
       status: "active",
       createdAt: now,
       updatedAt: now
-    }
-  });
+    })
+    .returning();
 
   return parseDbUser(user);
 }
@@ -110,45 +99,46 @@ export async function updateUserProfile(userId: number, data: { email?: string; 
     return null;
   }
 
-  const now = new Date(nowIso());
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: {
+  const now = nowIso();
+  const [updated] = await db
+    .update(users)
+    .set({
       email: data.email ?? current.email,
       name: data.name ?? current.name,
       avatarUrl: data.avatar_url ?? current.avatar_url,
       updatedAt: now
-    }
-  });
+    })
+    .where(eq(users.id, userId))
+    .returning();
 
-  return parseDbUser(user);
+  return updated ? parseDbUser(updated) : null;
 }
 
 export async function updateUserPassword(userId: number, passwordHash: string): Promise<void> {
-  const now = new Date(nowIso());
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
+  const now = nowIso();
+  await db
+    .update(users)
+    .set({
       passwordHash,
       updatedAt: now
-    }
-  });
+    })
+    .where(eq(users.id, userId));
 }
 
 export async function listUsers(): Promise<User[]> {
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "asc" }
+  const rows = await db.query.users.findMany({
+    orderBy: (table, { asc }) => asc(table.createdAt)
   });
-  return users.map(parseDbUser);
+  return rows.map(parseDbUser);
 }
 
 export async function promoteToAdmin(userId: number): Promise<void> {
-  const now = new Date(nowIso());
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
+  const now = nowIso();
+  await db
+    .update(users)
+    .set({
       role: "admin",
       updatedAt: now
-    }
-  });
+    })
+    .where(eq(users.id, userId));
 }

@@ -44,7 +44,7 @@ Caddy Proxy Manager brings a beautiful, intuitive web interface to [Caddy Server
 - **Hardened by default** – Login throttling, strict session management, HSTS injection
 - **Admin-first design** – Single admin account with production credential enforcement
 - **Secure secrets** – API tokens never displayed after initial entry, restrictive file permissions
-- **Modern stack** – Built on Next.js 16, React 19, and Prisma with TypeScript throughout
+- **Modern stack** – Built on Next.js 16, React 19, and Drizzle ORM with TypeScript throughout
 
 ---
 
@@ -125,7 +125,7 @@ Visit `http://localhost:3000/login` and sign in with your credentials.
 - **Next.js 16 App Router** – Server components, streaming, and server actions
 - **Material UI Components** – Responsive design with dark theme
 - **Direct Caddy Integration** – Generates JSON config and pushes via Caddy Admin API
-- **Prisma ORM** – Type-safe database access with automatic migrations
+- **Drizzle ORM** – Type-safe SQLite access with checked-in SQL migrations
 - **SQLite Database** – Zero-configuration persistence with full ACID compliance
 - **Cloudflare DNS-01** – Automated wildcard certificate issuance
 - **bcrypt Authentication** – Industry-standard password hashing for access lists
@@ -138,18 +138,37 @@ Visit `http://localhost:3000/login` and sign in with your credentials.
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `ADMIN_USERNAME` | Admin login username | `admin` (dev only) | Yes (production) |
-| `ADMIN_PASSWORD` | Admin password (min 12 chars with letters & numbers) | `admin` (dev only) | Yes (production) |
-| `SESSION_SECRET` | 32+ character string for session signing | - | Yes |
+| `SESSION_SECRET` | Session encryption key (32+ chars) | None | **Yes** |
+| `ADMIN_USERNAME` | Admin login username | `admin` | **Yes** |
+| `ADMIN_PASSWORD` | Admin password (see requirements below) | `admin` (dev only) | **Yes** |
 | `BASE_URL` | Public URL of the dashboard | `http://localhost:3000` | No |
 | `CADDY_API_URL` | Caddy Admin API endpoint | `http://caddy:2019` | No |
 | `DATABASE_PATH` | SQLite file path | `/app/data/caddy-proxy-manager.db` | No |
 | `PRIMARY_DOMAIN` | Default domain for Caddy config | `caddyproxymanager.com` | No |
 
-**Production Security Requirements:**
-- `ADMIN_PASSWORD` must be 12+ characters with both letters and numbers
-- `SESSION_SECRET` must be 32+ characters and not a default value
-- Default credentials (`admin`/`admin`) are automatically rejected
+**Production Security Requirements (Strictly Enforced):**
+
+The application will **fail to start** in production if these requirements are not met:
+
+- **`SESSION_SECRET`**:
+  - Must be at least 32 characters long
+  - Cannot be a known placeholder value
+  - Generate with: `openssl rand -base64 32`
+
+- **`ADMIN_USERNAME`**:
+  - Must be set (any value is acceptable, including `admin`)
+
+- **`ADMIN_PASSWORD`**:
+  - Minimum 12 characters
+  - Must include uppercase letters (A-Z)
+  - Must include lowercase letters (a-z)
+  - Must include numbers (0-9)
+  - Must include special characters (!@#$%^&* etc.)
+  - Cannot be `admin` in production
+
+**Development Mode:**
+- Default credentials (`admin`/`admin`) are allowed in development
+- Set `NODE_ENV=development` to use relaxed validation
 
 ---
 
@@ -167,7 +186,7 @@ caddy-proxy-manager/
 │   ├── models/                 # Database models and operations
 │   ├── caddy/                  # Caddy config generation
 │   └── auth/                   # Authentication helpers
-├── prisma/                     # Database schema and migrations
+├── drizzle/                    # Database migrations
 ├── docker/
 │   ├── web/                    # Next.js production Dockerfile
 │   └── caddy/                  # Custom Caddy build (xcaddy + modules)
@@ -181,18 +200,56 @@ caddy-proxy-manager/
 
 We take security seriously. Here's what's built-in:
 
-- **Session Secret Enforcement** – Production requires strong, unique session secrets
-- **Credential Validation** – Default credentials rejected; minimum complexity enforced
+### Authentication & Authorization
+- **Strict Credential Enforcement** – Application refuses to start in production with weak/default credentials
+- **Password Complexity** – Enforced minimum 12 chars with uppercase, lowercase, numbers, and special characters
+- **Session Secret Validation** – 32+ character secrets required with automatic detection of insecure placeholders
 - **Login Throttling** – IP + username based rate limiting (5 attempts / 5 minutes)
 - **Admin-Only Mutations** – All configuration changes require admin privileges
+- **Fail-Fast Validation** – Security checks run at server startup, not at first request
+
+### Data Protection
 - **Certificate Protection** – Imported certificates stored with `0600` permissions
-- **Audit Trail** – Immutable log of all administrative actions
-- **HSTS Headers** – Strict-Transport-Security automatically applied to managed hosts
+- **Session Encryption** – All sessions encrypted with validated secrets
 - **Secret Redaction** – API tokens never rendered back to the browser
+- **Audit Trail** – Immutable log of all administrative actions
+
+### Infrastructure Security
+- **HSTS Headers** – Strict-Transport-Security automatically applied to managed hosts
+- **Secure Defaults** – All security features enabled by default
+- **Docker Security** – Minimal attack surface with multi-stage builds
+- **Privilege Dropping** – Containers run as non-root users
+
+### Security Best Practices
+
+**For Production Deployments:**
+```bash
+# 1. Generate a secure session secret
+export SESSION_SECRET=$(openssl rand -base64 32)
+
+# 2. Create strong admin credentials
+export ADMIN_USERNAME="admin"  # Any username is fine
+export ADMIN_PASSWORD="Your-Str0ng-P@ssw0rd!"  # 12+ chars, mixed case, numbers, special chars
+
+# 3. Store credentials securely
+echo "SESSION_SECRET=$SESSION_SECRET" > .env
+echo "ADMIN_USERNAME=$ADMIN_USERNAME" >> .env
+echo "ADMIN_PASSWORD=$ADMIN_PASSWORD" >> .env
+chmod 600 .env  # Restrict file permissions
+```
+
+**For Development:**
+```bash
+# Development mode allows default credentials
+export NODE_ENV=development
+npm run dev
+# Login with admin/admin
+```
 
 **Known Limitations:**
 - Imported certificate keys stored in SQLite without encryption (planned enhancement)
 - In-memory rate limiting (requires Redis/Memcached for multi-instance deployments)
+- No 2FA support yet (planned enhancement)
 
 ---
 
@@ -223,7 +280,7 @@ To enable automatic SSL certificates with Cloudflare DNS-01 challenges:
 
 ### Development Notes
 
-- **Database:** Prisma manages schema migrations. Run `npx prisma db push` to sync changes.
+- **Database:** Drizzle migrations live in `/drizzle`. Run `npm run db:migrate` to apply them to your local SQLite file.
 - **Caddy Config:** Rebuilt on each mutation and pushed to Caddy Admin API. Errors are surfaced in the UI.
 - **Rate Limiting:** Kept in-memory per Node process. For horizontal scaling, use Redis/Memcached.
 - **Authentication:** Currently supports single admin user. Multi-role support requires architecture changes.
@@ -234,8 +291,6 @@ To enable automatic SSL certificates with Cloudflare DNS-01 challenges:
 
 We're actively working on these improvements:
 
-- [ ] Encrypted storage for imported certificate private keys
-- [ ] Redis/Memcached integration for distributed rate limiting
 - [ ] Multi-user support with role-based access control
 - [ ] Additional DNS providers (Namecheap, Route53, etc.)
 - [ ] Metrics and monitoring dashboard
@@ -287,7 +342,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **[Nginx Proxy Manager](https://github.com/NginxProxyManager/nginx-proxy-manager)** – The original project
 - **[Next.js](https://nextjs.org/)** – React framework for production
 - **[Material UI](https://mui.com/)** – Beautiful React components
-- **[Prisma](https://www.prisma.io/)** – Next-generation ORM
+- **[Drizzle ORM](https://orm.drizzle.team/)** – Lightweight SQL migrations and type-safe queries
 
 ---
 

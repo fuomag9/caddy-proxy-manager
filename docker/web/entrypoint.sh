@@ -1,50 +1,12 @@
 #!/bin/sh
 set -e
 
-# This script runs as root first to fix permissions, then switches to nextjs user
-
 DB_PATH="${DATABASE_PATH:-/app/data/caddy-proxy-manager.db}"
 DB_DIR=$(dirname "$DB_PATH")
 
-echo "Setting up database directory permissions..."
-
-# Ensure the data directory is owned by nextjs user
+echo "Ensuring database directory exists..."
+mkdir -p "$DB_DIR"
 chown -R nextjs:nodejs "$DB_DIR"
 
-# Ensure node_modules is owned by nextjs user for Prisma client generation
-chown -R nextjs:nodejs /app/node_modules
-
-# Remove old Prisma client to avoid permission issues during regeneration
-echo "Cleaning old Prisma client..."
-rm -rf /app/node_modules/.prisma/client
-
-# Switch to nextjs user and initialize database if needed
-gosu nextjs sh -c '
-    DB_PATH="'"$DB_PATH"'"
-
-    # Set npm cache to writable directory
-    export NPM_CONFIG_CACHE=/tmp/.npm
-
-    # Generate real Prisma client at runtime (replaces build-time stub)
-    echo "Generating Prisma client..."
-    npx prisma generate || {
-        echo "Warning: Prisma generate failed, attempting with checksum ignore..."
-        PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 npx prisma generate || {
-            echo "Error: Failed to generate Prisma client"
-            exit 1
-        }
-    }
-
-    if [ ! -f "$DB_PATH" ]; then
-        echo "Database not found, initializing..."
-        npx prisma db push --skip-generate
-        echo "Database initialized successfully"
-    else
-        echo "Database exists, applying any schema changes..."
-        npx prisma db push --skip-generate --accept-data-loss 2>/dev/null || true
-    fi
-
-    echo "Starting application..."
-    export HOSTNAME="0.0.0.0"
-    exec node server.js
-'
+echo "Starting application..."
+exec gosu nextjs env HOSTNAME=0.0.0.0 node server.js

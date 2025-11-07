@@ -1,6 +1,8 @@
-import prisma, { nowIso } from "../db";
+import db, { nowIso, toIso } from "../db";
 import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
+import { proxyHosts } from "../db/schema";
+import { desc, eq } from "drizzle-orm";
 
 const DEFAULT_AUTHENTIK_HEADERS = [
   "X-Authentik-Username",
@@ -94,25 +96,7 @@ export type ProxyHostInput = {
   authentik?: ProxyHostAuthentikInput | null;
 };
 
-type ProxyHostRow = {
-  id: number;
-  name: string;
-  domains: string;
-  upstreams: string;
-  certificateId: number | null;
-  accessListId: number | null;
-  ownerUserId: number | null;
-  sslForced: boolean;
-  hstsEnabled: boolean;
-  hstsSubdomains: boolean;
-  allowWebsocket: boolean;
-  preserveHostHeader: boolean;
-  meta: string | null;
-  skipHttpsHostnameValidation: boolean;
-  enabled: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-};
+type ProxyHostRow = typeof proxyHosts.$inferSelect;
 
 function normalizeMetaValue(value: string | null | undefined) {
   if (!value) {
@@ -394,8 +378,8 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     preserve_host_header: row.preserveHostHeader,
     skip_https_hostname_validation: row.skipHttpsHostnameValidation,
     enabled: row.enabled,
-    created_at: row.createdAt.toISOString(),
-    updated_at: row.updatedAt.toISOString(),
+    created_at: toIso(row.createdAt)!,
+    updated_at: toIso(row.updatedAt)!,
     custom_reverse_proxy_json: meta.custom_reverse_proxy_json ?? null,
     custom_pre_handlers_json: meta.custom_pre_handlers_json ?? null,
     authentik: hydrateAuthentik(meta.authentik)
@@ -403,9 +387,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
 }
 
 export async function listProxyHosts(): Promise<ProxyHost[]> {
-  const hosts = await prisma.proxyHost.findMany({
-    orderBy: { createdAt: "desc" }
-  });
+  const hosts = await db.select().from(proxyHosts).orderBy(desc(proxyHosts.createdAt));
   return hosts.map(parseProxyHost);
 }
 
@@ -417,10 +399,11 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
     throw new Error("At least one upstream must be specified");
   }
 
-  const now = new Date(nowIso());
+  const now = nowIso();
   const meta = buildMeta({}, input);
-  const record = await prisma.proxyHost.create({
-    data: {
+  const [record] = await db
+    .insert(proxyHosts)
+    .values({
       name: input.name.trim(),
       domains: JSON.stringify(Array.from(new Set(input.domains.map((d) => d.trim().toLowerCase())))),
       upstreams: JSON.stringify(Array.from(new Set(input.upstreams.map((u) => u.trim())))),
@@ -437,8 +420,12 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
       enabled: input.enabled ?? true,
       createdAt: now,
       updatedAt: now
-    }
-  });
+    })
+    .returning();
+
+  if (!record) {
+    throw new Error("Failed to create proxy host");
+  }
 
   logAuditEvent({
     userId: actorUserId,
@@ -454,8 +441,8 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
 }
 
 export async function getProxyHost(id: number): Promise<ProxyHost | null> {
-  const host = await prisma.proxyHost.findUnique({
-    where: { id }
+  const host = await db.query.proxyHosts.findFirst({
+    where: (table, { eq }) => eq(table.id, id)
   });
   return host ? parseProxyHost(host) : null;
 }
@@ -475,10 +462,10 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
   };
   const meta = buildMeta(existingMeta, input);
 
-  const now = new Date(nowIso());
-  await prisma.proxyHost.update({
-    where: { id },
-    data: {
+  const now = nowIso();
+  await db
+    .update(proxyHosts)
+    .set({
       name: input.name ?? existing.name,
       domains,
       upstreams,
@@ -493,8 +480,8 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
       skipHttpsHostnameValidation: input.skip_https_hostname_validation ?? existing.skip_https_hostname_validation,
       enabled: input.enabled ?? existing.enabled,
       updatedAt: now
-    }
-  });
+    })
+    .where(eq(proxyHosts.id, id));
 
   logAuditEvent({
     userId: actorUserId,
@@ -515,9 +502,7 @@ export async function deleteProxyHost(id: number, actorUserId: number) {
     throw new Error("Proxy host not found");
   }
 
-  await prisma.proxyHost.delete({
-    where: { id }
-  });
+  await db.delete(proxyHosts).where(eq(proxyHosts.id, id));
   logAuditEvent({
     userId: actorUserId,
     action: "delete",

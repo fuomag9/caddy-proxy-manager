@@ -1,9 +1,16 @@
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import crypto from "node:crypto";
-import prisma, { nowIso } from "./db";
+import db, { nowIso } from "./db";
 import { config } from "./config";
 import { getCloudflareSettings, getGeneralSettings, setSetting } from "./settings";
+import {
+  accessListEntries,
+  certificates,
+  deadHosts,
+  proxyHosts,
+  redirectHosts
+} from "./db/schema";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -721,69 +728,68 @@ async function buildTlsAutomation(
 }
 
 async function buildCaddyDocument() {
-  const [proxyHosts, redirectHosts, deadHosts, certRows, accessListEntries] = await Promise.all([
-    prisma.proxyHost.findMany({
-      select: {
-        id: true,
-        name: true,
-        domains: true,
-        upstreams: true,
-        certificateId: true,
-        accessListId: true,
-        sslForced: true,
-        hstsEnabled: true,
-        hstsSubdomains: true,
-        allowWebsocket: true,
-        preserveHostHeader: true,
-        skipHttpsHostnameValidation: true,
-        meta: true,
-        enabled: true
-      }
-    }),
-    prisma.redirectHost.findMany({
-      select: {
-        id: true,
-        name: true,
-        domains: true,
-        destination: true,
-        statusCode: true,
-        preserveQuery: true,
-        enabled: true
-      }
-    }),
-    prisma.deadHost.findMany({
-      select: {
-        id: true,
-        name: true,
-        domains: true,
-        statusCode: true,
-        responseBody: true,
-        enabled: true
-      }
-    }),
-    prisma.certificate.findMany({
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        domainNames: true,
-        certificatePem: true,
-        privateKeyPem: true,
-        autoRenew: true,
-        providerOptions: true
-      }
-    }),
-    prisma.accessListEntry.findMany({
-      select: {
-        accessListId: true,
-        username: true,
-        passwordHash: true
-      }
-    })
+  const [proxyHostRecords, redirectHostRecords, deadHostRecords, certRows, accessListEntryRecords] = await Promise.all([
+    db
+      .select({
+        id: proxyHosts.id,
+        name: proxyHosts.name,
+        domains: proxyHosts.domains,
+        upstreams: proxyHosts.upstreams,
+        certificateId: proxyHosts.certificateId,
+        accessListId: proxyHosts.accessListId,
+        sslForced: proxyHosts.sslForced,
+        hstsEnabled: proxyHosts.hstsEnabled,
+        hstsSubdomains: proxyHosts.hstsSubdomains,
+        allowWebsocket: proxyHosts.allowWebsocket,
+        preserveHostHeader: proxyHosts.preserveHostHeader,
+        skipHttpsHostnameValidation: proxyHosts.skipHttpsHostnameValidation,
+        meta: proxyHosts.meta,
+        enabled: proxyHosts.enabled
+      })
+      .from(proxyHosts),
+    db
+      .select({
+        id: redirectHosts.id,
+        name: redirectHosts.name,
+        domains: redirectHosts.domains,
+        destination: redirectHosts.destination,
+        statusCode: redirectHosts.statusCode,
+        preserveQuery: redirectHosts.preserveQuery,
+        enabled: redirectHosts.enabled
+      })
+      .from(redirectHosts),
+    db
+      .select({
+        id: deadHosts.id,
+        name: deadHosts.name,
+        domains: deadHosts.domains,
+        statusCode: deadHosts.statusCode,
+        responseBody: deadHosts.responseBody,
+        enabled: deadHosts.enabled
+      })
+      .from(deadHosts),
+    db
+      .select({
+        id: certificates.id,
+        name: certificates.name,
+        type: certificates.type,
+        domainNames: certificates.domainNames,
+        certificatePem: certificates.certificatePem,
+        privateKeyPem: certificates.privateKeyPem,
+        autoRenew: certificates.autoRenew,
+        providerOptions: certificates.providerOptions
+      })
+      .from(certificates),
+    db
+      .select({
+        accessListId: accessListEntries.accessListId,
+        username: accessListEntries.username,
+        passwordHash: accessListEntries.passwordHash
+      })
+      .from(accessListEntries)
   ]);
 
-  // Map Prisma results to expected types
-  const proxyHostRows: ProxyHostRow[] = proxyHosts.map((h: typeof proxyHosts[0]) => ({
+  const proxyHostRows: ProxyHostRow[] = proxyHostRecords.map((h) => ({
     id: h.id,
     name: h.name,
     domains: h.domains,
@@ -800,7 +806,7 @@ async function buildCaddyDocument() {
     enabled: h.enabled ? 1 : 0
   }));
 
-  const redirectHostRows: RedirectHostRow[] = redirectHosts.map((h: typeof redirectHosts[0]) => ({
+  const redirectHostRows: RedirectHostRow[] = redirectHostRecords.map((h) => ({
     id: h.id,
     name: h.name,
     domains: h.domains,
@@ -810,7 +816,7 @@ async function buildCaddyDocument() {
     enabled: h.enabled ? 1 : 0
   }));
 
-  const deadHostRows: DeadHostRow[] = deadHosts.map((h: typeof deadHosts[0]) => ({
+  const deadHostRows: DeadHostRow[] = deadHostRecords.map((h) => ({
     id: h.id,
     name: h.name,
     domains: h.domains,
@@ -830,10 +836,10 @@ async function buildCaddyDocument() {
     provider_options: c.providerOptions
   }));
 
-  const accessListEntryRows: AccessListEntryRow[] = accessListEntries.map((e: typeof accessListEntries[0]) => ({
-    access_list_id: e.accessListId,
-    username: e.username,
-    password_hash: e.passwordHash
+  const accessListEntryRows: AccessListEntryRow[] = accessListEntryRecords.map((entry) => ({
+    access_list_id: entry.accessListId,
+    username: entry.username,
+    password_hash: entry.passwordHash
   }));
 
   const certificateMap = new Map(certRowsMapped.map((cert) => [cert.id, cert]));

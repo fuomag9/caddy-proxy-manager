@@ -12,9 +12,10 @@ services:
       # Node environment
       NODE_ENV: production
 
-      # REQUIRED: Change this to a random secure string in production
+      # REQUIRED: Session secret for encrypting cookies and sessions
       # Generate with: openssl rand -base64 32
-      SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
+      # SECURITY: You MUST set this to a unique value in production!
+      SESSION_SECRET: ${SESSION_SECRET:?ERROR - SESSION_SECRET is required}
 
       # Caddy API endpoint (internal communication)
       CADDY_API_URL: ${CADDY_API_URL:-http://caddy:2019}
@@ -30,9 +31,10 @@ services:
       NEXTAUTH_URL: ${BASE_URL:-http://localhost:3000}
 
       # REQUIRED: Admin credentials for login
-      # WARNING: Change these values! Do not use defaults in production!
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      # SECURITY: You MUST set these to secure values in production!
+      # Password must be 12+ chars with uppercase, lowercase, numbers, and special chars
+      ADMIN_USERNAME: ${ADMIN_USERNAME:?ERROR - ADMIN_USERNAME is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ERROR - ADMIN_PASSWORD is required}
     volumes:
       - ./data:/app/data
     depends_on:

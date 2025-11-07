@@ -1,6 +1,8 @@
-import prisma, { nowIso } from "../db";
+import db, { nowIso, toIso } from "../db";
 import { logAuditEvent } from "../audit";
 import { applyCaddyConfig } from "../caddy";
+import { deadHosts } from "../db/schema";
+import { desc, eq } from "drizzle-orm";
 
 export type DeadHost = {
   id: number;
@@ -21,16 +23,9 @@ export type DeadHostInput = {
   enabled?: boolean;
 };
 
-function parse(row: {
-  id: number;
-  name: string;
-  domains: string;
-  statusCode: number;
-  responseBody: string | null;
-  enabled: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}): DeadHost {
+type DeadHostRow = typeof deadHosts.$inferSelect;
+
+function parse(row: DeadHostRow): DeadHost {
   return {
     id: row.id,
     name: row.name,
@@ -38,21 +33,19 @@ function parse(row: {
     status_code: row.statusCode,
     response_body: row.responseBody,
     enabled: row.enabled,
-    created_at: row.createdAt.toISOString(),
-    updated_at: row.updatedAt.toISOString()
+    created_at: toIso(row.createdAt)!,
+    updated_at: toIso(row.updatedAt)!
   };
 }
 
 export async function listDeadHosts(): Promise<DeadHost[]> {
-  const hosts = await prisma.deadHost.findMany({
-    orderBy: { createdAt: "desc" }
-  });
+  const hosts = await db.select().from(deadHosts).orderBy(desc(deadHosts.createdAt));
   return hosts.map(parse);
 }
 
 export async function getDeadHost(id: number): Promise<DeadHost | null> {
-  const host = await prisma.deadHost.findUnique({
-    where: { id }
+  const host = await db.query.deadHosts.findFirst({
+    where: (table, { eq }) => eq(table.id, id)
   });
   return host ? parse(host) : null;
 }
@@ -62,9 +55,10 @@ export async function createDeadHost(input: DeadHostInput, actorUserId: number) 
     throw new Error("At least one domain is required");
   }
 
-  const now = new Date(nowIso());
-  const record = await prisma.deadHost.create({
-    data: {
+  const now = nowIso();
+  const [record] = await db
+    .insert(deadHosts)
+    .values({
       name: input.name.trim(),
       domains: JSON.stringify(Array.from(new Set(input.domains.map((d) => d.trim().toLowerCase())))),
       statusCode: input.status_code ?? 503,
@@ -73,8 +67,12 @@ export async function createDeadHost(input: DeadHostInput, actorUserId: number) 
       createdAt: now,
       updatedAt: now,
       createdBy: actorUserId
-    }
-  });
+    })
+    .returning();
+
+  if (!record) {
+    throw new Error("Failed to create dead host");
+  }
   logAuditEvent({
     userId: actorUserId,
     action: "create",
@@ -91,18 +89,18 @@ export async function updateDeadHost(id: number, input: Partial<DeadHostInput>, 
   if (!existing) {
     throw new Error("Dead host not found");
   }
-  const now = new Date(nowIso());
-  await prisma.deadHost.update({
-    where: { id },
-    data: {
+  const now = nowIso();
+  await db
+    .update(deadHosts)
+    .set({
       name: input.name ?? existing.name,
       domains: JSON.stringify(input.domains ? Array.from(new Set(input.domains)) : existing.domains),
       statusCode: input.status_code ?? existing.status_code,
       responseBody: input.response_body ?? existing.response_body,
       enabled: input.enabled ?? existing.enabled,
       updatedAt: now
-    }
-  });
+    })
+    .where(eq(deadHosts.id, id));
   logAuditEvent({
     userId: actorUserId,
     action: "update",
@@ -119,9 +117,7 @@ export async function deleteDeadHost(id: number, actorUserId: number) {
   if (!existing) {
     throw new Error("Dead host not found");
   }
-  await prisma.deadHost.delete({
-    where: { id }
-  });
+  await db.delete(deadHosts).where(eq(deadHosts.id, id));
   logAuditEvent({
     userId: actorUserId,
     action: "delete",

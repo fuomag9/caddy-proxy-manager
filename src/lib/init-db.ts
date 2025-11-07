@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
-import prisma, { nowIso } from "./db";
+import db, { nowIso } from "./db";
 import { config } from "./config";
+import { users } from "./db/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Ensures the admin user from environment variables exists in the database.
@@ -17,43 +19,41 @@ export async function ensureAdminUser(): Promise<void> {
   const passwordHash = bcrypt.hashSync(config.adminPassword, 12);
 
   // Check if admin user already exists
-  const existingUser = await prisma.user.findUnique({
-    where: { id: adminId }
+  const existingUser = await db.query.users.findFirst({
+    where: (table, { eq }) => eq(table.id, adminId)
   });
 
   if (existingUser) {
     // Admin user exists, update credentials if needed
     // Always update password hash to handle password changes in env vars
-    const now = new Date(nowIso());
-    await prisma.user.update({
-      where: { id: adminId },
-      data: {
+    const now = nowIso();
+    await db
+      .update(users)
+      .set({
         email: adminEmail,
         subject,
         passwordHash,
         updatedAt: now
-      }
-    });
+      })
+      .where(eq(users.id, adminId));
     console.log(`Updated admin user: ${config.adminUsername}`);
     return;
   }
 
   // Create admin user with hashed password
-  const now = new Date(nowIso());
-  await prisma.user.create({
-    data: {
-      id: adminId,
-      email: adminEmail,
-      name: config.adminUsername,
-      passwordHash, // Store hashed password instead of plaintext
-      role: "admin",
-      provider,
-      subject,
-      avatarUrl: null,
-      status: "active",
-      createdAt: now,
-      updatedAt: now
-    }
+  const now = nowIso();
+  await db.insert(users).values({
+    id: adminId,
+    email: adminEmail,
+    name: config.adminUsername,
+    passwordHash,
+    role: "admin",
+    provider,
+    subject,
+    avatarUrl: null,
+    status: "active",
+    createdAt: now,
+    updatedAt: now
   });
 
   console.log(`Created admin user: ${config.adminUsername}`);

@@ -1,4 +1,6 @@
-import prisma, { nowIso } from "./db";
+import db, { nowIso } from "./db";
+import { settings } from "./db/schema";
+import { eq } from "drizzle-orm";
 
 export type SettingValue<T> = T | null;
 
@@ -14,8 +16,8 @@ export type GeneralSettings = {
 };
 
 export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
-  const setting = await prisma.setting.findUnique({
-    where: { key }
+  const setting = await db.query.settings.findFirst({
+    where: (table, { eq }) => eq(table.key, key)
   });
 
   if (!setting) {
@@ -32,20 +34,22 @@ export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
 
 export async function setSetting<T>(key: string, value: T): Promise<void> {
   const payload = JSON.stringify(value);
-  const now = new Date(nowIso());
+  const now = nowIso();
 
-  await prisma.setting.upsert({
-    where: { key },
-    update: {
-      value: payload,
-      updatedAt: now
-    },
-    create: {
+  await db
+    .insert(settings)
+    .values({
       key,
       value: payload,
       updatedAt: now
-    }
-  });
+    })
+    .onConflictDoUpdate({
+      target: settings.key,
+      set: {
+        value: payload,
+        updatedAt: now
+      }
+    });
 }
 
 export async function getCloudflareSettings(): Promise<CloudflareSettings | null> {

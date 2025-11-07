@@ -1,8 +1,9 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import prisma from "./db";
+import db from "./db";
 import { config } from "./config";
+import { users } from "./db/schema";
 
 declare module "next-auth" {
   interface Session {
@@ -36,8 +37,8 @@ function createCredentialsProvider() {
 
       // Look up user in database by email (constructed from username)
       const email = `${username}@localhost`;
-      const user = await prisma.user.findUnique({
-        where: { email }
+      const user = await db.query.users.findFirst({
+        where: (table, operators) => operators.eq(table.email, email)
       });
 
       if (!user || user.status !== "active" || !user.passwordHash) {
