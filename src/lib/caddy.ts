@@ -443,11 +443,22 @@ function buildProxyRoutes(
       }
 
       // Create the forward auth reverse_proxy handler
-      handlers.push({
+      // Convert "private_ranges" to actual CIDR blocks for JSON config
+      const trustedProxies = authentik.trustedProxies.includes("private_ranges")
+        ? ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8", "::1/128"]
+        : authentik.trustedProxies;
+
+      // Parse the outpost upstream to extract host:port for dial
+      // Remove http://, https://, and any trailing slashes
+      let dialAddress = authentik.outpostUpstream.replace(/^https?:\/\//, "").replace(/\/$/, "");
+      // Remove any path portion if accidentally included
+      dialAddress = dialAddress.split("/")[0];
+
+      const forwardAuthHandler: Record<string, unknown> = {
         handler: "reverse_proxy",
         upstreams: [
           {
-            dial: authentik.outpostUpstream
+            dial: dialAddress
           }
         ],
         rewrite: {
@@ -469,9 +480,14 @@ function buildProxyRoutes(
             },
             routes: handleResponseRoutes
           }
-        ],
-        trusted_proxies: authentik.trustedProxies
-      });
+        ]
+      };
+
+      if (trustedProxies.length > 0) {
+        forwardAuthHandler.trusted_proxies = trustedProxies;
+      }
+
+      handlers.push(forwardAuthHandler);
     }
 
     handlers.push(reverseProxyHandler);
