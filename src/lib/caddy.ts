@@ -409,7 +409,7 @@ function buildProxyRoutes(
 
     if (authentik) {
       // Build handle_response routes for copying headers on 2xx status
-      const handleResponseRoutes = [
+      const handleResponseRoutes: Record<string, unknown>[] = [
         {
           handle: [{ handler: "vars" }]
         }
@@ -426,7 +426,7 @@ function buildProxyRoutes(
                   [headerName]: [`{http.reverse_proxy.header.${headerName}}`]
                 }
               }
-            }
+            } as Record<string, unknown>
           ],
           match: [
             {
