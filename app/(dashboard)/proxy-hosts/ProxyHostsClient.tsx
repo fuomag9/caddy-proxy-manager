@@ -67,11 +67,17 @@ const AUTHENTIK_DEFAULT_TRUSTED_PROXIES = ["private_ranges"];
 
 export default function ProxyHostsClient({ hosts, certificates, accessLists, authentikDefaults }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [createDialogKey, setCreateDialogKey] = useState(0);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
 
   const handleToggleEnabled = async (id: number, enabled: boolean) => {
     await toggleProxyHostAction(id, enabled);
+  };
+
+  const handleOpenCreate = () => {
+    setCreateDialogKey(prev => prev + 1);
+    setCreateOpen(true);
   };
 
   return (
@@ -95,7 +101,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setCreateOpen(true)}
+          onClick={handleOpenCreate}
           sx={{
             bgcolor: "rgba(99, 102, 241, 0.9)",
             "&:hover": { bgcolor: "rgba(99, 102, 241, 1)" }
@@ -218,6 +224,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
       </TableContainer>
 
       <CreateHostDialog
+        key={createDialogKey}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         certificates={certificates}
@@ -689,8 +696,9 @@ function AuthentikFields({
             <HiddenCheckboxField
               name="authentik_set_host_header"
               defaultChecked={setHostHeaderDefault}
-              label="Set Host Header"
+              label="Set Host Header for Outpost"
               disabled={!enabled}
+              helperText="Recommended: Keep enabled. Only disable if using IP-based outpost access or troubleshooting routing issues."
             />
           </Stack>
         </Collapse>
@@ -703,12 +711,14 @@ function HiddenCheckboxField({
   name,
   defaultChecked,
   label,
-  disabled
+  disabled,
+  helperText
 }: {
   name: string;
   defaultChecked: boolean;
   label: string;
   disabled?: boolean;
+  helperText?: string;
 }) {
   return (
     <Box>
@@ -729,6 +739,11 @@ function HiddenCheckboxField({
         label={<Typography variant="body2">{label}</Typography>}
         disabled={disabled}
       />
+      {helperText && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", ml: 4, mt: -0.5 }}>
+          {helperText}
+        </Typography>
+      )}
     </Box>
   );
 }
