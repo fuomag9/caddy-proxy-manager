@@ -29,6 +29,7 @@ export type ProxyHostAuthentikConfig = {
   copyHeaders: string[];
   trustedProxies: string[];
   setOutpostHostHeader: boolean;
+  protectedPaths: string[] | null;
 };
 
 export type ProxyHostAuthentikInput = {
@@ -39,6 +40,7 @@ export type ProxyHostAuthentikInput = {
   copyHeaders?: string[] | null;
   trustedProxies?: string[] | null;
   setOutpostHostHeader?: boolean | null;
+  protectedPaths?: string[] | null;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -49,6 +51,7 @@ type ProxyHostAuthentikMeta = {
   copy_headers?: string[];
   trusted_proxies?: string[];
   set_outpost_host_header?: boolean;
+  protected_paths?: string[];
 };
 
 type ProxyHostMeta = {
@@ -148,6 +151,13 @@ function sanitizeAuthentikMeta(meta: ProxyHostAuthentikMeta | undefined): ProxyH
 
   if (meta.set_outpost_host_header !== undefined) {
     normalized.set_outpost_host_header = Boolean(meta.set_outpost_host_header);
+  }
+
+  if (Array.isArray(meta.protected_paths)) {
+    const paths = meta.protected_paths.map((path) => path?.trim()).filter((path): path is string => Boolean(path));
+    if (paths.length > 0) {
+      normalized.protected_paths = paths;
+    }
   }
 
   return Object.keys(normalized).length > 0 ? normalized : undefined;
@@ -263,6 +273,17 @@ function normalizeAuthentikInput(
     next.set_outpost_host_header = Boolean(input.setOutpostHostHeader);
   }
 
+  if (input.protectedPaths !== undefined) {
+    const paths = (input.protectedPaths ?? [])
+      .map((path) => path?.trim())
+      .filter((path): path is string => Boolean(path));
+    if (paths.length > 0) {
+      next.protected_paths = paths;
+    } else {
+      delete next.protected_paths;
+    }
+  }
+
   if ((next.enabled ?? false) && next.outpost_domain && !next.auth_endpoint) {
     next.auth_endpoint = `/${next.outpost_domain}/auth/caddy`;
   }
@@ -321,6 +342,8 @@ function hydrateAuthentik(meta: ProxyHostAuthentikMeta | undefined): ProxyHostAu
       : DEFAULT_AUTHENTIK_TRUSTED_PROXIES;
   const setOutpostHostHeader =
     meta.set_outpost_host_header !== undefined ? Boolean(meta.set_outpost_host_header) : true;
+  const protectedPaths =
+    Array.isArray(meta.protected_paths) && meta.protected_paths.length > 0 ? meta.protected_paths : null;
 
   return {
     enabled,
@@ -329,7 +352,8 @@ function hydrateAuthentik(meta: ProxyHostAuthentikMeta | undefined): ProxyHostAu
     authEndpoint,
     copyHeaders,
     trustedProxies,
-    setOutpostHostHeader
+    setOutpostHostHeader,
+    protectedPaths
   };
 }
 
@@ -358,6 +382,9 @@ function dehydrateAuthentik(config: ProxyHostAuthentikConfig | null): ProxyHostA
     meta.trusted_proxies = [...config.trustedProxies];
   }
   meta.set_outpost_host_header = config.setOutpostHostHeader;
+  if (config.protectedPaths && config.protectedPaths.length > 0) {
+    meta.protected_paths = [...config.protectedPaths];
+  }
 
   return meta;
 }

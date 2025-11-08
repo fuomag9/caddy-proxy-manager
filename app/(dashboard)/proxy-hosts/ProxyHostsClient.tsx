@@ -658,6 +658,18 @@ function AuthentikFields({ authentik }: { authentik?: ProxyHost["authentik"] | n
               size="small"
               fullWidth
             />
+            <TextField
+              name="authentik_protected_paths"
+              label="Protected Paths (Optional)"
+              placeholder="/secret/*, /admin/*"
+              helperText="Leave empty to protect entire domain. Specify paths to protect specific routes only."
+              defaultValue={initial?.protectedPaths?.join(", ") ?? ""}
+              disabled={!enabled}
+              multiline
+              minRows={2}
+              size="small"
+              fullWidth
+            />
             <HiddenCheckboxField
               name="authentik_set_host_header"
               defaultChecked={setHostHeaderDefault}

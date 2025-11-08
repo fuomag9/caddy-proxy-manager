@@ -44,6 +44,7 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
   const authEndpoint = parseOptionalText(formData.get("authentik_auth_endpoint"));
   const copyHeaders = parseCsv(formData.get("authentik_copy_headers"));
   const trustedProxies = parseCsv(formData.get("authentik_trusted_proxies"));
+  const protectedPaths = parseCsv(formData.get("authentik_protected_paths"));
   const setHostHeader = formData.has("authentik_set_host_header_present")
     ? parseCheckbox(formData.get("authentik_set_host_header"))
     : undefined;
@@ -66,6 +67,9 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
   }
   if (trustedProxies.length > 0 || formData.has("authentik_trusted_proxies")) {
     result.trustedProxies = trustedProxies;
+  }
+  if (protectedPaths.length > 0 || formData.has("authentik_protected_paths")) {
+    result.protectedPaths = protectedPaths;
   }
   if (setHostHeader !== undefined) {
     result.setOutpostHostHeader = setHostHeader;

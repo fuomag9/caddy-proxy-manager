@@ -68,6 +68,7 @@ type ProxyHostAuthentikMeta = {
   copy_headers?: string[];
   trusted_proxies?: string[];
   set_outpost_host_header?: boolean;
+  protected_paths?: string[];
 };
 
 type AuthentikRouteConfig = {
@@ -78,6 +79,7 @@ type AuthentikRouteConfig = {
   copyHeaders: string[];
   trustedProxies: string[];
   setOutpostHostHeader: boolean;
+  protectedPaths: string[] | null;
 };
 
 type RedirectHostRow = {
@@ -494,22 +496,75 @@ function buildProxyRoutes(
         forwardAuthHandler.trusted_proxies = trustedProxies;
       }
 
-      handlers.push(forwardAuthHandler);
+      // Path-based authentication support
+      if (authentik.protectedPaths && authentik.protectedPaths.length > 0) {
+        // Create separate routes for each protected path
+        for (const protectedPath of authentik.protectedPaths) {
+          const protectedHandlers: Record<string, unknown>[] = [...handlers];
+          const protectedReverseProxy = JSON.parse(JSON.stringify(reverseProxyHandler));
+
+          protectedHandlers.push(forwardAuthHandler);
+          protectedHandlers.push(protectedReverseProxy);
+
+          hostRoutes.push({
+            match: [
+              {
+                host: domains,
+                path: [protectedPath]
+              }
+            ],
+            handle: protectedHandlers,
+            terminal: true
+          });
+        }
+
+        // Create a catch-all route for non-protected paths (without forward auth)
+        const unprotectedHandlers: Record<string, unknown>[] = [...handlers];
+        unprotectedHandlers.push(reverseProxyHandler);
+
+        hostRoutes.push({
+          match: [
+            {
+              host: domains
+            }
+          ],
+          handle: unprotectedHandlers,
+          terminal: true
+        });
+      } else {
+        // No path-based protection: protect entire domain (backward compatibility)
+        handlers.push(forwardAuthHandler);
+        handlers.push(reverseProxyHandler);
+
+        const route: CaddyHttpRoute = {
+          match: [
+            {
+              host: domains
+            }
+          ],
+          handle: handlers,
+          terminal: true
+        };
+
+        hostRoutes.push(route);
+      }
+    } else {
+      // No Authentik: standard reverse proxy
+      handlers.push(reverseProxyHandler);
+
+      const route: CaddyHttpRoute = {
+        match: [
+          {
+            host: domains
+          }
+        ],
+        handle: handlers,
+        terminal: true
+      };
+
+      hostRoutes.push(route);
     }
 
-    handlers.push(reverseProxyHandler);
-
-    const route: CaddyHttpRoute = {
-      match: [
-        {
-          host: domains
-        }
-      ],
-      handle: handlers,
-      terminal: true
-    };
-
-    hostRoutes.push(route);
     routes.push(...hostRoutes);
   }
 
@@ -960,6 +1015,11 @@ function parseAuthentikConfig(meta: ProxyHostAuthentikMeta | undefined | null): 
   const setOutpostHostHeader =
     meta.set_outpost_host_header !== undefined ? Boolean(meta.set_outpost_host_header) : true;
 
+  const protectedPaths =
+    Array.isArray(meta.protected_paths) && meta.protected_paths.length > 0
+      ? meta.protected_paths.map((path) => path?.trim()).filter((path): path is string => Boolean(path))
+      : null;
+
   return {
     enabled: true,
     outpostDomain,
@@ -967,6 +1027,7 @@ function parseAuthentikConfig(meta: ProxyHostAuthentikMeta | undefined | null): 
     authEndpoint,
     copyHeaders,
     trustedProxies,
-    setOutpostHostHeader
+    setOutpostHostHeader,
+    protectedPaths
   };
 }
