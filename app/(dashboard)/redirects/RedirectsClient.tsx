@@ -16,6 +16,7 @@ import {
   FormControlLabel,
   IconButton,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -33,7 +34,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { useFormState } from "react-dom";
 import type { RedirectHost } from "@/src/lib/models/redirect-hosts";
 import { INITIAL_ACTION_STATE } from "@/src/lib/actions";
-import { createRedirectAction, deleteRedirectAction, updateRedirectAction } from "./actions";
+import { createRedirectAction, deleteRedirectAction, updateRedirectAction, toggleRedirectAction } from "./actions";
 
 type Props = {
   redirects: RedirectHost[];
@@ -43,6 +44,10 @@ export default function RedirectsClient({ redirects }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editRedirect, setEditRedirect] = useState<RedirectHost | null>(null);
   const [deleteRedirect, setDeleteRedirect] = useState<RedirectHost | null>(null);
+
+  const handleToggleEnabled = async (id: number, enabled: boolean) => {
+    await toggleRedirectAction(id, enabled);
+  };
 
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
@@ -137,16 +142,17 @@ export default function RedirectsClient({ redirects }: Props) {
                     />
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={redirect.enabled ? "Enabled" : "Disabled"}
+                    <Switch
+                      checked={redirect.enabled}
+                      onChange={(e) => handleToggleEnabled(redirect.id, e.target.checked)}
                       size="small"
                       sx={{
-                        bgcolor: redirect.enabled ? "rgba(34, 197, 94, 0.15)" : "rgba(148, 163, 184, 0.15)",
-                        color: redirect.enabled ? "rgba(34, 197, 94, 1)" : "rgba(148, 163, 184, 0.8)",
-                        border: "1px solid",
-                        borderColor: redirect.enabled ? "rgba(34, 197, 94, 0.3)" : "rgba(148, 163, 184, 0.3)",
-                        fontWeight: 500,
-                        fontSize: "0.75rem"
+                        "& .MuiSwitch-switchBase.Mui-checked": {
+                          color: "rgba(34, 197, 94, 1)"
+                        },
+                        "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                          backgroundColor: "rgba(34, 197, 94, 0.5)"
+                        }
                       }}
                     />
                   </TableCell>

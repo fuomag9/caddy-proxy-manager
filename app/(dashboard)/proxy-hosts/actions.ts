@@ -166,3 +166,19 @@ export async function deleteProxyHostAction(
     return actionError(error, "Failed to delete proxy host. Please check the logs for details.");
   }
 }
+
+export async function toggleProxyHostAction(
+  id: number,
+  enabled: boolean
+): Promise<ActionState> {
+  try {
+    const session = await requireAdmin();
+    const userId = Number(session.user.id);
+    await updateProxyHost(id, { enabled }, userId);
+    revalidatePath("/proxy-hosts");
+    return actionSuccess(`Proxy host ${enabled ? "enabled" : "disabled"}.`);
+  } catch (error) {
+    console.error(`Failed to toggle proxy host ${id}:`, error);
+    return actionError(error, "Failed to toggle proxy host. Please check the logs for details.");
+  }
+}

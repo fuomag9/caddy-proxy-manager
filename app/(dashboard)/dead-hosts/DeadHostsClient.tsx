@@ -12,18 +12,23 @@ import {
   Chip,
   FormControlLabel,
   Stack,
+  Switch,
   TextField,
   Typography,
   Checkbox
 } from "@mui/material";
 import type { DeadHost } from "@/src/lib/models/dead-hosts";
-import { createDeadHostAction, deleteDeadHostAction, updateDeadHostAction } from "./actions";
+import { createDeadHostAction, deleteDeadHostAction, updateDeadHostAction, toggleDeadHostAction } from "./actions";
 
 type Props = {
   hosts: DeadHost[];
 };
 
 export default function DeadHostsClient({ hosts }: Props) {
+  const handleToggleEnabled = async (id: number, enabled: boolean) => {
+    await toggleDeadHostAction(id, enabled);
+  };
+
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
       <Stack spacing={1}>
@@ -46,10 +51,10 @@ export default function DeadHostsClient({ hosts }: Props) {
                     {host.domains.join(", ")}
                   </Typography>
                 </Box>
-                <Chip
-                  label={host.enabled ? "Enabled" : "Disabled"}
-                  color={host.enabled ? "success" : "warning"}
-                  variant={host.enabled ? "filled" : "outlined"}
+                <Switch
+                  checked={host.enabled}
+                  onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
+                  color="success"
                 />
               </Box>
 

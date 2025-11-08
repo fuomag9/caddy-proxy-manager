@@ -15,6 +15,12 @@ export type GeneralSettings = {
   acmeEmail?: string;
 };
 
+export type AuthentikSettings = {
+  outpostDomain: string;
+  outpostUpstream: string;
+  authEndpoint?: string;
+};
+
 export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
   const setting = await db.query.settings.findFirst({
     where: (table, { eq }) => eq(table.key, key)
@@ -66,4 +72,12 @@ export async function getGeneralSettings(): Promise<GeneralSettings | null> {
 
 export async function saveGeneralSettings(settings: GeneralSettings): Promise<void> {
   await setSetting("general", settings);
+}
+
+export async function getAuthentikSettings(): Promise<AuthentikSettings | null> {
+  return await getSetting<AuthentikSettings>("authentik");
+}
+
+export async function saveAuthentikSettings(settings: AuthentikSettings): Promise<void> {
+  await setSetting("authentik", settings);
 }

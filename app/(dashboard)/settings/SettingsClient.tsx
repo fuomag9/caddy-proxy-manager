@@ -2,10 +2,11 @@
 
 import { useFormState } from "react-dom";
 import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, Stack, TextField, Typography } from "@mui/material";
-import type { GeneralSettings } from "@/src/lib/settings";
+import type { GeneralSettings, AuthentikSettings } from "@/src/lib/settings";
 import {
   updateCloudflareSettingsAction,
-  updateGeneralSettingsAction
+  updateGeneralSettingsAction,
+  updateAuthentikSettingsAction
 } from "./actions";
 
 type Props = {
@@ -15,11 +16,13 @@ type Props = {
     zoneId?: string;
     accountId?: string;
   };
+  authentik: AuthentikSettings | null;
 };
 
-export default function SettingsClient({ general, cloudflare }: Props) {
+export default function SettingsClient({ general, cloudflare, authentik }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
   const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
+  const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
 
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
@@ -101,6 +104,55 @@ export default function SettingsClient({ general, cloudflare }: Props) {
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save Cloudflare settings
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            Authentik Defaults
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Set default Authentik forward authentication values. These will be pre-filled when creating new proxy hosts but can be customized per host.
+          </Typography>
+          <Stack component="form" action={authentikFormAction} spacing={2}>
+            {authentikState?.message && (
+              <Alert severity={authentikState.success ? "success" : "error"}>
+                {authentikState.message}
+              </Alert>
+            )}
+            <TextField
+              name="outpostDomain"
+              label="Outpost Domain"
+              placeholder="auth.example.com"
+              defaultValue={authentik?.outpostDomain ?? ""}
+              helperText="Domain where Authentik is hosted"
+              required
+              fullWidth
+            />
+            <TextField
+              name="outpostUpstream"
+              label="Outpost Upstream"
+              placeholder="http://authentik-server:9000"
+              defaultValue={authentik?.outpostUpstream ?? ""}
+              helperText="Internal URL of Authentik outpost"
+              required
+              fullWidth
+            />
+            <TextField
+              name="authEndpoint"
+              label="Auth Endpoint (Optional)"
+              placeholder="/outpost.goauthentik.io/auth/caddy"
+              defaultValue={authentik?.authEndpoint ?? ""}
+              helperText="Custom authentication endpoint path"
+              fullWidth
+            />
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">
+                Save Authentik defaults
               </Button>
             </Box>
           </Stack>

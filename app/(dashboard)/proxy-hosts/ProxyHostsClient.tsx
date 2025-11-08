@@ -37,13 +37,15 @@ import { useFormState } from "react-dom";
 import type { AccessList } from "@/src/lib/models/access-lists";
 import type { Certificate } from "@/src/lib/models/certificates";
 import type { ProxyHost } from "@/src/lib/models/proxy-hosts";
+import type { AuthentikSettings } from "@/src/lib/settings";
 import { INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
-import { createProxyHostAction, deleteProxyHostAction, updateProxyHostAction } from "./actions";
+import { createProxyHostAction, deleteProxyHostAction, updateProxyHostAction, toggleProxyHostAction } from "./actions";
 
 type Props = {
   hosts: ProxyHost[];
   certificates: Certificate[];
   accessLists: AccessList[];
+  authentikDefaults: AuthentikSettings | null;
 };
 
 const AUTHENTIK_DEFAULT_HEADERS = [
@@ -63,10 +65,14 @@ const AUTHENTIK_DEFAULT_HEADERS = [
 
 const AUTHENTIK_DEFAULT_TRUSTED_PROXIES = ["private_ranges"];
 
-export default function ProxyHostsClient({ hosts, certificates, accessLists }: Props) {
+export default function ProxyHostsClient({ hosts, certificates, accessLists, authentikDefaults }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
+
+  const handleToggleEnabled = async (id: number, enabled: boolean) => {
+    await toggleProxyHostAction(id, enabled);
+  };
 
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
@@ -161,16 +167,17 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists }: P
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={host.enabled ? "Enabled" : "Disabled"}
+                      <Switch
+                        checked={host.enabled}
+                        onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
                         size="small"
                         sx={{
-                          bgcolor: host.enabled ? "rgba(34, 197, 94, 0.15)" : "rgba(148, 163, 184, 0.15)",
-                          color: host.enabled ? "rgba(34, 197, 94, 1)" : "rgba(148, 163, 184, 0.8)",
-                          border: "1px solid",
-                          borderColor: host.enabled ? "rgba(34, 197, 94, 0.3)" : "rgba(148, 163, 184, 0.3)",
-                          fontWeight: 500,
-                          fontSize: "0.75rem"
+                          "& .MuiSwitch-switchBase.Mui-checked": {
+                            color: "rgba(34, 197, 94, 1)"
+                          },
+                          "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                            backgroundColor: "rgba(34, 197, 94, 0.5)"
+                          }
                         }}
                       />
                     </TableCell>
@@ -215,6 +222,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists }: P
         onClose={() => setCreateOpen(false)}
         certificates={certificates}
         accessLists={accessLists}
+        authentikDefaults={authentikDefaults}
       />
 
       {editHost && (
@@ -242,12 +250,14 @@ function CreateHostDialog({
   open,
   onClose,
   certificates,
-  accessLists
+  accessLists,
+  authentikDefaults
 }: {
   open: boolean;
   onClose: () => void;
   certificates: Certificate[];
   accessLists: AccessList[];
+  authentikDefaults: AuthentikSettings | null;
 }) {
   const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
 
@@ -347,7 +357,7 @@ function CreateHostDialog({
             minRows={3}
             fullWidth
           />
-          <AuthentikFields />
+          <AuthentikFields defaults={authentikDefaults} />
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>
@@ -569,7 +579,13 @@ function DeleteHostDialog({
   );
 }
 
-function AuthentikFields({ authentik }: { authentik?: ProxyHost["authentik"] | null }) {
+function AuthentikFields({
+  authentik,
+  defaults
+}: {
+  authentik?: ProxyHost["authentik"] | null;
+  defaults?: AuthentikSettings | null;
+}) {
   const initial = authentik ?? null;
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
 
@@ -615,7 +631,7 @@ function AuthentikFields({ authentik }: { authentik?: ProxyHost["authentik"] | n
               name="authentik_outpost_domain"
               label="Outpost Domain"
               placeholder="outpost.goauthentik.io"
-              defaultValue={initial?.outpostDomain ?? ""}
+              defaultValue={initial?.outpostDomain ?? defaults?.outpostDomain ?? ""}
               required={enabled}
               disabled={!enabled}
               size="small"
@@ -625,7 +641,7 @@ function AuthentikFields({ authentik }: { authentik?: ProxyHost["authentik"] | n
               name="authentik_outpost_upstream"
               label="Outpost Upstream URL"
               placeholder="https://outpost.internal:9000"
-              defaultValue={initial?.outpostUpstream ?? ""}
+              defaultValue={initial?.outpostUpstream ?? defaults?.outpostUpstream ?? ""}
               required={enabled}
               disabled={!enabled}
               size="small"
@@ -635,7 +651,7 @@ function AuthentikFields({ authentik }: { authentik?: ProxyHost["authentik"] | n
               name="authentik_auth_endpoint"
               label="Auth Endpoint (Optional)"
               placeholder="/outpost.goauthentik.io/auth/caddy"
-              defaultValue={initial?.authEndpoint ?? ""}
+              defaultValue={initial?.authEndpoint ?? defaults?.authEndpoint ?? ""}
               disabled={!enabled}
               size="small"
               fullWidth

@@ -72,3 +72,15 @@ export async function deleteRedirectAction(id: number, _prevState: ActionState):
     return actionError(error, "Failed to delete redirect");
   }
 }
+
+export async function toggleRedirectAction(id: number, enabled: boolean): Promise<ActionState> {
+  try {
+    const session = await requireAdmin();
+    const userId = Number(session.user.id);
+    await updateRedirectHost(id, { enabled }, userId);
+    revalidatePath("/redirects");
+    return actionSuccess(`Redirect ${enabled ? "enabled" : "disabled"}.`);
+  } catch (error) {
+    return actionError(error, "Failed to toggle redirect");
+  }
+}

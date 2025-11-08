@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings } from "@/src/lib/settings";
+import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings } from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
@@ -59,5 +59,30 @@ export async function updateCloudflareSettingsAction(_prevState: ActionResult | 
   } catch (error) {
     console.error("Failed to save Cloudflare settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save Cloudflare settings" };
+  }
+}
+
+export async function updateAuthentikSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const outpostDomain = String(formData.get("outpostDomain") ?? "").trim();
+    const outpostUpstream = String(formData.get("outpostUpstream") ?? "").trim();
+    const authEndpoint = formData.get("authEndpoint") ? String(formData.get("authEndpoint")).trim() : undefined;
+
+    if (!outpostDomain || !outpostUpstream) {
+      return { success: false, message: "Outpost domain and upstream are required" };
+    }
+
+    await saveAuthentikSettings({
+      outpostDomain,
+      outpostUpstream,
+      authEndpoint: authEndpoint && authEndpoint.length > 0 ? authEndpoint : undefined
+    });
+
+    revalidatePath("/settings");
+    return { success: true, message: "Authentik defaults saved successfully" };
+  } catch (error) {
+    console.error("Failed to save Authentik settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save Authentik settings" };
   }
 }

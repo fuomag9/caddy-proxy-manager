@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { createDeadHost, deleteDeadHost, updateDeadHost } from "@/src/lib/models/dead-hosts";
+import { actionSuccess, actionError, type ActionState } from "@/src/lib/actions";
 
 function parseDomains(value: FormDataEntryValue | null): string[] {
   if (!value || typeof value !== "string") {
@@ -53,4 +54,16 @@ export async function deleteDeadHostAction(id: number) {
   const userId = Number(session.user.id);
   await deleteDeadHost(id, userId);
   revalidatePath("/dead-hosts");
+}
+
+export async function toggleDeadHostAction(id: number, enabled: boolean): Promise<ActionState> {
+  try {
+    const session = await requireAdmin();
+    const userId = Number(session.user.id);
+    await updateDeadHost(id, { enabled }, userId);
+    revalidatePath("/dead-hosts");
+    return actionSuccess(`Dead host ${enabled ? "enabled" : "disabled"}.`);
+  } catch (error) {
+    return actionError(error, "Failed to toggle dead host");
+  }
 }
