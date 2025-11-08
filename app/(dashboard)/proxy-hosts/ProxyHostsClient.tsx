@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   Alert,
   Box,
@@ -250,15 +249,14 @@ function CreateHostDialog({
   certificates: Certificate[];
   accessLists: AccessList[];
 }) {
-  const router = useRouter();
   const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
 
   useEffect(() => {
     if (state.status === "success") {
-      router.refresh();
+      // revalidatePath in server action already handles the refresh
       setTimeout(onClose, 1000);
     }
-  }, [state.status, router, onClose]);
+  }, [state.status, onClose]);
 
   return (
     <Dialog
@@ -377,15 +375,14 @@ function EditHostDialog({
   certificates: Certificate[];
   accessLists: AccessList[];
 }) {
-  const router = useRouter();
   const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
 
   useEffect(() => {
     if (state.status === "success") {
-      router.refresh();
+      // revalidatePath in server action already handles the refresh
       setTimeout(onClose, 1000);
     }
-  }, [state.status, router, onClose]);
+  }, [state.status, onClose]);
 
   return (
     <Dialog
@@ -498,15 +495,14 @@ function DeleteHostDialog({
   host: ProxyHost;
   onClose: () => void;
 }) {
-  const router = useRouter();
   const [state, formAction] = useFormState(deleteProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
 
   useEffect(() => {
     if (state.status === "success") {
-      router.refresh();
+      // revalidatePath in server action already handles the refresh
       setTimeout(onClose, 1000);
     }
-  }, [state.status, router, onClose]);
+  }, [state.status, onClose]);
 
   return (
     <Dialog
