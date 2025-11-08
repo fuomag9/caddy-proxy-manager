@@ -116,7 +116,7 @@ Visit `http://localhost:3000/login` and sign in with your credentials.
 | **Redirects** | Set up 301/302 redirects with optional query string preservation |
 | **Dead Hosts** | Display branded maintenance pages with custom status codes |
 | **Access Lists** | Create HTTP basic-auth user lists and assign them to proxy hosts |
-| **Certificates** | Request ACME-managed certificates or import custom PEM files |
+| **Certificates** | Import custom SSL/TLS certificates (internal CA, wildcards, etc.) - Caddy auto-manages public certs |
 | **Settings** | Configure primary domain, ACME email, and Cloudflare DNS automation |
 | **Audit Log** | Review chronological feed of all administrative actions |
 
@@ -250,6 +250,40 @@ npm run dev
 - Imported certificate keys stored in SQLite without encryption (planned enhancement)
 - In-memory rate limiting (requires Redis/Memcached for multi-instance deployments)
 - No 2FA support yet (planned enhancement)
+
+---
+
+## Certificate Management
+
+### Automatic HTTPS (Default)
+
+Caddy automatically handles SSL/TLS certificates for all proxy hosts:
+
+- **Zero Configuration**: Just add a domain to a proxy host - certificates are obtained automatically
+- **Auto-Renewal**: Certificates renew automatically before expiration
+- **Multiple Domains**: Each proxy host can have multiple domains with automatic cert management
+- **Wildcard Support**: Use Cloudflare DNS-01 challenge for wildcard certificates
+
+**No action required** - this works out of the box!
+
+### Custom Certificates (Optional)
+
+Import your own certificates when you need to:
+
+- **Internal CA**: Use certificates from your organization's Certificate Authority
+- **Pre-existing Certs**: Reuse certificates you already have
+- **Special Requirements**: Compliance, security policies, or specific certificate features
+- **Wildcard from DNS Provider**: Import wildcard certificates from your DNS provider
+
+**How to import:**
+1. Navigate to **Certificates** page
+2. Click **Import Custom Certificate**
+3. Provide certificate name and domains
+4. Paste certificate PEM (full chain recommended)
+5. Paste private key PEM
+6. Save and assign to proxy hosts as needed
+
+**Security Note**: Imported private keys are stored in the database. Ensure your `.env` file and database have restricted permissions (`chmod 600`).
 
 ---
 
