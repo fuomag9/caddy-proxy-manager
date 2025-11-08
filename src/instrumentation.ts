@@ -25,5 +25,17 @@ export async function register() {
       console.error("Failed to initialize database:", error);
       // Don't throw - let the app start anyway, errors will surface when users try to use features
     }
+
+    // Apply Caddy configuration from database on startup
+    const { applyCaddyConfig } = await import("./lib/caddy");
+    try {
+      console.log("Applying Caddy configuration from database...");
+      await applyCaddyConfig();
+      console.log("Caddy configuration applied successfully");
+    } catch (error) {
+      console.error("Failed to apply Caddy configuration on startup:", error);
+      // Don't throw - Caddy might not be ready yet, or config might be applied later
+      // This ensures proxy hosts work after container restart
+    }
   }
 }
