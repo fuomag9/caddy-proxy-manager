@@ -3,7 +3,7 @@ import { join } from "node:path";
 import crypto from "node:crypto";
 import db, { nowIso } from "./db";
 import { config } from "./config";
-import { getCloudflareSettings, getGeneralSettings, setSetting } from "./settings";
+import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, setSetting } from "./settings";
 import {
   accessListEntries,
   certificates,
@@ -925,6 +925,12 @@ async function buildCaddyDocument() {
 
   const hasTls = tlsConnectionPolicies.length > 0;
 
+  // Check if metrics should be enabled
+  const metricsSettings = await getMetricsSettings();
+  const metricsEnabled = metricsSettings?.enabled ?? false;
+  const metricsPort = metricsSettings?.port ?? 2019;
+  const metricsPath = metricsSettings?.path ?? "/metrics";
+
   const httpApp =
     httpRoutes.length > 0
       ? {
@@ -943,10 +949,21 @@ async function buildCaddyDocument() {
         }
       : {};
 
+  // Configure admin API
+  // Metrics are available at <admin_endpoint>/metrics when metrics are enabled
+  const adminConfig: Record<string, unknown> = {
+    listen: `0.0.0.0:${metricsPort}`
+  };
+
+  // Optionally disable metrics endpoint if not enabled
+  if (!metricsEnabled) {
+    adminConfig.config = {
+      persist: false
+    };
+  }
+
   return {
-    admin: {
-      listen: "0.0.0.0:2019"
-    },
+    admin: adminConfig,
     apps: {
       ...httpApp,
       ...(tlsApp ? { tls: tlsApp } : {})

@@ -37,5 +37,15 @@ export async function register() {
       // Don't throw - Caddy might not be ready yet, or config might be applied later
       // This ensures proxy hosts work after container restart
     }
+
+    // Start Caddy health monitoring to detect restarts and auto-reapply config
+    const { startCaddyMonitoring } = await import("./lib/caddy-monitor");
+    try {
+      startCaddyMonitoring();
+      console.log("Caddy health monitoring started");
+    } catch (error) {
+      console.error("Failed to start Caddy health monitoring:", error);
+      // Don't throw - monitoring is a nice-to-have feature
+    }
   }
 }

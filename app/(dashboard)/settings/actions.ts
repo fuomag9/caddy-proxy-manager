@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings } from "@/src/lib/settings";
+import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings } from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
@@ -84,5 +84,39 @@ export async function updateAuthentikSettingsAction(_prevState: ActionResult | n
   } catch (error) {
     console.error("Failed to save Authentik settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save Authentik settings" };
+  }
+}
+
+export async function updateMetricsSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const enabled = formData.get("enabled") === "on";
+    const portStr = formData.get("port") ? String(formData.get("port")).trim() : "";
+    const port = portStr && !isNaN(Number(portStr)) ? Number(portStr) : 2019;
+    const path = formData.get("path") ? String(formData.get("path")).trim() : "/metrics";
+
+    await saveMetricsSettings({
+      enabled,
+      port,
+      path
+    });
+
+    // Apply config to enable/disable metrics
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      return { success: true, message: "Metrics settings saved and applied successfully" };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: true,
+        message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
+      };
+    }
+  } catch (error) {
+    console.error("Failed to save metrics settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save metrics settings" };
   }
 }

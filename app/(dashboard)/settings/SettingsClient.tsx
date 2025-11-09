@@ -2,11 +2,12 @@
 
 import { useFormState } from "react-dom";
 import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, Stack, TextField, Typography } from "@mui/material";
-import type { GeneralSettings, AuthentikSettings } from "@/src/lib/settings";
+import type { GeneralSettings, AuthentikSettings, MetricsSettings } from "@/src/lib/settings";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
-  updateAuthentikSettingsAction
+  updateAuthentikSettingsAction,
+  updateMetricsSettingsAction
 } from "./actions";
 
 type Props = {
@@ -17,12 +18,14 @@ type Props = {
     accountId?: string;
   };
   authentik: AuthentikSettings | null;
+  metrics: MetricsSettings | null;
 };
 
-export default function SettingsClient({ general, cloudflare, authentik }: Props) {
+export default function SettingsClient({ general, cloudflare, authentik, metrics }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
   const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
   const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
+  const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
 
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
@@ -153,6 +156,53 @@ export default function SettingsClient({ general, cloudflare, authentik }: Props
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save Authentik defaults
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            Metrics & Monitoring
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Enable Caddy metrics exposure for monitoring with Prometheus, Grafana, or other observability tools.
+            When enabled, metrics will be available at http://caddy:{metrics?.port ?? 2019}{metrics?.path ?? "/metrics"}
+          </Typography>
+          <Stack component="form" action={metricsFormAction} spacing={2}>
+            {metricsState?.message && (
+              <Alert severity={metricsState.success ? "success" : "warning"}>
+                {metricsState.message}
+              </Alert>
+            )}
+            <FormControlLabel
+              control={<Checkbox name="enabled" defaultChecked={metrics?.enabled ?? false} />}
+              label="Enable metrics endpoint"
+            />
+            <TextField
+              name="port"
+              label="Metrics Port"
+              type="number"
+              defaultValue={metrics?.port ?? 2019}
+              helperText="Port to expose metrics on (default: 2019, same as admin API)"
+              fullWidth
+            />
+            <TextField
+              name="path"
+              label="Metrics Path"
+              defaultValue={metrics?.path ?? "/metrics"}
+              helperText="Path to expose metrics at (default: /metrics)"
+              fullWidth
+            />
+            <Alert severity="info">
+              After enabling metrics, configure your monitoring tool to scrape http://caddy-proxy-manager-caddy:{metrics?.port ?? 2019}{metrics?.path ?? "/metrics"} from within the Docker network.
+              To expose metrics externally, add a port mapping in docker-compose.yml.
+            </Alert>
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">
+                Save metrics settings
               </Button>
             </Box>
           </Stack>
