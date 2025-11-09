@@ -34,12 +34,19 @@ let isMonitoring = false;
  */
 async function getCaddyConfigId(): Promise<string | null> {
   try {
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(`${config.caddyApiUrl}/config/`, {
       method: "GET",
-      signal: AbortSignal.timeout(5000)
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
+      console.error(`[CaddyMonitor] Caddy API returned status ${response.status}`);
       return null;
     }
 
@@ -56,6 +63,9 @@ async function getCaddyConfigId(): Promise<string | null> {
     return isEmpty ? "empty" : "configured";
   } catch (error) {
     // Network error or timeout
+    if (error instanceof Error) {
+      console.error(`[CaddyMonitor] Failed to get Caddy config: ${error.message}`);
+    }
     return null;
   }
 }
@@ -73,9 +83,9 @@ async function checkCaddyHealth(): Promise<void> {
     // Caddy is not responding
     monitorState.consecutiveFailures++;
 
-    if (monitorState.isHealthy && monitorState.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+    if (monitorState.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && monitorState.isHealthy) {
       console.warn(
-        `[CaddyMonitor] Caddy appears to be down (${monitorState.consecutiveFailures} consecutive failures)`
+        `[CaddyMonitor] Caddy appears to be down after ${monitorState.consecutiveFailures} consecutive failures`
       );
       monitorState.isHealthy = false;
     }
@@ -85,15 +95,20 @@ async function checkCaddyHealth(): Promise<void> {
   // Caddy is responding
   const wasUnhealthy = !monitorState.isHealthy;
   monitorState.consecutiveFailures = 0;
+
+  if (wasUnhealthy) {
+    console.log("[CaddyMonitor] Caddy is now responding again");
+  }
+
   monitorState.isHealthy = true;
 
-  // Detect restart: config ID changed to "empty" or Caddy was previously unhealthy
+  // Detect restart: config ID changed to "empty" or Caddy was previously unhealthy and now has empty config
   const hasRestarted =
     (monitorState.lastConfigId !== null && currentConfigId === "empty") ||
     (wasUnhealthy && currentConfigId === "empty");
 
   if (hasRestarted) {
-    console.log("[CaddyMonitor] Caddy restart detected! Waiting before reapplying configuration...");
+    console.log("[CaddyMonitor] Caddy restart detected (config is empty)! Waiting before reapplying configuration...");
 
     // Wait a bit for Caddy to fully initialize
     setTimeout(async () => {
@@ -112,7 +127,7 @@ async function checkCaddyHealth(): Promise<void> {
     }, REAPPLY_DELAY);
   } else if (monitorState.lastConfigId === null) {
     // First time seeing Caddy healthy
-    console.log("[CaddyMonitor] Caddy health monitoring initialized");
+    console.log(`[CaddyMonitor] Caddy health monitoring initialized (current state: ${currentConfigId})`);
     monitorState.lastConfigId = currentConfigId;
   } else {
     // Normal operation, update last known config ID
