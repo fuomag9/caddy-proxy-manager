@@ -21,6 +21,11 @@ export type AuthentikSettings = {
   authEndpoint?: string;
 };
 
+export type MetricsSettings = {
+  enabled: boolean;
+  port?: number; // Port to expose metrics on (default: 9090, separate from admin API)
+};
+
 export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
   const setting = await db.query.settings.findFirst({
     where: (table, { eq }) => eq(table.key, key)
@@ -80,4 +85,12 @@ export async function getAuthentikSettings(): Promise<AuthentikSettings | null> 
 
 export async function saveAuthentikSettings(settings: AuthentikSettings): Promise<void> {
   await setSetting("authentik", settings);
+}
+
+export async function getMetricsSettings(): Promise<MetricsSettings | null> {
+  return await getSetting<MetricsSettings>("metrics");
+}
+
+export async function saveMetricsSettings(settings: MetricsSettings): Promise<void> {
+  await setSetting("metrics", settings);
 }

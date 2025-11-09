@@ -3,7 +3,7 @@ import { join } from "node:path";
 import crypto from "node:crypto";
 import db, { nowIso } from "./db";
 import { config } from "./config";
-import { getCloudflareSettings, getGeneralSettings, setSetting } from "./settings";
+import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, setSetting } from "./settings";
 import {
   accessListEntries,
   certificates,
@@ -925,23 +925,46 @@ async function buildCaddyDocument() {
 
   const hasTls = tlsConnectionPolicies.length > 0;
 
-  const httpApp =
-    httpRoutes.length > 0
-      ? {
-          http: {
-            servers: {
-              cpm: {
-                listen: hasTls ? [":80", ":443"] : [":80"],
-                routes: httpRoutes,
-                // Only disable automatic HTTPS if we have TLS automation policies
-                // This allows Caddy to handle HTTP-01 challenges for managed certificates
-                ...(tlsApp ? {} : { automatic_https: { disable: true } }),
-                ...(hasTls ? { tls_connection_policies: tlsConnectionPolicies } : {})
+  // Check if metrics should be enabled
+  const metricsSettings = await getMetricsSettings();
+  const metricsEnabled = metricsSettings?.enabled ?? false;
+  const metricsPort = metricsSettings?.port ?? 9090;
+
+  const servers: Record<string, unknown> = {};
+
+  // Main HTTP/HTTPS server for proxy hosts
+  if (httpRoutes.length > 0) {
+    servers.cpm = {
+      listen: hasTls ? [":80", ":443"] : [":80"],
+      routes: httpRoutes,
+      // Only disable automatic HTTPS if we have TLS automation policies
+      // This allows Caddy to handle HTTP-01 challenges for managed certificates
+      ...(tlsApp ? {} : { automatic_https: { disable: true } }),
+      ...(hasTls ? { tls_connection_policies: tlsConnectionPolicies } : {})
+    };
+  }
+
+  // Metrics server - exposes /metrics endpoint on separate port
+  if (metricsEnabled) {
+    servers.metrics = {
+      listen: [`:${metricsPort}`],
+      routes: [
+        {
+          handle: [
+            {
+              handler: "reverse_proxy",
+              upstreams: [{ dial: "localhost:2019" }],
+              rewrite: {
+                uri: "/metrics"
               }
             }
-          }
+          ]
         }
-      : {};
+      ]
+    };
+  }
+
+  const httpApp = Object.keys(servers).length > 0 ? { http: { servers } } : {};
 
   return {
     admin: {

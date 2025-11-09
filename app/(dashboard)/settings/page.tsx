@@ -1,14 +1,15 @@
 import SettingsClient from "./SettingsClient";
-import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings } from "@/src/lib/settings";
+import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings, getMetricsSettings } from "@/src/lib/settings";
 import { requireAdmin } from "@/src/lib/auth";
 
 export default async function SettingsPage() {
   await requireAdmin();
 
-  const [general, cloudflare, authentik] = await Promise.all([
+  const [general, cloudflare, authentik, metrics] = await Promise.all([
     getGeneralSettings(),
     getCloudflareSettings(),
-    getAuthentikSettings()
+    getAuthentikSettings(),
+    getMetricsSettings()
   ]);
 
   return (
@@ -20,6 +21,7 @@ export default async function SettingsPage() {
         accountId: cloudflare?.accountId
       }}
       authentik={authentik}
+      metrics={metrics}
     />
   );
 }

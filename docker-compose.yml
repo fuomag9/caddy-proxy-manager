@@ -59,8 +59,10 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      # Admin API only exposed on internal network for security
+      # Admin API (port 2019) is only exposed on internal network for security
       # Web UI accesses via http://caddy:2019 internally
+      # Uncomment the line below to expose metrics externally for Grafana/Prometheus
+      # - "9090:9090"  # Metrics available at http://localhost:9090/metrics (configure in Settings first)
     environment:
       # Primary domain for Caddy configuration
       PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:-caddyproxymanager.com}
