@@ -72,7 +72,7 @@ services:
     networks:
       - caddy-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:2019/config/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "-O", "/dev/null", "http://localhost:2019/config/"]
       interval: 30s
       timeout: 10s
       retries: 3
