@@ -16,6 +16,7 @@ FROM ubuntu:24.04
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy caddy binary from builder
