@@ -1,18 +1,9 @@
 # syntax=docker/dockerfile:1.6
 
-FROM ubuntu:24.04 AS builder
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    ca-certificates \
-    golang-go \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+FROM golang:1.25 AS builder
 
 # Install xcaddy
-RUN wget -O /usr/local/bin/xcaddy "https://caddyserver.com/api/download?os=linux&arch=amd64&p=github.com/caddyserver/xcaddy" \
-    && chmod +x /usr/local/bin/xcaddy
+RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 
 # Build Caddy with plugins
 RUN xcaddy build \
@@ -32,7 +23,7 @@ COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 COPY docker/caddy/Caddyfile /etc/caddy/Caddyfile
 
 # Create caddy user and directories
-RUN groupadd -g 1000 caddy && useradd -r -u 1000 -g caddy caddy \
+RUN groupadd caddy && useradd -r -g caddy caddy \
     && mkdir -p /data /config \
     && chown -R caddy:caddy /data /config
 
