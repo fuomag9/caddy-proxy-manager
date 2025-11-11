@@ -23,9 +23,9 @@ COPY --from=builder /usr/bin/caddy /usr/bin/caddy
 COPY docker/caddy/Caddyfile /etc/caddy/Caddyfile
 
 # Create caddy user and directories
-RUN groupadd caddy && useradd -r -g caddy caddy \
+RUN groupadd caddy && useradd -r -g caddy -m -d /home/caddy caddy \
     && mkdir -p /data /config \
-    && chown -R caddy:caddy /data /config
+    && chown -R caddy:caddy /data /config /home/caddy
 
 EXPOSE 80 443 2019
 
