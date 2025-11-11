@@ -30,5 +30,9 @@ RUN groupadd caddy && useradd -r -g caddy -m -d /home/caddy caddy \
 
 EXPOSE 80 443 2019
 
+# Set environment variables to use /data and /config like official Caddy image
+ENV XDG_CONFIG_HOME=/config
+ENV XDG_DATA_HOME=/data
+
 USER caddy
 CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
