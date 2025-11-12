@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Alert,
@@ -31,6 +31,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
+import SearchIcon from "@mui/icons-material/Search";
 import { useFormState } from "react-dom";
 import type { RedirectHost } from "@/src/lib/models/redirect-hosts";
 import { INITIAL_ACTION_STATE } from "@/src/lib/actions";
@@ -44,6 +45,28 @@ export default function RedirectsClient({ redirects }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editRedirect, setEditRedirect] = useState<RedirectHost | null>(null);
   const [deleteRedirect, setDeleteRedirect] = useState<RedirectHost | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredRedirects = useMemo(() => {
+    if (!searchTerm.trim()) return redirects;
+
+    const search = searchTerm.toLowerCase();
+    return redirects.filter((redirect) => {
+      // Search in name
+      if (redirect.name.toLowerCase().includes(search)) return true;
+
+      // Search in domains
+      if (redirect.domains.some(domain => domain.toLowerCase().includes(search))) return true;
+
+      // Search in destination
+      if (redirect.destination.toLowerCase().includes(search)) return true;
+
+      // Search in status code
+      if (redirect.status_code.toString().includes(search)) return true;
+
+      return false;
+    });
+  }, [redirects, searchTerm]);
 
   const handleToggleEnabled = async (id: number, enabled: boolean) => {
     await toggleRedirectAction(id, enabled);
@@ -80,6 +103,26 @@ export default function RedirectsClient({ redirects }: Props) {
         </Button>
       </Stack>
 
+      <TextField
+        placeholder="Search redirects..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        slotProps={{
+          input: {
+            startAdornment: <SearchIcon sx={{ mr: 1, color: "rgba(255, 255, 255, 0.5)" }} />
+          }
+        }}
+        sx={{
+          maxWidth: 500,
+          "& .MuiOutlinedInput-root": {
+            bgcolor: "rgba(20, 20, 22, 0.6)",
+            "&:hover": {
+              bgcolor: "rgba(20, 20, 22, 0.8)"
+            }
+          }
+        }}
+      />
+
       <TableContainer
         component={Card}
         sx={{
@@ -99,14 +142,14 @@ export default function RedirectsClient({ redirects }: Props) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {redirects.length === 0 ? (
+            {filteredRedirects.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} align="center" sx={{ py: 6, color: "text.secondary" }}>
-                  No redirects configured. Click "Create Redirect" to add one.
+                  {searchTerm ? "No redirects match your search." : "No redirects configured. Click \"Create Redirect\" to add one."}
                 </TableCell>
               </TableRow>
             ) : (
-              redirects.map((redirect) => (
+              filteredRedirects.map((redirect) => (
                 <TableRow
                   key={redirect.id}
                   sx={{

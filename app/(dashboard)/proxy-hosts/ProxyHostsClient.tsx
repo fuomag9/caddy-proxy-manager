@@ -33,6 +33,7 @@ import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
+import SearchIcon from "@mui/icons-material/Search";
 import { useFormState } from "react-dom";
 import type { AccessList } from "@/src/lib/models/access-lists";
 import type { Certificate } from "@/src/lib/models/certificates";
@@ -70,6 +71,32 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
   const [createDialogKey, setCreateDialogKey] = useState(0);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredHosts = useMemo(() => {
+    if (!searchTerm.trim()) return hosts;
+
+    const search = searchTerm.toLowerCase();
+    return hosts.filter((host) => {
+      // Search in name
+      if (host.name.toLowerCase().includes(search)) return true;
+
+      // Search in domains
+      if (host.domains.some(domain => domain.toLowerCase().includes(search))) return true;
+
+      // Search in upstreams
+      if (host.upstreams.some(upstream => upstream.toLowerCase().includes(search))) return true;
+
+      // Search in certificate name
+      const certificate = host.certificate_id
+        ? certificates.find(c => c.id === host.certificate_id)
+        : null;
+      const certName = certificate?.name ?? "Managed by Caddy (Auto)";
+      if (certName.toLowerCase().includes(search)) return true;
+
+      return false;
+    });
+  }, [hosts, certificates, searchTerm]);
 
   const handleToggleEnabled = async (id: number, enabled: boolean) => {
     await toggleProxyHostAction(id, enabled);
@@ -111,6 +138,26 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
         </Button>
       </Stack>
 
+      <TextField
+        placeholder="Search proxy hosts..."
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        slotProps={{
+          input: {
+            startAdornment: <SearchIcon sx={{ mr: 1, color: "rgba(255, 255, 255, 0.5)" }} />
+          }
+        }}
+        sx={{
+          maxWidth: 500,
+          "& .MuiOutlinedInput-root": {
+            bgcolor: "rgba(20, 20, 22, 0.6)",
+            "&:hover": {
+              bgcolor: "rgba(20, 20, 22, 0.8)"
+            }
+          }
+        }}
+      />
+
       <TableContainer
         component={Card}
         sx={{
@@ -130,14 +177,14 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
             </TableRow>
           </TableHead>
           <TableBody>
-            {hosts.length === 0 ? (
+            {filteredHosts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} align="center" sx={{ py: 6, color: "text.secondary" }}>
-                  No proxy hosts configured. Click "Create Host" to add one.
+                  {searchTerm ? "No proxy hosts match your search." : "No proxy hosts configured. Click \"Create Host\" to add one."}
                 </TableCell>
               </TableRow>
             ) : (
-              hosts.map((host) => {
+              filteredHosts.map((host) => {
                 const certificate = host.certificate_id
                   ? certificates.find(c => c.id === host.certificate_id)
                   : null;
