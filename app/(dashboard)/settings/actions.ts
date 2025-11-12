@@ -3,7 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings } from "@/src/lib/settings";
+import {
+  getCloudflareSettings,
+  getLoggingSettings,
+  saveAuthentikSettings,
+  saveCloudflareSettings,
+  saveGeneralSettings,
+  saveLoggingSettings,
+  saveMetricsSettings
+} from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
@@ -116,5 +124,75 @@ export async function updateMetricsSettingsAction(_prevState: ActionResult | nul
   } catch (error) {
     console.error("Failed to save metrics settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save metrics settings" };
+  }
+}
+
+export async function updateLoggingSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const enabled = formData.get("enabled") === "on";
+    const lokiUrl = formData.get("lokiUrl") ? String(formData.get("lokiUrl")).trim() : undefined;
+    const lokiUsername = formData.get("lokiUsername") ? String(formData.get("lokiUsername")).trim() : undefined;
+    const rawPassword = formData.get("lokiPassword") ? String(formData.get("lokiPassword")).trim() : "";
+    const clearPassword = formData.get("clearPassword") === "on";
+    const labelsStr = formData.get("labels") ? String(formData.get("labels")).trim() : "";
+
+    // Get current settings to preserve existing password if needed
+    const current = await getLoggingSettings();
+
+    // Validate Loki URL if logging is enabled
+    if (enabled && !lokiUrl) {
+      return { success: false, message: "Loki URL is required when logging is enabled" };
+    }
+
+    if (enabled && lokiUrl) {
+      try {
+        new URL(lokiUrl);
+      } catch {
+        return { success: false, message: "Invalid Loki URL format. Must be a valid HTTP/HTTPS URL." };
+      }
+    }
+
+    // Parse labels JSON if provided
+    let labels: Record<string, string> | undefined;
+    if (labelsStr && labelsStr.length > 0) {
+      try {
+        labels = JSON.parse(labelsStr);
+        if (typeof labels !== "object" || Array.isArray(labels)) {
+          return { success: false, message: "Labels must be a JSON object" };
+        }
+      } catch {
+        return { success: false, message: "Invalid labels JSON format" };
+      }
+    }
+
+    // Handle password: clear if checkbox is checked, update if new password provided, otherwise keep existing
+    const lokiPassword = clearPassword ? "" : rawPassword || current?.lokiPassword || "";
+
+    await saveLoggingSettings({
+      enabled,
+      lokiUrl,
+      lokiUsername: lokiUsername && lokiUsername.length > 0 ? lokiUsername : undefined,
+      lokiPassword: lokiPassword && lokiPassword.length > 0 ? lokiPassword : undefined,
+      labels
+    });
+
+    // Apply config to enable/disable logging
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      return { success: true, message: "Logging settings saved and applied successfully" };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: true,
+        message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
+      };
+    }
+  } catch (error) {
+    console.error("Failed to save logging settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save logging settings" };
   }
 }
