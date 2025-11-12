@@ -3,13 +3,7 @@ import { join } from "node:path";
 import crypto from "node:crypto";
 import db, { nowIso } from "./db";
 import { config } from "./config";
-import {
-  getCloudflareSettings,
-  getGeneralSettings,
-  getLoggingSettings,
-  getMetricsSettings,
-  setSetting
-} from "./settings";
+import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, setSetting } from "./settings";
 import {
   accessListEntries,
   certificates,
@@ -788,72 +782,6 @@ async function buildTlsAutomation(
   };
 }
 
-function buildLoggingApp(loggingSettings: NonNullable<Awaited<ReturnType<typeof getLoggingSettings>>>) {
-  if (!loggingSettings.lokiUrl) {
-    return null;
-  }
-
-  // Ensure Loki URL has the push endpoint path
-  let lokiUrl = loggingSettings.lokiUrl;
-  if (!lokiUrl.includes("/loki/api/v1/push")) {
-    // Remove trailing slash if present
-    lokiUrl = lokiUrl.replace(/\/$/, "");
-    lokiUrl = `${lokiUrl}/loki/api/v1/push`;
-  }
-
-  // Build Loki endpoint URL with basic auth if provided
-  let lokiEndpoint = lokiUrl;
-  if (loggingSettings.lokiUsername && loggingSettings.lokiPassword) {
-    // Embed basic auth in URL: https://user:pass@host/path
-    const urlObj = new URL(lokiUrl);
-    urlObj.username = loggingSettings.lokiUsername;
-    urlObj.password = loggingSettings.lokiPassword;
-    lokiEndpoint = urlObj.toString();
-  }
-
-  const lokiWriterConfig: Record<string, unknown> = {
-    output: "loki",
-    endpoint: lokiEndpoint
-  };
-
-  // Add custom labels if provided
-  if (loggingSettings.labels && Object.keys(loggingSettings.labels).length > 0) {
-    lokiWriterConfig.label = loggingSettings.labels;
-  }
-
-  return {
-    logs: {
-      // Access log for all HTTP requests
-      access: {
-        encoder: {
-          format: "json",
-          message_key: "msg",
-          level_key: "level",
-          time_key: "ts",
-          name_key: "logger"
-        },
-        writer: lokiWriterConfig,
-        level: "INFO",
-        include: ["http.log.access.*"]
-      },
-      // Default log for errors and other messages
-      default: {
-        encoder: {
-          format: "json",
-          message_key: "msg",
-          level_key: "level",
-          time_key: "ts",
-          name_key: "logger",
-          caller_key: "caller",
-          stacktrace_key: "stacktrace"
-        },
-        writer: lokiWriterConfig,
-        level: "WARN"
-      }
-    }
-  };
-}
-
 async function buildCaddyDocument() {
   const [proxyHostRecords, redirectHostRecords, deadHostRecords, certRows, accessListEntryRecords] = await Promise.all([
     db
@@ -1002,11 +930,6 @@ async function buildCaddyDocument() {
   const metricsEnabled = metricsSettings?.enabled ?? false;
   const metricsPort = metricsSettings?.port ?? 9090;
 
-  // Check if logging should be enabled
-  const loggingSettings = await getLoggingSettings();
-  const loggingEnabled = loggingSettings?.enabled ?? false;
-  const loggingApp = loggingEnabled && loggingSettings ? buildLoggingApp(loggingSettings) : null;
-
   const servers: Record<string, unknown> = {};
 
   // Main HTTP/HTTPS server for proxy hosts
@@ -1017,9 +940,7 @@ async function buildCaddyDocument() {
       // Only disable automatic HTTPS if we have TLS automation policies
       // This allows Caddy to handle HTTP-01 challenges for managed certificates
       ...(tlsApp ? {} : { automatic_https: { disable: true } }),
-      ...(hasTls ? { tls_connection_policies: tlsConnectionPolicies } : {}),
-      // Enable access logging if configured
-      ...(loggingEnabled ? { logs: { default_logger_name: "access" } } : {})
+      ...(hasTls ? { tls_connection_policies: tlsConnectionPolicies } : {})
     };
   }
 
@@ -1049,7 +970,6 @@ async function buildCaddyDocument() {
     admin: {
       listen: "0.0.0.0:2019"
     },
-    ...(loggingApp ? { logging: loggingApp } : {}),
     apps: {
       ...httpApp,
       ...(tlsApp ? { tls: tlsApp } : {})

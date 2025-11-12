@@ -2,12 +2,11 @@
 
 import { useFormState } from "react-dom";
 import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, Stack, TextField, Typography } from "@mui/material";
-import type { GeneralSettings, AuthentikSettings, LoggingSettings, MetricsSettings } from "@/src/lib/settings";
+import type { GeneralSettings, AuthentikSettings, MetricsSettings } from "@/src/lib/settings";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
   updateAuthentikSettingsAction,
-  updateLoggingSettingsAction,
   updateMetricsSettingsAction
 } from "./actions";
 
@@ -19,21 +18,13 @@ type Props = {
     accountId?: string;
   };
   authentik: AuthentikSettings | null;
-  logging: {
-    enabled: boolean;
-    lokiUrl?: string;
-    lokiUsername?: string;
-    hasPassword: boolean;
-    labels?: Record<string, string>;
-  } | null;
   metrics: MetricsSettings | null;
 };
 
-export default function SettingsClient({ general, cloudflare, authentik, logging, metrics }: Props) {
+export default function SettingsClient({ general, cloudflare, authentik, metrics }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
   const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
   const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
-  const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
   const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
 
   return (
@@ -165,82 +156,6 @@ export default function SettingsClient({ general, cloudflare, authentik, logging
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save Authentik defaults
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Logging
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Enable comprehensive request logging to Loki for debugging and monitoring.
-            You must deploy your own Loki instance and provide its URL.
-          </Typography>
-          {logging?.hasPassword && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              A Loki password is already configured. Leave the password field blank to keep it, or enter a new password to update it.
-            </Alert>
-          )}
-          <Stack component="form" action={loggingFormAction} spacing={2}>
-            {loggingState?.message && (
-              <Alert severity={loggingState.success ? "success" : "error"}>
-                {loggingState.message}
-              </Alert>
-            )}
-            <FormControlLabel
-              control={<Checkbox name="enabled" defaultChecked={logging?.enabled ?? false} />}
-              label="Enable request logging"
-            />
-            <TextField
-              name="lokiUrl"
-              label="Loki URL"
-              defaultValue={logging?.lokiUrl ?? ""}
-              placeholder="http://loki:3100"
-              helperText="Base URL of your Loki instance (e.g., http://loki:3100). The /loki/api/v1/push path will be added automatically."
-              fullWidth
-            />
-            <TextField
-              name="lokiUsername"
-              label="Loki Username (optional)"
-              defaultValue={logging?.lokiUsername ?? ""}
-              helperText="Leave empty if your Loki instance doesn't require authentication"
-              fullWidth
-            />
-            <TextField
-              name="lokiPassword"
-              label="Loki Password (optional)"
-              type="password"
-              autoComplete="new-password"
-              placeholder={logging?.hasPassword ? "Enter new password to update" : "Enter password"}
-              helperText="Leave empty to keep existing password, or enter new password to update"
-              fullWidth
-            />
-            <FormControlLabel
-              control={<Checkbox name="clearPassword" />}
-              label="Remove existing password"
-              disabled={!logging?.hasPassword}
-            />
-            <TextField
-              name="labels"
-              label="Custom Labels (optional)"
-              defaultValue={logging?.labels ? JSON.stringify(logging.labels) : ""}
-              placeholder='{"environment":"production","service":"caddy"}'
-              helperText="Optional JSON object of custom labels to add to logs"
-              fullWidth
-              multiline
-              rows={2}
-            />
-            <Alert severity="info">
-              After enabling logging, all Caddy requests will be sent to your Loki instance.
-              You can query and visualize logs in Grafana using the Loki datasource.
-            </Alert>
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save logging settings
               </Button>
             </Box>
           </Stack>
