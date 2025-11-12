@@ -801,20 +801,24 @@ function buildLoggingApp(loggingSettings: NonNullable<Awaited<ReturnType<typeof 
     lokiUrl = `${lokiUrl}/loki/api/v1/push`;
   }
 
+  // Build Loki endpoint URL with basic auth if provided
+  let lokiEndpoint = lokiUrl;
+  if (loggingSettings.lokiUsername && loggingSettings.lokiPassword) {
+    // Embed basic auth in URL: https://user:pass@host/path
+    const urlObj = new URL(lokiUrl);
+    urlObj.username = loggingSettings.lokiUsername;
+    urlObj.password = loggingSettings.lokiPassword;
+    lokiEndpoint = urlObj.toString();
+  }
+
   const lokiWriterConfig: Record<string, unknown> = {
     output: "loki",
-    url: lokiUrl
+    endpoint: lokiEndpoint
   };
-
-  // Add basic auth if provided
-  if (loggingSettings.lokiUsername && loggingSettings.lokiPassword) {
-    lokiWriterConfig.username = loggingSettings.lokiUsername;
-    lokiWriterConfig.password = loggingSettings.lokiPassword;
-  }
 
   // Add custom labels if provided
   if (loggingSettings.labels && Object.keys(loggingSettings.labels).length > 0) {
-    lokiWriterConfig.labels = loggingSettings.labels;
+    lokiWriterConfig.label = loggingSettings.labels;
   }
 
   return {
