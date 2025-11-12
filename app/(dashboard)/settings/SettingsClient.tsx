@@ -200,7 +200,7 @@ export default function SettingsClient({ general, cloudflare, authentik, logging
               label="Loki URL"
               defaultValue={logging?.lokiUrl ?? ""}
               placeholder="http://loki:3100"
-              helperText="URL of your Loki instance (e.g., http://loki:3100 or https://loki.example.com)"
+              helperText="Base URL of your Loki instance (e.g., http://loki:3100). The /loki/api/v1/push path will be added automatically."
               fullWidth
             />
             <TextField

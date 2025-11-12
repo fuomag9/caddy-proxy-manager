@@ -793,9 +793,17 @@ function buildLoggingApp(loggingSettings: NonNullable<Awaited<ReturnType<typeof 
     return null;
   }
 
+  // Ensure Loki URL has the push endpoint path
+  let lokiUrl = loggingSettings.lokiUrl;
+  if (!lokiUrl.includes("/loki/api/v1/push")) {
+    // Remove trailing slash if present
+    lokiUrl = lokiUrl.replace(/\/$/, "");
+    lokiUrl = `${lokiUrl}/loki/api/v1/push`;
+  }
+
   const lokiWriterConfig: Record<string, unknown> = {
     output: "loki",
-    url: loggingSettings.lokiUrl
+    url: lokiUrl
   };
 
   // Add basic auth if provided
@@ -1037,10 +1045,10 @@ async function buildCaddyDocument() {
     admin: {
       listen: "0.0.0.0:2019"
     },
+    ...(loggingApp ? { logging: loggingApp } : {}),
     apps: {
       ...httpApp,
-      ...(tlsApp ? { tls: tlsApp } : {}),
-      ...(loggingApp ? { logging: loggingApp } : {})
+      ...(tlsApp ? { tls: tlsApp } : {})
     }
   };
 }
