@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings } from "@/src/lib/settings";
+import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings } from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
@@ -116,5 +116,41 @@ export async function updateMetricsSettingsAction(_prevState: ActionResult | nul
   } catch (error) {
     console.error("Failed to save metrics settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save metrics settings" };
+  }
+}
+
+export async function updateLoggingSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const enabled = formData.get("enabled") === "on";
+    const format = formData.get("format") ? String(formData.get("format")).trim() : "json";
+
+    // Validate format
+    if (format !== "json" && format !== "console") {
+      return { success: false, message: "Invalid log format. Must be 'json' or 'console'" };
+    }
+
+    await saveLoggingSettings({
+      enabled,
+      format: format as "json" | "console"
+    });
+
+    // Apply config to enable/disable logging
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      return { success: true, message: "Logging settings saved and applied successfully" };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: true,
+        message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
+      };
+    }
+  } catch (error) {
+    console.error("Failed to save logging settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save logging settings" };
   }
 }

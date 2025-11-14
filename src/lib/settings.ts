@@ -26,6 +26,11 @@ export type MetricsSettings = {
   port?: number; // Port to expose metrics on (default: 9090, separate from admin API)
 };
 
+export type LoggingSettings = {
+  enabled: boolean;
+  format?: "json" | "console"; // Log format (default: json)
+};
+
 export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
   const setting = await db.query.settings.findFirst({
     where: (table, { eq }) => eq(table.key, key)
@@ -93,4 +98,12 @@ export async function getMetricsSettings(): Promise<MetricsSettings | null> {
 
 export async function saveMetricsSettings(settings: MetricsSettings): Promise<void> {
   await setSetting("metrics", settings);
+}
+
+export async function getLoggingSettings(): Promise<LoggingSettings | null> {
+  return await getSetting<LoggingSettings>("logging");
+}
+
+export async function saveLoggingSettings(settings: LoggingSettings): Promise<void> {
+  await setSetting("logging", settings);
 }

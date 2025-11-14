@@ -3,7 +3,7 @@ import { join } from "node:path";
 import crypto from "node:crypto";
 import db, { nowIso } from "./db";
 import { config } from "./config";
-import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, setSetting } from "./settings";
+import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, getLoggingSettings, setSetting } from "./settings";
 import {
   accessListEntries,
   certificates,
@@ -930,6 +930,11 @@ async function buildCaddyDocument() {
   const metricsEnabled = metricsSettings?.enabled ?? false;
   const metricsPort = metricsSettings?.port ?? 9090;
 
+  // Check if access logging should be enabled
+  const loggingSettings = await getLoggingSettings();
+  const loggingEnabled = loggingSettings?.enabled ?? false;
+  const loggingFormat = loggingSettings?.format ?? "json";
+
   const servers: Record<string, unknown> = {};
 
   // Main HTTP/HTTPS server for proxy hosts
@@ -940,7 +945,9 @@ async function buildCaddyDocument() {
       // Only disable automatic HTTPS if we have TLS automation policies
       // This allows Caddy to handle HTTP-01 challenges for managed certificates
       ...(tlsApp ? {} : { automatic_https: { disable: true } }),
-      ...(hasTls ? { tls_connection_policies: tlsConnectionPolicies } : {})
+      ...(hasTls ? { tls_connection_policies: tlsConnectionPolicies } : {}),
+      // Enable access logging if configured
+      ...(loggingEnabled ? { logs: { default_logger_name: "http_access" } } : {})
     };
   }
 
@@ -966,10 +973,31 @@ async function buildCaddyDocument() {
 
   const httpApp = Object.keys(servers).length > 0 ? { http: { servers } } : {};
 
+  // Build logging configuration if enabled
+  const loggingApp = loggingEnabled
+    ? {
+        logging: {
+          logs: {
+            http_access: {
+              writer: {
+                output: "file",
+                filename: "/logs/access.log"
+              },
+              encoder: {
+                format: loggingFormat
+              },
+              include: ["http.log.access"]
+            }
+          }
+        }
+      }
+    : {};
+
   return {
     admin: {
       listen: "0.0.0.0:2019"
     },
+    ...loggingApp,
     apps: {
       ...httpApp,
       ...(tlsApp ? { tls: tlsApp } : {})

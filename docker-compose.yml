@@ -69,6 +69,7 @@ services:
     volumes:
       - ./caddy-data:/data
       - ./caddy-config:/config
+      - ./caddy-logs:/logs
     networks:
       - caddy-network
     healthcheck:

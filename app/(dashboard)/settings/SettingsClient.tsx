@@ -1,13 +1,14 @@
 "use client";
 
 import { useFormState } from "react-dom";
-import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, Stack, TextField, Typography } from "@mui/material";
-import type { GeneralSettings, AuthentikSettings, MetricsSettings } from "@/src/lib/settings";
+import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import type { GeneralSettings, AuthentikSettings, MetricsSettings, LoggingSettings } from "@/src/lib/settings";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
   updateAuthentikSettingsAction,
-  updateMetricsSettingsAction
+  updateMetricsSettingsAction,
+  updateLoggingSettingsAction
 } from "./actions";
 
 type Props = {
@@ -19,13 +20,15 @@ type Props = {
   };
   authentik: AuthentikSettings | null;
   metrics: MetricsSettings | null;
+  logging: LoggingSettings | null;
 };
 
-export default function SettingsClient({ general, cloudflare, authentik, metrics }: Props) {
+export default function SettingsClient({ general, cloudflare, authentik, metrics, logging }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
   const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
   const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
   const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
+  const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
 
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
@@ -196,6 +199,49 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save metrics settings
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            Access Logging
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Enable HTTP access logging to track all requests going through your proxy hosts.
+            Logs will be stored in the caddy-logs directory and mounted at /logs/access.log inside the container.
+          </Typography>
+          <Stack component="form" action={loggingFormAction} spacing={2}>
+            {loggingState?.message && (
+              <Alert severity={loggingState.success ? "success" : "warning"}>
+                {loggingState.message}
+              </Alert>
+            )}
+            <FormControlLabel
+              control={<Checkbox name="enabled" defaultChecked={logging?.enabled ?? false} />}
+              label="Enable access logging"
+            />
+            <TextField
+              name="format"
+              label="Log Format"
+              select
+              defaultValue={logging?.format ?? "json"}
+              helperText="Format for access logs"
+              fullWidth
+            >
+              <MenuItem value="json">JSON</MenuItem>
+              <MenuItem value="console">Console (Common Log Format)</MenuItem>
+            </TextField>
+            <Alert severity="info">
+              Access logs will be available at ./caddy-logs/access.log on the host machine.
+              You can tail them with: docker exec caddy-proxy-manager-caddy tail -f /logs/access.log
+            </Alert>
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">
+                Save logging settings
               </Button>
             </Box>
           </Stack>
