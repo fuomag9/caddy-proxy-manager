@@ -9,3 +9,4 @@ data
 tsconfig.tsbuildinfo
 /caddy-data
 /caddy-config
+.DS_Store
