@@ -155,6 +155,14 @@ function parseOptionalJson(value: string | null | undefined) {
 
 function mergeDeep(target: Record<string, unknown>, source: Record<string, unknown>) {
   for (const [key, value] of Object.entries(source)) {
+    // Block prototype-polluting keys
+    if (
+      key === "__proto__" ||
+      key === "constructor" ||
+      key === "prototype"
+    ) {
+      continue;
+    }
     const existing = target[key];
     if (isPlainObject(existing) && isPlainObject(value)) {
       mergeDeep(existing, value);
