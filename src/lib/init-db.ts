@@ -9,6 +9,8 @@ import { eq } from "drizzle-orm";
  * This is called during application startup.
  * The password from environment variables is hashed and stored securely.
  */
+
+//Todo: this could probably be handled better, especially for the adminid.
 export async function ensureAdminUser(): Promise<void> {
   const adminId = 1; // Must match the hardcoded ID in auth.ts
   const adminEmail = `${config.adminUsername}@localhost`;
@@ -26,6 +28,7 @@ export async function ensureAdminUser(): Promise<void> {
   if (existingUser) {
     // Admin user exists, update credentials if needed
     // Always update password hash to handle password changes in env vars
+    // Also ensure role is always "admin" for the primary admin user
     const now = nowIso();
     await db
       .update(users)
@@ -33,6 +36,7 @@ export async function ensureAdminUser(): Promise<void> {
         email: adminEmail,
         subject,
         passwordHash,
+        role: "admin",
         updatedAt: now
       })
       .where(eq(users.id, adminId));

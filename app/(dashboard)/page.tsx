@@ -1,5 +1,5 @@
 import db, { toIso } from "@/src/lib/db";
-import { requireUser } from "@/src/lib/auth";
+import { requireAdmin } from "@/src/lib/auth";
 import OverviewClient from "./OverviewClient";
 import {
   accessLists,
@@ -43,7 +43,7 @@ async function loadStats(): Promise<StatCard[]> {
 }
 
 export default async function OverviewPage() {
-  const session = await requireUser();
+  const session = await requireAdmin();
   const stats = await loadStats();
   const recentEvents = await db
     .select({

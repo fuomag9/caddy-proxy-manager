@@ -1,8 +1,10 @@
 import AuditLogClient from "./AuditLogClient";
 import { listAuditEvents } from "@/src/lib/models/audit";
 import { listUsers } from "@/src/lib/models/user";
+import { requireAdmin } from "@/src/lib/auth";
 
 export default async function AuditLogPage() {
+  await requireAdmin();
   const events = await listAuditEvents(200);
   const users = await listUsers();
   const userMap = new Map(users.map((user) => [user.id, user]));
