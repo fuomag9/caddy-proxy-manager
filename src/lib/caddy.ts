@@ -359,11 +359,22 @@ function buildProxyRoutes(
     // Authentik outpost handler will be added later after protected paths
     let outpostRoute: CaddyHttpRoute | null = null;
     if (authentik) {
+      // Parse the outpost upstream URL to extract host:port for Caddy's dial field
+      let outpostDial = authentik.outpostUpstream;
+      try {
+        const url = new URL(authentik.outpostUpstream);
+        const port = url.port || (url.protocol === "https:" ? "443" : "80");
+        outpostDial = `${url.hostname}:${port}`;
+      } catch {
+        // If URL parsing fails, try to extract host:port from string
+        outpostDial = authentik.outpostUpstream.replace(/^https?:\/\//, "").replace(/\/$/, "");
+      }
+
       const outpostHandler: Record<string, unknown> = {
         handler: "reverse_proxy",
         upstreams: [
           {
-            dial: authentik.outpostUpstream
+            dial: outpostDial
           }
         ]
       };
