@@ -133,9 +133,9 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
             <TextField
               name="outpostDomain"
               label="Outpost Domain"
-              placeholder="auth.example.com"
+              placeholder="outpost.goauthentik.io"
               defaultValue={authentik?.outpostDomain ?? ""}
-              helperText="Domain where Authentik is hosted"
+              helperText="Authentik outpost domain"
               required
               fullWidth
             />
@@ -150,10 +150,10 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
             />
             <TextField
               name="authEndpoint"
-              label="Auth Endpoint (Optional)"
+              label="Authpost Endpoint"
               placeholder="/outpost.goauthentik.io/auth/caddy"
               defaultValue={authentik?.authEndpoint ?? ""}
-              helperText="Custom authentication endpoint path"
+              helperText="Authpost endpoint path"
               fullWidth
             />
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
