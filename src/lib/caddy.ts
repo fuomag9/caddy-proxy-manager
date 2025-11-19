@@ -527,13 +527,19 @@ function buildProxyRoutes(
         }
 
         // Create a catch-all route for non-protected paths (without forward auth)
+        // Explicitly exclude the outpost path to prevent interference with callback handling
         const unprotectedHandlers: Record<string, unknown>[] = [...handlers];
         unprotectedHandlers.push(reverseProxyHandler);
 
         hostRoutes.push({
           match: [
             {
-              host: domains
+              host: domains,
+              not: [
+                {
+                  path: [`/${authentik.outpostDomain}/*`]
+                }
+              ]
             }
           ],
           handle: unprotectedHandlers,
