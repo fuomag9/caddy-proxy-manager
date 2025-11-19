@@ -379,13 +379,11 @@ function buildProxyRoutes(
         ]
       };
 
-      // For the outpost route (callbacks), always preserve the original Host header
-      // so Authentik knows which domain to redirect back to after authentication
       if (authentik.setOutpostHostHeader) {
         outpostHandler.headers = {
           request: {
             set: {
-              Host: ["{http.request.host}"]
+              Host: ["{http.reverse_proxy.upstream.host}"]
             }
           }
         };
