@@ -356,6 +356,8 @@ function buildProxyRoutes(
       upstreams: parsedUpstreams
     };
 
+    // Authentik outpost handler will be added later after protected paths
+    let outpostRoute: CaddyHttpRoute | null = null;
     if (authentik) {
       const outpostHandler: Record<string, unknown> = {
         handler: "reverse_proxy",
@@ -376,7 +378,7 @@ function buildProxyRoutes(
         };
       }
 
-      hostRoutes.push({
+      outpostRoute = {
         match: [
           {
             host: domains,
@@ -385,7 +387,7 @@ function buildProxyRoutes(
         ],
         handle: [outpostHandler],
         terminal: true
-      });
+      };
     }
 
     if (row.preserve_host_header) {
@@ -526,20 +528,20 @@ function buildProxyRoutes(
           });
         }
 
+        // Add the outpost route AFTER protected paths but BEFORE the catch-all
+        // This ensures the outpost callback route is properly handled
+        if (outpostRoute) {
+          hostRoutes.push(outpostRoute);
+        }
+
         // Create a catch-all route for non-protected paths (without forward auth)
-        // Explicitly exclude the outpost path to prevent interference with callback handling
         const unprotectedHandlers: Record<string, unknown>[] = [...handlers];
         unprotectedHandlers.push(reverseProxyHandler);
 
         hostRoutes.push({
           match: [
             {
-              host: domains,
-              not: [
-                {
-                  path: [`/${authentik.outpostDomain}/*`]
-                }
-              ]
+              host: domains
             }
           ],
           handle: unprotectedHandlers,
@@ -547,6 +549,11 @@ function buildProxyRoutes(
         });
       } else {
         // No path-based protection: protect entire domain (backward compatibility)
+        // Add outpost route first to handle callbacks
+        if (outpostRoute) {
+          hostRoutes.push(outpostRoute);
+        }
+
         handlers.push(forwardAuthHandler);
         handlers.push(reverseProxyHandler);
 
