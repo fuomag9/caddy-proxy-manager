@@ -22,6 +22,13 @@ const NAV_ITEMS = [
   { href: "/audit-log", label: "Audit Log" }
 ] as const;
 
+// Stable background styles defined outside component to prevent regeneration
+const MAIN_BACKGROUND =
+  "radial-gradient(circle at 12% -20%, rgba(99, 102, 241, 0.28), transparent 45%), radial-gradient(circle at 88% 8%, rgba(45, 212, 191, 0.24), transparent 46%), linear-gradient(160deg, rgba(2, 3, 9, 1) 0%, rgba(4, 10, 22, 1) 40%, rgba(2, 6, 18, 1) 100%)";
+
+const OVERLAY_BACKGROUND =
+  "radial-gradient(circle at 18% -12%, rgba(56, 189, 248, 0.18), transparent 42%), radial-gradient(circle at 86% 0%, rgba(168, 85, 247, 0.15), transparent 45%)";
+
 export default function DashboardLayoutClient({ user, children }: { user: User; children: ReactNode }) {
   const pathname = usePathname();
 
@@ -31,8 +38,7 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
         display: "flex",
         minHeight: "100vh",
         position: "relative",
-        background:
-          "radial-gradient(circle at 12% -20%, rgba(99, 102, 241, 0.28), transparent 45%), radial-gradient(circle at 88% 8%, rgba(45, 212, 191, 0.24), transparent 46%), linear-gradient(160deg, rgba(2, 3, 9, 1) 0%, rgba(4, 10, 22, 1) 40%, rgba(2, 6, 18, 1) 100%)"
+        background: MAIN_BACKGROUND
       }}
     >
       <Box
@@ -216,8 +222,7 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
             position: "absolute",
             inset: 0,
             pointerEvents: "none",
-            background:
-              "radial-gradient(circle at 18% -12%, rgba(56, 189, 248, 0.18), transparent 42%), radial-gradient(circle at 86% 0%, rgba(168, 85, 247, 0.15), transparent 45%)"
+            background: OVERLAY_BACKGROUND
           }}
         />
         <Stack sx={{ position: "relative", gap: 4, width: "100%", maxWidth: 1160, mx: "auto" }}>{children}</Stack>

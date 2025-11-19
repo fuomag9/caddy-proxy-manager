@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import Grid from "@mui/material/Grid";
-import { Card, CardActionArea, CardContent, Paper, Stack, Typography } from "@mui/material";
+import { Card, CardActionArea, CardContent, Paper, Stack, Typography, Box } from "@mui/material";
+import { ReactNode } from "react";
 
 type StatCard = {
   label: string;
-  icon: string;
+  icon: ReactNode;
   count: number;
   href: string;
 };
@@ -69,9 +70,15 @@ export default function OverviewClient({
                 }}
               >
                 <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 1.2 }}>
+                  <Box
+                    sx={{
+                      color: "rgba(127, 91, 255, 0.8)",
+                      display: "flex",
+                      alignItems: "center"
+                    }}
+                  >
                     {stat.icon}
-                  </Typography>
+                  </Box>
                   <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: "-0.03em" }}>
                     {stat.count}
                   </Typography>

@@ -10,10 +10,16 @@ import {
   redirectHosts
 } from "@/src/lib/db/schema";
 import { count, desc } from "drizzle-orm";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import TurnRightIcon from "@mui/icons-material/TurnRight";
+import BlockIcon from "@mui/icons-material/Block";
+import SecurityIcon from "@mui/icons-material/Security";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import { ReactNode } from "react";
 
 type StatCard = {
   label: string;
-  icon: string;
+  icon: ReactNode;
   count: number;
   href: string;
 };
@@ -34,11 +40,11 @@ async function loadStats(): Promise<StatCard[]> {
   const accessListsCount = accessListCountResult[0]?.value ?? 0;
 
   return [
-    { label: "Proxy Hosts", icon: "⇄", count: proxyHostsCount, href: "/proxy-hosts" },
-    { label: "Redirects", icon: "↪", count: redirectHostsCount, href: "/redirects" },
-    { label: "Dead Hosts", icon: "☠", count: deadHostsCount, href: "/dead-hosts" },
-    { label: "Certificates", icon: "🔐", count: certificatesCount, href: "/certificates" },
-    { label: "Access Lists", icon: "🔒", count: accessListsCount, href: "/access-lists" }
+    { label: "Proxy Hosts", icon: <SwapHorizIcon fontSize="large" />, count: proxyHostsCount, href: "/proxy-hosts" },
+    { label: "Redirects", icon: <TurnRightIcon fontSize="large" />, count: redirectHostsCount, href: "/redirects" },
+    { label: "Dead Hosts", icon: <BlockIcon fontSize="large" />, count: deadHostsCount, href: "/dead-hosts" },
+    { label: "Certificates", icon: <SecurityIcon fontSize="large" />, count: certificatesCount, href: "/certificates" },
+    { label: "Access Lists", icon: <VpnKeyIcon fontSize="large" />, count: accessListsCount, href: "/access-lists" }
   ];
 }
 
