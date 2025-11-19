@@ -9,7 +9,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://www.docker.com/)
 
-[Website](https://caddyproxymanager.com) • [Documentation](#getting-started) • [Report Bug](https://github.com/yourusername/caddy-proxy-manager/issues) • [Request Feature](https://github.com/yourusername/caddy-proxy-manager/issues)
+[Website](https://caddyproxymanager.com) • [Documentation](#getting-started) • [Report Bug](https://github.com/fuomag9/caddy-proxy-manager/issues) • [Request Feature](https://github.com/fuomag9/caddy-proxy-manager/issues)
 
 </div>
 
