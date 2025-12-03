@@ -15,24 +15,24 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^7.3.5",
-    "@mui/material": "^7.3.5",
+    "@mui/icons-material": "^7.3.6",
+    "@mui/material": "^7.3.6",
     "@types/better-sqlite3": "^7.6.13",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^12.5.0",
     "drizzle-orm": "^0.44.7",
-    "next": "^16.0.3",
+    "next": "^16.0.7",
     "next-auth": "^5.0.0-beta.30",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.7",
     "@types/node": "^24.10.1",
-    "@types/react": "^19.2.6",
+    "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.1",
-    "eslint-config-next": "^16.0.3",
+    "eslint-config-next": "^16.0.7",
     "typescript": "^5.9.3"
   }
 }
