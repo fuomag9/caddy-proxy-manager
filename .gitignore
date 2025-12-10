@@ -5,6 +5,7 @@ dist
 data
 *.log
 .env*
+!.env.example
 /.idea
 tsconfig.tsbuildinfo
 /caddy-data

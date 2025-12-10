@@ -142,9 +142,12 @@ Visit `http://localhost:3000/login` and sign in with your credentials.
 | `ADMIN_USERNAME` | Admin login username | `admin` | **Yes** |
 | `ADMIN_PASSWORD` | Admin password (see requirements below) | `admin` (dev only) | **Yes** |
 | `BASE_URL` | Public URL of the dashboard | `http://localhost:3000` | No |
-| `CADDY_API_URL` | Caddy Admin API endpoint | `http://caddy:2019` | No |
-| `DATABASE_PATH` | SQLite file path | `/app/data/caddy-proxy-manager.db` | No |
-| `PRIMARY_DOMAIN` | Default domain for Caddy config | `caddyproxymanager.com` | No |
+| `CADDY_API_URL` | Caddy Admin API endpoint | `http://caddy:2019` (prod)<br/>`http://localhost:2019` (dev) | No |
+| `DATABASE_URL` | SQLite database URL | `file:./data/caddy-proxy-manager.db` | No |
+| `CERTS_DIRECTORY` | Certificate storage directory | `./data/certs` | No |
+| `LOGIN_MAX_ATTEMPTS` | Max login attempts before rate limit | `5` | No |
+| `LOGIN_WINDOW_MS` | Rate limit window in milliseconds | `300000` (5 min) | No |
+| `LOGIN_BLOCK_MS` | Rate limit block duration in milliseconds | `900000` (15 min) | No |
 
 **Production Security Requirements (Strictly Enforced):**
 
