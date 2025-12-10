@@ -20,19 +20,19 @@
     "@types/better-sqlite3": "^7.6.13",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.5.0",
-    "drizzle-orm": "^0.44.7",
-    "next": "^16.0.7",
+    "drizzle-orm": "^0.45.1",
+    "next": "^16.0.8",
     "next-auth": "^5.0.0-beta.30",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.7",
-    "@types/node": "^24.10.1",
+    "drizzle-kit": "^0.31.8",
+    "@types/node": "^24.10.2",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.1",
-    "eslint-config-next": "^16.0.7",
+    "eslint-config-next": "^16.0.8",
     "typescript": "^5.9.3"
   }
 }
