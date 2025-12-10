@@ -78,7 +78,7 @@ Login attempts are rate-limited (5 attempts per 5 minutes, 15 minute lockout aft
 - Material UI (dark theme)
 - Drizzle ORM with SQLite
 - Direct integration with Caddy Admin API
-- Cloudflare DNS-01 challenge support for wildcard certificates
+- Cloudflare DNS-01 challenge support
 - bcrypt for access list password hashing
 
 ---
@@ -196,7 +196,7 @@ npm run dev
 
 Caddy automatically obtains and renews Let's Encrypt certificates for all proxy hosts. Just add a domain and certificates are handled automatically.
 
-For wildcard certificates, configure Cloudflare DNS-01 in Settings (see below).
+For automatic certificates, configure Cloudflare DNS-01 in Settings (see below).
 
 **Custom Certificates (Optional):**
 
@@ -219,7 +219,7 @@ Note: Private keys are stored in SQLite without encryption.
 
 ## Cloudflare DNS-01 Setup
 
-For wildcard certificates or DNS-01 challenge:
+For automatic certificates via DNS-01 challenge:
 
 1. Go to Settings
 2. Create a Cloudflare API token with `Zone.DNS:Edit` permissions
