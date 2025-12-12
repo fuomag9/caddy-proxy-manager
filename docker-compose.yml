@@ -9,6 +9,10 @@ services:
     ports:
       - "3000:3000"
     environment:
+      # Custom user and group ids for running in rootless mode
+      PUID: ${PUID:-1001}
+      PGID: ${PGID:-1001}
+
       # Node environment
       NODE_ENV: production
 
