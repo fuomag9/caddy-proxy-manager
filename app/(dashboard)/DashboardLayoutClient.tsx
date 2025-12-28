@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Avatar, Box, Button, Divider, List, ListItemButton, ListItemText, Stack, Typography } from "@mui/material";
+import { Avatar, Box, Button, Divider, Stack, Typography } from "@mui/material";
 
 type User = {
   id: string;
@@ -94,48 +94,56 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
 
           <Divider sx={{ borderColor: "rgba(255, 255, 255, 0.06)" }} />
 
-          <List
+          <Box
             component="nav"
             sx={{
-              display: "grid",
-              gap: 0.25,
+              display: "flex",
+              flexDirection: "column",
               flex: 1,
-              py: 0.5
+              py: 0.5,
+              gap: 0.25
             }}
           >
             {NAV_ITEMS.map((item) => {
               const selected = pathname === item.href;
               return (
-                <ListItemButton
+                <Box
                   key={item.href}
                   component={Link}
                   href={item.href}
-                  selected={selected}
                   sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    textDecoration: "none",
                     borderRadius: 1.25,
                     px: 2,
                     py: 1,
+                    height: 36,
                     minHeight: 36,
+                    maxHeight: 36,
                     backgroundColor: selected ? "rgba(255, 255, 255, 0.1)" : "transparent",
                     transition: "background-color 0.15s ease",
+                    cursor: "pointer",
                     "&:hover": {
                       backgroundColor: selected ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.05)"
                     }
                   }}
                 >
-                  <ListItemText
-                    primary={item.label}
-                    primaryTypographyProps={{
-                      fontWeight: selected ? 500 : 400,
+                  <Typography
+                    sx={{
+                      fontWeight: 400,
                       fontSize: "0.875rem",
                       letterSpacing: "-0.005em",
-                      color: selected ? "rgba(255, 255, 255, 0.95)" : "rgba(255, 255, 255, 0.65)"
+                      color: selected ? "rgba(255, 255, 255, 0.95)" : "rgba(255, 255, 255, 0.65)",
+                      lineHeight: "20px"
                     }}
-                  />
-                </ListItemButton>
+                  >
+                    {item.label}
+                  </Typography>
+                </Box>
               );
             })}
-          </List>
+          </Box>
         </Stack>
 
         <Stack spacing={2}>
