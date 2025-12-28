@@ -2,13 +2,12 @@ import { auth } from "@/src/lib/auth";
 import { NextResponse } from "next/server";
 
 /**
- * Next.js Middleware for route protection.
+ * Next.js Proxy for route protection.
  * Provides defense-in-depth by checking authentication at the edge
  * before requests reach page components.
  *
- * Note: Uses Node.js runtime because auth requires database access.
+ * Note: Proxy always runs on Node.js runtime.
  */
-export const runtime = 'nodejs';
 
 export default auth((req) => {
   const isAuthenticated = !!req.auth;
