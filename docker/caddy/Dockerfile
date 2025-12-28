@@ -13,6 +13,11 @@ RUN xcaddy build \
 
 FROM ubuntu:24.04
 
+# Accept build args for user/group IDs to support rootless operation
+# Using 10000 as default to avoid conflicts with system users
+ARG PUID=10000
+ARG PGID=10000
+
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -21,12 +26,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy caddy binary from builder
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
-COPY docker/caddy/Caddyfile /etc/caddy/Caddyfile
 
-# Create caddy user and directories
-RUN groupadd caddy && useradd -r -g caddy -m -d /home/caddy caddy \
-    && mkdir -p /data /config \
-    && chown -R caddy:caddy /data /config /home/caddy
+# Create caddy user and directories with configurable IDs for rootless operation
+# Remove any existing users/groups with the same UID/GID to avoid conflicts
+RUN (getent group ${PGID} && groupdel $(getent group ${PGID} | cut -d: -f1) || true) && \
+    (getent passwd ${PUID} && userdel $(getent passwd ${PUID} | cut -d: -f1) || true) && \
+    groupadd -g ${PGID} caddy && \
+    useradd -r -u ${PUID} -g caddy -m -d /home/caddy caddy && \
+    mkdir -p /data /config /logs && \
+    chown -R caddy:caddy /data /config /logs /home/caddy
+
+COPY --chown=caddy:caddy docker/caddy/Caddyfile /etc/caddy/Caddyfile
 
 EXPOSE 80 443 2019
 
@@ -34,5 +44,7 @@ EXPOSE 80 443 2019
 ENV XDG_CONFIG_HOME=/config
 ENV XDG_DATA_HOME=/data
 
+# Run as non-root user (fully rootless)
 USER caddy
+
 CMD ["caddy", "run", "--resume", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

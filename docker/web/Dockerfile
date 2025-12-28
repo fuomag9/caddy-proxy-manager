@@ -28,37 +28,44 @@ COPY . .
 RUN npm run build && rm -f /tmp/build.db
 
 FROM base AS runner
+# Accept build args for user/group IDs to support rootless operation
+# Using 10001 as default to avoid conflicts with system users
+ARG PUID=10001
+ARG PGID=10001
+
 ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
 
-# Install gosu for privilege dropping
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gosu \
-    && rm -rf /var/lib/apt/lists/*
+# Create user and group with configurable IDs for rootless operation
+# Remove any existing users/groups with the same UID/GID to avoid conflicts
+RUN (getent group ${PGID} && groupdel $(getent group ${PGID} | cut -d: -f1) || true) && \
+    (getent passwd ${PUID} && userdel $(getent passwd ${PUID} | cut -d: -f1) || true) && \
+    groupadd -g ${PGID} nodejs && \
+    useradd -r -u ${PUID} -g nodejs nextjs
 
-RUN groupadd -g 1001 nodejs && useradd -r -u 1001 -g nodejs nextjs
-
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 
 # Copy instrumentation file and all required chunks for server startup initialization
-COPY --from=builder /app/.next/server/instrumentation.js ./.next/server/instrumentation.js
-COPY --from=builder /app/.next/server/instrumentation ./.next/server/instrumentation
-COPY --from=builder /app/.next/server/chunks/ ./.next/server/chunks/
+COPY --from=builder --chown=nextjs:nodejs /app/.next/server/instrumentation.js ./.next/server/instrumentation.js
+COPY --from=builder --chown=nextjs:nodejs /app/.next/server/instrumentation ./.next/server/instrumentation
+COPY --from=builder --chown=nextjs:nodejs /app/.next/server/chunks/ ./.next/server/chunks/
 # Copy Drizzle migrations for runtime schema management
-COPY --from=builder /app/drizzle ./drizzle
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 
-# Create data directory for SQLite database
+# Create data directory for SQLite database with correct ownership
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
 # Copy entrypoint script
-COPY docker/web/entrypoint.sh /entrypoint.sh
+COPY --chown=nextjs:nodejs docker/web/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 EXPOSE 3000
 
-# Run as root so entrypoint can fix permissions, then switch to nextjs
+# Run as non-root user (fully rootless)
+USER nextjs
+
 ENTRYPOINT ["/entrypoint.sh"]

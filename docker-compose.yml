@@ -5,6 +5,12 @@ services:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
+      args:
+        # User and group IDs for rootless operation
+        # Set these to match your host user to avoid permission issues
+        # Find your UID/GID with: id -u / id -g
+        PUID: ${PUID:-10001}
+        PGID: ${PGID:-10001}
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -66,6 +72,12 @@ services:
     build:
       context: .
       dockerfile: docker/caddy/Dockerfile
+      args:
+        # User and group IDs for rootless operation
+        # Set these to match your host user to avoid permission issues
+        # Find your UID/GID with: id -u / id -g
+        PUID: ${PUID:-10000}
+        PGID: ${PGID:-10000}
     restart: unless-stopped
     ports:
       - "80:80"
