@@ -52,6 +52,18 @@ export const oauthStates = sqliteTable(
   })
 );
 
+export const pendingOAuthLinks = sqliteTable("pending_oauth_links", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider", { length: 50 }).notNull(),
+  userEmail: text("user_email").notNull(), // Email of the user who initiated linking
+  createdAt: text("created_at").notNull(),
+  expiresAt: text("expires_at").notNull()
+}, (table) => ({
+  // Ensure only one pending link per user per provider (prevents race conditions)
+  userProviderUnique: uniqueIndex("pending_oauth_user_provider_unique").on(table.userId, table.provider)
+}));
+
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),

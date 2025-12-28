@@ -9,6 +9,7 @@ type User = {
   id: string;
   name?: string | null;
   email?: string | null;
+  image?: string | null;
 };
 
 const NAV_ITEMS = [
@@ -139,8 +140,27 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
 
         <Stack spacing={2}>
           <Divider sx={{ borderColor: "rgba(255, 255, 255, 0.06)" }} />
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 1.5 }}>
+          <Box
+            component={Link}
+            href="/profile"
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              px: 1.5,
+              py: 1,
+              borderRadius: 1.25,
+              textDecoration: "none",
+              transition: "background-color 0.15s ease",
+              cursor: "pointer",
+              "&:hover": {
+                backgroundColor: "rgba(255, 255, 255, 0.05)"
+              }
+            }}
+          >
             <Avatar
+              src={user.image || undefined}
+              alt={user.name || user.email || "User"}
               sx={{
                 bgcolor: "rgba(100, 100, 255, 0.2)",
                 border: "0.5px solid rgba(255, 255, 255, 0.15)",

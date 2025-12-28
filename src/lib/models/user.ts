@@ -71,7 +71,7 @@ export async function createUser(data: {
   passwordHash?: string | null;
 }): Promise<User> {
   const now = nowIso();
-  const role = data.role ?? "user";
+  const role = data.role ?? "admin"; // All users are admin by default
   const email = data.email.trim().toLowerCase();
 
   const [user] = await db

@@ -1,4 +1,4 @@
-import db, { toIso } from "../db";
+import db, { toIso, nowIso } from "../db";
 import { auditEvents } from "../db/schema";
 import { desc } from "drizzle-orm";
 
@@ -28,4 +28,23 @@ export async function listAuditEvents(limit = 100): Promise<AuditEvent[]> {
     summary: event.summary,
     created_at: toIso(event.createdAt)!
   }));
+}
+
+export async function createAuditEvent(data: {
+  userId: number | null;
+  action: string;
+  entityType: string;
+  entityId?: number | null;
+  summary?: string | null;
+  data?: string | null;
+}): Promise<void> {
+  await db.insert(auditEvents).values({
+    userId: data.userId,
+    action: data.action,
+    entityType: data.entityType,
+    entityId: data.entityId ?? null,
+    summary: data.summary ?? null,
+    data: data.data ?? null,
+    createdAt: nowIso(),
+  });
 }

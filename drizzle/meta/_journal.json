@@ -8,6 +8,20 @@
       "when": 1762515724134,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1766854292252,
+      "tag": "0001_adorable_sally_floyd",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1766880443160,
+      "tag": "0002_perfect_hedge_knight",
+      "breakpoints": true
     }
   ]
 }

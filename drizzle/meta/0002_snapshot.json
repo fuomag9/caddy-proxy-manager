@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "27881e49-47c6-4fe5-898d-a4f095273605",
-  "prevId": "b14592c5-88b2-43bd-910e-bd39d63b6923",
+  "id": "db635ecc-0855-4f49-a54c-21bec0ec495d",
+  "prevId": "27881e49-47c6-4fe5-898d-a4f095273605",
   "tables": {
     "access_list_entries": {
       "name": "access_list_entries",
@@ -575,6 +575,13 @@
         },
         "provider": {
           "name": "provider",
+          "type": "text(50)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_email": {
+          "name": "user_email",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -595,7 +602,16 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "pending_oauth_user_provider_unique": {
+          "name": "pending_oauth_user_provider_unique",
+          "columns": [
+            "user_id",
+            "provider"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {
         "pending_oauth_links_user_id_users_id_fk": {
           "name": "pending_oauth_links_user_id_users_id_fk",

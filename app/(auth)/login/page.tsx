@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/src/lib/auth";
+import { getEnabledOAuthProviders } from "@/src/lib/config";
 import LoginClient from "./LoginClient";
 
 export default async function LoginPage() {
@@ -8,5 +9,7 @@ export default async function LoginPage() {
     redirect("/");
   }
 
-  return <LoginClient />;
+  const enabledProviders = getEnabledOAuthProviders();
+
+  return <LoginClient enabledProviders={enabledProviders} />;
 }

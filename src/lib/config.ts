@@ -157,6 +157,17 @@ export const config = {
   },
   get adminPassword() {
     return getAdminCredentials().password;
+  },
+  oauth: {
+    enabled: process.env.OAUTH_ENABLED === "true",
+    providerName: process.env.OAUTH_PROVIDER_NAME ?? "OAuth2",
+    clientId: process.env.OAUTH_CLIENT_ID ?? null,
+    clientSecret: process.env.OAUTH_CLIENT_SECRET ?? null,
+    issuer: process.env.OAUTH_ISSUER ?? null,
+    authorizationUrl: process.env.OAUTH_AUTHORIZATION_URL ?? null,
+    tokenUrl: process.env.OAUTH_TOKEN_URL ?? null,
+    userinfoUrl: process.env.OAUTH_USERINFO_URL ?? null,
+    allowAutoLinking: process.env.OAUTH_ALLOW_AUTO_LINKING === "true",
   }
 };
 
@@ -173,4 +184,26 @@ export function validateProductionConfig() {
     const __ = config.adminUsername;
     const ___ = config.adminPassword;
   }
+}
+
+/**
+ * Returns list of enabled OAuth providers based on configuration.
+ * Only includes providers that have complete credentials configured.
+ */
+export function getEnabledOAuthProviders(): Array<{id: string; name: string}> {
+  const providers: Array<{id: string; name: string}> = [];
+
+  if (
+    config.oauth.enabled &&
+    config.oauth.clientId &&
+    config.oauth.clientSecret &&
+    config.oauth.issuer
+  ) {
+    providers.push({
+      id: "oauth2",
+      name: config.oauth.providerName
+    });
+  }
+
+  return providers;
 }

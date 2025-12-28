@@ -35,6 +35,17 @@ services:
       # Password must be 12+ chars with uppercase, lowercase, numbers, and special chars
       ADMIN_USERNAME: ${ADMIN_USERNAME:?ERROR - ADMIN_USERNAME is required}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ERROR - ADMIN_PASSWORD is required}
+
+      # OAuth2/OIDC Authentication (Optional - works with Authentik, Authelia, Keycloak, etc.)
+      OAUTH_ENABLED: ${OAUTH_ENABLED:-false}
+      OAUTH_PROVIDER_NAME: ${OAUTH_PROVIDER_NAME:-OAuth2}
+      OAUTH_CLIENT_ID: ${OAUTH_CLIENT_ID:-}
+      OAUTH_CLIENT_SECRET: ${OAUTH_CLIENT_SECRET:-}
+      OAUTH_ISSUER: ${OAUTH_ISSUER:-}
+      OAUTH_AUTHORIZATION_URL: ${OAUTH_AUTHORIZATION_URL:-}
+      OAUTH_TOKEN_URL: ${OAUTH_TOKEN_URL:-}
+      OAUTH_USERINFO_URL: ${OAUTH_USERINFO_URL:-}
+      OAUTH_ALLOW_AUTO_LINKING: ${OAUTH_ALLOW_AUTO_LINKING:-false}
     volumes:
       - ./data:/app/data
     depends_on:
