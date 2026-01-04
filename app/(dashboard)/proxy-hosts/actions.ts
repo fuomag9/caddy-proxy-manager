@@ -28,6 +28,18 @@ function parseOptionalText(value: FormDataEntryValue | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function parseOptionalNumber(value: FormDataEntryValue | null): number | null {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+  const num = Number(trimmed);
+  return isNaN(num) ? null : num;
+}
+
 function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | undefined {
   if (!formData.has("authentik_present")) {
     return undefined;
@@ -90,8 +102,8 @@ export async function createProxyHostAction(
         name: String(formData.get("name") ?? "Untitled"),
         domains: parseCsv(formData.get("domains")),
         upstreams: parseCsv(formData.get("upstreams")),
-        certificate_id: formData.get("certificate_id") ? Number(formData.get("certificate_id")) : null,
-        access_list_id: formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null,
+        certificate_id: parseOptionalNumber(formData.get("certificate_id")),
+        access_list_id: parseOptionalNumber(formData.get("access_list_id")),
         hsts_subdomains: parseCheckbox(formData.get("hsts_subdomains")),
         skip_https_hostname_validation: parseCheckbox(formData.get("skip_https_hostname_validation")),
         enabled: parseCheckbox(formData.get("enabled")),
@@ -125,10 +137,10 @@ export async function updateProxyHostAction(
         domains: formData.get("domains") ? parseCsv(formData.get("domains")) : undefined,
         upstreams: formData.get("upstreams") ? parseCsv(formData.get("upstreams")) : undefined,
         certificate_id: formData.has("certificate_id")
-          ? (formData.get("certificate_id") ? Number(formData.get("certificate_id")) : null)
+          ? parseOptionalNumber(formData.get("certificate_id"))
           : undefined,
         access_list_id: formData.has("access_list_id")
-          ? (formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null)
+          ? parseOptionalNumber(formData.get("access_list_id"))
           : undefined,
         hsts_subdomains: boolField("hsts_subdomains"),
         skip_https_hostname_validation: boolField("skip_https_hostname_validation"),
