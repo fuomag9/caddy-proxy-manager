@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
 import { createProxyHost, deleteProxyHost, updateProxyHost, type ProxyHostAuthentikInput } from "@/src/lib/models/proxy-hosts";
+import { getCertificate } from "@/src/lib/models/certificates";
+import { getCloudflareSettings } from "@/src/lib/settings";
 
 function parseCsv(value: FormDataEntryValue | null): string[] {
   if (!value || typeof value !== "string") {
@@ -26,6 +28,58 @@ function parseOptionalText(value: FormDataEntryValue | null): string | null {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseCertificateId(value: FormDataEntryValue | null): number | null {
+  if (!value || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed === "" || trimmed === "null" || trimmed === "undefined") {
+    return null;
+  }
+
+  const num = Number(trimmed);
+
+  // Check for NaN, Infinity, or non-integer values
+  if (!Number.isFinite(num) || !Number.isInteger(num) || num <= 0) {
+    return null;
+  }
+
+  return num;
+}
+
+async function validateAndSanitizeCertificateId(
+  certificateId: number | null,
+  cloudflareConfigured: boolean
+): Promise<{ certificateId: number | null; warning?: string }> {
+  // null is valid (Caddy Auto)
+  if (certificateId === null) {
+    return { certificateId: null };
+  }
+
+  // Check if certificate exists
+  const certificate = await getCertificate(certificateId);
+
+  if (!certificate) {
+    // Build helpful warning message
+    let warning: string;
+
+    if (!cloudflareConfigured) {
+      warning = `Certificate ID ${certificateId} not found. Automatically using 'Managed by Caddy (Auto)'. Note: Without Cloudflare DNS integration, wildcard certificates require port 80 to be accessible for HTTP-01 challenges. Configure Cloudflare in Settings to enable DNS-01 challenges.`;
+    } else {
+      warning = `Certificate ID ${certificateId} not found. Automatically using 'Managed by Caddy (Auto)' which will provision certificates automatically using Caddy.`;
+    }
+
+    return { certificateId: null, warning };
+  }
+
+  return { certificateId };
 }
 
 function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | undefined {
@@ -85,12 +139,27 @@ export async function createProxyHostAction(
   try {
     const session = await requireAdmin();
     const userId = Number(session.user.id);
+
+    // Parse certificate_id safely
+    const parsedCertificateId = parseCertificateId(formData.get("certificate_id"));
+
+    // Validate certificate exists and get sanitized value
+    const cloudflareSettings = await getCloudflareSettings();
+    const cloudflareConfigured = !!(cloudflareSettings?.apiToken);
+
+    const { certificateId, warning } = await validateAndSanitizeCertificateId(parsedCertificateId, cloudflareConfigured);
+
+    // Log warning if certificate was auto-fallback
+    if (warning) {
+      console.warn(`[createProxyHostAction] ${warning}`);
+    }
+
     await createProxyHost(
       {
         name: String(formData.get("name") ?? "Untitled"),
         domains: parseCsv(formData.get("domains")),
         upstreams: parseCsv(formData.get("upstreams")),
-        certificate_id: formData.get("certificate_id") ? Number(formData.get("certificate_id")) : null,
+        certificate_id: certificateId,
         access_list_id: formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null,
         hsts_subdomains: parseCheckbox(formData.get("hsts_subdomains")),
         skip_https_hostname_validation: parseCheckbox(formData.get("skip_https_hostname_validation")),
@@ -102,6 +171,11 @@ export async function createProxyHostAction(
       userId
     );
     revalidatePath("/proxy-hosts");
+
+    // Return success with warning if applicable
+    if (warning) {
+      return actionSuccess(`Proxy host created using Caddy Auto certificate management. ${warning}`);
+    }
     return actionSuccess("Proxy host created and queued for Caddy reload.");
   } catch (error) {
     console.error("Failed to create proxy host:", error);
@@ -118,15 +192,35 @@ export async function updateProxyHostAction(
     const session = await requireAdmin();
     const userId = Number(session.user.id);
     const boolField = (key: string) => (formData.has(`${key}_present`) ? parseCheckbox(formData.get(key)) : undefined);
+
+    // Parse and validate certificate_id if present
+    let certificateId: number | null | undefined = undefined;
+    let warning: string | undefined;
+
+    if (formData.has("certificate_id")) {
+      const parsedCertificateId = parseCertificateId(formData.get("certificate_id"));
+
+      // Validate certificate exists and get sanitized value
+      const cloudflareSettings = await getCloudflareSettings();
+      const cloudflareConfigured = !!(cloudflareSettings?.apiToken);
+
+      const validation = await validateAndSanitizeCertificateId(parsedCertificateId, cloudflareConfigured);
+      certificateId = validation.certificateId;
+      warning = validation.warning;
+
+      // Log warning if certificate was auto-fallback
+      if (warning) {
+        console.warn(`[updateProxyHostAction] ${warning}`);
+      }
+    }
+
     await updateProxyHost(
       id,
       {
         name: formData.get("name") ? String(formData.get("name")) : undefined,
         domains: formData.get("domains") ? parseCsv(formData.get("domains")) : undefined,
         upstreams: formData.get("upstreams") ? parseCsv(formData.get("upstreams")) : undefined,
-        certificate_id: formData.has("certificate_id")
-          ? (formData.get("certificate_id") ? Number(formData.get("certificate_id")) : null)
-          : undefined,
+        certificate_id: certificateId,
         access_list_id: formData.has("access_list_id")
           ? (formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null)
           : undefined,
@@ -144,6 +238,11 @@ export async function updateProxyHostAction(
       userId
     );
     revalidatePath("/proxy-hosts");
+
+    // Return success with warning if applicable
+    if (warning) {
+      return actionSuccess(`Proxy host updated using Caddy Auto certificate management. ${warning}`);
+    }
     return actionSuccess("Proxy host updated.");
   } catch (error) {
     console.error(`Failed to update proxy host ${id}:`, error);
