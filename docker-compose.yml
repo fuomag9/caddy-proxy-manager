@@ -53,7 +53,7 @@ services:
       OAUTH_USERINFO_URL: ${OAUTH_USERINFO_URL:-}
       OAUTH_ALLOW_AUTO_LINKING: ${OAUTH_ALLOW_AUTO_LINKING:-false}
     volumes:
-      - ./data:/app/data
+      - caddy-manager-data:/app/data
     depends_on:
       caddy:
         condition: service_healthy
@@ -90,9 +90,9 @@ services:
       # Primary domain for Caddy configuration
       PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:-caddyproxymanager.com}
     volumes:
-      - ./caddy-data:/data
-      - ./caddy-config:/config
-      - ./caddy-logs:/logs
+      - caddy-data:/data
+      - caddy-config:/config
+      - caddy-logs:/logs
     networks:
       - caddy-network
     healthcheck:
@@ -105,3 +105,9 @@ services:
 networks:
   caddy-network:
     driver: bridge
+
+volumes:
+  caddy-manager-data:
+  caddy-data:
+  caddy-config:
+  caddy-logs:

@@ -236,8 +236,8 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               <MenuItem value="console">Console (Common Log Format)</MenuItem>
             </TextField>
             <Alert severity="info">
-              Access logs will be available at ./caddy-logs/access.log on the host machine.
-              You can tail them with: docker exec caddy-proxy-manager-caddy tail -f /logs/access.log
+              Access logs are stored in the caddy-logs Docker volume.
+              You can view them with: docker exec caddy-proxy-manager-caddy tail -f /logs/access.log
             </Alert>
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">

@@ -37,7 +37,7 @@ docker compose up -d
 
 Access at `http://localhost:3000/login`
 
-Data persists in `./data`, `./caddy-data`, and `./caddy-config`.
+Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, caddy-logs).
 
 ---
 
@@ -62,7 +62,7 @@ Data persists in `./data`, `./caddy-data`, and `./caddy-config`.
 | `SESSION_SECRET` | Session encryption key (32+ chars) | None | **Yes** |
 | `ADMIN_USERNAME` | Admin login username | `admin` | **Yes** |
 | `ADMIN_PASSWORD` | Admin password (see requirements below) | `admin` (dev only) | **Yes** |
-| `BASE_URL` | Public URL of the dashboard | `http://localhost:3000` | No |
+| `BASE_URL` | Public URL where users access the dashboard.<br/>**Required for OAuth** - must match redirect URI | `http://localhost:3000` | **Yes** (if using OAuth) |
 | `CADDY_API_URL` | Caddy Admin API endpoint | `http://caddy:2019` (prod)<br/>`http://localhost:2019` (dev) | No |
 | `DATABASE_URL` | SQLite database URL | `file:/app/data/caddy-proxy-manager.db` | No |
 | `CERTS_DIRECTORY` | Certificate storage directory | `./data/certs` | No |
@@ -121,6 +121,9 @@ Caddy automatically obtains Let's Encrypt certificates for all proxy hosts.
 Supports any OIDC-compliant provider (Authentik, Keycloak, Auth0, etc.).
 
 ```bash
+# Set your public URL (REQUIRED for OAuth to work)
+BASE_URL=https://caddy-manager.example.com
+
 OAUTH_ENABLED=true
 OAUTH_PROVIDER_NAME="Authentik"  # Display name
 OAUTH_CLIENT_ID=your-client-id
@@ -128,7 +131,18 @@ OAUTH_CLIENT_SECRET=your-client-secret
 OAUTH_ISSUER=https://auth.example.com/application/o/app/
 ```
 
-**Redirect URI**: `{BASE_URL}/api/auth/callback/oauth2`
+**Redirect URI Configuration:**
+
+You must configure this redirect URI in your OAuth provider:
+```
+{BASE_URL}/api/auth/callback/oauth2
+```
+
+Examples:
+- `http://localhost:3000/api/auth/callback/oauth2` (development)
+- `https://caddy-manager.example.com/api/auth/callback/oauth2` (production)
+
+The `BASE_URL` environment variable must match exactly where users access your dashboard.
 
 OAuth login appears on the login page alongside credentials. Users can link OAuth to existing accounts from the Profile page.
 
