@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -16,6 +17,7 @@ import {
   DialogTitle,
   FormControlLabel,
   IconButton,
+  InputAdornment,
   MenuItem,
   Stack,
   Switch,
@@ -34,6 +36,9 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
+import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
 import { useFormState } from "react-dom";
 import type { AccessList } from "@/src/lib/models/access-lists";
 import type { Certificate } from "@/src/lib/models/certificates";
@@ -351,6 +356,7 @@ function CreateHostDialog({
               {state.message}
             </Alert>
           )}
+          <SettingsToggles />
           <TextField name="name" label="Name" placeholder="My Service" required fullWidth />
           <TextField
             name="domains"
@@ -362,16 +368,7 @@ function CreateHostDialog({
             required
             fullWidth
           />
-          <TextField
-            name="upstreams"
-            label="Upstreams"
-            placeholder="http://10.0.0.5:8080"
-            helperText="One per line or comma-separated"
-            multiline
-            minRows={2}
-            required
-            fullWidth
-          />
+          <UpstreamInput />
           <TextField select name="certificate_id" label="Certificate" defaultValue="" fullWidth>
             <MenuItem value="">Managed by Caddy (Auto)</MenuItem>
             {certificates.map((cert) => (
@@ -388,11 +385,6 @@ function CreateHostDialog({
               </MenuItem>
             ))}
           </TextField>
-          <Stack direction="row" spacing={2} flexWrap="wrap">
-            <HiddenCheckboxField name="hsts_subdomains" defaultChecked={false} label="HSTS Subdomains" />
-            <HiddenCheckboxField name="skip_https_hostname_validation" defaultChecked={false} label="Skip HTTPS Validation" />
-            <HiddenCheckboxField name="enabled" defaultChecked={true} label="Enabled" />
-          </Stack>
           <TextField
             name="custom_pre_handlers_json"
             label="Custom Pre-Handlers (JSON)"
@@ -477,6 +469,11 @@ function EditHostDialog({
               {state.message}
             </Alert>
           )}
+          <SettingsToggles
+            hstsSubdomains={host.hsts_subdomains}
+            skipHttpsValidation={host.skip_https_hostname_validation}
+            enabled={host.enabled}
+          />
           <TextField name="name" label="Name" defaultValue={host.name} required fullWidth />
           <TextField
             name="domains"
@@ -487,15 +484,7 @@ function EditHostDialog({
             minRows={2}
             fullWidth
           />
-          <TextField
-            name="upstreams"
-            label="Upstreams"
-            defaultValue={host.upstreams.join("\n")}
-            helperText="One per line or comma-separated"
-            multiline
-            minRows={2}
-            fullWidth
-          />
+          <UpstreamInput defaultUpstreams={host.upstreams} />
           <TextField select name="certificate_id" label="Certificate" defaultValue={host.certificate_id ?? ""} fullWidth>
             <MenuItem value="">Managed by Caddy (Auto)</MenuItem>
             {certificates.map((cert) => (
@@ -512,11 +501,6 @@ function EditHostDialog({
               </MenuItem>
             ))}
           </TextField>
-          <Stack direction="row" spacing={2} flexWrap="wrap">
-            <HiddenCheckboxField name="hsts_subdomains" defaultChecked={host.hsts_subdomains} label="HSTS Subdomains" />
-            <HiddenCheckboxField name="skip_https_hostname_validation" defaultChecked={host.skip_https_hostname_validation} label="Skip HTTPS Validation" />
-            <HiddenCheckboxField name="enabled" defaultChecked={host.enabled} label="Enabled" />
-          </Stack>
           <TextField
             name="custom_pre_handlers_json"
             label="Custom Pre-Handlers (JSON)"
@@ -791,6 +775,341 @@ function HiddenCheckboxField({
           {helperText}
         </Typography>
       )}
+    </Box>
+  );
+}
+
+type ToggleSetting = {
+  name: string;
+  label: string;
+  description: string;
+  defaultChecked: boolean;
+  color?: "success" | "warning" | "default";
+};
+
+function SettingsToggles({
+  hstsSubdomains = false,
+  skipHttpsValidation = false,
+  enabled = true
+}: {
+  hstsSubdomains?: boolean;
+  skipHttpsValidation?: boolean;
+  enabled?: boolean;
+}) {
+  const [values, setValues] = useState({
+    hsts_subdomains: hstsSubdomains,
+    skip_https_hostname_validation: skipHttpsValidation,
+    enabled: enabled
+  });
+
+  const handleChange = (name: keyof typeof values) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    setValues(prev => ({ ...prev, [name]: event.target.checked }));
+  };
+
+  const toggleEnabled = () => {
+    setValues(prev => ({ ...prev, enabled: !prev.enabled }));
+  };
+
+  const settings: ToggleSetting[] = [
+    {
+      name: "hsts_subdomains",
+      label: "HSTS Subdomains",
+      description: "Include subdomains in the Strict-Transport-Security header",
+      defaultChecked: values.hsts_subdomains,
+      color: "default"
+    },
+    {
+      name: "skip_https_hostname_validation",
+      label: "Skip HTTPS Validation",
+      description: "Skip SSL certificate hostname verification for backend connections",
+      defaultChecked: values.skip_https_hostname_validation,
+      color: "warning"
+    }
+  ];
+
+  return (
+    <Stack spacing={2}>
+      {/* Prominent Enabled/Paused Control */}
+      <input type="hidden" name="enabled_present" value="1" />
+      <input type="hidden" name="enabled" value={values.enabled ? "on" : ""} />
+      <Box
+        onClick={toggleEnabled}
+        sx={{
+          borderRadius: 2,
+          border: values.enabled
+            ? "1px solid rgba(34, 197, 94, 0.4)"
+            : "1px solid rgba(251, 191, 36, 0.4)",
+          background: values.enabled
+            ? "rgba(34, 197, 94, 0.08)"
+            : "rgba(251, 191, 36, 0.08)",
+          p: 2,
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          "&:hover": {
+            background: values.enabled
+              ? "rgba(34, 197, 94, 0.12)"
+              : "rgba(251, 191, 36, 0.12)",
+            borderColor: values.enabled
+              ? "rgba(34, 197, 94, 0.6)"
+              : "rgba(251, 191, 36, 0.6)"
+          }
+        }}
+      >
+        <Stack direction="row" alignItems="center" spacing={2}>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: values.enabled
+                ? "rgba(34, 197, 94, 0.2)"
+                : "rgba(251, 191, 36, 0.2)",
+              color: values.enabled
+                ? "rgba(34, 197, 94, 1)"
+                : "rgba(251, 191, 36, 1)",
+              transition: "all 0.2s ease"
+            }}
+          >
+            {values.enabled ? (
+              <PlayArrowRoundedIcon sx={{ fontSize: 28 }} />
+            ) : (
+              <PauseRoundedIcon sx={{ fontSize: 28 }} />
+            )}
+          </Box>
+          <Box sx={{ flex: 1 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 600,
+                color: values.enabled
+                  ? "rgba(34, 197, 94, 1)"
+                  : "rgba(251, 191, 36, 1)"
+              }}
+            >
+              {values.enabled ? "Active" : "Paused"}
+            </Typography>
+            <Typography variant="body2" sx={{ color: "rgba(255, 255, 255, 0.6)" }}>
+              {values.enabled
+                ? "This proxy host is enabled and routing traffic"
+                : "This proxy host is paused and not routing traffic"}
+            </Typography>
+          </Box>
+          <Typography
+            variant="caption"
+            sx={{
+              px: 1.5,
+              py: 0.5,
+              borderRadius: 1,
+              bgcolor: "rgba(255, 255, 255, 0.05)",
+              color: "rgba(255, 255, 255, 0.5)"
+            }}
+          >
+            Click to {values.enabled ? "pause" : "activate"}
+          </Typography>
+        </Stack>
+      </Box>
+
+      {/* Other Options */}
+      <Box
+        sx={{
+          borderRadius: 2,
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          background: "rgba(255, 255, 255, 0.02)",
+          overflow: "hidden"
+        }}
+      >
+        <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid rgba(255, 255, 255, 0.06)", bgcolor: "rgba(255, 255, 255, 0.02)" }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "rgba(255, 255, 255, 0.8)" }}>
+            Advanced Options
+          </Typography>
+        </Box>
+        <Stack divider={<Box sx={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }} />}>
+          {settings.map((setting) => (
+            <Box key={setting.name}>
+              <input type="hidden" name={`${setting.name}_present`} value="1" />
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{ px: 2, py: 1.5 }}
+              >
+                <Box sx={{ pr: 2 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, color: "rgba(255, 255, 255, 0.9)" }}>
+                    {setting.label}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "rgba(255, 255, 255, 0.5)" }}>
+                    {setting.description}
+                  </Typography>
+                </Box>
+                <Switch
+                  name={setting.name}
+                  checked={values[setting.name as keyof typeof values]}
+                  onChange={handleChange(setting.name as keyof typeof values)}
+                  size="small"
+                  sx={{
+                    "& .MuiSwitch-switchBase.Mui-checked": {
+                      color: setting.color === "warning"
+                        ? "rgba(251, 191, 36, 1)"
+                        : "rgba(99, 102, 241, 1)"
+                    },
+                    "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                      backgroundColor: setting.color === "warning"
+                        ? "rgba(251, 191, 36, 0.5)"
+                        : "rgba(99, 102, 241, 0.5)"
+                    }
+                  }}
+                />
+              </Stack>
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+    </Stack>
+  );
+}
+
+const PROTOCOL_OPTIONS = ["http://", "https://"];
+
+type UpstreamEntry = {
+  protocol: string;
+  address: string;
+};
+
+function parseUpstream(upstream: string): UpstreamEntry {
+  if (upstream.startsWith("https://")) {
+    return { protocol: "https://", address: upstream.slice(8) };
+  }
+  if (upstream.startsWith("http://")) {
+    return { protocol: "http://", address: upstream.slice(7) };
+  }
+  // Default to http:// if no protocol specified
+  return { protocol: "http://", address: upstream };
+}
+
+function UpstreamInput({
+  defaultUpstreams = [],
+  name = "upstreams"
+}: {
+  defaultUpstreams?: string[];
+  name?: string;
+}) {
+  const initialEntries: UpstreamEntry[] = defaultUpstreams.length > 0
+    ? defaultUpstreams.map(parseUpstream)
+    : [{ protocol: "http://", address: "" }];
+
+  const [entries, setEntries] = useState<UpstreamEntry[]>(initialEntries);
+
+  const handleProtocolChange = (index: number, newProtocol: string | null) => {
+    const updated = [...entries];
+    updated[index].protocol = newProtocol || "http://";
+    setEntries(updated);
+  };
+
+  const handleAddressChange = (index: number, newAddress: string) => {
+    const updated = [...entries];
+    updated[index].address = newAddress;
+    setEntries(updated);
+  };
+
+  const handleAdd = () => {
+    setEntries([...entries, { protocol: "http://", address: "" }]);
+  };
+
+  const handleRemove = (index: number) => {
+    if (entries.length === 1) return;
+    setEntries(entries.filter((_, i) => i !== index));
+  };
+
+  // Serialize entries to a single string for form submission
+  const serializedValue = entries
+    .filter(e => e.address.trim() !== "")
+    .map(e => `${e.protocol}${e.address}`)
+    .join("\n");
+
+  return (
+    <Box>
+      <input type="hidden" name={name} value={serializedValue} />
+      <Typography variant="body2" sx={{ mb: 1, color: "rgba(255, 255, 255, 0.7)" }}>
+        Upstreams
+      </Typography>
+      <Stack spacing={1.5}>
+        {entries.map((entry, index) => (
+          <Stack key={index} direction="row" spacing={1} alignItems="flex-start">
+            <Autocomplete
+              freeSolo
+              options={PROTOCOL_OPTIONS}
+              value={entry.protocol}
+              onChange={(_, newValue) => handleProtocolChange(index, newValue)}
+              onInputChange={(_, newInputValue) => {
+                if (newInputValue) {
+                  handleProtocolChange(index, newInputValue);
+                }
+              }}
+              disableClearable
+              sx={{ width: 140 }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  placeholder="http://"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: "rgba(20, 20, 22, 0.6)",
+                    }
+                  }}
+                />
+              )}
+            />
+            <TextField
+              value={entry.address}
+              onChange={(e) => handleAddressChange(index, e.target.value)}
+              placeholder="10.0.0.5:8080"
+              size="small"
+              fullWidth
+              required={index === 0}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: "rgba(20, 20, 22, 0.6)",
+                }
+              }}
+            />
+            <Tooltip title={entries.length === 1 ? "At least one upstream required" : "Remove upstream"}>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => handleRemove(index)}
+                  disabled={entries.length === 1}
+                  sx={{
+                    color: entries.length === 1 ? "rgba(255, 255, 255, 0.2)" : "rgba(239, 68, 68, 0.7)",
+                    "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                    mt: 0.5
+                  }}
+                >
+                  <RemoveCircleOutlineIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Stack>
+        ))}
+        <Button
+          startIcon={<AddIcon />}
+          onClick={handleAdd}
+          size="small"
+          sx={{
+            alignSelf: "flex-start",
+            color: "rgba(99, 102, 241, 0.9)",
+            "&:hover": { bgcolor: "rgba(99, 102, 241, 0.1)" }
+          }}
+        >
+          Add Upstream
+        </Button>
+      </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+        Backend servers to proxy requests to (supports load balancing with multiple upstreams)
+      </Typography>
     </Box>
   );
 }
