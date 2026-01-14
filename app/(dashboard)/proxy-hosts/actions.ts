@@ -18,6 +18,17 @@ function parseCsv(value: FormDataEntryValue | null): string[] {
     .filter(Boolean);
 }
 
+// Parse upstreams by newline only (URLs may contain commas in query strings)
+function parseUpstreams(value: FormDataEntryValue | null): string[] {
+  if (!value || typeof value !== "string") {
+    return [];
+  }
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function parseCheckbox(value: FormDataEntryValue | null): boolean {
   return value === "on" || value === "true" || value === "1";
 }
@@ -158,7 +169,7 @@ export async function createProxyHostAction(
       {
         name: String(formData.get("name") ?? "Untitled"),
         domains: parseCsv(formData.get("domains")),
-        upstreams: parseCsv(formData.get("upstreams")),
+        upstreams: parseUpstreams(formData.get("upstreams")),
         certificate_id: certificateId,
         access_list_id: formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null,
         hsts_subdomains: parseCheckbox(formData.get("hsts_subdomains")),
@@ -219,7 +230,7 @@ export async function updateProxyHostAction(
       {
         name: formData.get("name") ? String(formData.get("name")) : undefined,
         domains: formData.get("domains") ? parseCsv(formData.get("domains")) : undefined,
-        upstreams: formData.get("upstreams") ? parseCsv(formData.get("upstreams")) : undefined,
+        upstreams: formData.get("upstreams") ? parseUpstreams(formData.get("upstreams")) : undefined,
         certificate_id: certificateId,
         access_list_id: formData.has("access_list_id")
           ? (formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null)

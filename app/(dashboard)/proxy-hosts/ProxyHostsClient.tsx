@@ -1024,9 +1024,10 @@ function UpstreamInput({
   };
 
   // Serialize entries to a single string for form submission
+  // Use newline as separator - addresses shouldn't contain newlines
   const serializedValue = entries
     .filter(e => e.address.trim() !== "")
-    .map(e => `${e.protocol}${e.address}`)
+    .map(e => `${e.protocol}${e.address.trim()}`)
     .join("\n");
 
   return (
