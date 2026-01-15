@@ -101,7 +101,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
       align: "right" as const,
       width: 150,
       render: (host: ProxyHost) => (
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
+        <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
           <Switch
             checked={host.enabled}
             onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}

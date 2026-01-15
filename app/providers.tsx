@@ -71,7 +71,7 @@ export default function Providers({ children }: { children: ReactNode }) {
           components: {
             MuiCssBaseline: {
               styleOverrides: {
-                root: {
+                body: {
                   backgroundColor: "#09090b",
                   backgroundImage:
                     "radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15), transparent 40%), radial-gradient(circle at 100% 0%, rgba(6, 182, 212, 0.1), transparent 30%)",
