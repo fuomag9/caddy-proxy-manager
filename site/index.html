@@ -1,162 +1,167 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Caddy Proxy Manager – Modern Web UI for Caddy with automatic HTTPS management and reverse proxy configuration." />
-  <title>Caddy Proxy Manager - Modern Web UI for Caddy Server</title>
+  <meta name="description"
+    content="Caddy Proxy Manager - A modern, secure, and intuitive web interface for Caddy Server." />
+  <title>Caddy Proxy Manager</title>
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://caddyproxymanager.com/" />
   <meta property="og:title" content="Caddy Proxy Manager - Control Every Edge" />
-  <meta property="og:description" content="Caddy Proxy Manager – Modern Web UI for Caddy with automatic HTTPS management and reverse proxy configuration." />
+  <meta property="og:description"
+    content="Caddy Proxy Manager – Modern Web UI for Caddy with automatic HTTPS management and reverse proxy configuration." />
   <meta property="og:image" content="https://caddyproxymanager.com/assets/images/preview.png" />
 
-
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
   <link rel="stylesheet" href="styles.css" />
   <script defer src="scripts.js"></script>
 </head>
+
 <body>
-  <div class="aurora" aria-hidden="true"></div>
-  <header class="hero" id="top">
-    <nav class="nav">
-      <div class="logo">Caddy Proxy Manager</div>
-      <div class="nav-links">
+  <div class="aurora-bg"></div>
+
+  <header>
+    <div class="container header-inner">
+      <a href="#" class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+        Caddy Proxy Manager
+      </a>
+      <nav class="nav-links">
         <a href="#features">Features</a>
-        <a href="#showcase">Showcase</a>
         <a href="#architecture">Architecture</a>
-        <a href="#deployment">Deploy</a>
-        <a href="https://github.com/fuomag9/caddy-proxy-manager" target="_blank" rel="noreferrer">GitHub</a>
-      </div>
-    </nav>
-    <div class="hero-content">
-      <p class="eyebrow">Web UI for Caddy Server</p>
-      <h1>Modern interface for Caddy's automatic HTTPS.</h1>
-      <p class="lede">
-        Caddy Proxy Manager provides a web-based control panel for managing reverse proxies,
-        certificates, and configurations. Built with Next.js and featuring a clean dark interface.
-      </p>
-      <div class="cta-group">
-        <a class="cta primary" href="https://github.com/fuomag9/caddy-proxy-manager" target="_blank" rel="noreferrer">View on GitHub</a>
-        <a class="cta secondary" href="#deployment">Get Started</a>
-      </div>
-      <div class="metrics">
-        <div>
-          <span class="metric-value">Docker</span>
-          <span class="metric-label">Quick deployment</span>
-        </div>
-        <div>
-          <span class="metric-value">Full</span>
-          <span class="metric-label">Audit history</span>
-        </div>
-        <div>
-          <span class="metric-value">Auto</span>
-          <span class="metric-label">TLS with ACME</span>
-        </div>
-      </div>
+        <a href="#deployment">Data</a>
+        <a href="https://github.com/fuomag9/caddy-proxy-manager" target="_blank">GitHub</a>
+      </nav>
     </div>
   </header>
 
   <main>
-    <section class="panel" id="features">
-      <div class="section-heading">
-        <p class="eyebrow">Key Features</p>
-        <h2>Streamlined Caddy management.</h2>
-        <p class="lede">Manage your Caddy server configuration through an intuitive web interface with built-in security and audit logging.</p>
+    <section class="hero container">
+      <h1>Control Every Edge.</h1>
+      <p>The modern, secure context for your reverse proxy. Manage Caddy with an intuitive interface, automatic HTTPS,
+        and detailed audit logging.</p>
+
+      <div class="btn-group">
+        <a href="#deployment" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/fuomag9/caddy-proxy-manager" target="_blank" class="btn btn-secondary">View
+          Source</a>
       </div>
-      <div class="feature-grid">
-        <article class="card">
-          <h3>Reverse Proxy Management</h3>
-          <p>Configure reverse proxies, set custom headers, and manage domain routing through an easy-to-use web interface.</p>
-        </article>
-        <article class="card">
-          <h3>Certificate Management</h3>
-          <p>Automatic ACME certificate provisioning with Cloudflare DNS-01 support, plus manual certificate imports for custom setups.</p>
-        </article>
-        <article class="card">
-          <h3>Audit Logging</h3>
-          <p>Complete audit trail of all configuration changes with timestamps and user attribution for accountability.</p>
-        </article>
-        <article class="card">
-          <h3>Built-in Security</h3>
-          <p>Strong password requirements, secure session management, rate limiting, and HSTS headers protect your installation.</p>
-        </article>
+
+      <div class="showcase">
+        <div class="screenshot-main">
+          <img src="assets/screenshots/dashboard-main.png" alt="Caddy Proxy Manager Dashboard" loading="lazy" />
+        </div>
       </div>
     </section>
 
-    <section class="panel glass" id="showcase">
-      <div class="section-heading">
-        <p class="eyebrow">Screenshots</p>
-        <h2>See the interface.</h2>
+    <section id="features" class="container features">
+      <div class="section-header">
+        <h2>Powerful Simplicity</h2>
+        <p>Everything you need to manage your infrastructure, nothing you don't.</p>
       </div>
-      <div class="showcase-grid">
-        <figure>
-          <img src="assets/screenshots/dashboard-main.png" alt="Primary dashboard overview" loading="lazy" />
-          <figcaption>Dashboard overview showing proxy hosts, certificates, and system status.</figcaption>
-        </figure>
-        <figure>
-          <img src="assets/screenshots/certificates.png" alt="Certificate lifecycle manager" loading="lazy" />
-          <figcaption>Certificate management with ACME automation and manual imports.</figcaption>
-        </figure>
-        <figure>
-          <img src="assets/screenshots/proxy-editor.png" alt="Proxy host editor" loading="lazy" />
-          <figcaption>Proxy host configuration with validation and testing.</figcaption>
-        </figure>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Reverse Proxy</h3>
+          <p>Easily configure upstream pools, custom headers, and routing rules with a type-safe editor.</p>
+        </div>
+        <div class="card">
+          <h3>Auto HTTPS</h3>
+          <p>Zero-configuration TLS certificates via Let's Encrypt. Supports Cloudflare DNS-01 and HTTP-01 challenges
+            out of the
+            box.</p>
+        </div>
+        <div class="card">
+          <h3>Access Control</h3>
+          <p>Secure your endpoints with basic auth, IP access lists, or valid OAuth2/OIDC sessions.</p>
+        </div>
+        <div class="card">
+          <h3>Audit Log</h3>
+          <p>Every change is tracked. See who modified what and when, with full configuration diffs.</p>
+        </div>
+        <div class="card">
+          <h3>Modern Stack</h3>
+          <p>Built with Next.js 16, React Server Components, and Drizzle ORM for maximum performance.</p>
+        </div>
+        <div class="card">
+          <h3>Docker Ready</h3>
+          <p>Deploys in seconds with a single docker-compose file. Stateless application logic with persistent data.</p>
+        </div>
       </div>
     </section>
 
-    <section class="panel split" id="architecture">
-      <div>
-        <p class="eyebrow">Technology Stack</p>
-        <h2>Next.js, React, Drizzle ORM, and Caddy.</h2>
-        <p class="lede">Built with modern web technologies and integrates directly with Caddy's Admin API for real-time configuration management.</p>
+    <section id="architecture" class="container tech-stack">
+      <div class="section-header">
+        <h2>Designed for Reliability</h2>
       </div>
-      <ul class="pillars">
-        <li>
-          <span>Next.js App Router</span>
-          <p>Server-side rendering with React Server Components for fast page loads and smooth interactions.</p>
-        </li>
-        <li>
-          <span>SQLite Database</span>
-          <p>Drizzle ORM with SQLite for storing proxy configurations, certificates, and audit logs.</p>
-        </li>
-        <li>
-          <span>Caddy Admin API</span>
-          <p>Direct integration with Caddy's JSON API for applying configuration changes in real-time.</p>
-        </li>
-      </ul>
+      <div class="tech-grid">
+        <div class="secondary-screenshots">
+          <img src="assets/screenshots/audit-log.png" alt="Audit Log" loading="lazy" />
+          <img src="assets/screenshots/proxy-editor.png" alt="Proxy Editor" loading="lazy" />
+        </div>
+        <div>
+          <ul class="tech-list">
+            <li>
+              <h4>Caddy Powered</h4>
+              <p>Uses Caddy's native Admin API for real-time configuration updates without restarts.</p>
+            </li>
+            <li>
+              <h4>Type-Safe & Secure</h4>
+              <p>End-to-end type safety with TypeScript. Secure session management and input validation.</p>
+            </li>
+            <li>
+              <h4>SQLite Database</h4>
+              <p>Self-contained data storage. Easy to backup, migrate, and maintain.</p>
+            </li>
+            <li>
+              <h4>React Interface</h4>
+              <p>A responsive, dark-mode first UI built with the latest React patterns for a snappy experience.</p>
+            </li>
+          </ul>
+        </div>
+      </div>
     </section>
 
-    <section class="panel" id="deployment">
-      <div class="section-heading">
-        <p class="eyebrow">Quick Setup</p>
-        <h2>Deploy with Docker Compose.</h2>
-        <p class="lede">Get started quickly with Docker Compose. The setup includes persistent storage and environment-based configuration.</p>
-      </div>
-      <div class="code-block">
-        <pre><code> # Clone and enter
- git clone https://github.com/fuomag9/caddy-proxy-manager.git
- cd caddy-proxy-manager
+    <section id="deployment" class="deployment">
+      <div class="container section-header">
+        <h2>Deploy in Seconds</h2>
+        <p>Get up and running with Docker Compose.</p>
 
- # Configure secrets
- cp .env.example .env
- # ADMIN_USERNAME=your-admin
- # ADMIN_PASSWORD=your-strong-password
- # SESSION_SECRET=$(openssl rand -base64 32)
-
- # Launch the stack
- docker compose up -d
-        </code></pre>
+        <div class="code-block">
+          <span class="comment"># Clone the repository</span>
+          <span class="command">git clone https://github.com/fuomag9/caddy-proxy-manager.git</span>
+          <span class="command">cd caddy-proxy-manager</span>
+          <br>
+          <span class="comment"># Setup environment</span>
+          <span class="command">cp .env.example .env</span>
+          <br>
+          <span class="comment"># Start the stack</span>
+          <span class="command">docker compose up -d</span>
+        </div>
       </div>
     </section>
   </main>
 
   <footer>
-    <p>© <span id="year"></span> Caddy Proxy Manager. Crafted with intent.</p>
+    <div class="container">
+      <p>&copy; <span id="year"></span> Caddy Proxy Manager. Released under the MIT License.</p>
+    </div>
   </footer>
 </body>
+
 </html>

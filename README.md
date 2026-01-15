@@ -8,7 +8,7 @@ Web interface for managing [Caddy Server](https://caddyserver.com/) reverse prox
 
 [Report Bug](https://github.com/fuomag9/caddy-proxy-manager/issues) • [Request Feature](https://github.com/fuomag9/caddy-proxy-manager/issues)
 
-<img width="1525" height="873" alt="Dashboard screenshot" src="https://github.com/user-attachments/assets/297cc5b9-5185-4ce3-83ef-b5d87d16fcb4" />
+<img width="100%" alt="Dashboard screenshot" src="site/assets/screenshots/dashboard-main.png" />
 
 ## Overview
 
