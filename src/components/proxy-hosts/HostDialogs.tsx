@@ -22,13 +22,15 @@ export function CreateHostDialog({
     onClose,
     certificates,
     accessLists,
-    authentikDefaults
+    authentikDefaults,
+    initialData
 }: {
     open: boolean;
     onClose: () => void;
     certificates: Certificate[];
     accessLists: AccessList[];
     authentikDefaults: AuthentikSettings | null;
+    initialData?: ProxyHost | null;
 }) {
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
 
@@ -42,7 +44,7 @@ export function CreateHostDialog({
         <AppDialog
             open={open}
             onClose={onClose}
-            title="Create Proxy Host"
+            title={initialData ? "Duplicate Proxy Host" : "Create Proxy Host"}
             maxWidth="md"
             submitLabel="Create"
             onSubmit={() => {
@@ -56,20 +58,32 @@ export function CreateHostDialog({
                         {state.message}
                     </Alert>
                 )}
-                <SettingsToggles />
-                <TextField name="name" label="Name" placeholder="My Service" required fullWidth />
+                <SettingsToggles
+                    hstsSubdomains={initialData?.hsts_subdomains}
+                    skipHttpsValidation={initialData?.skip_https_hostname_validation}
+                    enabled={true}
+                />
+                <TextField
+                    name="name"
+                    label="Name"
+                    placeholder="My Service"
+                    defaultValue={initialData ? `${initialData.name} (Copy)` : ""}
+                    required
+                    fullWidth
+                />
                 <TextField
                     name="domains"
                     label="Domains"
                     placeholder="app.example.com"
+                    defaultValue={initialData?.domains.join("\n") ?? ""}
                     helperText="One per line or comma-separated"
                     multiline
                     minRows={2}
                     required
                     fullWidth
                 />
-                <UpstreamInput />
-                <TextField select name="certificate_id" label="Certificate" defaultValue="" fullWidth>
+                <UpstreamInput defaultUpstreams={initialData?.upstreams} />
+                <TextField select name="certificate_id" label="Certificate" defaultValue={initialData?.certificate_id ?? ""} fullWidth>
                     <MenuItem value="">Managed by Caddy (Auto)</MenuItem>
                     {certificates.map((cert) => (
                         <MenuItem key={cert.id} value={cert.id}>
@@ -77,7 +91,7 @@ export function CreateHostDialog({
                         </MenuItem>
                     ))}
                 </TextField>
-                <TextField select name="access_list_id" label="Access List" defaultValue="" fullWidth>
+                <TextField select name="access_list_id" label="Access List" defaultValue={initialData?.access_list_id ?? ""} fullWidth>
                     <MenuItem value="">None</MenuItem>
                     {accessLists.map((list) => (
                         <MenuItem key={list.id} value={list.id}>
@@ -89,6 +103,7 @@ export function CreateHostDialog({
                     name="custom_pre_handlers_json"
                     label="Custom Pre-Handlers (JSON)"
                     placeholder='[{"handler": "headers", ...}]'
+                    defaultValue={initialData?.custom_pre_handlers_json ?? ""}
                     helperText="Optional JSON array of Caddy handlers"
                     multiline
                     minRows={3}
@@ -98,12 +113,13 @@ export function CreateHostDialog({
                     name="custom_reverse_proxy_json"
                     label="Custom Reverse Proxy (JSON)"
                     placeholder='{"headers": {"request": {...}}}'
+                    defaultValue={initialData?.custom_reverse_proxy_json ?? ""}
                     helperText="Deep-merge into reverse_proxy handler"
                     multiline
                     minRows={3}
                     fullWidth
                 />
-                <AuthentikFields defaults={authentikDefaults} />
+                <AuthentikFields defaults={authentikDefaults} authentik={initialData?.authentik} />
             </Stack>
         </AppDialog>
     );

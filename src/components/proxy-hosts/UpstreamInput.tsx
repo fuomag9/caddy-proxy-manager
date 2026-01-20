@@ -42,7 +42,16 @@ export function UpstreamInput({
 
     const handleAddressChange = (index: number, newAddress: string) => {
         const updated = [...entries];
-        updated[index].address = newAddress;
+        // Strip protocol if user pasted a full URL
+        if (newAddress.startsWith("https://")) {
+            updated[index].protocol = "https://";
+            updated[index].address = newAddress.slice(8);
+        } else if (newAddress.startsWith("http://")) {
+            updated[index].protocol = "http://";
+            updated[index].address = newAddress.slice(7);
+        } else {
+            updated[index].address = newAddress;
+        }
         setEntries(updated);
     };
 

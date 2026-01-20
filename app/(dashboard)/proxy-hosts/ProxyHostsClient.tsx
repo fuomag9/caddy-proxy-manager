@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import type { AccessList } from "@/src/lib/models/access-lists";
 import type { Certificate } from "@/src/lib/models/certificates";
 import type { ProxyHost } from "@/src/lib/models/proxy-hosts";
@@ -24,6 +25,7 @@ type Props = {
 
 export default function ProxyHostsClient({ hosts, certificates, accessLists, authentikDefaults }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -108,6 +110,18 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
             size="small"
             color="success"
           />
+          <Tooltip title="Duplicate">
+            <IconButton
+              size="small"
+              onClick={() => {
+                setDuplicateHost(host);
+                setCreateOpen(true);
+              }}
+              color="info"
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Edit">
             <IconButton size="small" onClick={() => setEditHost(host)} color="primary">
               <EditIcon fontSize="small" />
@@ -149,7 +163,12 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
 
       <CreateHostDialog
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+          setCreateOpen(false);
+          // Clear duplicate host after dialog transition
+          setTimeout(() => setDuplicateHost(null), 200);
+        }}
+        initialData={duplicateHost}
         certificates={certificates}
         accessLists={accessLists}
         authentikDefaults={authentikDefaults}
