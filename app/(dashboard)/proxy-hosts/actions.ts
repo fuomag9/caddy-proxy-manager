@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
-import { createProxyHost, deleteProxyHost, updateProxyHost, type ProxyHostAuthentikInput } from "@/src/lib/models/proxy-hosts";
+import { createProxyHost, deleteProxyHost, updateProxyHost, type ProxyHostAuthentikInput, type LoadBalancerInput, type LoadBalancingPolicy } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings } from "@/src/lib/settings";
 
@@ -143,6 +143,133 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function parseOptionalNumber(value: FormDataEntryValue | null): number | null {
+  if (!value || typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const num = Number(trimmed);
+  if (!Number.isFinite(num)) {
+    return null;
+  }
+  return num;
+}
+
+const VALID_LB_POLICIES: LoadBalancingPolicy[] = ["random", "round_robin", "least_conn", "ip_hash", "first", "header", "cookie", "uri_hash"];
+
+function parseLoadBalancerConfig(formData: FormData): LoadBalancerInput | undefined {
+  if (!formData.has("lb_present")) {
+    return undefined;
+  }
+
+  const enabledIndicator = formData.has("lb_enabled_present");
+  const enabledValue = enabledIndicator
+    ? formData.has("lb_enabled")
+      ? parseCheckbox(formData.get("lb_enabled"))
+      : false
+    : undefined;
+
+  const policyRaw = parseOptionalText(formData.get("lb_policy"));
+  const policy = policyRaw && VALID_LB_POLICIES.includes(policyRaw as LoadBalancingPolicy)
+    ? (policyRaw as LoadBalancingPolicy)
+    : undefined;
+
+  const policyHeaderField = parseOptionalText(formData.get("lb_policy_header_field"));
+  const policyCookieName = parseOptionalText(formData.get("lb_policy_cookie_name"));
+  const policyCookieSecret = parseOptionalText(formData.get("lb_policy_cookie_secret"));
+  const tryDuration = parseOptionalText(formData.get("lb_try_duration"));
+  const tryInterval = parseOptionalText(formData.get("lb_try_interval"));
+  const retries = parseOptionalNumber(formData.get("lb_retries"));
+
+  // Active health check
+  const activeHealthEnabled = formData.has("lb_active_health_enabled_present")
+    ? formData.has("lb_active_health_enabled")
+      ? parseCheckbox(formData.get("lb_active_health_enabled"))
+      : false
+    : undefined;
+
+  let activeHealthCheck: LoadBalancerInput["activeHealthCheck"] = undefined;
+  if (activeHealthEnabled !== undefined || formData.has("lb_active_health_uri")) {
+    activeHealthCheck = {
+      enabled: activeHealthEnabled,
+      uri: parseOptionalText(formData.get("lb_active_health_uri")),
+      port: parseOptionalNumber(formData.get("lb_active_health_port")),
+      interval: parseOptionalText(formData.get("lb_active_health_interval")),
+      timeout: parseOptionalText(formData.get("lb_active_health_timeout")),
+      status: parseOptionalNumber(formData.get("lb_active_health_status")),
+      body: parseOptionalText(formData.get("lb_active_health_body"))
+    };
+  }
+
+  // Passive health check
+  const passiveHealthEnabled = formData.has("lb_passive_health_enabled_present")
+    ? formData.has("lb_passive_health_enabled")
+      ? parseCheckbox(formData.get("lb_passive_health_enabled"))
+      : false
+    : undefined;
+
+  let passiveHealthCheck: LoadBalancerInput["passiveHealthCheck"] = undefined;
+  if (passiveHealthEnabled !== undefined || formData.has("lb_passive_health_fail_duration")) {
+    // Parse unhealthy status codes from comma-separated input
+    const unhealthyStatusRaw = parseOptionalText(formData.get("lb_passive_health_unhealthy_status"));
+    let unhealthyStatus: number[] | null = null;
+    if (unhealthyStatusRaw) {
+      unhealthyStatus = unhealthyStatusRaw
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n >= 100);
+      if (unhealthyStatus.length === 0) {
+        unhealthyStatus = null;
+      }
+    }
+
+    passiveHealthCheck = {
+      enabled: passiveHealthEnabled,
+      failDuration: parseOptionalText(formData.get("lb_passive_health_fail_duration")),
+      maxFails: parseOptionalNumber(formData.get("lb_passive_health_max_fails")),
+      unhealthyStatus,
+      unhealthyLatency: parseOptionalText(formData.get("lb_passive_health_unhealthy_latency"))
+    };
+  }
+
+  const result: LoadBalancerInput = {};
+  if (enabledValue !== undefined) {
+    result.enabled = enabledValue;
+  }
+  if (policy !== undefined) {
+    result.policy = policy;
+  }
+  if (policyHeaderField !== null) {
+    result.policyHeaderField = policyHeaderField;
+  }
+  if (policyCookieName !== null) {
+    result.policyCookieName = policyCookieName;
+  }
+  if (policyCookieSecret !== null) {
+    result.policyCookieSecret = policyCookieSecret;
+  }
+  if (tryDuration !== null) {
+    result.tryDuration = tryDuration;
+  }
+  if (tryInterval !== null) {
+    result.tryInterval = tryInterval;
+  }
+  if (retries !== null) {
+    result.retries = retries;
+  }
+  if (activeHealthCheck !== undefined) {
+    result.activeHealthCheck = activeHealthCheck;
+  }
+  if (passiveHealthCheck !== undefined) {
+    result.passiveHealthCheck = passiveHealthCheck;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export async function createProxyHostAction(
   _prevState: ActionState = INITIAL_ACTION_STATE,
   formData: FormData
@@ -177,7 +304,8 @@ export async function createProxyHostAction(
         enabled: parseCheckbox(formData.get("enabled")),
         custom_pre_handlers_json: parseOptionalText(formData.get("custom_pre_handlers_json")),
         custom_reverse_proxy_json: parseOptionalText(formData.get("custom_reverse_proxy_json")),
-        authentik: parseAuthentikConfig(formData)
+        authentik: parseAuthentikConfig(formData),
+        load_balancer: parseLoadBalancerConfig(formData)
       },
       userId
     );
@@ -244,7 +372,8 @@ export async function updateProxyHostAction(
         custom_reverse_proxy_json: formData.has("custom_reverse_proxy_json")
           ? parseOptionalText(formData.get("custom_reverse_proxy_json"))
           : undefined,
-        authentik: parseAuthentikConfig(formData)
+        authentik: parseAuthentikConfig(formData),
+        load_balancer: parseLoadBalancerConfig(formData)
       },
       userId
     );

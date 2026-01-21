@@ -53,6 +53,7 @@ type ProxyHostMeta = {
   custom_reverse_proxy_json?: string;
   custom_pre_handlers_json?: string;
   authentik?: ProxyHostAuthentikMeta;
+  load_balancer?: LoadBalancerMeta;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -75,6 +76,64 @@ type AuthentikRouteConfig = {
   trustedProxies: string[];
   setOutpostHostHeader: boolean;
   protectedPaths: string[] | null;
+};
+
+type LoadBalancerActiveHealthCheckMeta = {
+  enabled?: boolean;
+  uri?: string;
+  port?: number;
+  interval?: string;
+  timeout?: string;
+  status?: number;
+  body?: string;
+};
+
+type LoadBalancerPassiveHealthCheckMeta = {
+  enabled?: boolean;
+  fail_duration?: string;
+  max_fails?: number;
+  unhealthy_status?: number[];
+  unhealthy_latency?: string;
+};
+
+type LoadBalancerMeta = {
+  enabled?: boolean;
+  policy?: string;
+  policy_header_field?: string;
+  policy_cookie_name?: string;
+  policy_cookie_secret?: string;
+  try_duration?: string;
+  try_interval?: string;
+  retries?: number;
+  active_health_check?: LoadBalancerActiveHealthCheckMeta;
+  passive_health_check?: LoadBalancerPassiveHealthCheckMeta;
+};
+
+type LoadBalancerRouteConfig = {
+  enabled: boolean;
+  policy: string;
+  policyHeaderField: string | null;
+  policyCookieName: string | null;
+  policyCookieSecret: string | null;
+  tryDuration: string | null;
+  tryInterval: string | null;
+  retries: number | null;
+  activeHealthCheck: {
+    enabled: boolean;
+    uri: string | null;
+    port: number | null;
+    interval: string | null;
+    timeout: string | null;
+    status: number | null;
+    body: string | null;
+  } | null;
+  passiveHealthCheck: {
+    enabled: boolean;
+    failDuration: string | null;
+    maxFails: number | null;
+    unhealthyStatus: number[] | null;
+    unhealthyLatency: string | null;
+  } | null;
 };
 
 type RedirectHostRow = {
@@ -410,6 +469,19 @@ function buildProxyRoutes(
             }
           : {}
       };
+    }
+
+    // Configure load balancing and health checks
+    const lbConfig = parseLoadBalancerConfig(meta.load_balancer);
+    if (lbConfig) {
+      const loadBalancing = buildLoadBalancingConfig(lbConfig);
+      if (loadBalancing) {
+        reverseProxyHandler.load_balancing = loadBalancing;
+      }
+      const healthChecks = buildHealthChecksConfig(lbConfig);
+      if (healthChecks) {
+        reverseProxyHandler.health_checks = healthChecks;
+      }
     }
 
     const customReverseProxy = parseOptionalJson(meta.custom_reverse_proxy_json);
@@ -1102,4 +1174,156 @@ function parseAuthentikConfig(meta: ProxyHostAuthentikMeta | undefined | null): 
     setOutpostHostHeader,
     protectedPaths
   };
+}
+
+const VALID_LB_POLICIES = ["random", "round_robin", "least_conn", "ip_hash", "first", "header", "cookie", "uri_hash"];
+
+function parseLoadBalancerConfig(meta: LoadBalancerMeta | undefined | null): LoadBalancerRouteConfig | null {
+  if (!meta || !meta.enabled) {
+    return null;
+  }
+
+  const policy = meta.policy && VALID_LB_POLICIES.includes(meta.policy) ? meta.policy : "random";
+  const policyHeaderField = typeof meta.policy_header_field === "string" ? meta.policy_header_field.trim() || null : null;
+  const policyCookieName = typeof meta.policy_cookie_name === "string" ? meta.policy_cookie_name.trim() || null : null;
+  const policyCookieSecret = typeof meta.policy_cookie_secret === "string" ? meta.policy_cookie_secret.trim() || null : null;
+  const tryDuration = typeof meta.try_duration === "string" ? meta.try_duration.trim() || null : null;
+  const tryInterval = typeof meta.try_interval === "string" ? meta.try_interval.trim() || null : null;
+  const retries = typeof meta.retries === "number" && Number.isFinite(meta.retries) && meta.retries >= 0 ? meta.retries : null;
+
+  let activeHealthCheck: LoadBalancerRouteConfig["activeHealthCheck"] = null;
+  if (meta.active_health_check && meta.active_health_check.enabled) {
+    activeHealthCheck = {
+      enabled: true,
+      uri: typeof meta.active_health_check.uri === "string" ? meta.active_health_check.uri.trim() || null : null,
+      port: typeof meta.active_health_check.port === "number" && Number.isFinite(meta.active_health_check.port) && meta.active_health_check.port > 0
+        ? meta.active_health_check.port
+        : null,
+      interval: typeof meta.active_health_check.interval === "string" ? meta.active_health_check.interval.trim() || null : null,
+      timeout: typeof meta.active_health_check.timeout === "string" ? meta.active_health_check.timeout.trim() || null : null,
+      status: typeof meta.active_health_check.status === "number" && Number.isFinite(meta.active_health_check.status) && meta.active_health_check.status >= 100
+        ? meta.active_health_check.status
+        : null,
+      body: typeof meta.active_health_check.body === "string" ? meta.active_health_check.body.trim() || null : null
+    };
+  }
+
+  let passiveHealthCheck: LoadBalancerRouteConfig["passiveHealthCheck"] = null;
+  if (meta.passive_health_check && meta.passive_health_check.enabled) {
+    const unhealthyStatus = Array.isArray(meta.passive_health_check.unhealthy_status)
+      ? meta.passive_health_check.unhealthy_status.filter((s): s is number => typeof s === "number" && Number.isFinite(s) && s >= 100)
+      : null;
+
+    passiveHealthCheck = {
+      enabled: true,
+      failDuration: typeof meta.passive_health_check.fail_duration === "string" ? meta.passive_health_check.fail_duration.trim() || null : null,
+      maxFails: typeof meta.passive_health_check.max_fails === "number" && Number.isFinite(meta.passive_health_check.max_fails) && meta.passive_health_check.max_fails >= 0
+        ? meta.passive_health_check.max_fails
+        : null,
+      unhealthyStatus: unhealthyStatus && unhealthyStatus.length > 0 ? unhealthyStatus : null,
+      unhealthyLatency: typeof meta.passive_health_check.unhealthy_latency === "string" ? meta.passive_health_check.unhealthy_latency.trim() || null : null
+    };
+  }
+
+  return {
+    enabled: true,
+    policy,
+    policyHeaderField,
+    policyCookieName,
+    policyCookieSecret,
+    tryDuration,
+    tryInterval,
+    retries,
+    activeHealthCheck,
+    passiveHealthCheck
+  };
+}
+
+function buildLoadBalancingConfig(config: LoadBalancerRouteConfig): Record<string, unknown> | null {
+  const loadBalancing: Record<string, unknown> = {};
+
+  // Build selection policy
+  const selectionPolicy: Record<string, unknown> = { policy: config.policy };
+
+  if (config.policy === "header" && config.policyHeaderField) {
+    selectionPolicy.policy = "header";
+    selectionPolicy.field = config.policyHeaderField;
+  } else if (config.policy === "cookie" && config.policyCookieName) {
+    selectionPolicy.policy = "cookie";
+    selectionPolicy.name = config.policyCookieName;
+    if (config.policyCookieSecret) {
+      selectionPolicy.secret = config.policyCookieSecret;
+    }
+  }
+
+  loadBalancing.selection_policy = selectionPolicy;
+
+  // Add retry settings
+  if (config.tryDuration) {
+    loadBalancing.try_duration = config.tryDuration;
+  }
+  if (config.tryInterval) {
+    loadBalancing.try_interval = config.tryInterval;
+  }
+  if (config.retries !== null) {
+    loadBalancing.retries = config.retries;
+  }
+
+  return Object.keys(loadBalancing).length > 0 ? loadBalancing : null;
+}
+
+function buildHealthChecksConfig(config: LoadBalancerRouteConfig): Record<string, unknown> | null {
+  const healthChecks: Record<string, unknown> = {};
+
+  // Active health checks
+  if (config.activeHealthCheck && config.activeHealthCheck.enabled) {
+    const active: Record<string, unknown> = {};
+
+    if (config.activeHealthCheck.uri) {
+      active.uri = config.activeHealthCheck.uri;
+    }
+    if (config.activeHealthCheck.port !== null) {
+      active.port = config.activeHealthCheck.port;
+    }
+    if (config.activeHealthCheck.interval) {
+      active.interval = config.activeHealthCheck.interval;
+    }
+    if (config.activeHealthCheck.timeout) {
+      active.timeout = config.activeHealthCheck.timeout;
+    }
+    if (config.activeHealthCheck.status !== null) {
+      active.expect_status = config.activeHealthCheck.status;
+    }
+    if (config.activeHealthCheck.body) {
+      active.expect_body = config.activeHealthCheck.body;
+    }
+
+    if (Object.keys(active).length > 0) {
+      healthChecks.active = active;
+    }
+  }
+
+  // Passive health checks
+  if (config.passiveHealthCheck && config.passiveHealthCheck.enabled) {
+    const passive: Record<string, unknown> = {};
+
+    if (config.passiveHealthCheck.failDuration) {
+      passive.fail_duration = config.passiveHealthCheck.failDuration;
+    }
+    if (config.passiveHealthCheck.maxFails !== null) {
+      passive.max_fails = config.passiveHealthCheck.maxFails;
+    }
+    if (config.passiveHealthCheck.unhealthyStatus && config.passiveHealthCheck.unhealthyStatus.length > 0) {
+      passive.unhealthy_status = config.passiveHealthCheck.unhealthyStatus;
+    }
+    if (config.passiveHealthCheck.unhealthyLatency) {
+      passive.unhealthy_latency = config.passiveHealthCheck.unhealthyLatency;
+    }
+
+    if (Object.keys(passive).length > 0) {
+      healthChecks.passive = passive;
+    }
+  }
+
+  return Object.keys(healthChecks).length > 0 ? healthChecks : null;
 }
