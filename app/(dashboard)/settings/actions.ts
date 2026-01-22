@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings } from "@/src/lib/settings";
+import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings } from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
@@ -152,5 +152,55 @@ export async function updateLoggingSettingsAction(_prevState: ActionResult | nul
   } catch (error) {
     console.error("Failed to save logging settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save logging settings" };
+  }
+}
+
+function parseResolverList(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+export async function updateDnsSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const enabled = formData.get("enabled") === "on";
+    const resolversRaw = formData.get("resolvers") ? String(formData.get("resolvers")) : "";
+    const fallbacksRaw = formData.get("fallbacks") ? String(formData.get("fallbacks")) : "";
+    const timeout = formData.get("timeout") ? String(formData.get("timeout")).trim() : undefined;
+
+    const resolvers = parseResolverList(resolversRaw);
+    const fallbacks = parseResolverList(fallbacksRaw);
+
+    if (enabled && resolvers.length === 0) {
+      return { success: false, message: "At least one DNS resolver is required when enabled" };
+    }
+
+    await saveDnsSettings({
+      enabled,
+      resolvers,
+      fallbacks: fallbacks.length > 0 ? fallbacks : undefined,
+      timeout: timeout && timeout.length > 0 ? timeout : undefined
+    });
+
+    // Apply config to use new DNS resolvers
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      return { success: true, message: "DNS settings saved and applied successfully" };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: true,
+        message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
+      };
+    }
+  } catch (error) {
+    console.error("Failed to save DNS settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save DNS settings" };
   }
 }

@@ -31,6 +31,13 @@ export type LoggingSettings = {
   format?: "json" | "console"; // Log format (default: json)
 };
 
+export type DnsSettings = {
+  enabled: boolean;
+  resolvers: string[]; // Primary DNS resolvers (e.g., "1.1.1.1", "8.8.8.8")
+  fallbacks?: string[]; // Fallback DNS resolvers if primary fails
+  timeout?: string; // DNS query timeout (e.g., "5s")
+};
+
 export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
   const setting = await db.query.settings.findFirst({
     where: (table, { eq }) => eq(table.key, key)
@@ -106,4 +113,12 @@ export async function getLoggingSettings(): Promise<LoggingSettings | null> {
 
 export async function saveLoggingSettings(settings: LoggingSettings): Promise<void> {
   await setSetting("logging", settings);
+}
+
+export async function getDnsSettings(): Promise<DnsSettings | null> {
+  return await getSetting<DnsSettings>("dns");
+}
+
+export async function saveDnsSettings(settings: DnsSettings): Promise<void> {
+  await setSetting("dns", settings);
 }

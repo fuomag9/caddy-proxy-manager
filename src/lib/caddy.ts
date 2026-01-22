@@ -3,7 +3,7 @@ import { join } from "node:path";
 import crypto from "node:crypto";
 import db, { nowIso } from "./db";
 import { config } from "./config";
-import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, getLoggingSettings, setSetting } from "./settings";
+import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, setSetting } from "./settings";
 import {
   accessListEntries,
   certificates,
@@ -49,11 +49,19 @@ type ProxyHostRow = {
   enabled: number;
 };
 
+type DnsResolverMeta = {
+  enabled?: boolean;
+  resolvers?: string[];
+  fallbacks?: string[];
+  timeout?: string;
+};
+
 type ProxyHostMeta = {
   custom_reverse_proxy_json?: string;
   custom_pre_handlers_json?: string;
   authentik?: ProxyHostAuthentikMeta;
   load_balancer?: LoadBalancerMeta;
+  dns_resolver?: DnsResolverMeta;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -473,14 +481,24 @@ function buildProxyRoutes(
 
     // Configure load balancing and health checks
     const lbConfig = parseLoadBalancerConfig(meta.load_balancer);
+    const dnsConfig = parseDnsResolverConfig(meta.dns_resolver);
+
     if (lbConfig) {
       const loadBalancing = buildLoadBalancingConfig(lbConfig);
       if (loadBalancing) {
         reverseProxyHandler.load_balancing = loadBalancing;
       }
-      const healthChecks = buildHealthChecksConfig(lbConfig);
+      const healthChecks = buildHealthChecksConfig(lbConfig, dnsConfig);
       if (healthChecks) {
         reverseProxyHandler.health_checks = healthChecks;
+      }
+    }
+
+    // Add transport-level DNS resolver config if enabled
+    if (dnsConfig) {
+      const transportConfig = buildTransportResolverConfig(dnsConfig);
+      if (transportConfig) {
+        reverseProxyHandler.transport = transportConfig;
       }
     }
 
@@ -785,6 +803,18 @@ async function buildTlsAutomation(
   const cloudflare = await getCloudflareSettings();
   const hasCloudflare = cloudflare && cloudflare.apiToken;
 
+  const dnsSettings = await getDnsSettings();
+  const hasDnsResolvers = dnsSettings && dnsSettings.enabled && dnsSettings.resolvers && dnsSettings.resolvers.length > 0;
+
+  // Build DNS resolvers list (primary + fallbacks)
+  const dnsResolvers: string[] = [];
+  if (hasDnsResolvers) {
+    dnsResolvers.push(...dnsSettings.resolvers);
+    if (dnsSettings.fallbacks && dnsSettings.fallbacks.length > 0) {
+      dnsResolvers.push(...dnsSettings.fallbacks);
+    }
+  }
+
   const managedCertificateIds = new Set<number>();
   const policies: Record<string, unknown>[] = [];
 
@@ -808,10 +838,17 @@ async function buildTlsAutomation(
         api_token: cloudflare.apiToken
       };
 
+      const dnsChallenge: Record<string, unknown> = {
+        provider: providerConfig
+      };
+
+      // Add custom DNS resolvers if configured
+      if (dnsResolvers.length > 0) {
+        dnsChallenge.resolvers = dnsResolvers;
+      }
+
       issuer.challenges = {
-        dns: {
-          provider: providerConfig
-        }
+        dns: dnsChallenge
       };
     }
 
@@ -846,10 +883,17 @@ async function buildTlsAutomation(
         api_token: cloudflare.apiToken
       };
 
+      const dnsChallenge: Record<string, unknown> = {
+        provider: providerConfig
+      };
+
+      // Add custom DNS resolvers if configured
+      if (dnsResolvers.length > 0) {
+        dnsChallenge.resolvers = dnsResolvers;
+      }
+
       issuer.challenges = {
-        dns: {
-          provider: providerConfig
-        }
+        dns: dnsChallenge
       };
     }
 
@@ -1272,7 +1316,14 @@ function buildLoadBalancingConfig(config: LoadBalancerRouteConfig): Record<strin
   return Object.keys(loadBalancing).length > 0 ? loadBalancing : null;
 }
 
-function buildHealthChecksConfig(config: LoadBalancerRouteConfig): Record<string, unknown> | null {
+type DnsResolverRouteConfig = {
+  enabled: boolean;
+  resolvers: string[];
+  fallbacks: string[] | null;
+  timeout: string | null;
+};
+
+function buildHealthChecksConfig(config: LoadBalancerRouteConfig, dnsConfig: DnsResolverRouteConfig | null): Record<string, unknown> | null {
   const healthChecks: Record<string, unknown> = {};
 
   // Active health checks
@@ -1326,4 +1377,63 @@ function buildHealthChecksConfig(config: LoadBalancerRouteConfig): Record<string
   }
 
   return Object.keys(healthChecks).length > 0 ? healthChecks : null;
+}
+
+function parseDnsResolverConfig(meta: DnsResolverMeta | undefined | null): DnsResolverRouteConfig | null {
+  if (!meta || !meta.enabled) {
+    return null;
+  }
+
+  const resolvers = Array.isArray(meta.resolvers)
+    ? meta.resolvers.map((r) => (typeof r === "string" ? r.trim() : "")).filter((r) => r.length > 0)
+    : [];
+
+  if (resolvers.length === 0) {
+    return null;
+  }
+
+  const fallbacks = Array.isArray(meta.fallbacks)
+    ? meta.fallbacks.map((r) => (typeof r === "string" ? r.trim() : "")).filter((r) => r.length > 0)
+    : null;
+
+  const timeout = typeof meta.timeout === "string" ? meta.timeout.trim() || null : null;
+
+  return {
+    enabled: true,
+    resolvers,
+    fallbacks: fallbacks && fallbacks.length > 0 ? fallbacks : null,
+    timeout
+  };
+}
+
+function buildTransportResolverConfig(dnsConfig: DnsResolverRouteConfig): Record<string, unknown> | null {
+  if (!dnsConfig || !dnsConfig.enabled || dnsConfig.resolvers.length === 0) {
+    return null;
+  }
+
+  // Build resolver addresses list (primary + fallbacks)
+  // DNS resolvers need port, default to :53 if not specified
+  const formatResolver = (r: string) => {
+    if (r.includes(":")) return r;
+    return `${r}:53`;
+  };
+
+  const addresses = dnsConfig.resolvers.map(formatResolver);
+  if (dnsConfig.fallbacks && dnsConfig.fallbacks.length > 0) {
+    addresses.push(...dnsConfig.fallbacks.map(formatResolver));
+  }
+
+  const transport: Record<string, unknown> = {
+    protocol: "http",
+    resolver: {
+      addresses
+    }
+  };
+
+  // Add dial timeout if specified
+  if (dnsConfig.timeout) {
+    transport.dial_timeout = dnsConfig.timeout;
+  }
+
+  return transport;
 }

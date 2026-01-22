@@ -2,13 +2,14 @@
 
 import { useFormState } from "react-dom";
 import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import type { GeneralSettings, AuthentikSettings, MetricsSettings, LoggingSettings } from "@/src/lib/settings";
+import type { GeneralSettings, AuthentikSettings, MetricsSettings, LoggingSettings, DnsSettings } from "@/src/lib/settings";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
   updateAuthentikSettingsAction,
   updateMetricsSettingsAction,
-  updateLoggingSettingsAction
+  updateLoggingSettingsAction,
+  updateDnsSettingsAction
 } from "./actions";
 
 type Props = {
@@ -21,14 +22,16 @@ type Props = {
   authentik: AuthentikSettings | null;
   metrics: MetricsSettings | null;
   logging: LoggingSettings | null;
+  dns: DnsSettings | null;
 };
 
-export default function SettingsClient({ general, cloudflare, authentik, metrics, logging }: Props) {
+export default function SettingsClient({ general, cloudflare, authentik, metrics, logging, dns }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
   const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
   const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
   const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
   const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
+  const [dnsState, dnsFormAction] = useFormState(updateDnsSettingsAction, null);
 
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
@@ -110,6 +113,65 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save Cloudflare settings
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            DNS Resolvers
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Configure custom DNS resolvers for ACME DNS-01 challenges. These resolvers will be used to verify DNS records during certificate issuance.
+          </Typography>
+          <Stack component="form" action={dnsFormAction} spacing={2}>
+            {dnsState?.message && (
+              <Alert severity={dnsState.success ? "success" : "error"}>
+                {dnsState.message}
+              </Alert>
+            )}
+            <FormControlLabel
+              control={<Checkbox name="enabled" defaultChecked={dns?.enabled ?? false} />}
+              label="Enable custom DNS resolvers"
+            />
+            <TextField
+              name="resolvers"
+              label="Primary DNS Resolvers"
+              placeholder="1.1.1.1&#10;8.8.8.8"
+              defaultValue={dns?.resolvers?.join("\n") ?? ""}
+              helperText="One resolver per line (e.g., 1.1.1.1, 8.8.8.8). Used for ACME DNS verification."
+              multiline
+              minRows={2}
+              fullWidth
+            />
+            <TextField
+              name="fallbacks"
+              label="Fallback DNS Resolvers (Optional)"
+              placeholder="8.8.4.4&#10;1.0.0.1"
+              defaultValue={dns?.fallbacks?.join("\n") ?? ""}
+              helperText="Fallback resolvers if primary fails. One per line."
+              multiline
+              minRows={2}
+              fullWidth
+            />
+            <TextField
+              name="timeout"
+              label="DNS Query Timeout"
+              placeholder="5s"
+              defaultValue={dns?.timeout ?? ""}
+              helperText="Timeout for DNS queries (e.g., 5s, 10s)"
+              fullWidth
+            />
+            <Alert severity="info">
+              Custom DNS resolvers are useful when your DNS provider has slow propagation or when using split-horizon DNS.
+              Common public resolvers: 1.1.1.1 (Cloudflare), 8.8.8.8 (Google), 9.9.9.9 (Quad9).
+            </Alert>
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">
+                Save DNS settings
               </Button>
             </Box>
           </Stack>

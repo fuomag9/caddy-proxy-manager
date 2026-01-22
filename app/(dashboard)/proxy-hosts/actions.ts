@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
-import { createProxyHost, deleteProxyHost, updateProxyHost, type ProxyHostAuthentikInput, type LoadBalancerInput, type LoadBalancingPolicy } from "@/src/lib/models/proxy-hosts";
+import { createProxyHost, deleteProxyHost, updateProxyHost, type ProxyHostAuthentikInput, type LoadBalancerInput, type LoadBalancingPolicy, type DnsResolverInput } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings } from "@/src/lib/settings";
 
@@ -270,6 +270,62 @@ function parseLoadBalancerConfig(formData: FormData): LoadBalancerInput | undefi
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefined {
+  if (!formData.has("dns_present")) {
+    return undefined;
+  }
+
+  const enabledIndicator = formData.has("dns_enabled_present");
+  const enabledValue = enabledIndicator
+    ? formData.has("dns_enabled")
+      ? parseCheckbox(formData.get("dns_enabled"))
+      : false
+    : undefined;
+
+  // Parse resolvers from newline-separated input
+  const resolversRaw = parseOptionalText(formData.get("dns_resolvers"));
+  let resolvers: string[] | undefined = undefined;
+  if (resolversRaw || formData.has("dns_resolvers")) {
+    resolvers = resolversRaw
+      ? resolversRaw
+          .split(/[\n,]/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0)
+      : [];
+  }
+
+  // Parse fallbacks from newline-separated input
+  const fallbacksRaw = parseOptionalText(formData.get("dns_fallbacks"));
+  let fallbacks: string[] | null = null;
+  if (fallbacksRaw) {
+    fallbacks = fallbacksRaw
+      .split(/[\n,]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (fallbacks.length === 0) {
+      fallbacks = null;
+    }
+  }
+
+  const timeout = parseOptionalText(formData.get("dns_timeout"));
+
+  const result: DnsResolverInput = {};
+  if (enabledValue !== undefined) {
+    result.enabled = enabledValue;
+  }
+  if (resolvers !== undefined) {
+    result.resolvers = resolvers;
+  }
+  if (fallbacks !== null) {
+    result.fallbacks = fallbacks;
+  }
+  if (timeout !== null) {
+    result.timeout = timeout;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export async function createProxyHostAction(
   _prevState: ActionState = INITIAL_ACTION_STATE,
   formData: FormData
@@ -305,7 +361,8 @@ export async function createProxyHostAction(
         custom_pre_handlers_json: parseOptionalText(formData.get("custom_pre_handlers_json")),
         custom_reverse_proxy_json: parseOptionalText(formData.get("custom_reverse_proxy_json")),
         authentik: parseAuthentikConfig(formData),
-        load_balancer: parseLoadBalancerConfig(formData)
+        load_balancer: parseLoadBalancerConfig(formData),
+        dns_resolver: parseDnsResolverConfig(formData)
       },
       userId
     );
@@ -373,7 +430,8 @@ export async function updateProxyHostAction(
           ? parseOptionalText(formData.get("custom_reverse_proxy_json"))
           : undefined,
         authentik: parseAuthentikConfig(formData),
-        load_balancer: parseLoadBalancerConfig(formData)
+        load_balancer: parseLoadBalancerConfig(formData),
+        dns_resolver: parseDnsResolverConfig(formData)
       },
       userId
     );

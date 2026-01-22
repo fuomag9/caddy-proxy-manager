@@ -14,6 +14,7 @@ import { ProxyHost } from "@/src/lib/models/proxy-hosts";
 import { AuthentikSettings } from "@/src/lib/settings";
 import { AppDialog } from "@/src/components/ui/AppDialog";
 import { AuthentikFields } from "./AuthentikFields";
+import { DnsResolverFields } from "./DnsResolverFields";
 import { LoadBalancerFields } from "./LoadBalancerFields";
 import { SettingsToggles } from "./SettingsToggles";
 import { UpstreamInput } from "./UpstreamInput";
@@ -122,6 +123,7 @@ export function CreateHostDialog({
                 />
                 <AuthentikFields defaults={authentikDefaults} authentik={initialData?.authentik} />
                 <LoadBalancerFields loadBalancer={initialData?.load_balancer} />
+                <DnsResolverFields dnsResolver={initialData?.dns_resolver} />
             </Stack>
         </AppDialog>
     );
@@ -217,6 +219,7 @@ export function EditHostDialog({
                 />
                 <AuthentikFields authentik={host.authentik} />
                 <LoadBalancerFields loadBalancer={host.load_balancer} />
+                <DnsResolverFields dnsResolver={host.dns_resolver} />
             </Stack>
         </AppDialog>
     );

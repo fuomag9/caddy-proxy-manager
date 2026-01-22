@@ -113,6 +113,28 @@ type LoadBalancerMeta = {
   passive_health_check?: LoadBalancerPassiveHealthCheckMeta;
 };
 
+// DNS Resolver Types
+export type DnsResolverConfig = {
+  enabled: boolean;
+  resolvers: string[];
+  fallbacks: string[] | null;
+  timeout: string | null;
+};
+
+export type DnsResolverInput = {
+  enabled?: boolean;
+  resolvers?: string[];
+  fallbacks?: string[] | null;
+  timeout?: string | null;
+};
+
+type DnsResolverMeta = {
+  enabled?: boolean;
+  resolvers?: string[];
+  fallbacks?: string[];
+  timeout?: string;
+};
+
 export type ProxyHostAuthentikConfig = {
   enabled: boolean;
   outpostDomain: string | null;
@@ -151,6 +173,7 @@ type ProxyHostMeta = {
   custom_pre_handlers_json?: string;
   authentik?: ProxyHostAuthentikMeta;
   load_balancer?: LoadBalancerMeta;
+  dns_resolver?: DnsResolverMeta;
 };
 
 export type ProxyHost = {
@@ -173,6 +196,7 @@ export type ProxyHost = {
   custom_pre_handlers_json: string | null;
   authentik: ProxyHostAuthentikConfig | null;
   load_balancer: LoadBalancerConfig | null;
+  dns_resolver: DnsResolverConfig | null;
 };
 
 export type ProxyHostInput = {
@@ -192,6 +216,7 @@ export type ProxyHostInput = {
   custom_pre_handlers_json?: string | null;
   authentik?: ProxyHostAuthentikInput | null;
   load_balancer?: LoadBalancerInput | null;
+  dns_resolver?: DnsResolverInput | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -366,6 +391,43 @@ function sanitizeLoadBalancerMeta(meta: LoadBalancerMeta | undefined): LoadBalan
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
+function sanitizeDnsResolverMeta(meta: DnsResolverMeta | undefined): DnsResolverMeta | undefined {
+  if (!meta) {
+    return undefined;
+  }
+
+  const normalized: DnsResolverMeta = {};
+
+  if (meta.enabled !== undefined) {
+    normalized.enabled = Boolean(meta.enabled);
+  }
+
+  if (Array.isArray(meta.resolvers)) {
+    const resolvers = meta.resolvers
+      .map((r) => (typeof r === "string" ? r.trim() : ""))
+      .filter((r) => r.length > 0);
+    if (resolvers.length > 0) {
+      normalized.resolvers = resolvers;
+    }
+  }
+
+  if (Array.isArray(meta.fallbacks)) {
+    const fallbacks = meta.fallbacks
+      .map((r) => (typeof r === "string" ? r.trim() : ""))
+      .filter((r) => r.length > 0);
+    if (fallbacks.length > 0) {
+      normalized.fallbacks = fallbacks;
+    }
+  }
+
+  const timeout = normalizeMetaValue(meta.timeout ?? null);
+  if (timeout) {
+    normalized.timeout = timeout;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 function serializeMeta(meta: ProxyHostMeta | null | undefined) {
   if (!meta) {
     return null;
@@ -391,6 +453,11 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.load_balancer = loadBalancer;
   }
 
+  const dnsResolver = sanitizeDnsResolverMeta(meta.dns_resolver);
+  if (dnsResolver) {
+    normalized.dns_resolver = dnsResolver;
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
 }
 
@@ -404,7 +471,8 @@ function parseMeta(value: string | null): ProxyHostMeta {
       custom_reverse_proxy_json: normalizeMetaValue(parsed.custom_reverse_proxy_json ?? null) ?? undefined,
       custom_pre_handlers_json: normalizeMetaValue(parsed.custom_pre_handlers_json ?? null) ?? undefined,
       authentik: sanitizeAuthentikMeta(parsed.authentik),
-      load_balancer: sanitizeLoadBalancerMeta(parsed.load_balancer)
+      load_balancer: sanitizeLoadBalancerMeta(parsed.load_balancer),
+      dns_resolver: sanitizeDnsResolverMeta(parsed.dns_resolver)
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -698,6 +766,65 @@ function normalizeLoadBalancerInput(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
+function normalizeDnsResolverInput(
+  input: DnsResolverInput | null | undefined,
+  existing: DnsResolverMeta | undefined
+): DnsResolverMeta | undefined {
+  if (input === undefined) {
+    return existing;
+  }
+  if (input === null) {
+    return undefined;
+  }
+
+  const next: DnsResolverMeta = { ...(existing ?? {}) };
+
+  if (input.enabled !== undefined) {
+    next.enabled = Boolean(input.enabled);
+  }
+
+  if (input.resolvers !== undefined) {
+    if (Array.isArray(input.resolvers)) {
+      const resolvers = input.resolvers
+        .map((r) => (typeof r === "string" ? r.trim() : ""))
+        .filter((r) => r.length > 0);
+      if (resolvers.length > 0) {
+        next.resolvers = resolvers;
+      } else {
+        delete next.resolvers;
+      }
+    } else {
+      delete next.resolvers;
+    }
+  }
+
+  if (input.fallbacks !== undefined) {
+    if (Array.isArray(input.fallbacks)) {
+      const fallbacks = input.fallbacks
+        .map((r) => (typeof r === "string" ? r.trim() : ""))
+        .filter((r) => r.length > 0);
+      if (fallbacks.length > 0) {
+        next.fallbacks = fallbacks;
+      } else {
+        delete next.fallbacks;
+      }
+    } else {
+      delete next.fallbacks;
+    }
+  }
+
+  if (input.timeout !== undefined) {
+    const val = normalizeMetaValue(input.timeout ?? null);
+    if (val) {
+      next.timeout = val;
+    } else {
+      delete next.timeout;
+    }
+  }
+
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
 function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): string | null {
   const next: ProxyHostMeta = { ...existing };
 
@@ -734,6 +861,15 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
       next.load_balancer = loadBalancer;
     } else {
       delete next.load_balancer;
+    }
+  }
+
+  if (input.dns_resolver !== undefined) {
+    const dnsResolver = normalizeDnsResolverInput(input.dns_resolver, existing.dns_resolver);
+    if (dnsResolver) {
+      next.dns_resolver = dnsResolver;
+    } else {
+      delete next.dns_resolver;
     }
   }
 
@@ -948,6 +1084,53 @@ function dehydrateLoadBalancer(config: LoadBalancerConfig | null): LoadBalancerM
   return meta;
 }
 
+function hydrateDnsResolver(meta: DnsResolverMeta | undefined): DnsResolverConfig | null {
+  if (!meta) {
+    return null;
+  }
+
+  const enabled = Boolean(meta.enabled);
+
+  const resolvers = Array.isArray(meta.resolvers)
+    ? meta.resolvers.map((r) => (typeof r === "string" ? r.trim() : "")).filter((r) => r.length > 0)
+    : [];
+
+  const fallbacks = Array.isArray(meta.fallbacks)
+    ? meta.fallbacks.map((r) => (typeof r === "string" ? r.trim() : "")).filter((r) => r.length > 0)
+    : null;
+
+  const timeout = normalizeMetaValue(meta.timeout ?? null);
+
+  return {
+    enabled,
+    resolvers,
+    fallbacks: fallbacks && fallbacks.length > 0 ? fallbacks : null,
+    timeout
+  };
+}
+
+function dehydrateDnsResolver(config: DnsResolverConfig | null): DnsResolverMeta | undefined {
+  if (!config) {
+    return undefined;
+  }
+
+  const meta: DnsResolverMeta = {
+    enabled: config.enabled
+  };
+
+  if (config.resolvers && config.resolvers.length > 0) {
+    meta.resolvers = [...config.resolvers];
+  }
+  if (config.fallbacks && config.fallbacks.length > 0) {
+    meta.fallbacks = [...config.fallbacks];
+  }
+  if (config.timeout) {
+    meta.timeout = config.timeout;
+  }
+
+  return meta;
+}
+
 function parseProxyHost(row: ProxyHostRow): ProxyHost {
   const meta = parseMeta(row.meta ?? null);
   return {
@@ -969,7 +1152,8 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     custom_reverse_proxy_json: meta.custom_reverse_proxy_json ?? null,
     custom_pre_handlers_json: meta.custom_pre_handlers_json ?? null,
     authentik: hydrateAuthentik(meta.authentik),
-    load_balancer: hydrateLoadBalancer(meta.load_balancer)
+    load_balancer: hydrateLoadBalancer(meta.load_balancer),
+    dns_resolver: hydrateDnsResolver(meta.dns_resolver)
   };
 }
 
@@ -1046,7 +1230,8 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     custom_reverse_proxy_json: existing.custom_reverse_proxy_json ?? undefined,
     custom_pre_handlers_json: existing.custom_pre_handlers_json ?? undefined,
     authentik: dehydrateAuthentik(existing.authentik),
-    load_balancer: dehydrateLoadBalancer(existing.load_balancer)
+    load_balancer: dehydrateLoadBalancer(existing.load_balancer),
+    dns_resolver: dehydrateDnsResolver(existing.dns_resolver)
   };
   const meta = buildMeta(existingMeta, input);
 
