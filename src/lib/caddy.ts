@@ -495,10 +495,23 @@ function buildProxyRoutes(
     }
 
     // Add transport-level DNS resolver config if enabled
-    if (dnsConfig) {
-      const transportConfig = buildTransportResolverConfig(dnsConfig);
-      if (transportConfig) {
-        reverseProxyHandler.transport = transportConfig;
+    if (dnsConfig && dnsConfig.enabled && dnsConfig.resolvers.length > 0) {
+      const resolverConfig = buildResolverConfig(dnsConfig);
+      if (resolverConfig) {
+        // Merge resolver into existing transport (preserving TLS settings for HTTPS upstreams)
+        if (reverseProxyHandler.transport) {
+          (reverseProxyHandler.transport as Record<string, unknown>).resolver = resolverConfig;
+          if (dnsConfig.timeout) {
+            (reverseProxyHandler.transport as Record<string, unknown>).dial_timeout = dnsConfig.timeout;
+          }
+        } else {
+          // No existing transport, create one with resolver
+          reverseProxyHandler.transport = {
+            protocol: "http",
+            resolver: resolverConfig,
+            ...(dnsConfig.timeout ? { dial_timeout: dnsConfig.timeout } : {})
+          };
+        }
       }
     }
 
@@ -1406,7 +1419,7 @@ function parseDnsResolverConfig(meta: DnsResolverMeta | undefined | null): DnsRe
   };
 }
 
-function buildTransportResolverConfig(dnsConfig: DnsResolverRouteConfig): Record<string, unknown> | null {
+function buildResolverConfig(dnsConfig: DnsResolverRouteConfig): Record<string, unknown> | null {
   if (!dnsConfig || !dnsConfig.enabled || dnsConfig.resolvers.length === 0) {
     return null;
   }
@@ -1423,17 +1436,5 @@ function buildTransportResolverConfig(dnsConfig: DnsResolverRouteConfig): Record
     addresses.push(...dnsConfig.fallbacks.map(formatResolver));
   }
 
-  const transport: Record<string, unknown> = {
-    protocol: "http",
-    resolver: {
-      addresses
-    }
-  };
-
-  // Add dial timeout if specified
-  if (dnsConfig.timeout) {
-    transport.dial_timeout = dnsConfig.timeout;
-  }
-
-  return transport;
+  return { addresses };
 }
