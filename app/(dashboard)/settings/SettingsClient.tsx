@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useFormState } from "react-dom";
 import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import type { GeneralSettings, AuthentikSettings, MetricsSettings, LoggingSettings, DnsSettings } from "@/src/lib/settings";
@@ -9,7 +10,13 @@ import {
   updateAuthentikSettingsAction,
   updateMetricsSettingsAction,
   updateLoggingSettingsAction,
-  updateDnsSettingsAction
+  updateDnsSettingsAction,
+  updateInstanceModeAction,
+  updateSlaveMasterTokenAction,
+  createSlaveInstanceAction,
+  deleteSlaveInstanceAction,
+  toggleSlaveInstanceAction,
+  syncSlaveInstancesAction
 } from "./actions";
 
 type Props = {
@@ -23,15 +30,60 @@ type Props = {
   metrics: MetricsSettings | null;
   logging: LoggingSettings | null;
   dns: DnsSettings | null;
+  instanceSync: {
+    mode: "standalone" | "master" | "slave";
+    modeFromEnv: boolean;
+    tokenFromEnv: boolean;
+    overrides: {
+      general: boolean;
+      cloudflare: boolean;
+      authentik: boolean;
+      metrics: boolean;
+      logging: boolean;
+      dns: boolean;
+    };
+    slave: {
+      hasToken: boolean;
+      lastSyncAt: string | null;
+      lastSyncError: string | null;
+    } | null;
+    master: {
+      instances: Array<{
+        id: number;
+        name: string;
+        base_url: string;
+        enabled: boolean;
+        last_sync_at: string | null;
+        last_sync_error: string | null;
+      }>;
+      envInstances: Array<{
+        name: string;
+        url: string;
+      }>;
+    } | null;
+  };
 };
 
-export default function SettingsClient({ general, cloudflare, authentik, metrics, logging, dns }: Props) {
+export default function SettingsClient({ general, cloudflare, authentik, metrics, logging, dns, instanceSync }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
   const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
   const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
   const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
   const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
   const [dnsState, dnsFormAction] = useFormState(updateDnsSettingsAction, null);
+  const [instanceModeState, instanceModeFormAction] = useFormState(updateInstanceModeAction, null);
+  const [slaveTokenState, slaveTokenFormAction] = useFormState(updateSlaveMasterTokenAction, null);
+  const [slaveInstanceState, slaveInstanceFormAction] = useFormState(createSlaveInstanceAction, null);
+  const [syncState, syncFormAction] = useFormState(syncSlaveInstancesAction, null);
+
+  const isSlave = instanceSync.mode === "slave";
+  const isMaster = instanceSync.mode === "master";
+  const [generalOverride, setGeneralOverride] = useState(instanceSync.overrides.general);
+  const [cloudflareOverride, setCloudflareOverride] = useState(instanceSync.overrides.cloudflare);
+  const [authentikOverride, setAuthentikOverride] = useState(instanceSync.overrides.authentik);
+  const [metricsOverride, setMetricsOverride] = useState(instanceSync.overrides.metrics);
+  const [loggingOverride, setLoggingOverride] = useState(instanceSync.overrides.logging);
+  const [dnsOverride, setDnsOverride] = useState(instanceSync.overrides.dns);
 
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
@@ -45,6 +97,222 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
       <Card>
         <CardContent>
           <Typography variant="h6" fontWeight={600} gutterBottom>
+            Instance Sync
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Choose whether this instance acts independently, pushes configuration to slave nodes, or pulls configuration from a master.
+          </Typography>
+          <Stack component="form" action={instanceModeFormAction} spacing={2}>
+            {instanceSync.modeFromEnv && (
+              <Alert severity="info">
+                Instance mode is configured via INSTANCE_MODE environment variable and cannot be changed at runtime.
+              </Alert>
+            )}
+            {instanceModeState?.message && (
+              <Alert severity={instanceModeState.success ? "success" : "error"}>
+                {instanceModeState.message}
+              </Alert>
+            )}
+            <TextField
+              name="mode"
+              label="Instance mode"
+              select
+              defaultValue={instanceSync.mode}
+              disabled={instanceSync.modeFromEnv}
+              fullWidth
+            >
+              <MenuItem value="standalone">Standalone</MenuItem>
+              <MenuItem value="master">Master</MenuItem>
+              <MenuItem value="slave">Slave</MenuItem>
+            </TextField>
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained" disabled={instanceSync.modeFromEnv}>
+                Save instance mode
+              </Button>
+            </Box>
+          </Stack>
+
+          {isSlave && (
+            <Stack spacing={2} sx={{ mt: 3 }}>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Master Connection
+              </Typography>
+              <Stack component="form" action={slaveTokenFormAction} spacing={2}>
+                {instanceSync.tokenFromEnv && (
+                  <Alert severity="info">
+                    Sync token is configured via INSTANCE_SYNC_TOKEN environment variable and cannot be changed at runtime.
+                  </Alert>
+                )}
+                {slaveTokenState?.message && (
+                  <Alert severity={slaveTokenState.success ? "success" : "error"}>
+                    {slaveTokenState.message}
+                  </Alert>
+                )}
+                {instanceSync.slave?.hasToken && !instanceSync.tokenFromEnv && (
+                  <Alert severity="info">
+                    A master sync token is configured. Leave the token field blank to keep it, or select "Remove existing token" to delete it.
+                  </Alert>
+                )}
+                <TextField
+                  name="masterToken"
+                  label="Master sync token"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Enter new token"
+                  disabled={instanceSync.tokenFromEnv}
+                  fullWidth
+                />
+                <FormControlLabel
+                  control={<Checkbox name="clearToken" />}
+                  label="Remove existing token"
+                  disabled={!instanceSync.slave?.hasToken || instanceSync.tokenFromEnv}
+                />
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Button type="submit" variant="contained" disabled={instanceSync.tokenFromEnv}>
+                    Save master token
+                  </Button>
+                </Box>
+              </Stack>
+              <Alert severity={instanceSync.slave?.lastSyncError ? "warning" : "info"}>
+                {instanceSync.slave?.lastSyncAt
+                  ? `Last sync: ${instanceSync.slave.lastSyncAt}${instanceSync.slave.lastSyncError ? ` (${instanceSync.slave.lastSyncError})` : ""}`
+                  : "No sync payload has been received yet."}
+              </Alert>
+            </Stack>
+          )}
+
+          {isMaster && (
+            <Stack spacing={2} sx={{ mt: 3 }}>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Slave Instances
+              </Typography>
+              <Stack component="form" action={slaveInstanceFormAction} spacing={2}>
+                {slaveInstanceState?.message && (
+                  <Alert severity={slaveInstanceState.success ? "success" : "error"}>
+                    {slaveInstanceState.message}
+                  </Alert>
+                )}
+                <TextField name="name" label="Instance name" placeholder="Edge node EU-1" fullWidth />
+                <TextField name="baseUrl" label="Base URL" placeholder="https://slave-1.example.com" fullWidth />
+                <TextField name="apiToken" label="Slave API token" type="password" autoComplete="new-password" fullWidth />
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Button type="submit" variant="contained">
+                    Add slave instance
+                  </Button>
+                </Box>
+              </Stack>
+
+              <Stack component="form" action={syncFormAction} spacing={2}>
+                {syncState?.message && (
+                  <Alert severity={syncState.success ? "success" : "warning"}>
+                    {syncState.message}
+                  </Alert>
+                )}
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Button type="submit" variant="outlined">
+                    Sync now
+                  </Button>
+                </Box>
+              </Stack>
+
+              {instanceSync.master?.instances.length === 0 && instanceSync.master?.envInstances.length === 0 && (
+                <Alert severity="info">No slave instances configured yet.</Alert>
+              )}
+
+              {instanceSync.master?.envInstances && instanceSync.master.envInstances.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
+                    Environment-configured instances (via INSTANCE_SLAVES)
+                  </Typography>
+                  {instanceSync.master.envInstances.map((instance, index) => (
+                    <Box
+                      key={`env-${index}`}
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 2,
+                        p: 2,
+                        display: "flex",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 2,
+                        bgcolor: "action.hover"
+                      }}
+                    >
+                      <Box>
+                        <Typography fontWeight={600}>{instance.name}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {instance.url}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Configured via environment variable
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                </>
+              )}
+
+              {instanceSync.master?.instances && instanceSync.master.instances.length > 0 && (
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
+                  UI-configured instances
+                </Typography>
+              )}
+              {instanceSync.master?.instances.map((instance) => (
+                <Box
+                  key={instance.id}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 2,
+                    p: 2,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 2
+                  }}
+                >
+                  <Box>
+                    <Typography fontWeight={600}>{instance.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {instance.base_url}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {instance.last_sync_at ? `Last sync: ${instance.last_sync_at}` : "No sync yet"}
+                    </Typography>
+                    {instance.last_sync_error && (
+                      <Typography variant="caption" color="error" display="block">
+                        {instance.last_sync_error}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Stack direction="row" spacing={1}>
+                    <Box component="form" action={toggleSlaveInstanceAction}>
+                      <input type="hidden" name="instanceId" value={instance.id} />
+                      <input type="hidden" name="enabled" value={instance.enabled ? "" : "on"} />
+                      <Button type="submit" variant="outlined" color={instance.enabled ? "warning" : "success"}>
+                        {instance.enabled ? "Disable" : "Enable"}
+                      </Button>
+                    </Box>
+                    <Box component="form" action={deleteSlaveInstanceAction}>
+                      <input type="hidden" name="instanceId" value={instance.id} />
+                      <Button type="submit" variant="outlined" color="error">
+                        Remove
+                      </Button>
+                    </Box>
+                  </Stack>
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
             General
           </Typography>
           <Stack component="form" action={generalFormAction} spacing={2}>
@@ -53,11 +321,24 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
                 {generalState.message}
               </Alert>
             )}
+            {isSlave && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="overrideEnabled"
+                    checked={generalOverride}
+                    onChange={(event) => setGeneralOverride(event.target.checked)}
+                  />
+                }
+                label="Override master settings"
+              />
+            )}
             <TextField
               name="primaryDomain"
               label="Primary domain"
               defaultValue={general?.primaryDomain ?? "caddyproxymanager.com"}
               required
+              disabled={isSlave && !generalOverride}
               fullWidth
             />
             <TextField
@@ -65,6 +346,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               label="ACME contact email"
               type="email"
               defaultValue={general?.acmeEmail ?? ""}
+              disabled={isSlave && !generalOverride}
               fullWidth
             />
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -95,21 +377,34 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
                 {cloudflareState.message}
               </Alert>
             )}
+            {isSlave && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="overrideEnabled"
+                    checked={cloudflareOverride}
+                    onChange={(event) => setCloudflareOverride(event.target.checked)}
+                  />
+                }
+                label="Override master settings"
+              />
+            )}
             <TextField
               name="apiToken"
               label="API token"
               type="password"
               autoComplete="new-password"
               placeholder="Enter new token"
+              disabled={isSlave && !cloudflareOverride}
               fullWidth
             />
             <FormControlLabel
               control={<Checkbox name="clearToken" />}
               label="Remove existing token"
-              disabled={!cloudflare.hasToken}
+              disabled={!cloudflare.hasToken || (isSlave && !cloudflareOverride)}
             />
-            <TextField name="zoneId" label="Zone ID" defaultValue={cloudflare.zoneId ?? ""} fullWidth />
-            <TextField name="accountId" label="Account ID" defaultValue={cloudflare.accountId ?? ""} fullWidth />
+            <TextField name="zoneId" label="Zone ID" defaultValue={cloudflare.zoneId ?? ""} disabled={isSlave && !cloudflareOverride} fullWidth />
+            <TextField name="accountId" label="Account ID" defaultValue={cloudflare.accountId ?? ""} disabled={isSlave && !cloudflareOverride} fullWidth />
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save Cloudflare settings
@@ -133,8 +428,20 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
                 {dnsState.message}
               </Alert>
             )}
+            {isSlave && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="overrideEnabled"
+                    checked={dnsOverride}
+                    onChange={(event) => setDnsOverride(event.target.checked)}
+                  />
+                }
+                label="Override master settings"
+              />
+            )}
             <FormControlLabel
-              control={<Checkbox name="enabled" defaultChecked={dns?.enabled ?? false} />}
+              control={<Checkbox name="enabled" defaultChecked={dns?.enabled ?? false} disabled={isSlave && !dnsOverride} />}
               label="Enable custom DNS resolvers"
             />
             <TextField
@@ -145,6 +452,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               helperText="One resolver per line (e.g., 1.1.1.1, 8.8.8.8). Used for ACME DNS verification."
               multiline
               minRows={2}
+              disabled={isSlave && !dnsOverride}
               fullWidth
             />
             <TextField
@@ -155,6 +463,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               helperText="Fallback resolvers if primary fails. One per line."
               multiline
               minRows={2}
+              disabled={isSlave && !dnsOverride}
               fullWidth
             />
             <TextField
@@ -163,6 +472,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               placeholder="5s"
               defaultValue={dns?.timeout ?? ""}
               helperText="Timeout for DNS queries (e.g., 5s, 10s)"
+              disabled={isSlave && !dnsOverride}
               fullWidth
             />
             <Alert severity="info">
@@ -192,6 +502,18 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
                 {authentikState.message}
               </Alert>
             )}
+            {isSlave && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="overrideEnabled"
+                    checked={authentikOverride}
+                    onChange={(event) => setAuthentikOverride(event.target.checked)}
+                  />
+                }
+                label="Override master settings"
+              />
+            )}
             <TextField
               name="outpostDomain"
               label="Outpost Domain"
@@ -199,6 +521,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               defaultValue={authentik?.outpostDomain ?? ""}
               helperText="Authentik outpost domain"
               required
+              disabled={isSlave && !authentikOverride}
               fullWidth
             />
             <TextField
@@ -208,6 +531,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               defaultValue={authentik?.outpostUpstream ?? ""}
               helperText="Internal URL of Authentik outpost"
               required
+              disabled={isSlave && !authentikOverride}
               fullWidth
             />
             <TextField
@@ -216,6 +540,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               placeholder="/outpost.goauthentik.io/auth/caddy"
               defaultValue={authentik?.authEndpoint ?? ""}
               helperText="Authpost endpoint path"
+              disabled={isSlave && !authentikOverride}
               fullWidth
             />
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
@@ -242,8 +567,20 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
                 {metricsState.message}
               </Alert>
             )}
+            {isSlave && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="overrideEnabled"
+                    checked={metricsOverride}
+                    onChange={(event) => setMetricsOverride(event.target.checked)}
+                  />
+                }
+                label="Override master settings"
+              />
+            )}
             <FormControlLabel
-              control={<Checkbox name="enabled" defaultChecked={metrics?.enabled ?? false} />}
+              control={<Checkbox name="enabled" defaultChecked={metrics?.enabled ?? false} disabled={isSlave && !metricsOverride} />}
               label="Enable metrics endpoint"
             />
             <TextField
@@ -252,6 +589,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               type="number"
               defaultValue={metrics?.port ?? 9090}
               helperText="Port to expose metrics on (default: 9090, separate from admin API on 2019)"
+              disabled={isSlave && !metricsOverride}
               fullWidth
             />
             <Alert severity="info">
@@ -282,8 +620,20 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
                 {loggingState.message}
               </Alert>
             )}
+            {isSlave && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="overrideEnabled"
+                    checked={loggingOverride}
+                    onChange={(event) => setLoggingOverride(event.target.checked)}
+                  />
+                }
+                label="Override master settings"
+              />
+            )}
             <FormControlLabel
-              control={<Checkbox name="enabled" defaultChecked={logging?.enabled ?? false} />}
+              control={<Checkbox name="enabled" defaultChecked={logging?.enabled ?? false} disabled={isSlave && !loggingOverride} />}
               label="Enable access logging"
             />
             <TextField
@@ -292,6 +642,7 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
               select
               defaultValue={logging?.format ?? "json"}
               helperText="Format for access logs"
+              disabled={isSlave && !loggingOverride}
               fullWidth
             >
               <MenuItem value="json">JSON</MenuItem>

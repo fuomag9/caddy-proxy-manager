@@ -47,5 +47,29 @@ export async function register() {
       console.error("Failed to start Caddy health monitoring:", error);
       // Don't throw - monitoring is a nice-to-have feature
     }
+
+    // Start periodic instance sync if configured (master mode only)
+    const { getInstanceMode, getSyncIntervalMs, syncInstances } = await import("./lib/instance-sync");
+    try {
+      const mode = await getInstanceMode();
+      const intervalMs = getSyncIntervalMs();
+
+      if (mode === "master" && intervalMs > 0) {
+        console.log(`Starting periodic instance sync (every ${intervalMs / 1000}s)`);
+        setInterval(async () => {
+          try {
+            const result = await syncInstances();
+            if (result.total > 0) {
+              console.log(`Periodic sync completed: ${result.success}/${result.total} succeeded`);
+            }
+          } catch (error) {
+            console.error("Periodic sync failed:", error);
+          }
+        }, intervalMs);
+      }
+    } catch (error) {
+      console.error("Failed to start periodic instance sync:", error);
+      // Don't throw - periodic sync is optional
+    }
   }
 }

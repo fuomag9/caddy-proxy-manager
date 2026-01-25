@@ -3,20 +3,48 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { getCloudflareSettings, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings } from "@/src/lib/settings";
+import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
+import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
+import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings } from "@/src/lib/settings";
+import type { CloudflareSettings } from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
   message?: string;
 };
 
+const MIN_TOKEN_LENGTH = 32;
+
+/**
+ * Validates that a sync token meets minimum security requirements.
+ * Tokens must be at least 32 characters to provide adequate entropy.
+ */
+function validateSyncToken(token: string): { valid: boolean; error?: string } {
+  if (token.length < MIN_TOKEN_LENGTH) {
+    return {
+      valid: false,
+      error: `Token must be at least ${MIN_TOKEN_LENGTH} characters for security. Consider using a randomly generated token.`
+    };
+  }
+  return { valid: true };
+}
+
 export async function updateGeneralSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("general");
+      await syncInstances();
+      revalidatePath("/settings");
+      return { success: true, message: "General settings reset to master defaults" };
+    }
     await saveGeneralSettings({
       primaryDomain: String(formData.get("primaryDomain") ?? ""),
       acmeEmail: formData.get("acmeEmail") ? String(formData.get("acmeEmail")) : undefined
     });
+    await syncInstances();
     revalidatePath("/settings");
     return { success: true, message: "General settings saved successfully" };
   } catch (error) {
@@ -28,9 +56,28 @@ export async function updateGeneralSettingsAction(_prevState: ActionResult | nul
 export async function updateCloudflareSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("cloudflare");
+      try {
+        await applyCaddyConfig();
+        revalidatePath("/settings");
+        return { success: true, message: "Cloudflare settings reset to master defaults" };
+      } catch (error) {
+        console.error("Failed to apply Caddy config:", error);
+        revalidatePath("/settings");
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        await syncInstances();
+        return {
+          success: true,
+          message: `Settings reset, but could not apply to Caddy: ${errorMsg}`
+        };
+      }
+    }
     const rawToken = formData.get("apiToken") ? String(formData.get("apiToken")).trim() : "";
     const clearToken = formData.get("clearToken") === "on";
-    const current = await getCloudflareSettings();
+    const current = await getSetting<CloudflareSettings>("cloudflare");
 
     const apiToken = clearToken ? "" : rawToken || current?.apiToken || "";
     const zoneId = formData.get("zoneId") ? String(formData.get("zoneId")) : undefined;
@@ -51,6 +98,7 @@ export async function updateCloudflareSettingsAction(_prevState: ActionResult | 
       console.error("Failed to apply Caddy config:", error);
       revalidatePath("/settings");
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await syncInstances();
       return {
         success: true, // Settings were saved successfully
         message: `Settings saved, but could not apply to Caddy: ${errorMsg}. You may need to start Caddy or check your configuration.`
@@ -65,6 +113,14 @@ export async function updateCloudflareSettingsAction(_prevState: ActionResult | 
 export async function updateAuthentikSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("authentik");
+      await syncInstances();
+      revalidatePath("/settings");
+      return { success: true, message: "Authentik defaults reset to master values" };
+    }
     const outpostDomain = String(formData.get("outpostDomain") ?? "").trim();
     const outpostUpstream = String(formData.get("outpostUpstream") ?? "").trim();
     const authEndpoint = formData.get("authEndpoint") ? String(formData.get("authEndpoint")).trim() : undefined;
@@ -79,6 +135,7 @@ export async function updateAuthentikSettingsAction(_prevState: ActionResult | n
       authEndpoint: authEndpoint && authEndpoint.length > 0 ? authEndpoint : undefined
     });
 
+    await syncInstances();
     revalidatePath("/settings");
     return { success: true, message: "Authentik defaults saved successfully" };
   } catch (error) {
@@ -90,6 +147,25 @@ export async function updateAuthentikSettingsAction(_prevState: ActionResult | n
 export async function updateMetricsSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("metrics");
+      try {
+        await applyCaddyConfig();
+        revalidatePath("/settings");
+        return { success: true, message: "Metrics settings reset to master defaults" };
+      } catch (error) {
+        console.error("Failed to apply Caddy config:", error);
+        revalidatePath("/settings");
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        await syncInstances();
+        return {
+          success: true,
+          message: `Settings reset, but could not apply to Caddy: ${errorMsg}`
+        };
+      }
+    }
     const enabled = formData.get("enabled") === "on";
     const portStr = formData.get("port") ? String(formData.get("port")).trim() : "";
     const port = portStr && !isNaN(Number(portStr)) ? Number(portStr) : 9090;
@@ -108,6 +184,7 @@ export async function updateMetricsSettingsAction(_prevState: ActionResult | nul
       console.error("Failed to apply Caddy config:", error);
       revalidatePath("/settings");
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await syncInstances();
       return {
         success: true,
         message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
@@ -122,6 +199,25 @@ export async function updateMetricsSettingsAction(_prevState: ActionResult | nul
 export async function updateLoggingSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("logging");
+      try {
+        await applyCaddyConfig();
+        revalidatePath("/settings");
+        return { success: true, message: "Logging settings reset to master defaults" };
+      } catch (error) {
+        console.error("Failed to apply Caddy config:", error);
+        revalidatePath("/settings");
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        await syncInstances();
+        return {
+          success: true,
+          message: `Settings reset, but could not apply to Caddy: ${errorMsg}`
+        };
+      }
+    }
     const enabled = formData.get("enabled") === "on";
     const format = formData.get("format") ? String(formData.get("format")).trim() : "json";
 
@@ -144,6 +240,7 @@ export async function updateLoggingSettingsAction(_prevState: ActionResult | nul
       console.error("Failed to apply Caddy config:", error);
       revalidatePath("/settings");
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await syncInstances();
       return {
         success: true,
         message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
@@ -166,6 +263,25 @@ function parseResolverList(value: string | null): string[] {
 export async function updateDnsSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("dns");
+      try {
+        await applyCaddyConfig();
+        revalidatePath("/settings");
+        return { success: true, message: "DNS settings reset to master defaults" };
+      } catch (error) {
+        console.error("Failed to apply Caddy config:", error);
+        revalidatePath("/settings");
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        await syncInstances();
+        return {
+          success: true,
+          message: `Settings reset, but could not apply to Caddy: ${errorMsg}`
+        };
+      }
+    }
     const enabled = formData.get("enabled") === "on";
     const resolversRaw = formData.get("resolvers") ? String(formData.get("resolvers")) : "";
     const fallbacksRaw = formData.get("fallbacks") ? String(formData.get("fallbacks")) : "";
@@ -194,6 +310,7 @@ export async function updateDnsSettingsAction(_prevState: ActionResult | null, f
       console.error("Failed to apply Caddy config:", error);
       revalidatePath("/settings");
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await syncInstances();
       return {
         success: true,
         message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
@@ -202,5 +319,146 @@ export async function updateDnsSettingsAction(_prevState: ActionResult | null, f
   } catch (error) {
     console.error("Failed to save DNS settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save DNS settings" };
+  }
+}
+
+export async function updateInstanceModeAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mode = String(formData.get("mode") ?? "").trim() as "standalone" | "master" | "slave";
+    if (mode !== "standalone" && mode !== "master" && mode !== "slave") {
+      return { success: false, message: "Invalid instance mode" };
+    }
+    await setInstanceMode(mode);
+    revalidatePath("/settings");
+    return { success: true, message: `Instance mode set to ${mode}` };
+  } catch (error) {
+    console.error("Failed to update instance mode:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to update instance mode" };
+  }
+}
+
+export async function updateSlaveMasterTokenAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const clearToken = formData.get("clearToken") === "on";
+    const rawToken = formData.get("masterToken") ? String(formData.get("masterToken")).trim() : "";
+    const current = await getSlaveMasterToken();
+
+    // If clearing, allow empty token
+    if (clearToken) {
+      await setSlaveMasterToken("");
+      revalidatePath("/settings");
+      return { success: true, message: "Master sync token removed" };
+    }
+
+    // If a new token is provided, validate it
+    if (rawToken) {
+      const validation = validateSyncToken(rawToken);
+      if (!validation.valid) {
+        return { success: false, message: validation.error };
+      }
+      await setSlaveMasterToken(rawToken);
+      revalidatePath("/settings");
+      return { success: true, message: "Master sync token updated" };
+    }
+
+    // No change - keep existing token
+    if (!current) {
+      return { success: false, message: "No token provided. Please enter a sync token." };
+    }
+    return { success: true, message: "Master sync token unchanged" };
+  } catch (error) {
+    console.error("Failed to update master token:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to update master token" };
+  }
+}
+
+export async function createSlaveInstanceAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mode = await getInstanceMode();
+    if (mode !== "master") {
+      return { success: false, message: "Instance mode must be set to master to add slaves" };
+    }
+    const name = String(formData.get("name") ?? "").trim();
+    const baseUrl = String(formData.get("baseUrl") ?? "").trim().replace(/\/$/, "");
+    const apiToken = String(formData.get("apiToken") ?? "").trim();
+    if (!name || !baseUrl || !apiToken) {
+      return { success: false, message: "Name, base URL, and API token are required" };
+    }
+
+    // Validate token complexity
+    const validation = validateSyncToken(apiToken);
+    if (!validation.valid) {
+      return { success: false, message: validation.error };
+    }
+
+    await createInstance({ name, baseUrl, apiToken, enabled: true });
+    revalidatePath("/settings");
+    return { success: true, message: "Slave instance added" };
+  } catch (error) {
+    console.error("Failed to create slave instance:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to create slave instance" };
+  }
+}
+
+export async function deleteSlaveInstanceAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const mode = await getInstanceMode();
+  if (mode !== "master") {
+    return;
+  }
+  const id = Number(formData.get("instanceId"));
+  if (Number.isNaN(id)) {
+    return;
+  }
+  await deleteInstance(id);
+  revalidatePath("/settings");
+}
+
+export async function toggleSlaveInstanceAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const mode = await getInstanceMode();
+  if (mode !== "master") {
+    return;
+  }
+  const id = Number(formData.get("instanceId"));
+  const enabled = formData.get("enabled") === "on";
+  if (Number.isNaN(id)) {
+    return;
+  }
+  await updateInstance(id, { enabled });
+  revalidatePath("/settings");
+}
+
+export async function syncSlaveInstancesAction(_prevState: ActionResult | null, _formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mode = await getInstanceMode();
+    if (mode !== "master") {
+      return { success: false, message: "Instance mode must be set to master to sync slaves" };
+    }
+    const result = await syncInstances();
+    revalidatePath("/settings");
+
+    const parts: string[] = [];
+    if (result.success > 0) parts.push(`${result.success} succeeded`);
+    if (result.failed > 0) parts.push(`${result.failed} failed`);
+    if (result.skippedHttp > 0) parts.push(`${result.skippedHttp} skipped (HTTP blocked)`);
+
+    if (result.skippedHttp > 0) {
+      return {
+        success: result.success > 0,
+        message: `Sync: ${parts.join(", ")}. Set INSTANCE_SYNC_ALLOW_HTTP=true to allow insecure HTTP sync.`
+      };
+    }
+    if (result.failed > 0) {
+      return { success: true, message: `Sync completed with ${result.failed} failures (${result.success}/${result.total} succeeded)` };
+    }
+    return { success: true, message: `Sync completed (${result.success}/${result.total} succeeded)` };
+  } catch (error) {
+    console.error("Failed to sync slave instances:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to sync slave instances" };
   }
 }

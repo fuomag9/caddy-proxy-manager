@@ -14,7 +14,12 @@ export default auth((req) => {
   const pathname = req.nextUrl.pathname;
 
   // Allow public routes
-  if (pathname === "/login" || pathname.startsWith("/api/auth") || pathname === "/api/health") {
+  if (
+    pathname === "/login" ||
+    pathname.startsWith("/api/auth") ||
+    pathname === "/api/health" ||
+    pathname === "/api/instances/sync"
+  ) {
     return NextResponse.next();
   }
 

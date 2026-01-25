@@ -22,6 +22,13 @@
       "when": 1766880443160,
       "tag": "0002_perfect_hedge_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1769262874211,
+      "tag": "0003_instances",
+      "breakpoints": true
     }
   ]
 }

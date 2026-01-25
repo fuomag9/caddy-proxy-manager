@@ -70,6 +70,24 @@ export const settings = sqliteTable("settings", {
   updatedAt: text("updated_at").notNull()
 });
 
+export const instances = sqliteTable(
+  "instances",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    baseUrl: text("base_url").notNull(),
+    apiToken: text("api_token").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    lastSyncAt: text("last_sync_at"),
+    lastSyncError: text("last_sync_error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull()
+  },
+  (table) => ({
+    baseUrlUnique: uniqueIndex("instances_base_url_unique").on(table.baseUrl)
+  })
+);
+
 export const accessLists = sqliteTable("access_lists", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),

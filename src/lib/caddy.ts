@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import db, { nowIso } from "./db";
 import { config } from "./config";
 import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, setSetting } from "./settings";
+import { syncInstances } from "./instance-sync";
 import {
   accessListEntries,
   certificates,
@@ -1174,6 +1175,8 @@ export async function applyCaddyConfig() {
       const text = await response.text();
       throw new Error(`Caddy config load failed: ${response.status} ${text}`);
     }
+
+    await syncInstances();
   } catch (error) {
     console.error("Failed to apply Caddy config", error);
 

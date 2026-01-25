@@ -38,6 +38,11 @@ export type DnsSettings = {
   timeout?: string; // DNS query timeout (e.g., "5s")
 };
 
+type InstanceMode = "standalone" | "master" | "slave";
+
+const INSTANCE_MODE_KEY = "instance_mode";
+const SYNCED_PREFIX = "synced:";
+
 export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
   const setting = await db.query.settings.findFirst({
     where: (table, { eq }) => eq(table.key, key)
@@ -53,6 +58,32 @@ export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
     console.warn(`Failed to parse setting ${key}`, error);
     return null;
   }
+}
+
+async function getInstanceModeForSettings(): Promise<InstanceMode> {
+  const stored = await getSetting<string>(INSTANCE_MODE_KEY);
+  if (stored === "master" || stored === "slave" || stored === "standalone") {
+    return stored;
+  }
+  return "standalone";
+}
+
+async function getSyncedSetting<T>(key: string): Promise<SettingValue<T>> {
+  return await getSetting<T>(`${SYNCED_PREFIX}${key}`);
+}
+
+export async function getEffectiveSetting<T>(key: string): Promise<SettingValue<T>> {
+  const mode = await getInstanceModeForSettings();
+  if (mode !== "slave") {
+    return await getSetting<T>(key);
+  }
+
+  const override = await getSetting<T>(key);
+  if (override !== null) {
+    return override;
+  }
+
+  return await getSyncedSetting<T>(key);
 }
 
 export async function setSetting<T>(key: string, value: T): Promise<void> {
@@ -75,8 +106,12 @@ export async function setSetting<T>(key: string, value: T): Promise<void> {
     });
 }
 
+export async function clearSetting(key: string): Promise<void> {
+  await db.delete(settings).where(eq(settings.key, key));
+}
+
 export async function getCloudflareSettings(): Promise<CloudflareSettings | null> {
-  return await getSetting<CloudflareSettings>("cloudflare");
+  return await getEffectiveSetting<CloudflareSettings>("cloudflare");
 }
 
 export async function saveCloudflareSettings(settings: CloudflareSettings): Promise<void> {
@@ -84,7 +119,7 @@ export async function saveCloudflareSettings(settings: CloudflareSettings): Prom
 }
 
 export async function getGeneralSettings(): Promise<GeneralSettings | null> {
-  return await getSetting<GeneralSettings>("general");
+  return await getEffectiveSetting<GeneralSettings>("general");
 }
 
 export async function saveGeneralSettings(settings: GeneralSettings): Promise<void> {
@@ -92,7 +127,7 @@ export async function saveGeneralSettings(settings: GeneralSettings): Promise<vo
 }
 
 export async function getAuthentikSettings(): Promise<AuthentikSettings | null> {
-  return await getSetting<AuthentikSettings>("authentik");
+  return await getEffectiveSetting<AuthentikSettings>("authentik");
 }
 
 export async function saveAuthentikSettings(settings: AuthentikSettings): Promise<void> {
@@ -100,7 +135,7 @@ export async function saveAuthentikSettings(settings: AuthentikSettings): Promis
 }
 
 export async function getMetricsSettings(): Promise<MetricsSettings | null> {
-  return await getSetting<MetricsSettings>("metrics");
+  return await getEffectiveSetting<MetricsSettings>("metrics");
 }
 
 export async function saveMetricsSettings(settings: MetricsSettings): Promise<void> {
@@ -108,7 +143,7 @@ export async function saveMetricsSettings(settings: MetricsSettings): Promise<vo
 }
 
 export async function getLoggingSettings(): Promise<LoggingSettings | null> {
-  return await getSetting<LoggingSettings>("logging");
+  return await getEffectiveSetting<LoggingSettings>("logging");
 }
 
 export async function saveLoggingSettings(settings: LoggingSettings): Promise<void> {
@@ -116,7 +151,7 @@ export async function saveLoggingSettings(settings: LoggingSettings): Promise<vo
 }
 
 export async function getDnsSettings(): Promise<DnsSettings | null> {
-  return await getSetting<DnsSettings>("dns");
+  return await getEffectiveSetting<DnsSettings>("dns");
 }
 
 export async function saveDnsSettings(settings: DnsSettings): Promise<void> {
