@@ -1,6 +1,7 @@
 import db, { nowIso, toIso } from "../db";
 import { instances } from "../db/schema";
 import { asc, eq } from "drizzle-orm";
+import { encryptSecret } from "../secret";
 
 export type Instance = {
   id: number;
@@ -57,7 +58,7 @@ export async function createInstance(input: InstanceInput): Promise<Instance> {
     .values({
       name: input.name.trim(),
       baseUrl: input.baseUrl.trim(),
-      apiToken: input.apiToken.trim(),
+      apiToken: encryptSecret(input.apiToken.trim()),
       enabled: input.enabled ?? true,
       createdAt: now,
       updatedAt: now
@@ -86,7 +87,7 @@ export async function updateInstance(
     .set({
       name: input.name?.trim() ?? existing.name,
       baseUrl: input.baseUrl?.trim() ?? existing.baseUrl,
-      apiToken: input.apiToken?.trim() ?? existing.apiToken,
+      apiToken: input.apiToken !== undefined ? encryptSecret(input.apiToken.trim()) : existing.apiToken,
       enabled: input.enabled ?? existing.enabled,
       updatedAt: now
     })

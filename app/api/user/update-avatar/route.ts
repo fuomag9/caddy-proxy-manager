@@ -22,11 +22,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If avatarUrl is provided, validate it's a base64 image
+    // If avatarUrl is provided, validate it's a base64 image (png/jpeg/webp only)
     if (avatarUrl !== null) {
-      if (!avatarUrl.startsWith("data:image/")) {
+      const match = avatarUrl.match(/^data:(image\/(png|jpeg|jpg|webp));base64,/i);
+      if (!match) {
         return NextResponse.json(
-          { error: "Avatar must be a base64-encoded image" },
+          { error: "Avatar must be a base64-encoded PNG, JPEG, or WebP image" },
           { status: 400 }
         );
       }

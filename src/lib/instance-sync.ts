@@ -1,7 +1,8 @@
 import db, { nowIso } from "./db";
 import { accessListEntries, accessLists, certificates, deadHosts, proxyHosts, redirectHosts } from "./db/schema";
 import { getSetting, setSetting } from "./settings";
-import { recordInstanceSyncResult } from "./models/instances";
+import { recordInstanceSyncResult, updateInstance } from "./models/instances";
+import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
 
 export type InstanceMode = "standalone" | "master" | "slave";
 
@@ -169,7 +170,24 @@ export async function getSlaveMasterToken(): Promise<string | null> {
   }
 
   // Fall back to database setting
-  return await getSetting<string>(MASTER_TOKEN_KEY);
+  const stored = await getSetting<string>(MASTER_TOKEN_KEY);
+  if (!stored) {
+    return null;
+  }
+  if (!isEncryptedSecret(stored)) {
+    try {
+      await setSetting(MASTER_TOKEN_KEY, encryptSecret(stored));
+    } catch (error) {
+      console.warn("Failed to encrypt stored master token:", error);
+    }
+    return stored;
+  }
+  try {
+    return decryptSecret(stored);
+  } catch (error) {
+    console.error("Failed to decrypt stored master token:", error);
+    return null;
+  }
 }
 
 export async function setSlaveMasterToken(token: string | null): Promise<void> {
@@ -178,7 +196,8 @@ export async function setSlaveMasterToken(token: string | null): Promise<void> {
     console.warn("Sync token is configured via INSTANCE_SYNC_TOKEN environment variable and cannot be changed at runtime");
     return;
   }
-  await setSetting(MASTER_TOKEN_KEY, token ?? "");
+  const next = token ? encryptSecret(token) : "";
+  await setSetting(MASTER_TOKEN_KEY, next);
 }
 
 export async function getSlaveLastSync(): Promise<{ at: string | null; error: string | null }> {
@@ -293,6 +312,23 @@ export async function syncInstances(): Promise<{ total: number; success: number;
   // Sync database-configured instances
   const dbResults = await Promise.all(
     dbTargets.map(async (instance) => {
+      if (!isEncryptedSecret(instance.apiToken)) {
+        try {
+          await updateInstance(instance.id, { apiToken: instance.apiToken });
+        } catch (error) {
+          console.warn(`Failed to encrypt stored token for instance "${instance.name}":`, error);
+        }
+      }
+
+      let token: string;
+      try {
+        token = decryptSecret(instance.apiToken);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await recordInstanceSyncResult(instance.id, { ok: false, error: `Token decrypt failed: ${message}` });
+        return { ok: false, skippedHttp: false };
+      }
+
       // Check for HTTP URL
       if (isHttpUrl(instance.baseUrl) && !httpAllowed) {
         const message = "HTTP sync blocked. Set INSTANCE_SYNC_ALLOW_HTTP=true to allow insecure sync.";
@@ -306,7 +342,7 @@ export async function syncInstances(): Promise<{ total: number; success: number;
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${instance.apiToken}`
+            Authorization: `Bearer ${token}`
           },
           body: JSON.stringify(payload)
         });
