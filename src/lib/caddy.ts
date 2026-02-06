@@ -8,7 +8,6 @@ import { syncInstances } from "./instance-sync";
 import {
   accessListEntries,
   certificates,
-  deadHosts,
   proxyHosts,
   redirectHosts
 } from "./db/schema";
@@ -48,6 +47,9 @@ type ProxyHostRow = {
   skip_https_hostname_validation: number;
   meta: string | null;
   enabled: number;
+  response_mode: string;
+  static_status_code: number | null;
+  static_response_body: string | null;
 };
 
 type DnsResolverMeta = {
@@ -152,15 +154,6 @@ type RedirectHostRow = {
   destination: string;
   status_code: number;
   preserve_query: number;
-  enabled: number;
-};
-
-type DeadHostRow = {
-  id: number;
-  name: string;
-  domains: string;
-  status_code: number;
-  response_body: string | null;
   enabled: number;
 };
 
@@ -332,6 +325,59 @@ function buildProxyRoutes(
     if (domains.length === 0) {
       continue;
     }
+
+    // Handle static response mode
+    if (row.response_mode === "static") {
+      const staticHandlers: Record<string, unknown>[] = [];
+
+      // Build static response handler
+      const staticResponseHandler: Record<string, unknown> = {
+        handler: "static_response",
+        status_code: row.static_status_code ?? 200,
+        body: row.static_response_body ?? ""
+      };
+
+      // Add HSTS header if enabled
+      if (row.hsts_enabled) {
+        const hstsValue = row.hsts_subdomains ? "max-age=63072000; includeSubDomains" : "max-age=63072000";
+        staticResponseHandler.headers = {
+          "Strict-Transport-Security": [hstsValue]
+        };
+      }
+
+      staticHandlers.push(staticResponseHandler);
+
+      // SSL redirect for static responses
+      if (row.ssl_forced) {
+        routes.push({
+          match: [
+            {
+              host: domains,
+              expression: '{http.request.scheme} == "http"'
+            }
+          ],
+          handle: [
+            {
+              handler: "static_response",
+              status_code: 308,
+              headers: {
+                Location: ["https://{http.request.host}{http.request.uri}"]
+              }
+            }
+          ],
+          terminal: true
+        });
+      }
+
+      routes.push({
+        match: [{ host: domains }],
+        handle: staticHandlers,
+        terminal: true
+      });
+      continue;
+    }
+
+    // Proxy mode: require upstreams
     const upstreams = parseJson<string[]>(row.upstreams, []);
     if (upstreams.length === 0) {
       continue;
@@ -720,25 +766,6 @@ function buildRedirectRoutes(rows: RedirectHostRow[]): CaddyHttpRoute[] {
     });
 }
 
-function buildDeadRoutes(rows: DeadHostRow[]): CaddyHttpRoute[] {
-  return rows
-    .filter((row) => Boolean(row.enabled))
-    .map((row) => ({
-      match: [{ host: parseJson<string[]>(row.domains, []) }],
-      handle: [
-        {
-          handler: "static_response",
-          status_code: row.status_code,
-          body: row.response_body ?? "Service unavailable",
-          headers: {
-            "Strict-Transport-Security": ["max-age=63072000"]
-          }
-        }
-      ],
-      terminal: true
-    }));
-}
-
 function buildTlsConnectionPolicies(
   usage: Map<number, CertificateUsage>,
   managedCertificatesWithAutomation: Set<number>,
@@ -934,7 +961,7 @@ async function buildTlsAutomation(
 }
 
 async function buildCaddyDocument() {
-  const [proxyHostRecords, redirectHostRecords, deadHostRecords, certRows, accessListEntryRecords] = await Promise.all([
+  const [proxyHostRecords, redirectHostRecords, certRows, accessListEntryRecords] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -950,7 +977,10 @@ async function buildCaddyDocument() {
         preserveHostHeader: proxyHosts.preserveHostHeader,
         skipHttpsHostnameValidation: proxyHosts.skipHttpsHostnameValidation,
         meta: proxyHosts.meta,
-        enabled: proxyHosts.enabled
+        enabled: proxyHosts.enabled,
+        responseMode: proxyHosts.responseMode,
+        staticStatusCode: proxyHosts.staticStatusCode,
+        staticResponseBody: proxyHosts.staticResponseBody
       })
       .from(proxyHosts),
     db
@@ -964,16 +994,6 @@ async function buildCaddyDocument() {
         enabled: redirectHosts.enabled
       })
       .from(redirectHosts),
-    db
-      .select({
-        id: deadHosts.id,
-        name: deadHosts.name,
-        domains: deadHosts.domains,
-        statusCode: deadHosts.statusCode,
-        responseBody: deadHosts.responseBody,
-        enabled: deadHosts.enabled
-      })
-      .from(deadHosts),
     db
       .select({
         id: certificates.id,
@@ -1009,7 +1029,10 @@ async function buildCaddyDocument() {
     preserve_host_header: h.preserveHostHeader ? 1 : 0,
     skip_https_hostname_validation: h.skipHttpsHostnameValidation ? 1 : 0,
     meta: h.meta,
-    enabled: h.enabled ? 1 : 0
+    enabled: h.enabled ? 1 : 0,
+    response_mode: h.responseMode,
+    static_status_code: h.staticStatusCode,
+    static_response_body: h.staticResponseBody
   }));
 
   const redirectHostRows: RedirectHostRow[] = redirectHostRecords.map((h) => ({
@@ -1019,15 +1042,6 @@ async function buildCaddyDocument() {
     destination: h.destination,
     status_code: h.statusCode,
     preserve_query: h.preserveQuery ? 1 : 0,
-    enabled: h.enabled ? 1 : 0
-  }));
-
-  const deadHostRows: DeadHostRow[] = deadHostRecords.map((h) => ({
-    id: h.id,
-    name: h.name,
-    domains: h.domains,
-    status_code: h.statusCode,
-    response_body: h.responseBody,
     enabled: h.enabled ? 1 : 0
   }));
 
@@ -1070,8 +1084,7 @@ async function buildCaddyDocument() {
 
   const httpRoutes: CaddyHttpRoute[] = [
     ...buildProxyRoutes(proxyHostRows, accessMap, readyCertificates, autoManagedDomains),
-    ...buildRedirectRoutes(redirectHostRows),
-    ...buildDeadRoutes(deadHostRows)
+    ...buildRedirectRoutes(redirectHostRows)
   ];
 
   const hasTls = tlsConnectionPolicies.length > 0;

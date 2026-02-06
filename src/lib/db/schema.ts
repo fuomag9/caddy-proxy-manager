@@ -147,7 +147,12 @@ export const proxyHosts = sqliteTable("proxy_hosts", {
   updatedAt: text("updated_at").notNull(),
   skipHttpsHostnameValidation: integer("skip_https_hostname_validation", { mode: "boolean" })
     .notNull()
-    .default(false)
+    .default(false),
+  // Response mode: 'proxy' (default) or 'static'
+  responseMode: text("response_mode").notNull().default("proxy"),
+  // Static response fields (used when responseMode is 'static')
+  staticStatusCode: integer("static_status_code").default(200),
+  staticResponseBody: text("static_response_body")
 });
 
 export const redirectHosts = sqliteTable("redirect_hosts", {
@@ -157,18 +162,6 @@ export const redirectHosts = sqliteTable("redirect_hosts", {
   destination: text("destination").notNull(),
   statusCode: integer("status_code").notNull().default(302),
   preserveQuery: integer("preserve_query", { mode: "boolean" }).notNull().default(true),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull()
-});
-
-export const deadHosts = sqliteTable("dead_hosts", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  domains: text("domains").notNull(),
-  statusCode: integer("status_code").notNull().default(503),
-  responseBody: text("response_body"),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: text("created_at").notNull(),

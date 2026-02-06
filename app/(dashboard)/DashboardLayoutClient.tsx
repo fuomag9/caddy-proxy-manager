@@ -23,7 +23,6 @@ import MenuIcon from "@mui/icons-material/Menu";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DnsIcon from "@mui/icons-material/Dns";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import SecurityIcon from "@mui/icons-material/Security";
 import ShieldIcon from "@mui/icons-material/Shield";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -41,7 +40,6 @@ const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: DashboardIcon },
   { href: "/proxy-hosts", label: "Proxy Hosts", icon: DnsIcon },
   { href: "/redirects", label: "Redirects", icon: SwapHorizIcon },
-  { href: "/dead-hosts", label: "Dead Hosts", icon: ReportProblemIcon },
   { href: "/access-lists", label: "Access Lists", icon: SecurityIcon },
   { href: "/certificates", label: "Certificates", icon: ShieldIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },

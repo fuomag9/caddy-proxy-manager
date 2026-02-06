@@ -138,7 +138,10 @@ function isProxyHost(value: unknown): value is SyncPayload["data"]["proxyHosts"]
     isBoolean(value.enabled) &&
     isString(value.createdAt) &&
     isString(value.updatedAt) &&
-    isBoolean(value.skipHttpsHostnameValidation)
+    isBoolean(value.skipHttpsHostnameValidation) &&
+    isString(value.responseMode) &&
+    isNullableNumber(value.staticStatusCode) &&
+    isNullableString(value.staticResponseBody)
   );
 }
 
@@ -151,21 +154,6 @@ function isRedirectHost(value: unknown): value is SyncPayload["data"]["redirectH
     isString(value.destination) &&
     isNumber(value.statusCode) &&
     isBoolean(value.preserveQuery) &&
-    isBoolean(value.enabled) &&
-    isNullableNumber(value.createdBy) &&
-    isString(value.createdAt) &&
-    isString(value.updatedAt)
-  );
-}
-
-function isDeadHost(value: unknown): value is SyncPayload["data"]["deadHosts"][number] {
-  if (!isRecord(value)) return false;
-  return (
-    isNumber(value.id) &&
-    isString(value.name) &&
-    isString(value.domains) &&
-    isNumber(value.statusCode) &&
-    isNullableString(value.responseBody) &&
     isBoolean(value.enabled) &&
     isNullableNumber(value.createdBy) &&
     isString(value.createdAt) &&
@@ -210,8 +198,7 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
     validateArray(d.accessLists, isAccessList) &&
     validateArray(d.accessListEntries, isAccessListEntry) &&
     validateArray(d.proxyHosts, isProxyHost) &&
-    validateArray(d.redirectHosts, isRedirectHost) &&
-    validateArray(d.deadHosts, isDeadHost)
+    validateArray(d.redirectHosts, isRedirectHost)
   );
 }
 

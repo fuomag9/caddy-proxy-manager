@@ -1,5 +1,5 @@
 import db, { nowIso } from "./db";
-import { accessListEntries, accessLists, certificates, deadHosts, proxyHosts, redirectHosts } from "./db/schema";
+import { accessListEntries, accessLists, certificates, proxyHosts, redirectHosts } from "./db/schema";
 import { getSetting, setSetting } from "./settings";
 import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
@@ -24,7 +24,6 @@ export type SyncPayload = {
     accessListEntries: Array<typeof accessListEntries.$inferSelect>;
     proxyHosts: Array<typeof proxyHosts.$inferSelect>;
     redirectHosts: Array<typeof redirectHosts.$inferSelect>;
-    deadHosts: Array<typeof deadHosts.$inferSelect>;
   };
 };
 
@@ -230,13 +229,12 @@ export async function clearSyncedSetting(key: string): Promise<void> {
 }
 
 export async function buildSyncPayload(): Promise<SyncPayload> {
-  const [certRows, accessListRows, accessEntryRows, proxyRows, redirectRows, deadRows] = await Promise.all([
+  const [certRows, accessListRows, accessEntryRows, proxyRows, redirectRows] = await Promise.all([
     db.select().from(certificates),
     db.select().from(accessLists),
     db.select().from(accessListEntries),
     db.select().from(proxyHosts),
-    db.select().from(redirectHosts),
-    db.select().from(deadHosts)
+    db.select().from(redirectHosts)
   ]);
 
   const settings = {
@@ -263,11 +261,6 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     createdBy: null
   }));
 
-  const sanitizedDeadHosts = deadRows.map((row) => ({
-    ...row,
-    createdBy: null
-  }));
-
   const sanitizedProxyHosts = proxyRows.map((row) => ({
     ...row,
     ownerUserId: null
@@ -281,8 +274,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
       accessLists: sanitizedAccessLists,
       accessListEntries: accessEntryRows,
       proxyHosts: sanitizedProxyHosts,
-      redirectHosts: sanitizedRedirects,
-      deadHosts: sanitizedDeadHosts
+      redirectHosts: sanitizedRedirects
     }
   };
 }
@@ -416,7 +408,6 @@ export async function applySyncPayload(payload: SyncPayload) {
   db.transaction((tx) => {
     tx.delete(proxyHosts).run();
     tx.delete(redirectHosts).run();
-    tx.delete(deadHosts).run();
     tx.delete(accessListEntries).run();
     tx.delete(accessLists).run();
     tx.delete(certificates).run();
@@ -435,9 +426,6 @@ export async function applySyncPayload(payload: SyncPayload) {
     }
     if (payload.data.redirectHosts.length > 0) {
       tx.insert(redirectHosts).values(payload.data.redirectHosts).run();
-    }
-    if (payload.data.deadHosts.length > 0) {
-      tx.insert(deadHosts).values(payload.data.deadHosts).run();
     }
   });
 }
