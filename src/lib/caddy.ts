@@ -47,9 +47,6 @@ type ProxyHostRow = {
   skip_https_hostname_validation: number;
   meta: string | null;
   enabled: number;
-  response_mode: string;
-  static_status_code: number | null;
-  static_response_body: string | null;
 };
 
 type DnsResolverMeta = {
@@ -326,58 +323,7 @@ function buildProxyRoutes(
       continue;
     }
 
-    // Handle static response mode
-    if (row.response_mode === "static") {
-      const staticHandlers: Record<string, unknown>[] = [];
-
-      // Build static response handler
-      const staticResponseHandler: Record<string, unknown> = {
-        handler: "static_response",
-        status_code: row.static_status_code ?? 200,
-        body: row.static_response_body ?? ""
-      };
-
-      // Add HSTS header if enabled
-      if (row.hsts_enabled) {
-        const hstsValue = row.hsts_subdomains ? "max-age=63072000; includeSubDomains" : "max-age=63072000";
-        staticResponseHandler.headers = {
-          "Strict-Transport-Security": [hstsValue]
-        };
-      }
-
-      staticHandlers.push(staticResponseHandler);
-
-      // SSL redirect for static responses
-      if (row.ssl_forced) {
-        routes.push({
-          match: [
-            {
-              host: domains,
-              expression: '{http.request.scheme} == "http"'
-            }
-          ],
-          handle: [
-            {
-              handler: "static_response",
-              status_code: 308,
-              headers: {
-                Location: ["https://{http.request.host}{http.request.uri}"]
-              }
-            }
-          ],
-          terminal: true
-        });
-      }
-
-      routes.push({
-        match: [{ host: domains }],
-        handle: staticHandlers,
-        terminal: true
-      });
-      continue;
-    }
-
-    // Proxy mode: require upstreams
+    // Require upstreams
     const upstreams = parseJson<string[]>(row.upstreams, []);
     if (upstreams.length === 0) {
       continue;
@@ -977,10 +923,7 @@ async function buildCaddyDocument() {
         preserveHostHeader: proxyHosts.preserveHostHeader,
         skipHttpsHostnameValidation: proxyHosts.skipHttpsHostnameValidation,
         meta: proxyHosts.meta,
-        enabled: proxyHosts.enabled,
-        responseMode: proxyHosts.responseMode,
-        staticStatusCode: proxyHosts.staticStatusCode,
-        staticResponseBody: proxyHosts.staticResponseBody
+        enabled: proxyHosts.enabled
       })
       .from(proxyHosts),
     db
@@ -1029,10 +972,7 @@ async function buildCaddyDocument() {
     preserve_host_header: h.preserveHostHeader ? 1 : 0,
     skip_https_hostname_validation: h.skipHttpsHostnameValidation ? 1 : 0,
     meta: h.meta,
-    enabled: h.enabled ? 1 : 0,
-    response_mode: h.responseMode,
-    static_status_code: h.staticStatusCode,
-    static_response_body: h.staticResponseBody
+    enabled: h.enabled ? 1 : 0
   }));
 
   const redirectHostRows: RedirectHostRow[] = redirectHostRecords.map((h) => ({

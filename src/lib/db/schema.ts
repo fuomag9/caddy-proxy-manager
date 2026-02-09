@@ -147,12 +147,7 @@ export const proxyHosts = sqliteTable("proxy_hosts", {
   updatedAt: text("updated_at").notNull(),
   skipHttpsHostnameValidation: integer("skip_https_hostname_validation", { mode: "boolean" })
     .notNull()
-    .default(false),
-  // Response mode: 'proxy' (default) or 'static'
-  responseMode: text("response_mode").notNull().default("proxy"),
-  // Static response fields (used when responseMode is 'static')
-  staticStatusCode: integer("static_status_code").default(200),
-  staticResponseBody: text("static_response_body")
+    .default(false)
 });
 
 export const redirectHosts = sqliteTable("redirect_hosts", {

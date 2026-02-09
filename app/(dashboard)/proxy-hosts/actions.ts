@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
-import { createProxyHost, deleteProxyHost, updateProxyHost, type ProxyHostAuthentikInput, type LoadBalancerInput, type LoadBalancingPolicy, type DnsResolverInput, type ResponseMode } from "@/src/lib/models/proxy-hosts";
+import { createProxyHost, deleteProxyHost, updateProxyHost, type ProxyHostAuthentikInput, type LoadBalancerInput, type LoadBalancingPolicy, type DnsResolverInput } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings } from "@/src/lib/settings";
 
@@ -270,28 +270,6 @@ function parseLoadBalancerConfig(formData: FormData): LoadBalancerInput | undefi
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-function parseResponseMode(value: FormDataEntryValue | null): ResponseMode {
-  if (!value || typeof value !== "string") {
-    return "proxy";
-  }
-  return value === "static" ? "static" : "proxy";
-}
-
-function parseStatusCode(value: FormDataEntryValue | null): number | null {
-  if (!value || typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (trimmed === "") {
-    return null;
-  }
-  const num = parseInt(trimmed, 10);
-  if (!Number.isFinite(num) || num < 100 || num > 599) {
-    return 200;
-  }
-  return num;
-}
-
 function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefined {
   if (!formData.has("dns_present")) {
     return undefined;
@@ -370,8 +348,6 @@ export async function createProxyHostAction(
       console.warn(`[createProxyHostAction] ${warning}`);
     }
 
-    const responseMode = parseResponseMode(formData.get("response_mode"));
-
     await createProxyHost(
       {
         name: String(formData.get("name") ?? "Untitled"),
@@ -386,10 +362,7 @@ export async function createProxyHostAction(
         custom_reverse_proxy_json: parseOptionalText(formData.get("custom_reverse_proxy_json")),
         authentik: parseAuthentikConfig(formData),
         load_balancer: parseLoadBalancerConfig(formData),
-        dns_resolver: parseDnsResolverConfig(formData),
-        response_mode: responseMode,
-        static_status_code: parseStatusCode(formData.get("static_status_code")),
-        static_response_body: parseOptionalText(formData.get("static_response_body"))
+        dns_resolver: parseDnsResolverConfig(formData)
       },
       userId
     );
@@ -437,8 +410,6 @@ export async function updateProxyHostAction(
       }
     }
 
-    const responseMode = formData.has("response_mode") ? parseResponseMode(formData.get("response_mode")) : undefined;
-
     await updateProxyHost(
       id,
       {
@@ -460,10 +431,7 @@ export async function updateProxyHostAction(
           : undefined,
         authentik: parseAuthentikConfig(formData),
         load_balancer: parseLoadBalancerConfig(formData),
-        dns_resolver: parseDnsResolverConfig(formData),
-        response_mode: responseMode,
-        static_status_code: formData.has("static_status_code") ? parseStatusCode(formData.get("static_status_code")) : undefined,
-        static_response_body: formData.has("static_response_body") ? parseOptionalText(formData.get("static_response_body")) : undefined
+        dns_resolver: parseDnsResolverConfig(formData)
       },
       userId
     );

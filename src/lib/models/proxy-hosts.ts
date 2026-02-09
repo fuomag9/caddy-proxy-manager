@@ -176,8 +176,6 @@ type ProxyHostMeta = {
   dns_resolver?: DnsResolverMeta;
 };
 
-export type ResponseMode = "proxy" | "static";
-
 export type ProxyHost = {
   id: number;
   name: string;
@@ -199,15 +197,12 @@ export type ProxyHost = {
   authentik: ProxyHostAuthentikConfig | null;
   load_balancer: LoadBalancerConfig | null;
   dns_resolver: DnsResolverConfig | null;
-  response_mode: ResponseMode;
-  static_status_code: number | null;
-  static_response_body: string | null;
 };
 
 export type ProxyHostInput = {
   name: string;
   domains: string[];
-  upstreams?: string[];
+  upstreams: string[];
   certificate_id?: number | null;
   access_list_id?: number | null;
   ssl_forced?: boolean;
@@ -222,9 +217,6 @@ export type ProxyHostInput = {
   authentik?: ProxyHostAuthentikInput | null;
   load_balancer?: LoadBalancerInput | null;
   dns_resolver?: DnsResolverInput | null;
-  response_mode?: ResponseMode;
-  static_status_code?: number | null;
-  static_response_body?: string | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -1141,7 +1133,6 @@ function dehydrateDnsResolver(config: DnsResolverConfig | null): DnsResolverMeta
 
 function parseProxyHost(row: ProxyHostRow): ProxyHost {
   const meta = parseMeta(row.meta ?? null);
-  const responseMode = row.responseMode === "static" ? "static" : "proxy";
   return {
     id: row.id,
     name: row.name,
@@ -1162,10 +1153,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     custom_pre_handlers_json: meta.custom_pre_handlers_json ?? null,
     authentik: hydrateAuthentik(meta.authentik),
     load_balancer: hydrateLoadBalancer(meta.load_balancer),
-    dns_resolver: hydrateDnsResolver(meta.dns_resolver),
-    response_mode: responseMode,
-    static_status_code: row.staticStatusCode ?? null,
-    static_response_body: row.staticResponseBody ?? null
+    dns_resolver: hydrateDnsResolver(meta.dns_resolver)
   };
 }
 
@@ -1179,22 +1167,18 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
     throw new Error("At least one domain must be specified");
   }
 
-  const responseMode = input.response_mode === "static" ? "static" : "proxy";
-
-  // Only require upstreams in proxy mode
-  if (responseMode === "proxy" && (!input.upstreams || input.upstreams.length === 0)) {
-    throw new Error("At least one upstream must be specified for proxy mode");
+  if (!input.upstreams || input.upstreams.length === 0) {
+    throw new Error("At least one upstream must be specified");
   }
 
   const now = nowIso();
   const meta = buildMeta({}, input);
-  const upstreams = input.upstreams ?? [];
   const [record] = await db
     .insert(proxyHosts)
     .values({
       name: input.name.trim(),
       domains: JSON.stringify(Array.from(new Set(input.domains.map((d) => d.trim().toLowerCase())))),
-      upstreams: JSON.stringify(Array.from(new Set(upstreams.map((u) => u.trim())))),
+      upstreams: JSON.stringify(Array.from(new Set(input.upstreams.map((u) => u.trim())))),
       certificateId: input.certificate_id ?? null,
       accessListId: input.access_list_id ?? null,
       ownerUserId: actorUserId,
@@ -1207,10 +1191,7 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
       skipHttpsHostnameValidation: input.skip_https_hostname_validation ?? false,
       enabled: input.enabled ?? true,
       createdAt: now,
-      updatedAt: now,
-      responseMode,
-      staticStatusCode: input.static_status_code ?? 200,
-      staticResponseBody: input.static_response_body ?? null
+      updatedAt: now
     })
     .returning();
 
@@ -1244,10 +1225,6 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     throw new Error("Proxy host not found");
   }
 
-  const responseMode = input.response_mode !== undefined
-    ? (input.response_mode === "static" ? "static" : "proxy")
-    : existing.response_mode;
-
   const domains = input.domains ? JSON.stringify(Array.from(new Set(input.domains))) : JSON.stringify(existing.domains);
   const upstreams = input.upstreams ? JSON.stringify(Array.from(new Set(input.upstreams))) : JSON.stringify(existing.upstreams);
   const existingMeta: ProxyHostMeta = {
@@ -1276,10 +1253,7 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
       meta,
       skipHttpsHostnameValidation: input.skip_https_hostname_validation ?? existing.skip_https_hostname_validation,
       enabled: input.enabled ?? existing.enabled,
-      updatedAt: now,
-      responseMode,
-      staticStatusCode: input.static_status_code !== undefined ? input.static_status_code : existing.static_status_code,
-      staticResponseBody: input.static_response_body !== undefined ? input.static_response_body : existing.static_response_body
+      updatedAt: now
     })
     .where(eq(proxyHosts.id, id));
 

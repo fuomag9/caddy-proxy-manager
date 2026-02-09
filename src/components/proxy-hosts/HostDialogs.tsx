@@ -1,7 +1,7 @@
 
-import { Alert, Box, FormControl, FormControlLabel, FormLabel, MenuItem, Radio, RadioGroup, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { useFormState } from "react-dom";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
     createProxyHostAction,
     deleteProxyHostAction,
@@ -10,7 +10,7 @@ import {
 import { INITIAL_ACTION_STATE } from "@/src/lib/actions";
 import { AccessList } from "@/src/lib/models/access-lists";
 import { Certificate } from "@/src/lib/models/certificates";
-import { ProxyHost, ResponseMode } from "@/src/lib/models/proxy-hosts";
+import { ProxyHost } from "@/src/lib/models/proxy-hosts";
 import { AuthentikSettings } from "@/src/lib/settings";
 import { AppDialog } from "@/src/components/ui/AppDialog";
 import { AuthentikFields } from "./AuthentikFields";
@@ -35,20 +35,12 @@ export function CreateHostDialog({
     initialData?: ProxyHost | null;
 }) {
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
-    const [responseMode, setResponseMode] = useState<ResponseMode>(initialData?.response_mode ?? "proxy");
 
     useEffect(() => {
         if (state.status === "success") {
             setTimeout(onClose, 1000);
         }
     }, [state.status, onClose]);
-
-    // Reset response mode when dialog opens/closes
-    useEffect(() => {
-        if (open) {
-            setResponseMode(initialData?.response_mode ?? "proxy");
-        }
-    }, [open, initialData]);
 
     return (
         <AppDialog
@@ -92,43 +84,7 @@ export function CreateHostDialog({
                     required
                     fullWidth
                 />
-                <FormControl component="fieldset">
-                    <FormLabel component="legend">Response Mode</FormLabel>
-                    <RadioGroup
-                        row
-                        name="response_mode"
-                        value={responseMode}
-                        onChange={(e) => setResponseMode(e.target.value as ResponseMode)}
-                    >
-                        <FormControlLabel value="proxy" control={<Radio />} label="Proxy to Upstream" />
-                        <FormControlLabel value="static" control={<Radio />} label="Static Response" />
-                    </RadioGroup>
-                </FormControl>
-                {responseMode === "proxy" && (
-                    <UpstreamInput defaultUpstreams={initialData?.upstreams} />
-                )}
-                {responseMode === "static" && (
-                    <>
-                        <TextField
-                            name="static_status_code"
-                            label="Status Code"
-                            type="number"
-                            defaultValue={initialData?.static_status_code ?? 200}
-                            helperText="HTTP status code to return (e.g., 200 for OK, 503 for Service Unavailable)"
-                            fullWidth
-                        />
-                        <TextField
-                            name="static_response_body"
-                            label="Response Body"
-                            placeholder=""
-                            defaultValue={initialData?.static_response_body ?? ""}
-                            helperText="Optional body text to return in the response"
-                            multiline
-                            minRows={3}
-                            fullWidth
-                        />
-                    </>
-                )}
+                <UpstreamInput defaultUpstreams={initialData?.upstreams} />
                 <TextField select name="certificate_id" label="Certificate" defaultValue={initialData?.certificate_id ?? ""} fullWidth>
                     <MenuItem value="">Managed by Caddy (Auto)</MenuItem>
                     {certificates.map((cert) => (
@@ -187,18 +143,12 @@ export function EditHostDialog({
     accessLists: AccessList[];
 }) {
     const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
-    const [responseMode, setResponseMode] = useState<ResponseMode>(host.response_mode);
 
     useEffect(() => {
         if (state.status === "success") {
             setTimeout(onClose, 1000);
         }
     }, [state.status, onClose]);
-
-    // Reset response mode when host changes
-    useEffect(() => {
-        setResponseMode(host.response_mode);
-    }, [host]);
 
     return (
         <AppDialog
@@ -232,43 +182,7 @@ export function EditHostDialog({
                     minRows={2}
                     fullWidth
                 />
-                <FormControl component="fieldset">
-                    <FormLabel component="legend">Response Mode</FormLabel>
-                    <RadioGroup
-                        row
-                        name="response_mode"
-                        value={responseMode}
-                        onChange={(e) => setResponseMode(e.target.value as ResponseMode)}
-                    >
-                        <FormControlLabel value="proxy" control={<Radio />} label="Proxy to Upstream" />
-                        <FormControlLabel value="static" control={<Radio />} label="Static Response" />
-                    </RadioGroup>
-                </FormControl>
-                {responseMode === "proxy" && (
-                    <UpstreamInput defaultUpstreams={host.upstreams} />
-                )}
-                {responseMode === "static" && (
-                    <>
-                        <TextField
-                            name="static_status_code"
-                            label="Status Code"
-                            type="number"
-                            defaultValue={host.static_status_code ?? 200}
-                            helperText="HTTP status code to return (e.g., 200 for OK, 503 for Service Unavailable)"
-                            fullWidth
-                        />
-                        <TextField
-                            name="static_response_body"
-                            label="Response Body"
-                            placeholder=""
-                            defaultValue={host.static_response_body ?? ""}
-                            helperText="Optional body text to return in the response"
-                            multiline
-                            minRows={3}
-                            fullWidth
-                        />
-                    </>
-                )}
+                <UpstreamInput defaultUpstreams={host.upstreams} />
                 <TextField select name="certificate_id" label="Certificate" defaultValue={host.certificate_id ?? ""} fullWidth>
                     <MenuItem value="">Managed by Caddy (Auto)</MenuItem>
                     {certificates.map((cert) => (

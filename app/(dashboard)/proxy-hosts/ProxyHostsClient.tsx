@@ -84,16 +84,10 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
       id: "upstreams",
       label: "Target",
       render: (host: ProxyHost) => (
-        host.response_mode === "static" ? (
-          <Typography variant="body2" color="warning.main" sx={{ fontStyle: 'italic' }}>
-            Static Response ({host.static_status_code ?? 503})
-          </Typography>
-        ) : (
-          <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
-            {host.upstreams[0]}
-            {host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
-          </Typography>
-        )
+        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+          {host.upstreams[0]}
+          {host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
+        </Typography>
       )
     },
     {
