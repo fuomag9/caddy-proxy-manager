@@ -1,6 +1,6 @@
 # Caddy Proxy Manager
 
-Web interface for managing [Caddy Server](https://caddyserver.com/) reverse proxies, redirects, and certificates.
+Web interface for managing [Caddy Server](https://caddyserver.com/) reverse proxies and certificates.
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://mit-license.org)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
@@ -12,7 +12,7 @@ Web interface for managing [Caddy Server](https://caddyserver.com/) reverse prox
 
 ## Overview
 
-This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, redirects, dead hosts (maintenance pages), access lists, and certificate management through a Material UI interface.
+This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a Material UI interface.
 
 **Key features:**
 - Reverse proxy configuration with upstream pools and custom headers
@@ -44,8 +44,6 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 ## Features
 
 - **Proxy Hosts** - Reverse proxies with custom headers and upstream pools
-- **Redirects** - 301/302 redirects
-- **Dead Hosts** - Maintenance pages
 - **Access Lists** - HTTP basic auth
 - **Certificates** - Custom SSL/TLS import (automatic Let's Encrypt via Caddy)
 - **Settings** - ACME email and Cloudflare DNS-01 configuration
