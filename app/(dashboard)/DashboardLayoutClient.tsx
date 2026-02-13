@@ -22,7 +22,6 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DnsIcon from "@mui/icons-material/Dns";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SecurityIcon from "@mui/icons-material/Security";
 import ShieldIcon from "@mui/icons-material/Shield";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -39,7 +38,6 @@ type User = {
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: DashboardIcon },
   { href: "/proxy-hosts", label: "Proxy Hosts", icon: DnsIcon },
-  { href: "/redirects", label: "Redirects", icon: SwapHorizIcon },
   { href: "/access-lists", label: "Access Lists", icon: SecurityIcon },
   { href: "/certificates", label: "Certificates", icon: ShieldIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },

@@ -145,22 +145,6 @@ function isProxyHost(value: unknown): value is SyncPayload["data"]["proxyHosts"]
   );
 }
 
-function isRedirectHost(value: unknown): value is SyncPayload["data"]["redirectHosts"][number] {
-  if (!isRecord(value)) return false;
-  return (
-    isNumber(value.id) &&
-    isString(value.name) &&
-    isString(value.domains) &&
-    isString(value.destination) &&
-    isNumber(value.statusCode) &&
-    isBoolean(value.preserveQuery) &&
-    isBoolean(value.enabled) &&
-    isNullableNumber(value.createdBy) &&
-    isString(value.createdAt) &&
-    isString(value.updatedAt)
-  );
-}
-
 /**
  * Validates that the payload has the expected structure for syncing
  */
@@ -197,8 +181,7 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
     validateArray(d.certificates, isCertificate) &&
     validateArray(d.accessLists, isAccessList) &&
     validateArray(d.accessListEntries, isAccessListEntry) &&
-    validateArray(d.proxyHosts, isProxyHost) &&
-    validateArray(d.redirectHosts, isRedirectHost)
+    validateArray(d.proxyHosts, isProxyHost)
   );
 }
 

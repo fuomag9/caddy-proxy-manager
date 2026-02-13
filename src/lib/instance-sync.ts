@@ -1,5 +1,5 @@
 import db, { nowIso } from "./db";
-import { accessListEntries, accessLists, certificates, proxyHosts, redirectHosts } from "./db/schema";
+import { accessListEntries, accessLists, certificates, proxyHosts } from "./db/schema";
 import { getSetting, setSetting } from "./settings";
 import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
@@ -23,7 +23,6 @@ export type SyncPayload = {
     accessLists: Array<typeof accessLists.$inferSelect>;
     accessListEntries: Array<typeof accessListEntries.$inferSelect>;
     proxyHosts: Array<typeof proxyHosts.$inferSelect>;
-    redirectHosts: Array<typeof redirectHosts.$inferSelect>;
   };
 };
 
@@ -229,12 +228,11 @@ export async function clearSyncedSetting(key: string): Promise<void> {
 }
 
 export async function buildSyncPayload(): Promise<SyncPayload> {
-  const [certRows, accessListRows, accessEntryRows, proxyRows, redirectRows] = await Promise.all([
+  const [certRows, accessListRows, accessEntryRows, proxyRows] = await Promise.all([
     db.select().from(certificates),
     db.select().from(accessLists),
     db.select().from(accessListEntries),
-    db.select().from(proxyHosts),
-    db.select().from(redirectHosts)
+    db.select().from(proxyHosts)
   ]);
 
   const settings = {
@@ -256,11 +254,6 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     createdBy: null
   }));
 
-  const sanitizedRedirects = redirectRows.map((row) => ({
-    ...row,
-    createdBy: null
-  }));
-
   const sanitizedProxyHosts = proxyRows.map((row) => ({
     ...row,
     ownerUserId: null
@@ -273,8 +266,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
       certificates: sanitizedCertificates,
       accessLists: sanitizedAccessLists,
       accessListEntries: accessEntryRows,
-      proxyHosts: sanitizedProxyHosts,
-      redirectHosts: sanitizedRedirects
+      proxyHosts: sanitizedProxyHosts
     }
   };
 }
@@ -407,7 +399,6 @@ export async function applySyncPayload(payload: SyncPayload) {
   // better-sqlite3 is synchronous, so transaction callback must be synchronous
   db.transaction((tx) => {
     tx.delete(proxyHosts).run();
-    tx.delete(redirectHosts).run();
     tx.delete(accessListEntries).run();
     tx.delete(accessLists).run();
     tx.delete(certificates).run();
@@ -423,9 +414,6 @@ export async function applySyncPayload(payload: SyncPayload) {
     }
     if (payload.data.proxyHosts.length > 0) {
       tx.insert(proxyHosts).values(payload.data.proxyHosts).run();
-    }
-    if (payload.data.redirectHosts.length > 0) {
-      tx.insert(redirectHosts).values(payload.data.redirectHosts).run();
     }
   });
 }

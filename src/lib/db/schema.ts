@@ -150,19 +150,6 @@ export const proxyHosts = sqliteTable("proxy_hosts", {
     .default(false)
 });
 
-export const redirectHosts = sqliteTable("redirect_hosts", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  domains: text("domains").notNull(),
-  destination: text("destination").notNull(),
-  statusCode: integer("status_code").notNull().default(302),
-  preserveQuery: integer("preserve_query", { mode: "boolean" }).notNull().default(true),
-  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull()
-});
-
 export const apiTokens = sqliteTable(
   "api_tokens",
   {

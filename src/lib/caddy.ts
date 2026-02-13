@@ -8,8 +8,7 @@ import { syncInstances } from "./instance-sync";
 import {
   accessListEntries,
   certificates,
-  proxyHosts,
-  redirectHosts
+  proxyHosts
 } from "./db/schema";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
@@ -142,16 +141,6 @@ type LoadBalancerRouteConfig = {
     unhealthyStatus: number[] | null;
     unhealthyLatency: string | null;
   } | null;
-};
-
-type RedirectHostRow = {
-  id: number;
-  name: string;
-  domains: string;
-  destination: string;
-  status_code: number;
-  preserve_query: number;
-  enabled: number;
 };
 
 type AccessListEntryRow = {
@@ -688,30 +677,6 @@ function buildProxyRoutes(
   return routes;
 }
 
-function buildRedirectRoutes(rows: RedirectHostRow[]): CaddyHttpRoute[] {
-  return rows
-    .filter((row) => Boolean(row.enabled))
-    .map((row) => {
-      const domains = parseJson<string[]>(row.domains, []);
-      const preserveQuery = Boolean(row.preserve_query);
-      const location = preserveQuery ? `${row.destination}{uri}` : row.destination;
-      return {
-        match: [{ host: domains }],
-        handle: [
-          {
-            handler: "static_response",
-            status_code: row.status_code,
-            headers: {
-              Location: [location],
-              "Strict-Transport-Security": ["max-age=63072000"]
-            }
-          }
-        ],
-        terminal: true
-      };
-    });
-}
-
 function buildTlsConnectionPolicies(
   usage: Map<number, CertificateUsage>,
   managedCertificatesWithAutomation: Set<number>,
@@ -907,7 +872,7 @@ async function buildTlsAutomation(
 }
 
 async function buildCaddyDocument() {
-  const [proxyHostRecords, redirectHostRecords, certRows, accessListEntryRecords] = await Promise.all([
+  const [proxyHostRecords, certRows, accessListEntryRecords] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -926,17 +891,6 @@ async function buildCaddyDocument() {
         enabled: proxyHosts.enabled
       })
       .from(proxyHosts),
-    db
-      .select({
-        id: redirectHosts.id,
-        name: redirectHosts.name,
-        domains: redirectHosts.domains,
-        destination: redirectHosts.destination,
-        statusCode: redirectHosts.statusCode,
-        preserveQuery: redirectHosts.preserveQuery,
-        enabled: redirectHosts.enabled
-      })
-      .from(redirectHosts),
     db
       .select({
         id: certificates.id,
@@ -972,16 +926,6 @@ async function buildCaddyDocument() {
     preserve_host_header: h.preserveHostHeader ? 1 : 0,
     skip_https_hostname_validation: h.skipHttpsHostnameValidation ? 1 : 0,
     meta: h.meta,
-    enabled: h.enabled ? 1 : 0
-  }));
-
-  const redirectHostRows: RedirectHostRow[] = redirectHostRecords.map((h) => ({
-    id: h.id,
-    name: h.name,
-    domains: h.domains,
-    destination: h.destination,
-    status_code: h.statusCode,
-    preserve_query: h.preserveQuery ? 1 : 0,
     enabled: h.enabled ? 1 : 0
   }));
 
@@ -1023,8 +967,7 @@ async function buildCaddyDocument() {
   );
 
   const httpRoutes: CaddyHttpRoute[] = [
-    ...buildProxyRoutes(proxyHostRows, accessMap, readyCertificates, autoManagedDomains),
-    ...buildRedirectRoutes(redirectHostRows)
+    ...buildProxyRoutes(proxyHostRows, accessMap, readyCertificates, autoManagedDomains)
   ];
 
   const hasTls = tlsConnectionPolicies.length > 0;
