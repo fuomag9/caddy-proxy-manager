@@ -150,8 +150,6 @@ OAuth login appears on the login page alongside credentials. Users can link OAut
 
 - [ ] Multi-user RBAC
 - [ ] Additional DNS providers (Route53, Namecheap, etc.)
-- [ ] Backup/restore
-- [ ] API for programmatic configuration
 
 [Open an issue](https://github.com/fuomag9/caddy-proxy-manager/issues) for feature requests.
 
