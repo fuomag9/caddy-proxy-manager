@@ -45,6 +45,33 @@ export type UpstreamDnsResolutionSettings = {
   family: UpstreamDnsAddressFamily;
 };
 
+export type GeoBlockSettings = {
+  enabled: boolean;
+
+  // Block rules
+  block_countries: string[];    // ISO 3166-1 alpha-2, e.g. ["CN", "RU"]
+  block_continents: string[];   // AF, AN, AS, EU, NA, OC, SA
+  block_asns: number[];
+  block_cidrs: string[];
+  block_ips: string[];
+
+  // Allow rules (win over block rules)
+  allow_countries: string[];
+  allow_continents: string[];
+  allow_asns: number[];
+  allow_cidrs: string[];
+  allow_ips: string[];
+
+  // Trusted proxies for X-Forwarded-For parsing
+  trusted_proxies: string[];
+
+  // Block response customization
+  response_status: number;        // default 403
+  response_body: string;          // default "Forbidden"
+  response_headers: Record<string, string>;
+  redirect_url: string;           // if set, 302 redirect instead of status/body
+};
+
 type InstanceMode = "standalone" | "master" | "slave";
 
 const INSTANCE_MODE_KEY = "instance_mode";
@@ -171,4 +198,12 @@ export async function getUpstreamDnsResolutionSettings(): Promise<UpstreamDnsRes
 
 export async function saveUpstreamDnsResolutionSettings(settings: UpstreamDnsResolutionSettings): Promise<void> {
   await setSetting("upstream_dns_resolution", settings);
+}
+
+export async function getGeoBlockSettings(): Promise<GeoBlockSettings | null> {
+  return await getEffectiveSetting<GeoBlockSettings>("geoblock");
+}
+
+export async function saveGeoBlockSettings(settings: GeoBlockSettings): Promise<void> {
+  await setSetting("geoblock", settings);
 }
