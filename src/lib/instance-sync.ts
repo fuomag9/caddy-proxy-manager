@@ -13,6 +13,7 @@ export type SyncSettings = {
   metrics: unknown | null;
   logging: unknown | null;
   dns: unknown | null;
+  upstream_dns_resolution: unknown | null;
 };
 
 export type SyncPayload = {
@@ -241,7 +242,8 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     authentik: await getSetting("authentik"),
     metrics: await getSetting("metrics"),
     logging: await getSetting("logging"),
-    dns: await getSetting("dns")
+    dns: await getSetting("dns"),
+    upstream_dns_resolution: await getSetting("upstream_dns_resolution")
   };
 
   const sanitizedAccessLists = accessListRows.map((row) => ({
@@ -395,6 +397,7 @@ export async function applySyncPayload(payload: SyncPayload) {
   await setSyncedSetting("metrics", payload.settings.metrics);
   await setSyncedSetting("logging", payload.settings.logging);
   await setSyncedSetting("dns", payload.settings.dns);
+  await setSyncedSetting("upstream_dns_resolution", payload.settings.upstream_dns_resolution ?? null);
 
   // better-sqlite3 is synchronous, so transaction callback must be synchronous
   db.transaction((tx) => {

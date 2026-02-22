@@ -19,6 +19,7 @@ This project provides a web UI for Caddy Server, eliminating the need to manuall
 - HTTP basic auth access lists
 - OAuth2/OIDC authentication support
 - Automatic HTTPS via Caddy's ACME (Let's Encrypt) with Cloudflare DNS-01 support
+- Optional upstream DNS pinning (resolve upstream hostnames on config apply)
 - Custom certificate import (internal CA, wildcards, etc.)
 - Audit logging of all configuration changes
 - Built with Next.js 16, React 19, Drizzle ORM, and TypeScript
@@ -46,7 +47,7 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 - **Proxy Hosts** - Reverse proxies with custom headers and upstream pools
 - **Access Lists** - HTTP basic auth
 - **Certificates** - Custom SSL/TLS import (automatic Let's Encrypt via Caddy)
-- **Settings** - ACME email and Cloudflare DNS-01 configuration
+- **Settings** - ACME email, Cloudflare DNS-01, and upstream DNS pinning defaults
 - **Audit Log** - Configuration change tracking
 
 ---
@@ -111,6 +112,23 @@ Caddy automatically obtains Let's Encrypt certificates for all proxy hosts.
 **Cloudflare DNS-01** (optional): Configure in Settings with a Cloudflare API token (`Zone.DNS:Edit` permissions).
 
 **Custom Certificates** (optional): Import your own certificates via the Certificates page. Private keys are stored unencrypted in SQLite.
+
+---
+
+## Upstream DNS Pinning
+
+You can enable upstream DNS pinning globally (**Settings → Upstream DNS Pinning**) and override per host (**Proxy Host → Upstream DNS Pinning**).
+
+When enabled, hostname upstreams are resolved during config save/reload and written to Caddy as concrete IP dials. Address family selection supports:
+- `both` (preferred, resolves AAAA then A with IPv6 preference)
+- `ipv6`
+- `ipv4`
+
+### Important HTTPS Limitation
+
+If one reverse proxy handler contains multiple different HTTPS upstream hostnames, HTTPS pinning is skipped for those HTTPS upstreams to avoid TLS SNI mismatch. In that case, hostname dials are kept for those HTTPS upstreams.
+
+HTTP upstreams in the same handler are still eligible for pinning.
 
 ---
 

@@ -1,5 +1,5 @@
 import SettingsClient from "./SettingsClient";
-import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getSetting } from "@/src/lib/settings";
+import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getSetting, getUpstreamDnsResolutionSettings } from "@/src/lib/settings";
 import { getInstanceMode, getSlaveLastSync, getSlaveMasterToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvSlaveInstances } from "@/src/lib/instance-sync";
 import { listInstances } from "@/src/lib/models/instances";
 import { requireAdmin } from "@/src/lib/auth";
@@ -11,17 +11,18 @@ export default async function SettingsPage() {
   const modeFromEnv = isInstanceModeFromEnv();
   const tokenFromEnv = isSyncTokenFromEnv();
 
-  const [general, cloudflare, authentik, metrics, logging, dns, instanceMode] = await Promise.all([
+  const [general, cloudflare, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode] = await Promise.all([
     getGeneralSettings(),
     getCloudflareSettings(),
     getAuthentikSettings(),
     getMetricsSettings(),
     getLoggingSettings(),
     getDnsSettings(),
+    getUpstreamDnsResolutionSettings(),
     getInstanceMode()
   ]);
 
-  const [overrideGeneral, overrideCloudflare, overrideAuthentik, overrideMetrics, overrideLogging, overrideDns] =
+  const [overrideGeneral, overrideCloudflare, overrideAuthentik, overrideMetrics, overrideLogging, overrideDns, overrideUpstreamDnsResolution] =
     instanceMode === "slave"
       ? await Promise.all([
           getSetting("general"),
@@ -29,9 +30,10 @@ export default async function SettingsPage() {
           getSetting("authentik"),
           getSetting("metrics"),
           getSetting("logging"),
-          getSetting("dns")
+          getSetting("dns"),
+          getSetting("upstream_dns_resolution")
         ])
-      : [null, null, null, null, null, null];
+      : [null, null, null, null, null, null, null];
 
   const [slaveToken, slaveLastSync] = instanceMode === "slave"
     ? await Promise.all([getSlaveMasterToken(), getSlaveLastSync()])
@@ -52,6 +54,7 @@ export default async function SettingsPage() {
       metrics={metrics}
       logging={logging}
       dns={dns}
+      upstreamDnsResolution={upstreamDnsResolution}
       instanceSync={{
         mode: instanceMode,
         modeFromEnv,
@@ -62,7 +65,8 @@ export default async function SettingsPage() {
           authentik: overrideAuthentik !== null,
           metrics: overrideMetrics !== null,
           logging: overrideLogging !== null,
-          dns: overrideDns !== null
+          dns: overrideDns !== null,
+          upstreamDnsResolution: overrideUpstreamDnsResolution !== null
         },
         slave: instanceMode === "slave" ? {
           hasToken: Boolean(slaveToken),

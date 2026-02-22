@@ -20,6 +20,7 @@ const DEFAULT_AUTHENTIK_HEADERS = [
 ];
 
 const DEFAULT_AUTHENTIK_TRUSTED_PROXIES = ["private_ranges"];
+const VALID_UPSTREAM_DNS_FAMILIES: UpstreamDnsAddressFamily[] = ["ipv6", "ipv4", "both"];
 
 // Load Balancer Types
 export type LoadBalancingPolicy = "random" | "round_robin" | "least_conn" | "ip_hash" | "first" | "header" | "cookie" | "uri_hash";
@@ -135,6 +136,23 @@ type DnsResolverMeta = {
   timeout?: string;
 };
 
+export type UpstreamDnsAddressFamily = "ipv6" | "ipv4" | "both";
+
+export type UpstreamDnsResolutionConfig = {
+  enabled: boolean | null;
+  family: UpstreamDnsAddressFamily | null;
+};
+
+export type UpstreamDnsResolutionInput = {
+  enabled?: boolean | null;
+  family?: UpstreamDnsAddressFamily | null;
+};
+
+type UpstreamDnsResolutionMeta = {
+  enabled?: boolean;
+  family?: UpstreamDnsAddressFamily;
+};
+
 export type ProxyHostAuthentikConfig = {
   enabled: boolean;
   outpostDomain: string | null;
@@ -174,6 +192,7 @@ type ProxyHostMeta = {
   authentik?: ProxyHostAuthentikMeta;
   load_balancer?: LoadBalancerMeta;
   dns_resolver?: DnsResolverMeta;
+  upstream_dns_resolution?: UpstreamDnsResolutionMeta;
 };
 
 export type ProxyHost = {
@@ -197,6 +216,7 @@ export type ProxyHost = {
   authentik: ProxyHostAuthentikConfig | null;
   load_balancer: LoadBalancerConfig | null;
   dns_resolver: DnsResolverConfig | null;
+  upstream_dns_resolution: UpstreamDnsResolutionConfig | null;
 };
 
 export type ProxyHostInput = {
@@ -217,6 +237,7 @@ export type ProxyHostInput = {
   authentik?: ProxyHostAuthentikInput | null;
   load_balancer?: LoadBalancerInput | null;
   dns_resolver?: DnsResolverInput | null;
+  upstream_dns_resolution?: UpstreamDnsResolutionInput | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -428,6 +449,25 @@ function sanitizeDnsResolverMeta(meta: DnsResolverMeta | undefined): DnsResolver
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
+function sanitizeUpstreamDnsResolutionMeta(
+  meta: UpstreamDnsResolutionMeta | undefined
+): UpstreamDnsResolutionMeta | undefined {
+  if (!meta) {
+    return undefined;
+  }
+
+  const normalized: UpstreamDnsResolutionMeta = {};
+  if (meta.enabled !== undefined) {
+    normalized.enabled = Boolean(meta.enabled);
+  }
+
+  if (meta.family && VALID_UPSTREAM_DNS_FAMILIES.includes(meta.family)) {
+    normalized.family = meta.family;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 function serializeMeta(meta: ProxyHostMeta | null | undefined) {
   if (!meta) {
     return null;
@@ -458,6 +498,11 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.dns_resolver = dnsResolver;
   }
 
+  const upstreamDnsResolution = sanitizeUpstreamDnsResolutionMeta(meta.upstream_dns_resolution);
+  if (upstreamDnsResolution) {
+    normalized.upstream_dns_resolution = upstreamDnsResolution;
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
 }
 
@@ -472,7 +517,8 @@ function parseMeta(value: string | null): ProxyHostMeta {
       custom_pre_handlers_json: normalizeMetaValue(parsed.custom_pre_handlers_json ?? null) ?? undefined,
       authentik: sanitizeAuthentikMeta(parsed.authentik),
       load_balancer: sanitizeLoadBalancerMeta(parsed.load_balancer),
-      dns_resolver: sanitizeDnsResolverMeta(parsed.dns_resolver)
+      dns_resolver: sanitizeDnsResolverMeta(parsed.dns_resolver),
+      upstream_dns_resolution: sanitizeUpstreamDnsResolutionMeta(parsed.upstream_dns_resolution)
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -825,6 +871,38 @@ function normalizeDnsResolverInput(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
+function normalizeUpstreamDnsResolutionInput(
+  input: UpstreamDnsResolutionInput | null | undefined,
+  existing: UpstreamDnsResolutionMeta | undefined
+): UpstreamDnsResolutionMeta | undefined {
+  if (input === undefined) {
+    return existing;
+  }
+  if (input === null) {
+    return undefined;
+  }
+
+  const next: UpstreamDnsResolutionMeta = { ...(existing ?? {}) };
+
+  if (input.enabled !== undefined) {
+    if (input.enabled === null) {
+      delete next.enabled;
+    } else {
+      next.enabled = Boolean(input.enabled);
+    }
+  }
+
+  if (input.family !== undefined) {
+    if (input.family && VALID_UPSTREAM_DNS_FAMILIES.includes(input.family)) {
+      next.family = input.family;
+    } else {
+      delete next.family;
+    }
+  }
+
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
 function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): string | null {
   const next: ProxyHostMeta = { ...existing };
 
@@ -870,6 +948,18 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
       next.dns_resolver = dnsResolver;
     } else {
       delete next.dns_resolver;
+    }
+  }
+
+  if (input.upstream_dns_resolution !== undefined) {
+    const upstreamDnsResolution = normalizeUpstreamDnsResolutionInput(
+      input.upstream_dns_resolution,
+      existing.upstream_dns_resolution
+    );
+    if (upstreamDnsResolution) {
+      next.upstream_dns_resolution = upstreamDnsResolution;
+    } else {
+      delete next.upstream_dns_resolution;
     }
   }
 
@@ -1131,6 +1221,38 @@ function dehydrateDnsResolver(config: DnsResolverConfig | null): DnsResolverMeta
   return meta;
 }
 
+function hydrateUpstreamDnsResolution(meta: UpstreamDnsResolutionMeta | undefined): UpstreamDnsResolutionConfig | null {
+  if (!meta) {
+    return null;
+  }
+
+  const enabled = meta.enabled === undefined ? null : Boolean(meta.enabled);
+  const family = meta.family && VALID_UPSTREAM_DNS_FAMILIES.includes(meta.family) ? meta.family : null;
+
+  return {
+    enabled,
+    family
+  };
+}
+
+function dehydrateUpstreamDnsResolution(
+  config: UpstreamDnsResolutionConfig | null
+): UpstreamDnsResolutionMeta | undefined {
+  if (!config) {
+    return undefined;
+  }
+
+  const meta: UpstreamDnsResolutionMeta = {};
+  if (config.enabled !== null) {
+    meta.enabled = Boolean(config.enabled);
+  }
+  if (config.family && VALID_UPSTREAM_DNS_FAMILIES.includes(config.family)) {
+    meta.family = config.family;
+  }
+
+  return Object.keys(meta).length > 0 ? meta : undefined;
+}
+
 function parseProxyHost(row: ProxyHostRow): ProxyHost {
   const meta = parseMeta(row.meta ?? null);
   return {
@@ -1153,7 +1275,8 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     custom_pre_handlers_json: meta.custom_pre_handlers_json ?? null,
     authentik: hydrateAuthentik(meta.authentik),
     load_balancer: hydrateLoadBalancer(meta.load_balancer),
-    dns_resolver: hydrateDnsResolver(meta.dns_resolver)
+    dns_resolver: hydrateDnsResolver(meta.dns_resolver),
+    upstream_dns_resolution: hydrateUpstreamDnsResolution(meta.upstream_dns_resolution)
   };
 }
 
@@ -1232,7 +1355,8 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     custom_pre_handlers_json: existing.custom_pre_handlers_json ?? undefined,
     authentik: dehydrateAuthentik(existing.authentik),
     load_balancer: dehydrateLoadBalancer(existing.load_balancer),
-    dns_resolver: dehydrateDnsResolver(existing.dns_resolver)
+    dns_resolver: dehydrateDnsResolver(existing.dns_resolver),
+    upstream_dns_resolution: dehydrateUpstreamDnsResolution(existing.upstream_dns_resolution)
   };
   const meta = buildMeta(existingMeta, input);
 

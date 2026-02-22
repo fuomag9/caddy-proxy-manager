@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { useFormState } from "react-dom";
 import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import type { GeneralSettings, AuthentikSettings, MetricsSettings, LoggingSettings, DnsSettings } from "@/src/lib/settings";
+import type {
+  GeneralSettings,
+  AuthentikSettings,
+  MetricsSettings,
+  LoggingSettings,
+  DnsSettings,
+  UpstreamDnsResolutionSettings
+} from "@/src/lib/settings";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
@@ -11,6 +18,7 @@ import {
   updateMetricsSettingsAction,
   updateLoggingSettingsAction,
   updateDnsSettingsAction,
+  updateUpstreamDnsResolutionSettingsAction,
   updateInstanceModeAction,
   updateSlaveMasterTokenAction,
   createSlaveInstanceAction,
@@ -30,6 +38,7 @@ type Props = {
   metrics: MetricsSettings | null;
   logging: LoggingSettings | null;
   dns: DnsSettings | null;
+  upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   instanceSync: {
     mode: "standalone" | "master" | "slave";
     modeFromEnv: boolean;
@@ -41,6 +50,7 @@ type Props = {
       metrics: boolean;
       logging: boolean;
       dns: boolean;
+      upstreamDnsResolution: boolean;
     };
     slave: {
       hasToken: boolean;
@@ -64,13 +74,26 @@ type Props = {
   };
 };
 
-export default function SettingsClient({ general, cloudflare, authentik, metrics, logging, dns, instanceSync }: Props) {
+export default function SettingsClient({
+  general,
+  cloudflare,
+  authentik,
+  metrics,
+  logging,
+  dns,
+  upstreamDnsResolution,
+  instanceSync
+}: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
   const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
   const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
   const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
   const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
   const [dnsState, dnsFormAction] = useFormState(updateDnsSettingsAction, null);
+  const [upstreamDnsResolutionState, upstreamDnsResolutionFormAction] = useFormState(
+    updateUpstreamDnsResolutionSettingsAction,
+    null
+  );
   const [instanceModeState, instanceModeFormAction] = useFormState(updateInstanceModeAction, null);
   const [slaveTokenState, slaveTokenFormAction] = useFormState(updateSlaveMasterTokenAction, null);
   const [slaveInstanceState, slaveInstanceFormAction] = useFormState(createSlaveInstanceAction, null);
@@ -84,6 +107,9 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
   const [metricsOverride, setMetricsOverride] = useState(instanceSync.overrides.metrics);
   const [loggingOverride, setLoggingOverride] = useState(instanceSync.overrides.logging);
   const [dnsOverride, setDnsOverride] = useState(instanceSync.overrides.dns);
+  const [upstreamDnsResolutionOverride, setUpstreamDnsResolutionOverride] = useState(
+    instanceSync.overrides.upstreamDnsResolution
+  );
 
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
@@ -482,6 +508,64 @@ export default function SettingsClient({ general, cloudflare, authentik, metrics
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save DNS settings
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            Upstream DNS Pinning
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Optionally resolve upstream hostnames when applying config and pin reverse proxy upstream dials to IP addresses.
+            This can avoid runtime DNS churn and lets you force IPv6, IPv4, or both (IPv6 preferred).
+          </Typography>
+          <Stack component="form" action={upstreamDnsResolutionFormAction} spacing={2}>
+            {upstreamDnsResolutionState?.message && (
+              <Alert severity={upstreamDnsResolutionState.success ? "success" : "error"}>
+                {upstreamDnsResolutionState.message}
+              </Alert>
+            )}
+            {isSlave && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    name="overrideEnabled"
+                    checked={upstreamDnsResolutionOverride}
+                    onChange={(event) => setUpstreamDnsResolutionOverride(event.target.checked)}
+                  />
+                }
+                label="Override master settings"
+              />
+            )}
+            <FormControlLabel
+              control={<Checkbox name="enabled" defaultChecked={upstreamDnsResolution?.enabled ?? false} disabled={isSlave && !upstreamDnsResolutionOverride} />}
+              label="Enable upstream DNS pinning during config apply"
+            />
+            <TextField
+              name="family"
+              label="Address Family Preference"
+              select
+              defaultValue={upstreamDnsResolution?.family ?? "both"}
+              helperText="Both resolves AAAA + A with IPv6 preferred ordering."
+              disabled={isSlave && !upstreamDnsResolutionOverride}
+              fullWidth
+            >
+              <MenuItem value="both">Both (Prefer IPv6)</MenuItem>
+              <MenuItem value="ipv6">IPv6 only</MenuItem>
+              <MenuItem value="ipv4">IPv4 only</MenuItem>
+            </TextField>
+            <Alert severity="info">
+              Host-level settings can override this default. Resolution happens at config save/reload time and resolved IPs are written into
+              Caddy's active config. If one handler has multiple different HTTPS upstream hostnames, HTTPS pinning is skipped for those
+              HTTPS upstreams to avoid SNI mismatch.
+            </Alert>
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">
+                Save upstream DNS pinning settings
               </Button>
             </Box>
           </Stack>

@@ -5,7 +5,7 @@ import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings } from "@/src/lib/settings";
 import type { CloudflareSettings } from "@/src/lib/settings";
 
 type ActionResult = {
@@ -14,6 +14,7 @@ type ActionResult = {
 };
 
 const MIN_TOKEN_LENGTH = 32;
+const VALID_UPSTREAM_DNS_FAMILIES = ["ipv6", "ipv4", "both"] as const;
 
 /**
  * Validates that a sync token meets minimum security requirements.
@@ -319,6 +320,66 @@ export async function updateDnsSettingsAction(_prevState: ActionResult | null, f
   } catch (error) {
     console.error("Failed to save DNS settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save DNS settings" };
+  }
+}
+
+export async function updateUpstreamDnsResolutionSettingsAction(
+  _prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("upstream_dns_resolution");
+      try {
+        await applyCaddyConfig();
+        revalidatePath("/settings");
+        return { success: true, message: "Upstream DNS resolution settings reset to master defaults" };
+      } catch (error) {
+        console.error("Failed to apply Caddy config:", error);
+        revalidatePath("/settings");
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        await syncInstances();
+        return {
+          success: true,
+          message: `Settings reset, but could not apply to Caddy: ${errorMsg}`
+        };
+      }
+    }
+
+    const enabled = formData.get("enabled") === "on";
+    const familyRaw = formData.get("family") ? String(formData.get("family")).trim() : "both";
+    if (!VALID_UPSTREAM_DNS_FAMILIES.includes(familyRaw as typeof VALID_UPSTREAM_DNS_FAMILIES[number])) {
+      return { success: false, message: "Invalid address family selection" };
+    }
+
+    await saveUpstreamDnsResolutionSettings({
+      enabled,
+      family: familyRaw as "ipv6" | "ipv4" | "both"
+    });
+
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      return { success: true, message: "Upstream DNS resolution settings saved and applied successfully" };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await syncInstances();
+      return {
+        success: true,
+        message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
+      };
+    }
+  } catch (error) {
+    console.error("Failed to save upstream DNS resolution settings:", error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to save upstream DNS resolution settings"
+    };
   }
 }
 

@@ -3,7 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
-import { createProxyHost, deleteProxyHost, updateProxyHost, type ProxyHostAuthentikInput, type LoadBalancerInput, type LoadBalancingPolicy, type DnsResolverInput } from "@/src/lib/models/proxy-hosts";
+import {
+  createProxyHost,
+  deleteProxyHost,
+  updateProxyHost,
+  type ProxyHostAuthentikInput,
+  type LoadBalancerInput,
+  type LoadBalancingPolicy,
+  type DnsResolverInput,
+  type UpstreamDnsResolutionInput
+} from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings } from "@/src/lib/settings";
 
@@ -159,6 +168,7 @@ function parseOptionalNumber(value: FormDataEntryValue | null): number | null {
 }
 
 const VALID_LB_POLICIES: LoadBalancingPolicy[] = ["random", "round_robin", "least_conn", "ip_hash", "first", "header", "cookie", "uri_hash"];
+const VALID_UPSTREAM_DNS_FAMILIES = ["ipv6", "ipv4", "both"] as const;
 
 function parseLoadBalancerConfig(formData: FormData): LoadBalancerInput | undefined {
   if (!formData.has("lb_present")) {
@@ -326,6 +336,33 @@ function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefine
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function parseUpstreamDnsResolutionConfig(formData: FormData): UpstreamDnsResolutionInput | undefined {
+  if (!formData.has("upstream_dns_resolution_present")) {
+    return undefined;
+  }
+
+  const modeRaw = parseOptionalText(formData.get("upstream_dns_resolution_mode")) ?? "inherit";
+  const familyRaw = parseOptionalText(formData.get("upstream_dns_resolution_family")) ?? "inherit";
+
+  const result: UpstreamDnsResolutionInput = {};
+
+  if (modeRaw === "enabled") {
+    result.enabled = true;
+  } else if (modeRaw === "disabled") {
+    result.enabled = false;
+  } else if (modeRaw === "inherit") {
+    result.enabled = null;
+  }
+
+  if (familyRaw === "inherit") {
+    result.family = null;
+  } else if (VALID_UPSTREAM_DNS_FAMILIES.includes(familyRaw as typeof VALID_UPSTREAM_DNS_FAMILIES[number])) {
+    result.family = familyRaw as "ipv6" | "ipv4" | "both";
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 export async function createProxyHostAction(
   _prevState: ActionState = INITIAL_ACTION_STATE,
   formData: FormData
@@ -362,7 +399,8 @@ export async function createProxyHostAction(
         custom_reverse_proxy_json: parseOptionalText(formData.get("custom_reverse_proxy_json")),
         authentik: parseAuthentikConfig(formData),
         load_balancer: parseLoadBalancerConfig(formData),
-        dns_resolver: parseDnsResolverConfig(formData)
+        dns_resolver: parseDnsResolverConfig(formData),
+        upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData)
       },
       userId
     );
@@ -431,7 +469,8 @@ export async function updateProxyHostAction(
           : undefined,
         authentik: parseAuthentikConfig(formData),
         load_balancer: parseLoadBalancerConfig(formData),
-        dns_resolver: parseDnsResolverConfig(formData)
+        dns_resolver: parseDnsResolverConfig(formData),
+        upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData)
       },
       userId
     );

@@ -1,9 +1,22 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { Resolver } from "node:dns/promises";
 import { join } from "node:path";
+import { isIP } from "node:net";
 import crypto from "node:crypto";
 import db, { nowIso } from "./db";
 import { config } from "./config";
-import { getCloudflareSettings, getGeneralSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, setSetting } from "./settings";
+import {
+  getCloudflareSettings,
+  getGeneralSettings,
+  getMetricsSettings,
+  getLoggingSettings,
+  getDnsSettings,
+  getUpstreamDnsResolutionSettings,
+  setSetting,
+  type DnsSettings,
+  type UpstreamDnsAddressFamily,
+  type UpstreamDnsResolutionSettings
+} from "./settings";
 import { syncInstances } from "./instance-sync";
 import {
   accessListEntries,
@@ -55,12 +68,18 @@ type DnsResolverMeta = {
   timeout?: string;
 };
 
+type UpstreamDnsResolutionMeta = {
+  enabled?: boolean;
+  family?: UpstreamDnsAddressFamily;
+};
+
 type ProxyHostMeta = {
   custom_reverse_proxy_json?: string;
   custom_pre_handlers_json?: string;
   authentik?: ProxyHostAuthentikMeta;
   load_balancer?: LoadBalancerMeta;
   dns_resolver?: DnsResolverMeta;
+  upstream_dns_resolution?: UpstreamDnsResolutionMeta;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -231,6 +250,406 @@ function parseCustomHandlers(value: string | null | undefined): Record<string, u
   return handlers;
 }
 
+const VALID_UPSTREAM_DNS_FAMILIES: UpstreamDnsAddressFamily[] = ["ipv6", "ipv4", "both"];
+
+type ParsedUpstreamTarget = {
+  original: string;
+  dial: string;
+  scheme: "http" | "https" | null;
+  host: string | null;
+  port: string | null;
+};
+
+type UpstreamDnsResolutionRouteConfig = {
+  enabled: boolean | null;
+  family: UpstreamDnsAddressFamily | null;
+};
+
+type EffectiveUpstreamDnsResolution = {
+  enabled: boolean;
+  family: UpstreamDnsAddressFamily;
+};
+
+function formatDialAddress(host: string, port: string) {
+  return isIP(host) === 6 ? `[${host}]:${port}` : `${host}:${port}`;
+}
+
+function parseHostPort(value: string): { host: string; port: string } | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("[")) {
+    const closeIndex = trimmed.indexOf("]");
+    if (closeIndex <= 1) {
+      return null;
+    }
+    const host = trimmed.slice(1, closeIndex);
+    const remainder = trimmed.slice(closeIndex + 1);
+    if (!remainder.startsWith(":")) {
+      return null;
+    }
+    const port = remainder.slice(1).trim();
+    if (!port) {
+      return null;
+    }
+    return { host, port };
+  }
+
+  const firstColon = trimmed.indexOf(":");
+  const lastColon = trimmed.lastIndexOf(":");
+  if (firstColon === -1 || firstColon !== lastColon) {
+    return null;
+  }
+
+  const host = trimmed.slice(0, lastColon).trim();
+  const port = trimmed.slice(lastColon + 1).trim();
+  if (!host || !port) {
+    return null;
+  }
+
+  return { host, port };
+}
+
+function parseUpstreamTarget(upstream: string): ParsedUpstreamTarget {
+  const trimmed = upstream.trim();
+  if (!trimmed) {
+    return {
+      original: upstream,
+      dial: upstream,
+      scheme: null,
+      host: null,
+      port: null
+    };
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      const scheme = url.protocol === "https:" ? "https" : "http";
+      const port = url.port || (scheme === "https" ? "443" : "80");
+      const host = url.hostname;
+      return {
+        original: trimmed,
+        dial: formatDialAddress(host, port),
+        scheme,
+        host,
+        port
+      };
+    }
+  } catch {
+    // Ignore and parse as host:port below.
+  }
+
+  const parsed = parseHostPort(trimmed);
+  if (!parsed) {
+    return {
+      original: trimmed,
+      dial: trimmed,
+      scheme: null,
+      host: null,
+      port: null
+    };
+  }
+
+  return {
+    original: trimmed,
+    dial: formatDialAddress(parsed.host, parsed.port),
+    scheme: null,
+    host: parsed.host,
+    port: parsed.port
+  };
+}
+
+function toDurationMs(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const regex = /(\d+(?:\.\d+)?)(ms|s|m|h)/g;
+  let total = 0;
+  let matched = false;
+  let consumed = 0;
+
+  while (true) {
+    const match = regex.exec(trimmed);
+    if (!match) {
+      break;
+    }
+
+    matched = true;
+    consumed += match[0].length;
+    const valueNum = Number.parseFloat(match[1]);
+    if (!Number.isFinite(valueNum)) {
+      return null;
+    }
+    const unit = match[2];
+    if (unit === "ms") {
+      total += valueNum;
+    } else if (unit === "s") {
+      total += valueNum * 1000;
+    } else if (unit === "m") {
+      total += valueNum * 60_000;
+    } else if (unit === "h") {
+      total += valueNum * 3_600_000;
+    }
+  }
+
+  if (!matched || consumed !== trimmed.length) {
+    return null;
+  }
+
+  const rounded = Math.round(total);
+  return rounded > 0 ? rounded : null;
+}
+
+function parseUpstreamDnsResolutionConfig(
+  meta: UpstreamDnsResolutionMeta | undefined | null
+): UpstreamDnsResolutionRouteConfig | null {
+  if (!meta) {
+    return null;
+  }
+
+  const enabled = typeof meta.enabled === "boolean" ? meta.enabled : null;
+  const family = meta.family && VALID_UPSTREAM_DNS_FAMILIES.includes(meta.family) ? meta.family : null;
+
+  if (enabled === null && family === null) {
+    return null;
+  }
+
+  return {
+    enabled,
+    family
+  };
+}
+
+function resolveEffectiveUpstreamDnsResolution(
+  globalSetting: UpstreamDnsResolutionSettings | null,
+  hostSetting: UpstreamDnsResolutionRouteConfig | null
+): EffectiveUpstreamDnsResolution {
+  const globalFamily = globalSetting?.family && VALID_UPSTREAM_DNS_FAMILIES.includes(globalSetting.family)
+    ? globalSetting.family
+    : "both";
+  const globalEnabled = Boolean(globalSetting?.enabled);
+
+  return {
+    enabled: hostSetting?.enabled ?? globalEnabled,
+    family: hostSetting?.family ?? globalFamily
+  };
+}
+
+function getLookupServers(dnsConfig: DnsResolverRouteConfig | null, globalDnsSettings: DnsSettings | null): string[] {
+  if (dnsConfig && dnsConfig.enabled && dnsConfig.resolvers.length > 0) {
+    const servers = [...dnsConfig.resolvers];
+    if (dnsConfig.fallbacks && dnsConfig.fallbacks.length > 0) {
+      servers.push(...dnsConfig.fallbacks);
+    }
+    return servers;
+  }
+
+  if (globalDnsSettings?.enabled && Array.isArray(globalDnsSettings.resolvers) && globalDnsSettings.resolvers.length > 0) {
+    const servers = [...globalDnsSettings.resolvers];
+    if (Array.isArray(globalDnsSettings.fallbacks) && globalDnsSettings.fallbacks.length > 0) {
+      servers.push(...globalDnsSettings.fallbacks);
+    }
+    return servers;
+  }
+
+  return [];
+}
+
+function getLookupTimeoutMs(dnsConfig: DnsResolverRouteConfig | null, globalDnsSettings: DnsSettings | null): number | null {
+  const hostTimeout = toDurationMs(dnsConfig?.timeout ?? null);
+  if (hostTimeout !== null) {
+    return hostTimeout;
+  }
+
+  if (globalDnsSettings?.enabled) {
+    const globalTimeout = toDurationMs(globalDnsSettings.timeout ?? null);
+    if (globalTimeout !== null) {
+      return globalTimeout;
+    }
+  }
+
+  return null;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number | null, timeoutLabel: string): Promise<T> {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return promise;
+  }
+
+  let timeoutHandle: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(`${timeoutLabel} timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
+async function resolveHostnameAddresses(
+  resolver: Resolver,
+  hostname: string,
+  family: UpstreamDnsAddressFamily,
+  timeoutMs: number | null
+): Promise<string[]> {
+  const errors: string[] = [];
+  const resolved: string[] = [];
+  const seen = new Set<string>();
+
+  const resolve6 = async () => {
+    try {
+      return await withTimeout(resolver.resolve6(hostname), timeoutMs, `AAAA lookup for ${hostname}`);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+      return [];
+    }
+  };
+
+  const resolve4 = async () => {
+    try {
+      return await withTimeout(resolver.resolve4(hostname), timeoutMs, `A lookup for ${hostname}`);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+      return [];
+    }
+  };
+
+  const pushUnique = (addresses: string[]) => {
+    for (const address of addresses) {
+      if (!seen.has(address)) {
+        seen.add(address);
+        resolved.push(address);
+      }
+    }
+  };
+
+  if (family === "ipv6") {
+    pushUnique(await resolve6());
+  } else if (family === "ipv4") {
+    pushUnique(await resolve4());
+  } else {
+    pushUnique(await resolve6());
+    pushUnique(await resolve4());
+  }
+
+  if (resolved.length === 0 && errors.length > 0) {
+    throw new Error(errors.join("; "));
+  }
+
+  return resolved;
+}
+
+type ResolveUpstreamsResult = {
+  upstreams: Array<{ dial: string }>;
+  hasHttpsUpstream: boolean;
+  httpsTlsServerName: string | null;
+};
+
+async function resolveUpstreamDials(
+  row: ProxyHostRow,
+  upstreams: string[],
+  dnsConfig: DnsResolverRouteConfig | null,
+  globalDnsSettings: DnsSettings | null,
+  dnsResolution: EffectiveUpstreamDnsResolution
+): Promise<ResolveUpstreamsResult> {
+  const parsedTargets = upstreams.map(parseUpstreamTarget);
+  const hasHttpsUpstream = parsedTargets.some((target) => target.scheme === "https");
+
+  if (!dnsResolution.enabled) {
+    return {
+      upstreams: parsedTargets.map((target) => ({ dial: target.dial })),
+      hasHttpsUpstream,
+      httpsTlsServerName: null
+    };
+  }
+
+  const httpsHostnames = Array.from(
+    new Set(
+      parsedTargets
+        .filter((target) => target.scheme === "https" && target.host && target.port && isIP(target.host) === 0)
+        .map((target) => target.host as string)
+    )
+  );
+  const canResolveHttps = httpsHostnames.length <= 1;
+  if (!canResolveHttps) {
+    console.warn(
+      `[caddy] Skipping DNS pinning for HTTPS upstreams on host "${row.name}" because multiple TLS server names are configured.`
+    );
+  }
+
+  const resolver = new Resolver();
+  const lookupServers = getLookupServers(dnsConfig, globalDnsSettings);
+  if (lookupServers.length > 0) {
+    try {
+      resolver.setServers(lookupServers);
+    } catch (error) {
+      console.warn(`[caddy] Failed to set custom DNS servers for upstream pinning`, error);
+    }
+  }
+  const timeoutMs = getLookupTimeoutMs(dnsConfig, globalDnsSettings);
+
+  const dials: string[] = [];
+  for (const target of parsedTargets) {
+    if (!target.host || !target.port || isIP(target.host) !== 0) {
+      dials.push(target.dial);
+      continue;
+    }
+
+    if (target.scheme === "https" && !canResolveHttps) {
+      dials.push(target.dial);
+      continue;
+    }
+
+    try {
+      const addresses = await resolveHostnameAddresses(resolver, target.host, dnsResolution.family, timeoutMs);
+      if (addresses.length === 0) {
+        dials.push(target.dial);
+        continue;
+      }
+      for (const address of addresses) {
+        dials.push(formatDialAddress(address, target.port));
+      }
+    } catch (error) {
+      console.warn(
+        `[caddy] Failed to resolve upstream "${target.original}" for host "${row.name}", falling back to hostname dial.`,
+        error
+      );
+      dials.push(target.dial);
+    }
+  }
+
+  const dedupedDials: Array<{ dial: string }> = [];
+  const seen = new Set<string>();
+  for (const dial of dials) {
+    if (!seen.has(dial)) {
+      seen.add(dial);
+      dedupedDials.push({ dial });
+    }
+  }
+
+  return {
+    upstreams: dedupedDials,
+    hasHttpsUpstream,
+    httpsTlsServerName: canResolveHttps && httpsHostnames.length === 1 ? httpsHostnames[0] : null
+  };
+}
+
 function writeCertificateFiles(cert: CertificateRow) {
   if (cert.type !== "imported" || !cert.certificate_pem || !cert.private_key_pem) {
     return null;
@@ -286,12 +705,17 @@ function collectCertificateUsage(rows: ProxyHostRow[], certificates: Map<number,
   return { usage, autoManagedDomains };
 }
 
-function buildProxyRoutes(
+type BuildProxyRoutesOptions = {
+  globalDnsSettings: DnsSettings | null;
+  globalUpstreamDnsResolutionSettings: UpstreamDnsResolutionSettings | null;
+};
+
+async function buildProxyRoutes(
   rows: ProxyHostRow[],
   accessAccounts: Map<number, AccessListEntryRow[]>,
   tlsReadyCertificates: Set<number>,
-  autoManagedDomains: Set<string>
-): CaddyHttpRoute[] {
+  options: BuildProxyRoutesOptions
+): Promise<CaddyHttpRoute[]> {
   const routes: CaddyHttpRoute[] = [];
 
   for (const row of rows) {
@@ -373,25 +797,24 @@ function buildProxyRoutes(
       }
     }
 
-    // Parse upstream URLs to extract host:port for Caddy's dial field
-    const parsedUpstreams = upstreams.map((upstream) => {
-      try {
-        const url = new URL(upstream);
-        // Use default ports if not specified: 443 for https, 80 for http
-        const port = url.port || (url.protocol === "https:" ? "443" : "80");
-        const dial = `${url.hostname}:${port}`;
-        return { dial };
-      } catch {
-        // If URL parsing fails, use the upstream as-is
-        return { dial: upstream };
-      }
-    });
-
-    const hasHttpsUpstream = upstreams.some((upstream) => upstream.startsWith("https://"));
+    const lbConfig = parseLoadBalancerConfig(meta.load_balancer);
+    const dnsConfig = parseDnsResolverConfig(meta.dns_resolver);
+    const hostDnsResolutionConfig = parseUpstreamDnsResolutionConfig(meta.upstream_dns_resolution);
+    const effectiveDnsResolution = resolveEffectiveUpstreamDnsResolution(
+      options.globalUpstreamDnsResolutionSettings,
+      hostDnsResolutionConfig
+    );
+    const resolvedUpstreams = await resolveUpstreamDials(
+      row,
+      upstreams,
+      dnsConfig,
+      options.globalDnsSettings,
+      effectiveDnsResolution
+    );
 
     const reverseProxyHandler: Record<string, unknown> = {
       handler: "reverse_proxy",
-      upstreams: parsedUpstreams
+      upstreams: resolvedUpstreams.upstreams
     };
 
     // Authentik outpost handler will be added later after protected paths
@@ -450,21 +873,23 @@ function buildProxyRoutes(
     }
 
     // Configure TLS transport for HTTPS upstreams
-    if (hasHttpsUpstream) {
+    if (resolvedUpstreams.hasHttpsUpstream) {
+      const tlsTransport: Record<string, unknown> = row.skip_https_hostname_validation
+        ? {
+            insecure_skip_verify: true
+          }
+        : {};
+      if (resolvedUpstreams.httpsTlsServerName) {
+        tlsTransport.server_name = resolvedUpstreams.httpsTlsServerName;
+      }
+
       reverseProxyHandler.transport = {
         protocol: "http",
-        tls: row.skip_https_hostname_validation
-          ? {
-              insecure_skip_verify: true
-            }
-          : {}
+        tls: tlsTransport
       };
     }
 
     // Configure load balancing and health checks
-    const lbConfig = parseLoadBalancerConfig(meta.load_balancer);
-    const dnsConfig = parseDnsResolverConfig(meta.dns_resolver);
-
     if (lbConfig) {
       const loadBalancing = buildLoadBalancingConfig(lbConfig);
       if (loadBalancing) {
@@ -738,7 +1163,7 @@ function buildTlsConnectionPolicies(
 async function buildTlsAutomation(
   usage: Map<number, CertificateUsage>,
   autoManagedDomains: Set<string>,
-  options: { acmeEmail?: string }
+  options: { acmeEmail?: string; dnsSettings?: DnsSettings | null }
 ) {
   const managedEntries = Array.from(usage.values()).filter(
     (entry) => entry.certificate.type === "managed" && Boolean(entry.certificate.auto_renew)
@@ -755,7 +1180,7 @@ async function buildTlsAutomation(
   const cloudflare = await getCloudflareSettings();
   const hasCloudflare = cloudflare && cloudflare.apiToken;
 
-  const dnsSettings = await getDnsSettings();
+  const dnsSettings = options.dnsSettings ?? await getDnsSettings();
   const hasDnsResolvers = dnsSettings && dnsSettings.enabled && dnsSettings.resolvers && dnsSettings.resolvers.length > 0;
 
   // Build DNS resolvers list (primary + fallbacks)
@@ -956,9 +1381,14 @@ async function buildCaddyDocument() {
   }, new Map());
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
-  const generalSettings = await getGeneralSettings();
+  const [generalSettings, dnsSettings, upstreamDnsResolutionSettings] = await Promise.all([
+    getGeneralSettings(),
+    getDnsSettings(),
+    getUpstreamDnsResolutionSettings()
+  ]);
   const { tlsApp, managedCertificateIds } = await buildTlsAutomation(certificateUsage, autoManagedDomains, {
-    acmeEmail: generalSettings?.acmeEmail
+    acmeEmail: generalSettings?.acmeEmail,
+    dnsSettings
   });
   const { policies: tlsConnectionPolicies, readyCertificates } = buildTlsConnectionPolicies(
     certificateUsage,
@@ -966,9 +1396,15 @@ async function buildCaddyDocument() {
     autoManagedDomains
   );
 
-  const httpRoutes: CaddyHttpRoute[] = [
-    ...buildProxyRoutes(proxyHostRows, accessMap, readyCertificates, autoManagedDomains)
-  ];
+  const httpRoutes: CaddyHttpRoute[] = await buildProxyRoutes(
+    proxyHostRows,
+    accessMap,
+    readyCertificates,
+    {
+      globalDnsSettings: dnsSettings,
+      globalUpstreamDnsResolutionSettings: upstreamDnsResolutionSettings
+    }
+  );
 
   const hasTls = tlsConnectionPolicies.length > 0;
 

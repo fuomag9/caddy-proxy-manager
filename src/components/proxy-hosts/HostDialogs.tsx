@@ -17,6 +17,7 @@ import { AuthentikFields } from "./AuthentikFields";
 import { DnsResolverFields } from "./DnsResolverFields";
 import { LoadBalancerFields } from "./LoadBalancerFields";
 import { SettingsToggles } from "./SettingsToggles";
+import { UpstreamDnsResolutionFields } from "./UpstreamDnsResolutionFields";
 import { UpstreamInput } from "./UpstreamInput";
 
 export function CreateHostDialog({
@@ -124,6 +125,7 @@ export function CreateHostDialog({
                 <AuthentikFields defaults={authentikDefaults} authentik={initialData?.authentik} />
                 <LoadBalancerFields loadBalancer={initialData?.load_balancer} />
                 <DnsResolverFields dnsResolver={initialData?.dns_resolver} />
+                <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstream_dns_resolution} />
             </Stack>
         </AppDialog>
     );
@@ -220,6 +222,7 @@ export function EditHostDialog({
                 <AuthentikFields authentik={host.authentik} />
                 <LoadBalancerFields loadBalancer={host.load_balancer} />
                 <DnsResolverFields dnsResolver={host.dns_resolver} />
+                <UpstreamDnsResolutionFields upstreamDnsResolution={host.upstream_dns_resolution} />
             </Stack>
         </AppDialog>
     );

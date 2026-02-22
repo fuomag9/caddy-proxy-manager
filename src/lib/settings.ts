@@ -38,6 +38,13 @@ export type DnsSettings = {
   timeout?: string; // DNS query timeout (e.g., "5s")
 };
 
+export type UpstreamDnsAddressFamily = "ipv6" | "ipv4" | "both";
+
+export type UpstreamDnsResolutionSettings = {
+  enabled: boolean;
+  family: UpstreamDnsAddressFamily;
+};
+
 type InstanceMode = "standalone" | "master" | "slave";
 
 const INSTANCE_MODE_KEY = "instance_mode";
@@ -156,4 +163,12 @@ export async function getDnsSettings(): Promise<DnsSettings | null> {
 
 export async function saveDnsSettings(settings: DnsSettings): Promise<void> {
   await setSetting("dns", settings);
+}
+
+export async function getUpstreamDnsResolutionSettings(): Promise<UpstreamDnsResolutionSettings | null> {
+  return await getEffectiveSetting<UpstreamDnsResolutionSettings>("upstream_dns_resolution");
+}
+
+export async function saveUpstreamDnsResolutionSettings(settings: UpstreamDnsResolutionSettings): Promise<void> {
+  await setSetting("upstream_dns_resolution", settings);
 }
