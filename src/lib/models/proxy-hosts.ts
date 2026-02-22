@@ -984,10 +984,11 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
 
   if (input.geoblock !== undefined) {
     const geoblockMeta = dehydrateGeoBlock(input.geoblock ?? null);
-    if (geoblockMeta.geoblock) {
-      next.geoblock = geoblockMeta.geoblock;
+    if (geoblockMeta) {
+      next.geoblock = geoblockMeta;
     } else {
       delete next.geoblock;
+      delete next.geoblock_mode;
     }
   }
 
@@ -1285,13 +1286,13 @@ function dehydrateUpstreamDnsResolution(
   return Object.keys(meta).length > 0 ? meta : undefined;
 }
 
-function hydrateGeoBlock(meta: ProxyHostMeta): GeoBlockSettings | null {
-  return meta.geoblock ?? null;
+function hydrateGeoBlock(meta: GeoBlockSettings | undefined): GeoBlockSettings | null {
+  return meta ?? null;
 }
 
-function dehydrateGeoBlock(geoblock: GeoBlockSettings | null): Partial<ProxyHostMeta> {
-  if (!geoblock) return {};
-  return { geoblock };
+function dehydrateGeoBlock(geoblock: GeoBlockSettings | null): GeoBlockSettings | undefined {
+  if (!geoblock) return undefined;
+  return geoblock;
 }
 
 function parseProxyHost(row: ProxyHostRow): ProxyHost {
@@ -1318,7 +1319,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     load_balancer: hydrateLoadBalancer(meta.load_balancer),
     dns_resolver: hydrateDnsResolver(meta.dns_resolver),
     upstream_dns_resolution: hydrateUpstreamDnsResolution(meta.upstream_dns_resolution),
-    geoblock: hydrateGeoBlock(meta),
+    geoblock: hydrateGeoBlock(meta.geoblock),
     geoblock_mode: meta.geoblock_mode ?? "merge"
   };
 }
@@ -1400,7 +1401,7 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     load_balancer: dehydrateLoadBalancer(existing.load_balancer),
     dns_resolver: dehydrateDnsResolver(existing.dns_resolver),
     upstream_dns_resolution: dehydrateUpstreamDnsResolution(existing.upstream_dns_resolution),
-    ...dehydrateGeoBlock(existing.geoblock),
+    geoblock: dehydrateGeoBlock(existing.geoblock),
     ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {})
   };
   const meta = buildMeta(existingMeta, input);
