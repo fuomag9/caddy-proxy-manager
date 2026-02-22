@@ -12,3 +12,4 @@ tsconfig.tsbuildinfo
 /caddy-config
 .DS_Store
 /caddy-proxy-manager.wiki
+docs/plans
