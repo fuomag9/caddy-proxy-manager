@@ -12,10 +12,12 @@ import {
   getLoggingSettings,
   getDnsSettings,
   getUpstreamDnsResolutionSettings,
+  getGeoBlockSettings,
   setSetting,
   type DnsSettings,
   type UpstreamDnsAddressFamily,
-  type UpstreamDnsResolutionSettings
+  type UpstreamDnsResolutionSettings,
+  type GeoBlockSettings
 } from "./settings";
 import { syncInstances } from "./instance-sync";
 import {
@@ -23,6 +25,7 @@ import {
   certificates,
   proxyHosts
 } from "./db/schema";
+import { type GeoBlockMode } from "./models/proxy-hosts";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -80,6 +83,8 @@ type ProxyHostMeta = {
   load_balancer?: LoadBalancerMeta;
   dns_resolver?: DnsResolverMeta;
   upstream_dns_resolution?: UpstreamDnsResolutionMeta;
+  geoblock?: GeoBlockSettings;
+  geoblock_mode?: GeoBlockMode;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -705,9 +710,96 @@ function collectCertificateUsage(rows: ProxyHostRow[], certificates: Map<number,
   return { usage, autoManagedDomains };
 }
 
+function mergeGeoBlockSettings(
+  global: GeoBlockSettings,
+  host: GeoBlockSettings
+): GeoBlockSettings {
+  return {
+    enabled: host.enabled,
+    block_countries: [...(global.block_countries ?? []), ...(host.block_countries ?? [])],
+    block_continents: [...(global.block_continents ?? []), ...(host.block_continents ?? [])],
+    block_asns: [...(global.block_asns ?? []), ...(host.block_asns ?? [])],
+    block_cidrs: [...(global.block_cidrs ?? []), ...(host.block_cidrs ?? [])],
+    block_ips: [...(global.block_ips ?? []), ...(host.block_ips ?? [])],
+    allow_countries: [...(global.allow_countries ?? []), ...(host.allow_countries ?? [])],
+    allow_continents: [...(global.allow_continents ?? []), ...(host.allow_continents ?? [])],
+    allow_asns: [...(global.allow_asns ?? []), ...(host.allow_asns ?? [])],
+    allow_cidrs: [...(global.allow_cidrs ?? []), ...(host.allow_cidrs ?? [])],
+    allow_ips: [...(global.allow_ips ?? []), ...(host.allow_ips ?? [])],
+    trusted_proxies: [...(global.trusted_proxies ?? []), ...(host.trusted_proxies ?? [])],
+    // Host config wins for scalar fields
+    response_status: host.response_status ?? global.response_status ?? 403,
+    response_body: host.response_body ?? global.response_body ?? "Forbidden",
+    response_headers: { ...(global.response_headers ?? {}), ...(host.response_headers ?? {}) },
+    redirect_url: host.redirect_url ?? global.redirect_url ?? "",
+  };
+}
+
+function resolveEffectiveGeoBlock(
+  global: GeoBlockSettings | null,
+  host: { geoblock: GeoBlockSettings | null; geoblock_mode: GeoBlockMode }
+): GeoBlockSettings | null {
+  const hostConfig = host.geoblock;
+  const globalConfig = global;
+
+  // Neither configured or enabled
+  if (!hostConfig?.enabled && !globalConfig?.enabled) return null;
+
+  // Host override mode: use host config only
+  if (hostConfig && host.geoblock_mode === "override") {
+    return hostConfig.enabled ? hostConfig : null;
+  }
+
+  // Host merge mode: merge global + host
+  if (hostConfig && globalConfig) {
+    return mergeGeoBlockSettings(globalConfig, hostConfig);
+  }
+
+  // Only one configured
+  if (hostConfig?.enabled) return hostConfig;
+  if (globalConfig?.enabled) return globalConfig;
+
+  return null;
+}
+
+function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> {
+  const handler: Record<string, unknown> = {
+    handler: "blocker",
+    geoip_db: "/usr/share/GeoIP/GeoLite2-Country.mmdb",
+    asn_db: "/usr/share/GeoIP/GeoLite2-ASN.mmdb",
+  };
+
+  if (config.block_countries?.length) handler.block_countries = config.block_countries;
+  if (config.block_continents?.length) handler.block_continents = config.block_continents;
+  if (config.block_asns?.length) handler.block_asns = config.block_asns;
+  if (config.block_cidrs?.length) handler.block_cidrs = config.block_cidrs;
+  if (config.block_ips?.length) handler.block_ips = config.block_ips;
+
+  if (config.allow_countries?.length) handler.allow_countries = config.allow_countries;
+  if (config.allow_continents?.length) handler.allow_continents = config.allow_continents;
+  if (config.allow_asns?.length) handler.allow_asns = config.allow_asns;
+  if (config.allow_cidrs?.length) handler.allow_cidrs = config.allow_cidrs;
+  if (config.allow_ips?.length) handler.allow_ips = config.allow_ips;
+
+  if (config.trusted_proxies?.length) handler.trusted_proxies = config.trusted_proxies;
+
+  if (config.redirect_url) {
+    handler.redirect_url = config.redirect_url;
+  } else {
+    if (config.response_status) handler.response_status = config.response_status;
+    if (config.response_body) handler.response_body = config.response_body;
+    if (config.response_headers && Object.keys(config.response_headers).length) {
+      handler.response_headers = config.response_headers;
+    }
+  }
+
+  return handler;
+}
+
 type BuildProxyRoutesOptions = {
   globalDnsSettings: DnsSettings | null;
   globalUpstreamDnsResolutionSettings: UpstreamDnsResolutionSettings | null;
+  globalGeoBlock?: GeoBlockSettings | null;
 };
 
 async function buildProxyRoutes(
@@ -746,6 +838,14 @@ async function buildProxyRoutes(
     const meta = parseJson<ProxyHostMeta>(row.meta, {});
     const authentik = parseAuthentikConfig(meta.authentik);
     const hostRoutes: CaddyHttpRoute[] = [];
+
+    const effectiveGeoBlock = resolveEffectiveGeoBlock(
+      options.globalGeoBlock ?? null,
+      { geoblock: meta.geoblock ?? null, geoblock_mode: meta.geoblock_mode ?? "merge" }
+    );
+    if (effectiveGeoBlock) {
+      handlers.unshift(buildBlockerHandler(effectiveGeoBlock));
+    }
 
     if (row.hsts_enabled) {
       const value = row.hsts_subdomains ? "max-age=63072000; includeSubDomains" : "max-age=63072000";
@@ -1381,10 +1481,11 @@ async function buildCaddyDocument() {
   }, new Map());
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
-  const [generalSettings, dnsSettings, upstreamDnsResolutionSettings] = await Promise.all([
+  const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock] = await Promise.all([
     getGeneralSettings(),
     getDnsSettings(),
-    getUpstreamDnsResolutionSettings()
+    getUpstreamDnsResolutionSettings(),
+    getGeoBlockSettings()
   ]);
   const { tlsApp, managedCertificateIds } = await buildTlsAutomation(certificateUsage, autoManagedDomains, {
     acmeEmail: generalSettings?.acmeEmail,
@@ -1402,7 +1503,8 @@ async function buildCaddyDocument() {
     readyCertificates,
     {
       globalDnsSettings: dnsSettings,
-      globalUpstreamDnsResolutionSettings: upstreamDnsResolutionSettings
+      globalUpstreamDnsResolutionSettings: upstreamDnsResolutionSettings,
+      globalGeoBlock
     }
   );
 
