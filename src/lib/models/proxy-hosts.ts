@@ -3,6 +3,7 @@ import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { proxyHosts } from "../db/schema";
 import { desc, eq } from "drizzle-orm";
+import { getAuthentikSettings, getGeoBlockSettings, GeoBlockSettings } from "../settings";
 
 const DEFAULT_AUTHENTIK_HEADERS = [
   "X-Authentik-Username",
@@ -21,6 +22,8 @@ const DEFAULT_AUTHENTIK_HEADERS = [
 
 const DEFAULT_AUTHENTIK_TRUSTED_PROXIES = ["private_ranges"];
 const VALID_UPSTREAM_DNS_FAMILIES: UpstreamDnsAddressFamily[] = ["ipv6", "ipv4", "both"];
+
+export type GeoBlockMode = "merge" | "override";
 
 // Load Balancer Types
 export type LoadBalancingPolicy = "random" | "round_robin" | "least_conn" | "ip_hash" | "first" | "header" | "cookie" | "uri_hash";
@@ -193,6 +196,8 @@ type ProxyHostMeta = {
   load_balancer?: LoadBalancerMeta;
   dns_resolver?: DnsResolverMeta;
   upstream_dns_resolution?: UpstreamDnsResolutionMeta;
+  geoblock?: GeoBlockSettings;
+  geoblock_mode?: GeoBlockMode;
 };
 
 export type ProxyHost = {
@@ -217,6 +222,8 @@ export type ProxyHost = {
   load_balancer: LoadBalancerConfig | null;
   dns_resolver: DnsResolverConfig | null;
   upstream_dns_resolution: UpstreamDnsResolutionConfig | null;
+  geoblock: GeoBlockSettings | null;
+  geoblock_mode: GeoBlockMode;
 };
 
 export type ProxyHostInput = {
@@ -238,6 +245,8 @@ export type ProxyHostInput = {
   load_balancer?: LoadBalancerInput | null;
   dns_resolver?: DnsResolverInput | null;
   upstream_dns_resolution?: UpstreamDnsResolutionInput | null;
+  geoblock?: GeoBlockSettings | null;
+  geoblock_mode?: GeoBlockMode;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -503,6 +512,14 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.upstream_dns_resolution = upstreamDnsResolution;
   }
 
+  if (meta.geoblock) {
+    normalized.geoblock = meta.geoblock;
+  }
+
+  if (meta.geoblock_mode) {
+    normalized.geoblock_mode = meta.geoblock_mode;
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
 }
 
@@ -518,7 +535,9 @@ function parseMeta(value: string | null): ProxyHostMeta {
       authentik: sanitizeAuthentikMeta(parsed.authentik),
       load_balancer: sanitizeLoadBalancerMeta(parsed.load_balancer),
       dns_resolver: sanitizeDnsResolverMeta(parsed.dns_resolver),
-      upstream_dns_resolution: sanitizeUpstreamDnsResolutionMeta(parsed.upstream_dns_resolution)
+      upstream_dns_resolution: sanitizeUpstreamDnsResolutionMeta(parsed.upstream_dns_resolution),
+      geoblock: parsed.geoblock,
+      geoblock_mode: parsed.geoblock_mode
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -963,6 +982,19 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
+  if (input.geoblock !== undefined) {
+    const geoblockMeta = dehydrateGeoBlock(input.geoblock ?? null);
+    if (geoblockMeta.geoblock) {
+      next.geoblock = geoblockMeta.geoblock;
+    } else {
+      delete next.geoblock;
+    }
+  }
+
+  if (input.geoblock_mode !== undefined) {
+    next.geoblock_mode = input.geoblock_mode;
+  }
+
   return serializeMeta(next);
 }
 
@@ -1253,6 +1285,15 @@ function dehydrateUpstreamDnsResolution(
   return Object.keys(meta).length > 0 ? meta : undefined;
 }
 
+function hydrateGeoBlock(meta: ProxyHostMeta): GeoBlockSettings | null {
+  return meta.geoblock ?? null;
+}
+
+function dehydrateGeoBlock(geoblock: GeoBlockSettings | null): Partial<ProxyHostMeta> {
+  if (!geoblock) return {};
+  return { geoblock };
+}
+
 function parseProxyHost(row: ProxyHostRow): ProxyHost {
   const meta = parseMeta(row.meta ?? null);
   return {
@@ -1276,7 +1317,9 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     authentik: hydrateAuthentik(meta.authentik),
     load_balancer: hydrateLoadBalancer(meta.load_balancer),
     dns_resolver: hydrateDnsResolver(meta.dns_resolver),
-    upstream_dns_resolution: hydrateUpstreamDnsResolution(meta.upstream_dns_resolution)
+    upstream_dns_resolution: hydrateUpstreamDnsResolution(meta.upstream_dns_resolution),
+    geoblock: hydrateGeoBlock(meta),
+    geoblock_mode: meta.geoblock_mode ?? "merge"
   };
 }
 
@@ -1356,7 +1399,9 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     authentik: dehydrateAuthentik(existing.authentik),
     load_balancer: dehydrateLoadBalancer(existing.load_balancer),
     dns_resolver: dehydrateDnsResolver(existing.dns_resolver),
-    upstream_dns_resolution: dehydrateUpstreamDnsResolution(existing.upstream_dns_resolution)
+    upstream_dns_resolution: dehydrateUpstreamDnsResolution(existing.upstream_dns_resolution),
+    ...dehydrateGeoBlock(existing.geoblock),
+    ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {})
   };
   const meta = buildMeta(existingMeta, input);
 
