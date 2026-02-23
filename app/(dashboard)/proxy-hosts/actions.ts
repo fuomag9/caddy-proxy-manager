@@ -11,10 +11,11 @@ import {
   type LoadBalancerInput,
   type LoadBalancingPolicy,
   type DnsResolverInput,
-  type UpstreamDnsResolutionInput
+  type UpstreamDnsResolutionInput,
+  type GeoBlockMode
 } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
-import { getCloudflareSettings } from "@/src/lib/settings";
+import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
 
 function parseCsv(value: FormDataEntryValue | null): string[] {
   if (!value || typeof value !== "string") {
@@ -280,6 +281,65 @@ function parseLoadBalancerConfig(formData: FormData): LoadBalancerInput | undefi
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function parseGeoBlockConfig(formData: FormData): {
+  geoblock: GeoBlockSettings | null;
+  geoblock_mode: GeoBlockMode;
+} {
+  if (!formData.has("geoblock_present")) {
+    return { geoblock: null, geoblock_mode: "merge" };
+  }
+
+  const enabled = formData.get("geoblock_enabled") === "true";
+  const mode = (formData.get("geoblock_mode") ?? "merge") as GeoBlockMode;
+
+  // Helper to parse a comma-separated string field into a string array
+  const parseStringList = (key: string): string[] => {
+    const val = formData.get(key);
+    if (!val || typeof val !== "string") return [];
+    return val.split(",").map(s => s.trim()).filter(Boolean);
+  };
+
+  // Helper to parse a comma-separated string field into a number array
+  const parseNumberList = (key: string): number[] => {
+    return parseStringList(key)
+      .map(s => parseInt(s, 10))
+      .filter(n => !isNaN(n));
+  };
+
+  const config: GeoBlockSettings = {
+    enabled,
+    block_countries: parseStringList("geoblock_block_countries"),
+    block_continents: parseStringList("geoblock_block_continents"),
+    block_asns: parseNumberList("geoblock_block_asns"),
+    block_cidrs: parseStringList("geoblock_block_cidrs"),
+    block_ips: parseStringList("geoblock_block_ips"),
+    allow_countries: parseStringList("geoblock_allow_countries"),
+    allow_continents: parseStringList("geoblock_allow_continents"),
+    allow_asns: parseNumberList("geoblock_allow_asns"),
+    allow_cidrs: parseStringList("geoblock_allow_cidrs"),
+    allow_ips: parseStringList("geoblock_allow_ips"),
+    trusted_proxies: parseStringList("geoblock_trusted_proxies"),
+    response_status: parseInt(formData.get("geoblock_response_status") as string ?? "403", 10) || 403,
+    response_body: (formData.get("geoblock_response_body") as string) || "Forbidden",
+    response_headers: parseResponseHeaders(formData),
+    redirect_url: (formData.get("geoblock_redirect_url") as string) || "",
+  };
+
+  return { geoblock: config, geoblock_mode: mode };
+}
+
+// Helper: parse response headers from geoblock_response_headers_keys[] and geoblock_response_headers_values[]
+function parseResponseHeaders(formData: FormData): Record<string, string> {
+  const keys = formData.getAll("geoblock_response_headers_keys[]") as string[];
+  const values = formData.getAll("geoblock_response_headers_values[]") as string[];
+  const headers: Record<string, string> = {};
+  keys.forEach((key, i) => {
+    const trimmed = key.trim();
+    if (trimmed) headers[trimmed] = (values[i] ?? "").trim();
+  });
+  return headers;
+}
+
 function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefined {
   if (!formData.has("dns_present")) {
     return undefined;
@@ -400,7 +460,8 @@ export async function createProxyHostAction(
         authentik: parseAuthentikConfig(formData),
         load_balancer: parseLoadBalancerConfig(formData),
         dns_resolver: parseDnsResolverConfig(formData),
-        upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData)
+        upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
+        ...parseGeoBlockConfig(formData)
       },
       userId
     );
@@ -470,7 +531,8 @@ export async function updateProxyHostAction(
         authentik: parseAuthentikConfig(formData),
         load_balancer: parseLoadBalancerConfig(formData),
         dns_resolver: parseDnsResolverConfig(formData),
-        upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData)
+        upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
+        ...parseGeoBlockConfig(formData)
       },
       userId
     );
