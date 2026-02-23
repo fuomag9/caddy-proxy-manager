@@ -249,9 +249,9 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
         </Stack>
 
         {/* Mode selector (merge vs override) */}
+        <input type="hidden" name="geoblock_mode" value={mode} />
         {showModeSelector && (
           <Box>
-            <input type="hidden" name="geoblock_mode" value={mode} />
             <ToggleButtonGroup
               value={mode}
               exclusive
