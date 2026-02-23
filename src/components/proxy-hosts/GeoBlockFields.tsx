@@ -1,20 +1,30 @@
 "use client";
 
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Autocomplete,
   Box,
   Chip,
   Collapse,
   Divider,
-  FormControlLabel,
+  Grid,
   IconButton,
   Stack,
   Switch,
+  Tab,
+  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography
 } from "@mui/material";
-import { useState, KeyboardEvent } from "react";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import { useState, SyntheticEvent } from "react";
 import { GeoBlockSettings } from "@/src/lib/settings";
 import { GeoBlockMode } from "@/src/lib/models/proxy-hosts";
 
@@ -25,109 +35,73 @@ type TagInputProps = {
   label: string;
   initialValues?: string[];
   placeholder?: string;
+  helperText?: string;
   validate?: (value: string) => boolean;
   uppercase?: boolean;
 };
 
-function TagInput({ name, label, initialValues = [], placeholder, validate, uppercase = false }: TagInputProps) {
+function TagInput({ name, label, initialValues = [], placeholder, helperText, validate, uppercase = false }: TagInputProps) {
   const [tags, setTags] = useState<string[]>(initialValues);
-  const [inputValue, setInputValue] = useState("");
+
+  function processValue(raw: string): string {
+    return uppercase ? raw.trim().toUpperCase() : raw.trim();
+  }
 
   function addTag(raw: string) {
-    const value = uppercase ? raw.trim().toUpperCase() : raw.trim();
+    const value = processValue(raw);
     if (!value) return;
     if (validate && !validate(value)) return;
     if (tags.includes(value)) return;
     setTags((prev) => [...prev, value]);
-    setInputValue("");
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      addTag(inputValue);
-    } else if (e.key === "Backspace" && inputValue === "" && tags.length > 0) {
-      setTags((prev) => prev.slice(0, -1));
-    }
-  }
-
-  function handleBlur() {
-    if (inputValue.trim()) {
-      addTag(inputValue);
-    }
-  }
-
-  function removeTag(index: number) {
-    setTags((prev) => prev.filter((_, i) => i !== index));
   }
 
   return (
     <Box>
       <input type="hidden" name={name} value={tags.join(",")} />
-      <Box
-        sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 1,
-          p: 1,
-          minHeight: 56,
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 0.5,
-          alignItems: "flex-start",
-          "&:focus-within": {
-            borderColor: "primary.main",
-            borderWidth: "2px"
-          },
-          cursor: "text"
+      <Autocomplete
+        multiple
+        freeSolo
+        options={[]}
+        value={tags}
+        onChange={(_, newValue) => {
+          const processed = newValue.map((v) => processValue(v as string)).filter((v) => {
+            if (!v) return false;
+            if (validate && !validate(v)) return false;
+            return true;
+          });
+          // Deduplicate
+          setTags([...new Set(processed)]);
         }}
-        onClick={(e) => {
-          const input = (e.currentTarget as HTMLElement).querySelector("input[type='text']") as HTMLInputElement | null;
-          input?.focus();
+        onBlur={(e) => {
+          const input = (e.target as HTMLInputElement).value;
+          if (input.trim()) addTag(input);
         }}
-      >
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{
-            position: "relative",
-            top: -8,
-            left: 4,
-            bgcolor: "background.paper",
-            px: 0.5,
-            display: "block",
-            width: "fit-content",
-            mb: -1
-          }}
-        >
-          {label}
-        </Typography>
-        {tags.map((tag, i) => (
-          <Chip
-            key={i}
-            label={tag}
+        renderTags={(value, getTagProps) =>
+          value.map((option, index) => {
+            const { key, ...tagProps } = getTagProps({ index });
+            return <Chip key={key} label={option} size="small" {...tagProps} />;
+          })
+        }
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label={label}
+            placeholder={tags.length === 0 ? placeholder : undefined}
+            helperText={helperText}
             size="small"
-            onDelete={() => removeTag(i)}
+            onKeyDown={(e) => {
+              if (e.key === "," || e.key === " ") {
+                e.preventDefault();
+                const input = (e.target as HTMLInputElement).value;
+                if (input.trim()) {
+                  addTag(input);
+                  (e.target as HTMLInputElement).value = "";
+                }
+              }
+            }}
           />
-        ))}
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleBlur}
-          placeholder={tags.length === 0 ? placeholder : ""}
-          style={{
-            border: "none",
-            outline: "none",
-            background: "transparent",
-            fontSize: "0.875rem",
-            flexGrow: 1,
-            minWidth: 80,
-            padding: "2px 4px"
-          }}
-        />
-      </Box>
+        )}
+      />
     </Box>
   );
 }
@@ -141,63 +115,51 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
     Object.entries(initialHeaders).map(([key, value]) => ({ key, value }))
   );
 
-  function addRow() {
-    setRows((prev) => [...prev, { key: "", value: "" }]);
-  }
-
-  function removeRow(index: number) {
-    setRows((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function updateRow(index: number, field: "key" | "value", val: string) {
-    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: val } : row)));
-  }
-
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={rows.length > 0 ? 1 : 0}>
         <Typography variant="body2" color="text.secondary">
-          Response Headers
+          Custom Response Headers
         </Typography>
-        <IconButton
-          size="small"
-          onClick={addRow}
-          title="Add header"
-          sx={{ fontSize: "1.25rem", fontWeight: "bold" }}
-        >
-          +
-        </IconButton>
+        <Tooltip title="Add header">
+          <IconButton size="small" onClick={() => setRows((prev) => [...prev, { key: "", value: "" }])}>
+            <AddIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Stack>
-      {rows.length === 0 && (
+      {rows.length === 0 ? (
         <Typography variant="caption" color="text.disabled">
-          No custom response headers. Click + to add one.
+          No custom headers — click + to add one.
         </Typography>
+      ) : (
+        <Stack spacing={1}>
+          {rows.map((row, i) => (
+            <Stack key={i} direction="row" spacing={1} alignItems="flex-start">
+              <input type="hidden" name="geoblock_response_headers_keys[]" value={row.key} />
+              <input type="hidden" name="geoblock_response_headers_values[]" value={row.value} />
+              <TextField
+                label="Header"
+                value={row.key}
+                onChange={(e) => setRows((prev) => prev.map((r, j) => j === i ? { ...r, key: e.target.value } : r))}
+                size="small"
+                fullWidth
+              />
+              <TextField
+                label="Value"
+                value={row.value}
+                onChange={(e) => setRows((prev) => prev.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
+                size="small"
+                fullWidth
+              />
+              <Tooltip title="Remove">
+                <IconButton size="small" color="error" onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))} sx={{ mt: 0.5 }}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          ))}
+        </Stack>
       )}
-      <Stack spacing={1}>
-        {rows.map((row, i) => (
-          <Stack key={i} direction="row" spacing={1} alignItems="center">
-            <input type="hidden" name="geoblock_response_headers_keys[]" value={row.key} />
-            <input type="hidden" name="geoblock_response_headers_values[]" value={row.value} />
-            <TextField
-              label="Header Name"
-              value={row.key}
-              onChange={(e) => updateRow(i, "key", e.target.value)}
-              size="small"
-              fullWidth
-            />
-            <TextField
-              label="Header Value"
-              value={row.value}
-              onChange={(e) => updateRow(i, "value", e.target.value)}
-              size="small"
-              fullWidth
-            />
-            <IconButton size="small" onClick={() => removeRow(i)} title="Remove header" color="error">
-              ×
-            </IconButton>
-          </Stack>
-        ))}
-      </Stack>
     </Box>
   );
 }
@@ -216,6 +178,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
   const initial = initialValues?.geoblock ?? null;
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
   const [mode, setMode] = useState<GeoBlockMode>(initialValues?.geoblock_mode ?? "merge");
+  const [rulesTab, setRulesTab] = useState(0);
 
   return (
     <Box
@@ -223,201 +186,229 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
         borderRadius: 2,
         border: "1px solid",
         borderColor: "warning.main",
-        bgcolor: "rgba(237, 108, 2, 0.05)",
-        p: 2.5
+        bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(237,108,2,0.06)" : "rgba(237,108,2,0.04)",
+        p: 2
       }}
     >
-      {/* Always-present sentinel */}
       <input type="hidden" name="geoblock_present" value="1" />
 
-      <Stack spacing={2}>
-        {/* Header row: title + toggle */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Box>
-            <Typography variant="subtitle1" fontWeight={600}>
-              Geo Blocking
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Block or allow traffic by country, continent, ASN, CIDR, or IP
-            </Typography>
-          </Box>
-          <Switch
-            name="geoblock_enabled"
-            checked={enabled}
-            onChange={(_, checked) => setEnabled(checked)}
-          />
-        </Stack>
+      {/* Header */}
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600}>
+            Geo Blocking
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Block or allow traffic by country, continent, ASN, CIDR, or IP
+          </Typography>
+        </Box>
+        <Switch
+          name="geoblock_enabled"
+          checked={enabled}
+          onChange={(_, checked) => setEnabled(checked)}
+        />
+      </Stack>
 
-        {/* Mode selector (merge vs override) */}
-        <input type="hidden" name="geoblock_mode" value={mode} />
-        {showModeSelector && (
-          <Box>
-            <ToggleButtonGroup
-              value={mode}
-              exclusive
-              size="small"
-              onChange={(_, newMode: GeoBlockMode | null) => {
-                if (newMode) setMode(newMode);
-              }}
-            >
-              <ToggleButton value="merge">Merge with global</ToggleButton>
-              <ToggleButton value="override">Override global</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
-        )}
+      {/* Mode selector */}
+      <input type="hidden" name="geoblock_mode" value={mode} />
+      {showModeSelector && (
+        <Box mt={1.5}>
+          <ToggleButtonGroup
+            value={mode}
+            exclusive
+            size="small"
+            onChange={(_, v: GeoBlockMode | null) => { if (v) setMode(v); }}
+          >
+            <ToggleButton value="merge">Merge with global</ToggleButton>
+            <ToggleButton value="override">Override global</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      )}
 
-        {/* Collapsible detail fields */}
-        <Collapse in={enabled} timeout="auto" unmountOnExit>
-          <Stack spacing={2.5}>
-            <Divider />
+      {/* Detail fields */}
+      <Collapse in={enabled} timeout="auto" unmountOnExit>
+        <Box mt={2}>
+          <Divider sx={{ mb: 2 }} />
 
-            {/* Block Rules */}
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Block Rules
-              </Typography>
-              <Stack spacing={1.5}>
+          {/* Block / Allow tabs */}
+          <Tabs
+            value={rulesTab}
+            onChange={(_: SyntheticEvent, v: number) => setRulesTab(v)}
+            variant="fullWidth"
+            sx={{ mb: 2, "& .MuiTab-root": { textTransform: "none", fontWeight: 500 } }}
+          >
+            <Tab label="Block Rules" />
+            <Tab label="Allow Rules" />
+          </Tabs>
+
+          {/* Block Rules */}
+          <Box hidden={rulesTab !== 0}>
+            <Grid container spacing={2}>
+              <Grid size={6}>
                 <TagInput
                   name="geoblock_block_countries"
-                  label="Block Countries (ISO 3166-1 alpha-2)"
+                  label="Countries"
                   initialValues={initial?.block_countries ?? []}
-                  placeholder="CN, RU, ..."
+                  placeholder="CN, RU..."
+                  helperText="ISO 3166-1 alpha-2 codes"
                   uppercase
                 />
+              </Grid>
+              <Grid size={6}>
                 <TagInput
                   name="geoblock_block_continents"
-                  label="Block Continents"
+                  label="Continents"
                   initialValues={initial?.block_continents ?? []}
-                  placeholder="AS, EU, ..."
+                  placeholder="AS, EU..."
+                  helperText="AF AN AS EU NA OC SA"
                   uppercase
                 />
+              </Grid>
+              <Grid size={12}>
                 <TagInput
                   name="geoblock_block_asns"
-                  label="Block ASNs"
+                  label="ASNs"
                   initialValues={(initial?.block_asns ?? []).map(String)}
-                  placeholder="12345, ..."
+                  placeholder="13335, 15169..."
+                  helperText="Autonomous System Numbers"
                   validate={(v) => /^\d+$/.test(v)}
                 />
+              </Grid>
+              <Grid size={6}>
                 <TagInput
                   name="geoblock_block_cidrs"
-                  label="Block CIDRs"
+                  label="CIDRs"
                   initialValues={initial?.block_cidrs ?? []}
-                  placeholder="10.0.0.0/8, ..."
+                  placeholder="10.0.0.0/8..."
                 />
+              </Grid>
+              <Grid size={6}>
                 <TagInput
                   name="geoblock_block_ips"
-                  label="Block IPs"
+                  label="IPs"
                   initialValues={initial?.block_ips ?? []}
-                  placeholder="1.2.3.4, ..."
+                  placeholder="1.2.3.4..."
                 />
-              </Stack>
-            </Box>
+              </Grid>
+            </Grid>
+          </Box>
 
-            <Divider />
-
-            {/* Allow Rules */}
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Allow Rules{" "}
-                <Typography component="span" variant="caption" color="text.secondary">
-                  (override block rules)
-                </Typography>
-              </Typography>
-              <Stack spacing={1.5}>
+          {/* Allow Rules */}
+          <Box hidden={rulesTab !== 1}>
+            <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+              Allow rules take precedence over block rules.
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid size={6}>
                 <TagInput
                   name="geoblock_allow_countries"
-                  label="Allow Countries (ISO 3166-1 alpha-2)"
+                  label="Countries"
                   initialValues={initial?.allow_countries ?? []}
-                  placeholder="US, DE, ..."
+                  placeholder="US, DE..."
+                  helperText="ISO 3166-1 alpha-2 codes"
                   uppercase
                 />
+              </Grid>
+              <Grid size={6}>
                 <TagInput
                   name="geoblock_allow_continents"
-                  label="Allow Continents"
+                  label="Continents"
                   initialValues={initial?.allow_continents ?? []}
-                  placeholder="NA, EU, ..."
+                  placeholder="NA, EU..."
+                  helperText="AF AN AS EU NA OC SA"
                   uppercase
                 />
+              </Grid>
+              <Grid size={12}>
                 <TagInput
                   name="geoblock_allow_asns"
-                  label="Allow ASNs"
+                  label="ASNs"
                   initialValues={(initial?.allow_asns ?? []).map(String)}
-                  placeholder="12345, ..."
+                  placeholder="13335, 15169..."
+                  helperText="Autonomous System Numbers"
                   validate={(v) => /^\d+$/.test(v)}
                 />
+              </Grid>
+              <Grid size={6}>
                 <TagInput
                   name="geoblock_allow_cidrs"
-                  label="Allow CIDRs"
+                  label="CIDRs"
                   initialValues={initial?.allow_cidrs ?? []}
-                  placeholder="192.168.0.0/16, ..."
+                  placeholder="192.168.0.0/16..."
                 />
+              </Grid>
+              <Grid size={6}>
                 <TagInput
                   name="geoblock_allow_ips"
-                  label="Allow IPs"
+                  label="IPs"
                   initialValues={initial?.allow_ips ?? []}
-                  placeholder="5.6.7.8, ..."
+                  placeholder="5.6.7.8..."
                 />
-              </Stack>
-            </Box>
+              </Grid>
+            </Grid>
+          </Box>
 
-            <Divider />
-
-            {/* Trusted Proxies */}
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Trusted Proxies
-              </Typography>
-              <TagInput
-                name="geoblock_trusted_proxies"
-                label="Trusted Proxies (for X-Forwarded-For)"
-                initialValues={initial?.trusted_proxies ?? []}
-                placeholder="private_ranges, 10.0.0.0/8, ..."
-              />
-            </Box>
-
-            <Divider />
-
-            {/* Block Response */}
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Block Response
-              </Typography>
-              <Stack spacing={1.5}>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                  <TextField
-                    name="geoblock_response_status"
-                    label="Response Status Code"
-                    type="number"
-                    inputProps={{ min: 100, max: 599 }}
-                    defaultValue={initial?.response_status ?? 403}
-                    helperText="HTTP status code returned when blocked"
-                    fullWidth
-                    size="small"
+          {/* Advanced: Trusted Proxies + Block Response */}
+          <Box mt={2}>
+            <Accordion disableGutters elevation={0} sx={{ bgcolor: "transparent", border: "1px solid", borderColor: "divider", borderRadius: 1, "&:before": { display: "none" } }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 44, "& .MuiAccordionSummary-content": { my: 0.5 } }}>
+                <Typography variant="body2" fontWeight={500}>Trusted Proxies &amp; Block Response</Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack spacing={2}>
+                  <TagInput
+                    name="geoblock_trusted_proxies"
+                    label="Trusted Proxies"
+                    initialValues={initial?.trusted_proxies ?? []}
+                    placeholder="private_ranges, 10.0.0.0/8..."
+                    helperText="Used to parse X-Forwarded-For. Use private_ranges for all RFC-1918 ranges."
                   />
-                  <TextField
-                    name="geoblock_response_body"
-                    label="Response Body"
-                    defaultValue={initial?.response_body ?? "Forbidden"}
-                    helperText="Body text returned when blocked"
-                    fullWidth
-                    size="small"
-                  />
+
+                  <Divider />
+
+                  <Grid container spacing={2}>
+                    <Grid size={4}>
+                      <TextField
+                        name="geoblock_response_status"
+                        label="Status Code"
+                        type="number"
+                        inputProps={{ min: 100, max: 599 }}
+                        defaultValue={initial?.response_status ?? 403}
+                        helperText="HTTP status when blocked"
+                        fullWidth
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid size={8}>
+                      <TextField
+                        name="geoblock_response_body"
+                        label="Response Body"
+                        defaultValue={initial?.response_body ?? "Forbidden"}
+                        helperText="Body text returned to blocked clients"
+                        fullWidth
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid size={12}>
+                      <TextField
+                        name="geoblock_redirect_url"
+                        label="Redirect URL"
+                        defaultValue={initial?.redirect_url ?? ""}
+                        helperText="If set, sends a 302 redirect instead of status/body above"
+                        fullWidth
+                        size="small"
+                        placeholder="https://example.com/blocked"
+                      />
+                    </Grid>
+                  </Grid>
+
+                  <ResponseHeadersEditor initialHeaders={initial?.response_headers ?? {}} />
                 </Stack>
-                <TextField
-                  name="geoblock_redirect_url"
-                  label="Redirect URL (optional)"
-                  defaultValue={initial?.redirect_url ?? ""}
-                  helperText="If set, issues a 302 redirect instead of returning the status/body above"
-                  fullWidth
-                  size="small"
-                  placeholder="https://example.com/blocked"
-                />
-                <ResponseHeadersEditor initialHeaders={initial?.response_headers ?? {}} />
-              </Stack>
-            </Box>
-          </Stack>
-        </Collapse>
-      </Stack>
+              </AccordionDetails>
+            </Accordion>
+          </Box>
+        </Box>
+      </Collapse>
     </Box>
   );
 }
