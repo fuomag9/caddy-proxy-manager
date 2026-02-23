@@ -106,6 +106,7 @@ services:
   geoipupdate:
     container_name: geoipupdate-${HOSTNAME}
     image: ghcr.io/maxmind/geoipupdate
+    profiles: [geoipupdate]
     restart: always
     environment:
       - GEOIPUPDATE_ACCOUNT_ID=${GEOIPUPDATE_ACCOUNT_ID:-}
