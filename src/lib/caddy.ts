@@ -3,6 +3,8 @@ import { Resolver } from "node:dns/promises";
 import { join } from "node:path";
 import { isIP } from "node:net";
 import crypto from "node:crypto";
+import http from "node:http";
+import https from "node:https";
 import db, { nowIso } from "./db";
 import { config } from "./config";
 import {
@@ -1591,6 +1593,37 @@ async function buildCaddyDocument() {
   };
 }
 
+/**
+ * Plain HTTP/HTTPS request to the Caddy admin API using node:http.
+ * Avoids browser-security headers (Sec-Fetch-*) that native fetch sends,
+ * which would trigger Caddy's CORS origin enforcement.
+ */
+function caddyRequest(url: string, method: string, body?: string): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const lib = parsed.protocol === "https:" ? https : http;
+    const req = lib.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.pathname + parsed.search,
+        method,
+        headers: {
+          ...(body ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } : {})
+        }
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, text: data }));
+      }
+    );
+    req.on("error", reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
 export async function applyCaddyConfig() {
   const document = await buildCaddyDocument();
   const payload = JSON.stringify(document);
@@ -1598,18 +1631,10 @@ export async function applyCaddyConfig() {
   setSetting("caddy_config_hash", { hash, updated_at: nowIso() });
 
   try {
-    const response = await fetch(`${config.caddyApiUrl}/load`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Origin": config.caddyApiUrl
-      },
-      body: payload
-    });
+    const response = await caddyRequest(`${config.caddyApiUrl}/load`, "POST", payload);
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Caddy config load failed: ${response.status} ${text}`);
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`Caddy config load failed: ${response.status} ${response.text}`);
     }
 
     await syncInstances();

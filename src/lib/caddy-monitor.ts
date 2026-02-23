@@ -3,6 +3,8 @@
  * Monitors Caddy for restarts/crashes and automatically reapplies configuration
  */
 
+import http from "node:http";
+import https from "node:https";
 import { config } from "./config";
 import { applyCaddyConfig } from "./caddy";
 import { getSetting, setSetting } from "./settings";
@@ -34,24 +36,34 @@ let isMonitoring = false;
  */
 async function getCaddyConfigId(): Promise<string | null> {
   try {
-    const response = await fetch(`${config.caddyApiUrl}/config/`, {
-      method: "GET",
-      headers: { "Origin": config.caddyApiUrl },
-      signal: AbortSignal.timeout(5000)
+    const response = await new Promise<{ status: number; text: string; etag: string | null }>((resolve, reject) => {
+      const parsed = new URL(`${config.caddyApiUrl}/config/`);
+      const lib = parsed.protocol === "https:" ? https : http;
+      const req = lib.request(
+        { hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method: "GET" },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => resolve({ status: res.statusCode ?? 0, text: data, etag: res.headers.etag ?? null }));
+        }
+      );
+      req.setTimeout(5000, () => { req.destroy(); reject(new Error("timeout")); });
+      req.on("error", reject);
+      req.end();
     });
 
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       return null;
     }
 
     // Use ETag or compute a simple hash from the response
-    const etag = response.headers.get("etag");
+    const etag = response.etag;
     if (etag) {
       return etag;
     }
 
     // Fallback: use the config object's structure
-    const configData = await response.json();
+    const configData = JSON.parse(response.text);
     // Check if config is essentially empty (default state after restart)
     const isEmpty = !configData.apps || Object.keys(configData.apps).length === 0;
     return isEmpty ? "empty" : "configured";

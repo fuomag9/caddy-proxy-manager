@@ -49,4 +49,4 @@ ENV XDG_DATA_HOME=/data
 # Run as non-root user (fully rootless)
 USER caddy
 
-CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+CMD ["caddy", "run", "--resume", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
