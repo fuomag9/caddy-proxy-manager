@@ -289,7 +289,7 @@ function parseGeoBlockConfig(formData: FormData): {
     return { geoblock: null, geoblock_mode: "merge" };
   }
 
-  const enabled = formData.get("geoblock_enabled") === "true";
+  const enabled = parseCheckbox(formData.get("geoblock_enabled"));
   const mode = (formData.get("geoblock_mode") ?? "merge") as GeoBlockMode;
 
   // Helper to parse a comma-separated string field into a string array
@@ -319,10 +319,10 @@ function parseGeoBlockConfig(formData: FormData): {
     allow_cidrs: parseStringList("geoblock_allow_cidrs"),
     allow_ips: parseStringList("geoblock_allow_ips"),
     trusted_proxies: parseStringList("geoblock_trusted_proxies"),
-    response_status: parseInt(formData.get("geoblock_response_status") as string ?? "403", 10) || 403,
-    response_body: (formData.get("geoblock_response_body") as string) || "Forbidden",
+    response_status: parseOptionalNumber(formData.get("geoblock_response_status")) ?? 403,
+    response_body: parseOptionalText(formData.get("geoblock_response_body")) ?? "Forbidden",
     response_headers: parseResponseHeaders(formData),
-    redirect_url: (formData.get("geoblock_redirect_url") as string) || "",
+    redirect_url: parseOptionalText(formData.get("geoblock_redirect_url")) ?? "",
   };
 
   return { geoblock: config, geoblock_mode: mode };
