@@ -1601,7 +1601,8 @@ export async function applyCaddyConfig() {
     const response = await fetch(`${config.caddyApiUrl}/load`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Origin": config.caddyApiUrl
       },
       body: payload
     });

@@ -36,6 +36,7 @@ async function getCaddyConfigId(): Promise<string | null> {
   try {
     const response = await fetch(`${config.caddyApiUrl}/config/`, {
       method: "GET",
+      headers: { "Origin": config.caddyApiUrl },
       signal: AbortSignal.timeout(5000)
     });
 
