@@ -9,8 +9,10 @@ import type {
   MetricsSettings,
   LoggingSettings,
   DnsSettings,
-  UpstreamDnsResolutionSettings
+  UpstreamDnsResolutionSettings,
+  GeoBlockSettings
 } from "@/src/lib/settings";
+import { GeoBlockFields } from "@/src/components/proxy-hosts/GeoBlockFields";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
@@ -24,7 +26,8 @@ import {
   createSlaveInstanceAction,
   deleteSlaveInstanceAction,
   toggleSlaveInstanceAction,
-  syncSlaveInstancesAction
+  syncSlaveInstancesAction,
+  updateGeoBlockSettingsAction
 } from "./actions";
 
 type Props = {
@@ -39,6 +42,7 @@ type Props = {
   logging: LoggingSettings | null;
   dns: DnsSettings | null;
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
+  globalGeoBlock?: GeoBlockSettings | null;
   instanceSync: {
     mode: "standalone" | "master" | "slave";
     modeFromEnv: boolean;
@@ -82,6 +86,7 @@ export default function SettingsClient({
   logging,
   dns,
   upstreamDnsResolution,
+  globalGeoBlock,
   instanceSync
 }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
@@ -98,6 +103,7 @@ export default function SettingsClient({
   const [slaveTokenState, slaveTokenFormAction] = useFormState(updateSlaveMasterTokenAction, null);
   const [slaveInstanceState, slaveInstanceFormAction] = useFormState(createSlaveInstanceAction, null);
   const [syncState, syncFormAction] = useFormState(syncSlaveInstancesAction, null);
+  const [geoBlockState, geoBlockFormAction] = useFormState(updateGeoBlockSettingsAction, null);
 
   const isSlave = instanceSync.mode === "slave";
   const isMaster = instanceSync.mode === "master";
@@ -739,6 +745,33 @@ export default function SettingsClient({
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save logging settings
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            Global Geoblocking
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Configure default geoblocking rules applied to all proxy hosts. Per-host rules can merge with or override these global defaults.
+          </Typography>
+          <Stack component="form" action={geoBlockFormAction} spacing={2}>
+            {geoBlockState?.message && (
+              <Alert severity={geoBlockState.success ? "success" : "error"}>
+                {geoBlockState.message}
+              </Alert>
+            )}
+            <GeoBlockFields
+              initialValues={{ geoblock: globalGeoBlock ?? null, geoblock_mode: "merge" }}
+              showModeSelector={false}
+            />
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">
+                Save geoblocking settings
               </Button>
             </Box>
           </Stack>

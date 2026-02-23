@@ -5,8 +5,8 @@ import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings } from "@/src/lib/settings";
-import type { CloudflareSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings } from "@/src/lib/settings";
+import type { CloudflareSettings, GeoBlockSettings } from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
@@ -491,6 +491,93 @@ export async function toggleSlaveInstanceAction(formData: FormData): Promise<voi
   }
   await updateInstance(id, { enabled });
   revalidatePath("/settings");
+}
+
+function parseGeoBlockCheckbox(value: FormDataEntryValue | null): boolean {
+  return value === "on" || value === "true" || value === "1";
+}
+
+function parseGeoBlockStringList(key: string, formData: FormData): string[] {
+  const val = formData.get(key);
+  if (!val || typeof val !== "string") return [];
+  return val.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function parseGeoBlockNumberList(key: string, formData: FormData): number[] {
+  return parseGeoBlockStringList(key, formData)
+    .map((s) => parseInt(s, 10))
+    .filter((n) => !isNaN(n));
+}
+
+function parseGeoBlockResponseHeaders(formData: FormData): Record<string, string> {
+  const keys = formData.getAll("geoblock_response_headers_keys[]") as string[];
+  const values = formData.getAll("geoblock_response_headers_values[]") as string[];
+  const headers: Record<string, string> = {};
+  keys.forEach((key, i) => {
+    const trimmed = key.trim();
+    if (trimmed) headers[trimmed] = (values[i] ?? "").trim();
+  });
+  return headers;
+}
+
+export async function updateGeoBlockSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    const enabled = parseGeoBlockCheckbox(formData.get("geoblock_enabled"));
+
+    const statusRaw = formData.get("geoblock_response_status");
+    const statusNum = statusRaw && typeof statusRaw === "string" && statusRaw.trim() !== ""
+      ? Number(statusRaw.trim())
+      : NaN;
+    const responseStatus = Number.isFinite(statusNum) ? statusNum : 403;
+
+    const responseBodyRaw = formData.get("geoblock_response_body");
+    const responseBody = responseBodyRaw && typeof responseBodyRaw === "string" && responseBodyRaw.trim().length > 0
+      ? responseBodyRaw.trim()
+      : "Forbidden";
+
+    const redirectUrlRaw = formData.get("geoblock_redirect_url");
+    const redirectUrl = redirectUrlRaw && typeof redirectUrlRaw === "string" ? redirectUrlRaw.trim() : "";
+
+    const config: GeoBlockSettings = {
+      enabled,
+      block_countries: parseGeoBlockStringList("geoblock_block_countries", formData),
+      block_continents: parseGeoBlockStringList("geoblock_block_continents", formData),
+      block_asns: parseGeoBlockNumberList("geoblock_block_asns", formData),
+      block_cidrs: parseGeoBlockStringList("geoblock_block_cidrs", formData),
+      block_ips: parseGeoBlockStringList("geoblock_block_ips", formData),
+      allow_countries: parseGeoBlockStringList("geoblock_allow_countries", formData),
+      allow_continents: parseGeoBlockStringList("geoblock_allow_continents", formData),
+      allow_asns: parseGeoBlockNumberList("geoblock_allow_asns", formData),
+      allow_cidrs: parseGeoBlockStringList("geoblock_allow_cidrs", formData),
+      allow_ips: parseGeoBlockStringList("geoblock_allow_ips", formData),
+      trusted_proxies: parseGeoBlockStringList("geoblock_trusted_proxies", formData),
+      response_status: responseStatus,
+      response_body: responseBody,
+      response_headers: parseGeoBlockResponseHeaders(formData),
+      redirect_url: redirectUrl
+    };
+
+    await saveGeoBlockSettings(config);
+
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      return { success: true, message: "Geoblocking settings saved and applied successfully" };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      return {
+        success: true,
+        message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
+      };
+    }
+  } catch (error) {
+    console.error("Failed to save geoblocking settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save geoblocking settings" };
+  }
 }
 
 export async function syncSlaveInstancesAction(_prevState: ActionResult | null, _formData: FormData): Promise<ActionResult> {
