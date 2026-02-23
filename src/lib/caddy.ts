@@ -1580,7 +1580,8 @@ async function buildCaddyDocument() {
 
   return {
     admin: {
-      listen: "0.0.0.0:2019"
+      listen: "0.0.0.0:2019",
+      origins: ["caddy:2019", "localhost:2019", "localhost"]
     },
     ...loggingApp,
     apps: {
