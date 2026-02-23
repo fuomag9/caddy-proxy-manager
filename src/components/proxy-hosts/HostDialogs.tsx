@@ -19,6 +19,7 @@ import { LoadBalancerFields } from "./LoadBalancerFields";
 import { SettingsToggles } from "./SettingsToggles";
 import { UpstreamDnsResolutionFields } from "./UpstreamDnsResolutionFields";
 import { UpstreamInput } from "./UpstreamInput";
+import { GeoBlockFields } from "./GeoBlockFields";
 
 export function CreateHostDialog({
     open,
@@ -126,6 +127,7 @@ export function CreateHostDialog({
                 <LoadBalancerFields loadBalancer={initialData?.load_balancer} />
                 <DnsResolverFields dnsResolver={initialData?.dns_resolver} />
                 <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstream_dns_resolution} />
+                <GeoBlockFields />
             </Stack>
         </AppDialog>
     );
@@ -223,6 +225,12 @@ export function EditHostDialog({
                 <LoadBalancerFields loadBalancer={host.load_balancer} />
                 <DnsResolverFields dnsResolver={host.dns_resolver} />
                 <UpstreamDnsResolutionFields upstreamDnsResolution={host.upstream_dns_resolution} />
+                <GeoBlockFields
+                  initialValues={{
+                    geoblock: host.geoblock,
+                    geoblock_mode: host.geoblock_mode,
+                  }}
+                />
             </Stack>
         </AppDialog>
     );
