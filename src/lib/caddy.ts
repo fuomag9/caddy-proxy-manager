@@ -715,7 +715,7 @@ function mergeGeoBlockSettings(
   host: GeoBlockSettings
 ): GeoBlockSettings {
   return {
-    enabled: host.enabled,
+    enabled: host.enabled || global.enabled,
     block_countries: [...(global.block_countries ?? []), ...(host.block_countries ?? [])],
     block_continents: [...(global.block_continents ?? []), ...(host.block_continents ?? [])],
     block_asns: [...(global.block_asns ?? []), ...(host.block_asns ?? [])],
@@ -843,7 +843,7 @@ async function buildProxyRoutes(
       options.globalGeoBlock ?? null,
       { geoblock: meta.geoblock ?? null, geoblock_mode: meta.geoblock_mode ?? "merge" }
     );
-    if (effectiveGeoBlock) {
+    if (effectiveGeoBlock?.enabled) {
       handlers.unshift(buildBlockerHandler(effectiveGeoBlock));
     }
 
