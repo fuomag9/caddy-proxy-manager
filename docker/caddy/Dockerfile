@@ -6,7 +6,8 @@ FROM golang:1.26 AS builder
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 
 # Build Caddy with plugins
-RUN xcaddy build \
+# GOPROXY=direct bypasses the module proxy cache so the latest commit is always fetched
+RUN GOPROXY=direct xcaddy build \
     --with github.com/caddy-dns/cloudflare \
     --with github.com/mholt/caddy-l4 \
     --with github.com/fuomag9/caddy-blocker-plugin \
