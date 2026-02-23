@@ -569,6 +569,7 @@ export async function updateGeoBlockSettingsAction(_prevState: ActionResult | nu
       console.error("Failed to apply Caddy config:", error);
       revalidatePath("/settings");
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await syncInstances();
       return {
         success: true,
         message: `Settings saved, but could not apply to Caddy: ${errorMsg}`
