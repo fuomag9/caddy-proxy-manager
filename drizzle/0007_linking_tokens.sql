@@ -4,4 +4,5 @@ CREATE TABLE `linking_tokens` (
   `created_at` text NOT NULL,
   `expires_at` text NOT NULL
 );
+--> statement-breakpoint
 CREATE INDEX `linking_tokens_expires_at_idx` ON `linking_tokens` (`expires_at`);
