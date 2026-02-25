@@ -7,6 +7,7 @@ import {
   Autocomplete,
   Box,
   Chip,
+  CircularProgress,
   Collapse,
   Divider,
   Grid,
@@ -16,17 +17,67 @@ import {
   Tab,
   Tabs,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Tooltip,
   Typography
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import { useState, SyntheticEvent } from "react";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import PublicIcon from "@mui/icons-material/Public";
+import { useState, useEffect, SyntheticEvent } from "react";
 import { GeoBlockSettings } from "@/src/lib/settings";
 import { GeoBlockMode } from "@/src/lib/models/proxy-hosts";
+
+// ─── GeoIpStatus ─────────────────────────────────────────────────────────────
+
+type GeoIpStatusData = { country: boolean; asn: boolean } | null;
+
+function GeoIpStatus() {
+  const [status, setStatus] = useState<GeoIpStatusData>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/geoip-status")
+      .then((r) => r.json())
+      .then((d) => setStatus(d))
+      .catch(() => setStatus(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return <CircularProgress size={12} sx={{ color: "text.disabled" }} />;
+  }
+
+  const allLoaded = status?.country && status?.asn;
+  const noneLoaded = !status?.country && !status?.asn;
+
+  const color = allLoaded ? "success" : noneLoaded ? "error" : "warning";
+  const Icon = allLoaded ? CheckCircleOutlineIcon : noneLoaded ? ErrorOutlineIcon : WarningAmberIcon;
+  const label = allLoaded ? "GeoIP ready" : noneLoaded ? "GeoIP missing" : "GeoIP partial";
+  const tooltip = noneLoaded
+    ? "GeoIP databases not found — country/continent/ASN blocking will not work. Enable the geoipupdate service."
+    : !status?.country
+    ? "GeoLite2-Country database missing — country/continent blocking disabled"
+    : !status?.asn
+    ? "GeoLite2-ASN database missing — ASN blocking disabled"
+    : "GeoLite2-Country and GeoLite2-ASN databases loaded";
+
+  return (
+    <Tooltip title={tooltip} placement="right">
+      <Chip
+        size="small"
+        icon={<Icon sx={{ fontSize: "14px !important" }} />}
+        label={label}
+        color={color}
+        variant="outlined"
+        sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600, letterSpacing: 0.3, cursor: "default", "& .MuiChip-icon": { ml: "6px" } }}
+      />
+    </Tooltip>
+  );
+}
 
 // ─── TagInput ────────────────────────────────────────────────────────────────
 
@@ -42,17 +93,22 @@ type TagInputProps = {
 
 function TagInput({ name, label, initialValues = [], placeholder, helperText, validate, uppercase = false }: TagInputProps) {
   const [tags, setTags] = useState<string[]>(initialValues);
+  const [inputValue, setInputValue] = useState("");
 
   function processValue(raw: string): string {
     return uppercase ? raw.trim().toUpperCase() : raw.trim();
   }
 
-  function addTag(raw: string) {
+  function commitInput(raw: string) {
     const value = processValue(raw);
     if (!value) return;
     if (validate && !validate(value)) return;
-    if (tags.includes(value)) return;
+    if (tags.includes(value)) {
+      setInputValue("");
+      return;
+    }
     setTags((prev) => [...prev, value]);
+    setInputValue("");
   }
 
   return (
@@ -63,18 +119,18 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
         freeSolo
         options={[]}
         value={tags}
+        inputValue={inputValue}
+        onInputChange={(_, value, reason) => {
+          if (reason === "input") setInputValue(value);
+        }}
         onChange={(_, newValue) => {
+          // Called when user selects/removes a chip via Autocomplete internals
           const processed = newValue.map((v) => processValue(v as string)).filter((v) => {
             if (!v) return false;
             if (validate && !validate(v)) return false;
             return true;
           });
-          // Deduplicate
           setTags([...new Set(processed)]);
-        }}
-        onBlur={(e) => {
-          const input = (e.target as HTMLInputElement).value;
-          if (input.trim()) addTag(input);
         }}
         renderTags={(value, getTagProps) =>
           value.map((option, index) => {
@@ -90,17 +146,17 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
             helperText={helperText}
             size="small"
             onKeyDown={(e) => {
-              if (e.key === "," || e.key === " ") {
+              if (e.key === "," || e.key === " " || e.key === "Enter") {
                 e.preventDefault();
-                const input = (e.target as HTMLInputElement).value;
-                if (input.trim()) {
-                  addTag(input);
-                  (e.target as HTMLInputElement).value = "";
-                }
+                e.stopPropagation();
+                commitInput(inputValue);
               }
             }}
           />
         )}
+        onBlur={() => {
+          if (inputValue.trim()) commitInput(inputValue);
+        }}
       />
     </Box>
   );
@@ -193,42 +249,90 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
       <input type="hidden" name="geoblock_present" value="1" />
 
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between">
-        <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
-            Geo Blocking
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Block or allow traffic by country, continent, ASN, CIDR, or IP
-          </Typography>
-        </Box>
+      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+        <Stack direction="row" alignItems="flex-start" spacing={1.5} flex={1} minWidth={0}>
+          <Box
+            sx={{
+              mt: 0.25,
+              width: 32,
+              height: 32,
+              borderRadius: 1.5,
+              bgcolor: "warning.main",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <PublicIcon sx={{ fontSize: 18, color: "#fff" }} />
+          </Box>
+          <Box minWidth={0}>
+            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
+              <Typography variant="subtitle1" fontWeight={700} lineHeight={1.3}>
+                Geo Blocking
+              </Typography>
+              <GeoIpStatus />
+            </Stack>
+            <Typography variant="body2" color="text.secondary" mt={0.25}>
+              Block or allow traffic by country, continent, ASN, CIDR, or IP
+            </Typography>
+          </Box>
+        </Stack>
         <Switch
           name="geoblock_enabled"
           checked={enabled}
           onChange={(_, checked) => setEnabled(checked)}
+          sx={{ flexShrink: 0 }}
         />
       </Stack>
 
       {/* Mode selector */}
       <input type="hidden" name="geoblock_mode" value={mode} />
-      {showModeSelector && (
-        <Box mt={1.5}>
-          <ToggleButtonGroup
-            value={mode}
-            exclusive
-            size="small"
-            onChange={(_, v: GeoBlockMode | null) => { if (v) setMode(v); }}
-          >
-            <ToggleButton value="merge">Merge with global</ToggleButton>
-            <ToggleButton value="override">Override global</ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
-      )}
 
       {/* Detail fields */}
       <Collapse in={enabled} timeout="auto" unmountOnExit>
         <Box mt={2}>
-          <Divider sx={{ mb: 2 }} />
+          {showModeSelector && (
+            <>
+              <Stack direction="row" spacing={1}>
+                {(["merge", "override"] as GeoBlockMode[]).map((v) => (
+                  <Box
+                    key={v}
+                    onClick={() => setMode(v)}
+                    sx={{
+                      flex: 1,
+                      py: 0.75,
+                      px: 1.5,
+                      borderRadius: 1.5,
+                      border: "1.5px solid",
+                      borderColor: mode === v ? "warning.main" : "divider",
+                      bgcolor: mode === v
+                        ? (theme) => theme.palette.mode === "dark" ? "rgba(237,108,2,0.12)" : "rgba(237,108,2,0.08)"
+                        : "transparent",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      transition: "all 0.15s ease",
+                      userSelect: "none",
+                      "&:hover": {
+                        borderColor: mode === v ? "warning.main" : "text.disabled",
+                      },
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      fontWeight={mode === v ? 600 : 400}
+                      color={mode === v ? "warning.main" : "text.secondary"}
+                      sx={{ transition: "all 0.15s ease" }}
+                    >
+                      {v === "merge" ? "Merge with global" : "Override global"}
+                    </Typography>
+                  </Box>
+                ))}
+              </Stack>
+              <Divider sx={{ mt: 2, mb: 2 }} />
+            </>
+          )}
+          {!showModeSelector && <Divider sx={{ mb: 2 }} />}
 
           {/* Block / Allow tabs */}
           <Tabs

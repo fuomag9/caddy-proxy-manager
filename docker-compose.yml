@@ -54,6 +54,7 @@ services:
       OAUTH_ALLOW_AUTO_LINKING: ${OAUTH_ALLOW_AUTO_LINKING:-false}
     volumes:
       - caddy-manager-data:/app/data
+      - geoip-data:/usr/share/GeoIP:ro,z
     depends_on:
       caddy:
         condition: service_healthy
