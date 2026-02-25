@@ -18,7 +18,6 @@ export default auth((req) => {
     pathname === "/login" ||
     pathname.startsWith("/api/auth") ||
     pathname === "/api/health" ||
-    pathname === "/api/geoip-status" ||
     pathname === "/api/instances/sync"
   ) {
     return NextResponse.next();
