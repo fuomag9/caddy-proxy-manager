@@ -168,8 +168,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             if (existingUser) {
               // Security: Validate OAuth email matches the authenticated user's stored email
               // This prevents users from linking arbitrary OAuth accounts to their credentials account
-              if (user.email && existingUser.email !== pendingLink.userEmail) {
-                console.error(`OAuth linking rejected: user email mismatch. Expected ${pendingLink.userEmail}, got ${existingUser.email}`);
+              if (user.email && (
+                existingUser.email !== pendingLink.userEmail ||
+                user.email.toLowerCase() !== pendingLink.userEmail.toLowerCase()
+              )) {
+                console.error(`OAuth linking rejected: user email mismatch. Expected ${pendingLink.userEmail}, got ${existingUser.email} (OAuth provider returned ${user.email})`);
 
                 // Clean up the pending link
                 await db.delete(pendingOAuthLinks).where(eq(pendingOAuthLinks.id, pendingLink.id));
