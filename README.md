@@ -20,6 +20,7 @@ This project provides a web UI for Caddy Server, eliminating the need to manuall
 - OAuth2/OIDC authentication support
 - Automatic HTTPS via Caddy's ACME (Let's Encrypt) with Cloudflare DNS-01 support
 - Optional upstream DNS pinning (resolve upstream hostnames on config apply)
+- Geo blocking per proxy host — block/allow by country, continent, ASN, CIDR, or IP
 - Custom certificate import (internal CA, wildcards, etc.)
 - Audit logging of all configuration changes
 - Built with Next.js 16, React 19, Drizzle ORM, and TypeScript
@@ -45,6 +46,7 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 ## Features
 
 - **Proxy Hosts** - Reverse proxies with custom headers and upstream pools
+- **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host
 - **Access Lists** - HTTP basic auth
 - **Certificates** - Custom SSL/TLS import (automatic Let's Encrypt via Caddy)
 - **Settings** - ACME email, Cloudflare DNS-01, and upstream DNS pinning defaults
@@ -112,6 +114,42 @@ Caddy automatically obtains Let's Encrypt certificates for all proxy hosts.
 **Cloudflare DNS-01** (optional): Configure in Settings with a Cloudflare API token (`Zone.DNS:Edit` permissions).
 
 **Custom Certificates** (optional): Import your own certificates via the Certificates page. Private keys are stored unencrypted in SQLite.
+
+---
+
+## Geo Blocking
+
+Geo blocking is configured per proxy host. It requires MaxMind GeoLite2 databases (see [GeoIP Setup](#geoip-setup)).
+
+### Rule types
+
+| Type | Example | Description |
+|------|---------|-------------|
+| Country | `DE` | ISO 3166-1 alpha-2 country code |
+| Continent | `EU` | `AF`, `AN`, `AS`, `EU`, `NA`, `OC`, `SA` |
+| ASN | `24940` | Autonomous System Number |
+| CIDR | `91.98.150.0/24` | IP range in CIDR notation |
+| IP | `91.98.150.103` | Exact IP address |
+
+Rules can be **block** or **allow**. Allow rules take precedence over block rules — you can block an entire continent and then allow specific IPs or ASNs through.
+
+### GeoIP Setup
+
+Geo blocking requires MaxMind GeoLite2 Country and/or ASN databases. Use the bundled `geoipupdate` service:
+
+1. Register for a free MaxMind account at [maxmind.com](https://www.maxmind.com/)
+2. Generate a license key with `GeoLite2-Country` and `GeoLite2-ASN` permissions
+3. Add to your `.env`:
+   ```
+   GEOIPUPDATE_ACCOUNT_ID=your-account-id
+   GEOIPUPDATE_LICENSE_KEY=your-license-key
+   ```
+4. Start with the `geoipupdate` profile:
+   ```bash
+   docker compose --profile geoipupdate up -d
+   ```
+
+The databases are stored in the `geoip-data` Docker volume and shared between the web and Caddy containers.
 
 ---
 
