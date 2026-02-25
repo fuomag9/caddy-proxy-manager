@@ -11,5 +11,6 @@ tsconfig.tsbuildinfo
 /caddy-data
 /caddy-config
 .DS_Store
+CLAUDE.local.md
 /caddy-proxy-manager.wiki
 docs/plans
