@@ -89,6 +89,7 @@ function createOAuthProviders(): OAuthConfig<any>[] {
       authorization: config.oauth.authorizationUrl ?? undefined,
       token: config.oauth.tokenUrl ?? undefined,
       userinfo: config.oauth.userinfoUrl ?? undefined,
+      // PKCE is the default for OIDC; state is added as defence-in-depth
       checks: ["pkce", "state"],
       profile(profile) {
         return {
