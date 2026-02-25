@@ -6,7 +6,7 @@ const IV_LENGTH = 12;
 
 function deriveKey(): Buffer {
   return Buffer.from(
-    hkdfSync("sha256", config.sessionSecret, "", "caddy-proxy-manager:secret:v1", 32)
+    hkdfSync("sha256", config.sessionSecret, Buffer.alloc(0), "caddy-proxy-manager:secret:v1", 32)
   );
 }
 
@@ -35,10 +35,12 @@ export function decryptSecret(value: string): string {
   if (!value) return "";
   if (!isEncryptedSecret(value)) return value;
 
-  // Try new HKDF key first, fall back to old SHA-256 key for existing data
+  // Try new HKDF key first, fall back to old SHA-256 key for existing data.
+  // Log when the legacy path is taken so operators know when re-encryption is complete.
   try {
     return _decryptWithKey(value, deriveKey());
   } catch {
+    console.warn("[secret] HKDF decryption failed; retrying with legacy SHA-256 key. Re-encrypt this secret to remove the legacy key dependency.");
     return _decryptWithKey(value, deriveKeyLegacy());
   }
 }
