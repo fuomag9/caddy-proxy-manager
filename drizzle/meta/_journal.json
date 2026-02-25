@@ -57,6 +57,13 @@
       "when": 1740441600000,
       "tag": "0007_linking_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1740960000000,
+      "tag": "0008_unique_provider_subject",
+      "breakpoints": true
     }
   ]
 }

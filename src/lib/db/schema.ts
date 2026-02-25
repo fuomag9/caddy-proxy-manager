@@ -17,7 +17,7 @@ export const users = sqliteTable(
   },
   (table) => ({
     emailUnique: uniqueIndex("users_email_unique").on(table.email),
-    providerSubjectIdx: index("users_provider_subject_idx").on(table.provider, table.subject)
+    providerSubjectIdx: uniqueIndex("users_provider_subject_idx").on(table.provider, table.subject)
   })
 );
 

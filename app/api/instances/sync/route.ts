@@ -3,7 +3,11 @@ import { timingSafeEqual } from "crypto";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { applySyncPayload, getInstanceMode, getSlaveMasterToken, setSlaveLastSync, SyncPayload } from "@/src/lib/instance-sync";
 
-const MAX_SYNC_BODY_BYTES = Number(process.env.INSTANCE_SYNC_MAX_BYTES ?? 10 * 1024 * 1024);
+const DEFAULT_MAX_SYNC_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
+const _parsedMaxBytes = Number(process.env.INSTANCE_SYNC_MAX_BYTES);
+const MAX_SYNC_BODY_BYTES = Number.isFinite(_parsedMaxBytes) && _parsedMaxBytes > 0
+  ? _parsedMaxBytes
+  : DEFAULT_MAX_SYNC_BODY_BYTES;
 const SYNC_RATE_MAX = Number(process.env.INSTANCE_SYNC_RATE_MAX ?? 60);
 const SYNC_RATE_WINDOW_MS = Number(process.env.INSTANCE_SYNC_RATE_WINDOW_MS ?? 60_000);
 const SYNC_RATE_LIMITS = new Map<string, { count: number; windowStart: number }>();
@@ -235,7 +239,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to apply sync payload";
-    await setSlaveLastSync({ ok: false, error: message });
-    return NextResponse.json({ error: message }, { status: 500 });
+    await setSlaveLastSync({ ok: false, error: message }); // still store internally
+    return NextResponse.json({ error: "Failed to apply sync payload" }, { status: 500 });
   }
 }
