@@ -56,17 +56,42 @@ export async function POST(request: NextRequest) {
 
   const response = await handlers.POST(request);
 
-  if (response.status >= 200 && response.status < 300) {
-    resetAttempts(rateLimitKey);
-    return response;
-  }
+  // Determine success/failure by inspecting redirect destination, not status code.
+  // Auth.js returns 302 (direct form) or 200+JSON (X-Auth-Return-Redirect) on both
+  // success and failure — the error is signaled by the destination URL containing "error=".
+  const isFailure = await isAuthFailureResponse(response);
 
-  if (response.status === 401) {
+  if (isFailure) {
     const result = registerFailedAttempt(rateLimitKey);
     if (result.blocked) {
       return buildBlockedResponse(result.retryAfterMs);
     }
+  } else {
+    resetAttempts(rateLimitKey);
   }
 
   return response;
+}
+
+async function isAuthFailureResponse(response: Response): Promise<boolean> {
+  // Redirect case: Auth.js sets Location header
+  const location = response.headers.get("location");
+  if (location) {
+    return location.includes("error=");
+  }
+  // JSON case (X-Auth-Return-Redirect: 1): body is {"url": "..."}
+  const contentType = response.headers.get("content-type") ?? "";
+  if (response.status === 200 && contentType.includes("application/json")) {
+    try {
+      const cloned = response.clone();
+      const body = await cloned.json() as { url?: string };
+      if (typeof body.url === "string") {
+        return body.url.includes("error=");
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  // Any 4xx/5xx is a failure
+  return response.status >= 400;
 }
