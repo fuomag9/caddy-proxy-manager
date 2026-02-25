@@ -89,7 +89,7 @@ function createOAuthProviders(): OAuthConfig<any>[] {
       authorization: config.oauth.authorizationUrl ?? undefined,
       token: config.oauth.tokenUrl ?? undefined,
       userinfo: config.oauth.userinfoUrl ?? undefined,
-      checks: ["state"],
+      checks: ["pkce", "state"],
       profile(profile) {
         return {
           id: profile.sub ?? profile.id,
