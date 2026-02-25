@@ -75,6 +75,30 @@ function parseCertificateId(value: FormDataEntryValue | null): number | null {
   return num;
 }
 
+function parseAccessListId(value: FormDataEntryValue | null): number | null {
+  if (!value || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed === "" || trimmed === "null" || trimmed === "undefined") {
+    return null;
+  }
+
+  const num = Number(trimmed);
+
+  // Check for NaN, Infinity, or non-integer values
+  if (!Number.isFinite(num) || !Number.isInteger(num) || num <= 0) {
+    return null;
+  }
+
+  return num;
+}
+
 async function validateAndSanitizeCertificateId(
   certificateId: number | null,
   cloudflareConfigured: boolean
@@ -151,6 +175,19 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
   }
 
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function parseRedirectUrl(raw: FormDataEntryValue | null): string {
+  if (!raw || typeof raw !== "string") return "";
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return trimmed;
+  } catch {
+    return "";
+  }
 }
 
 function parseOptionalNumber(value: FormDataEntryValue | null): number | null {
@@ -290,7 +327,8 @@ function parseGeoBlockConfig(formData: FormData): {
   }
 
   const enabled = parseCheckbox(formData.get("geoblock_enabled"));
-  const mode = (formData.get("geoblock_mode") ?? "merge") as GeoBlockMode;
+  const rawMode = formData.get("geoblock_mode");
+  const mode: GeoBlockMode = rawMode === "override" ? "override" : "merge";
 
   // Helper to parse a comma-separated string field into a string array
   const parseStringList = (key: string): string[] => {
@@ -320,10 +358,13 @@ function parseGeoBlockConfig(formData: FormData): {
     allow_ips: parseStringList("geoblock_allow_ips"),
     trusted_proxies: parseStringList("geoblock_trusted_proxies"),
     fail_closed: formData.get("geoblock_fail_closed") === "on",
-    response_status: parseOptionalNumber(formData.get("geoblock_response_status")) ?? 403,
+    response_status: (() => {
+      const s = parseOptionalNumber(formData.get("geoblock_response_status")) ?? 403;
+      return s >= 100 && s <= 599 ? s : 403;
+    })(),
     response_body: parseOptionalText(formData.get("geoblock_response_body")) ?? "Forbidden",
     response_headers: parseResponseHeaders(formData),
-    redirect_url: parseOptionalText(formData.get("geoblock_redirect_url")) ?? "",
+    redirect_url: parseRedirectUrl(formData.get("geoblock_redirect_url")),
   };
 
   return { geoblock: config, geoblock_mode: mode };
@@ -336,7 +377,9 @@ function parseResponseHeaders(formData: FormData): Record<string, string> {
   const headers: Record<string, string> = {};
   keys.forEach((key, i) => {
     const trimmed = key.trim();
-    if (trimmed) headers[trimmed] = (values[i] ?? "").trim();
+    if (trimmed && /^[a-zA-Z0-9\-_]+$/.test(trimmed)) {
+      headers[trimmed] = (values[i] ?? "").trim();
+    }
   });
   return headers;
 }
@@ -452,7 +495,7 @@ export async function createProxyHostAction(
         domains: parseCsv(formData.get("domains")),
         upstreams: parseUpstreams(formData.get("upstreams")),
         certificate_id: certificateId,
-        access_list_id: formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null,
+        access_list_id: parseAccessListId(formData.get("access_list_id")),
         hsts_subdomains: parseCheckbox(formData.get("hsts_subdomains")),
         skip_https_hostname_validation: parseCheckbox(formData.get("skip_https_hostname_validation")),
         enabled: parseCheckbox(formData.get("enabled")),
@@ -518,7 +561,7 @@ export async function updateProxyHostAction(
         upstreams: formData.get("upstreams") ? parseUpstreams(formData.get("upstreams")) : undefined,
         certificate_id: certificateId,
         access_list_id: formData.has("access_list_id")
-          ? (formData.get("access_list_id") ? Number(formData.get("access_list_id")) : null)
+          ? parseAccessListId(formData.get("access_list_id"))
           : undefined,
         hsts_subdomains: boolField("hsts_subdomains"),
         skip_https_hostname_validation: boolField("skip_https_hostname_validation"),

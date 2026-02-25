@@ -493,6 +493,19 @@ export async function toggleSlaveInstanceAction(formData: FormData): Promise<voi
   revalidatePath("/settings");
 }
 
+function parseRedirectUrl(raw: FormDataEntryValue | null): string {
+  if (!raw || typeof raw !== "string") return "";
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    return trimmed;
+  } catch {
+    return "";
+  }
+}
+
 function parseGeoBlockCheckbox(value: FormDataEntryValue | null): boolean {
   return value === "on" || value === "true" || value === "1";
 }
@@ -515,7 +528,9 @@ function parseGeoBlockResponseHeaders(formData: FormData): Record<string, string
   const headers: Record<string, string> = {};
   keys.forEach((key, i) => {
     const trimmed = key.trim();
-    if (trimmed) headers[trimmed] = (values[i] ?? "").trim();
+    if (trimmed && /^[a-zA-Z0-9\-_]+$/.test(trimmed)) {
+      headers[trimmed] = (values[i] ?? "").trim();
+    }
   });
   return headers;
 }
@@ -530,7 +545,7 @@ export async function updateGeoBlockSettingsAction(_prevState: ActionResult | nu
     const statusNum = statusRaw && typeof statusRaw === "string" && statusRaw.trim() !== ""
       ? Number(statusRaw.trim())
       : NaN;
-    const responseStatus = Number.isFinite(statusNum) ? statusNum : 403;
+    const responseStatus = Number.isFinite(statusNum) && statusNum >= 100 && statusNum <= 599 ? statusNum : 403;
 
     const responseBodyRaw = formData.get("geoblock_response_body");
     const responseBody = responseBodyRaw && typeof responseBodyRaw === "string" && responseBodyRaw.trim().length > 0
@@ -538,7 +553,7 @@ export async function updateGeoBlockSettingsAction(_prevState: ActionResult | nu
       : "Forbidden";
 
     const redirectUrlRaw = formData.get("geoblock_redirect_url");
-    const redirectUrl = redirectUrlRaw && typeof redirectUrlRaw === "string" ? redirectUrlRaw.trim() : "";
+    const redirectUrl = parseRedirectUrl(redirectUrlRaw);
 
     const config: GeoBlockSettings = {
       enabled,
