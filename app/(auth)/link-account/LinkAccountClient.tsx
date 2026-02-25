@@ -17,13 +17,13 @@ import { signIn } from "next-auth/react";
 interface LinkAccountClientProps {
   provider: string;
   email: string;
-  linkingToken: string;
+  linkingId: string;
 }
 
 export default function LinkAccountClient({
   provider,
   email,
-  linkingToken
+  linkingId
 }: LinkAccountClientProps) {
   const router = useRouter();
   const [password, setPassword] = useState("");
@@ -41,7 +41,7 @@ export default function LinkAccountClient({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          linkingToken,
+          linkingId,
           password
         })
       });

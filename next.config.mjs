@@ -16,8 +16,10 @@ const nextConfig = {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          // X-Frame-Options omitted: frame-ancestors in CSP supersedes it in all modern browsers
+          // X-Frame-Options kept for legacy browsers that don't support frame-ancestors CSP directive
+          { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), interest-cohort=()" },
           {
             key: "Content-Security-Policy",
             value: [

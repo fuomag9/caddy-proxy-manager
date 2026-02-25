@@ -16,13 +16,12 @@ const SYNC_RATE_LIMITS = new Map<string, { count: number; windowStart: number }>
  * Timing-safe token comparison to prevent timing attacks
  */
 function secureTokenCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    // Compare against dummy to maintain constant time
-    const dummy = Buffer.alloc(a.length, 0);
-    timingSafeEqual(Buffer.from(a), dummy);
-    return false;
-  }
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  // Always compare buffers of the expected length (b) to avoid leaking
+  // the expected token length via early-return timing when a.length !== b.length
+  const bufA = Buffer.from(a.padEnd(b.length, "\0").slice(0, b.length));
+  const bufB = Buffer.from(b);
+  const equal = timingSafeEqual(bufA, bufB);
+  return equal && a.length === b.length;
 }
 
 function getClientIp(request: NextRequest): string {

@@ -1,22 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyLinkingToken, verifyAndLinkOAuth } from "@/src/lib/services/account-linking";
+import { retrieveLinkingToken, verifyLinkingToken, verifyAndLinkOAuth } from "@/src/lib/services/account-linking";
 import { createAuditEvent } from "@/src/lib/models/audit";
-import { registerFailedAttempt } from "@/src/lib/rate-limit";
+import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { linkingToken, password } = body;
+    const { linkingId, password } = body;
 
-    if (!linkingToken || !password) {
+    if (!linkingId || !password) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
-    // Verify linking token
-    const tokenPayload = await verifyLinkingToken(linkingToken);
+    // Retrieve and consume the linking token server-side — the raw JWT never reaches the browser
+    const rawToken = await retrieveLinkingToken(linkingId);
+    if (!rawToken) {
+      return NextResponse.json(
+        { error: "Authentication failed" },
+        { status: 401 }
+      );
+    }
+
+    const tokenPayload = await verifyLinkingToken(rawToken);
     if (!tokenPayload) {
       return NextResponse.json(
         { error: "Authentication failed" },
@@ -24,11 +32,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Rate limiting: prevent brute force password attacks during OAuth linking
+    // Rate limiting: check before attempting password verification
     const rateLimitKey = `oauth-link-verify:${tokenPayload.userId}`;
-    const rateLimitResult = registerFailedAttempt(rateLimitKey);
-    if (rateLimitResult.blocked) {
-      // Audit log for blocked attempt
+    const rateLimitCheck = isRateLimited(rateLimitKey);
+    if (rateLimitCheck.blocked) {
       await createAuditEvent({
         userId: tokenPayload.userId,
         action: "oauth_link_rate_limited",
@@ -53,7 +60,9 @@ export async function POST(request: NextRequest) {
     );
 
     if (!success) {
-      // Audit log for failed password verification
+      // Count this failure against the rate limit
+      registerFailedAttempt(rateLimitKey);
+
       await createAuditEvent({
         userId: tokenPayload.userId,
         action: "oauth_link_password_failed",
@@ -69,7 +78,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Audit log
+    // Success — clear rate limit for this user
+    resetAttempts(rateLimitKey);
+
     await createAuditEvent({
       userId: tokenPayload.userId,
       action: "account_linked",

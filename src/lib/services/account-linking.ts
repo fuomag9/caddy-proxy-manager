@@ -5,7 +5,7 @@ import { config } from "../config";
 import { findUserByEmail, findUserByProviderSubject, getUserById } from "../models/user";
 import db from "../db";
 import { users, linkingTokens } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { nowIso } from "../db";
 
 const LINKING_TOKEN_EXPIRY = 5 * 60; // 5 minutes in seconds
@@ -124,25 +124,53 @@ export async function verifyLinkingToken(token: string): Promise<LinkingTokenPay
 }
 
 /**
- * Store a linking JWT in the DB and return an opaque 64-char hex ID
+ * Store a linking JWT in the DB and return an opaque 64-char hex ID.
+ * Expired rows are purged on each insert to prevent unbounded table growth.
  */
 export async function storeLinkingToken(token: string): Promise<string> {
   const id = randomBytes(32).toString("hex");
+  const now = nowIso();
+  const expiresAt = new Date(Date.now() + LINKING_TOKEN_EXPIRY * 1000).toISOString();
+
+  // Purge expired tokens opportunistically
+  await db.delete(linkingTokens).where(lt(linkingTokens.expiresAt, now));
+
   await db.insert(linkingTokens).values({
     id,
     token,
-    createdAt: nowIso()
+    createdAt: now,
+    expiresAt
   });
   return id;
 }
 
 /**
+ * Peek at a linking token by its opaque ID without consuming (deleting) it.
+ * Used by the link-account page to decode display info (provider, email) while
+ * keeping the token available for the subsequent API call.
+ * Returns null if the ID is not found or the token is expired.
+ */
+export async function peekLinkingToken(id: string): Promise<string | null> {
+  const now = nowIso();
+  const rows = await db.select().from(linkingTokens)
+    .where(eq(linkingTokens.id, id))
+    .limit(1);
+  if (rows.length === 0 || rows[0].expiresAt < now) {
+    return null;
+  }
+  return rows[0].token;
+}
+
+/**
  * Retrieve and delete a linking token by its opaque ID (one-time use).
- * Returns null if the ID is not found.
+ * Returns null if the ID is not found or the token is expired.
  */
 export async function retrieveLinkingToken(id: string): Promise<string | null> {
-  const rows = await db.select().from(linkingTokens).where(eq(linkingTokens.id, id)).limit(1);
-  if (rows.length === 0) {
+  const now = nowIso();
+  const rows = await db.select().from(linkingTokens)
+    .where(eq(linkingTokens.id, id))
+    .limit(1);
+  if (rows.length === 0 || rows[0].expiresAt < now) {
     return null;
   }
   const { token } = rows[0];
@@ -199,7 +227,7 @@ export async function autoLinkOAuth(
 
   // Don't auto-link if user has a password (unless explicitly called for authenticated linking)
   // This check is bypassed when called from the authenticated linking flow
-  if (user.password_hash && !process.env.OAUTH_ALLOW_AUTO_LINKING) {
+  if (user.password_hash && !config.oauth.allowAutoLinking) {
     return false;
   }
 

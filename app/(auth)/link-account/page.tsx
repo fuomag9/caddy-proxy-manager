@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/src/lib/auth";
-import { retrieveLinkingToken, verifyLinkingToken } from "@/src/lib/services/account-linking";
+import { peekLinkingToken, verifyLinkingToken } from "@/src/lib/services/account-linking";
 import LinkAccountClient from "./LinkAccountClient";
 
 interface LinkAccountPageProps {
@@ -26,25 +26,27 @@ export default async function LinkAccountPage({ searchParams }: LinkAccountPageP
 
   const linkingId = errorParam.replace("LINKING_REQUIRED:", "");
 
-  // Retrieve the raw JWT from the server-side store (one-time use)
-  const rawToken = await retrieveLinkingToken(linkingId);
+  // Peek at the raw JWT to decode display info (provider, email) without consuming it.
+  // The API endpoint will consume (retrieve + delete) the token during password verification.
+  const rawToken = await peekLinkingToken(linkingId);
 
   if (!rawToken) {
     redirect("/login?error=Linking token expired or invalid");
   }
 
-  // Verify token and decode
+  // Verify token and decode for display purposes only
   const tokenPayload = await verifyLinkingToken(rawToken);
 
   if (!tokenPayload) {
     redirect("/login?error=Linking token expired or invalid");
   }
 
+  // Pass only the opaque linkingId to the client — the raw JWT never leaves the server
   return (
     <LinkAccountClient
       provider={tokenPayload.provider}
       email={tokenPayload.email}
-      linkingToken={rawToken}
+      linkingId={linkingId}
     />
   );
 }
