@@ -553,6 +553,7 @@ export async function updateGeoBlockSettingsAction(_prevState: ActionResult | nu
       allow_cidrs: parseGeoBlockStringList("geoblock_allow_cidrs", formData),
       allow_ips: parseGeoBlockStringList("geoblock_allow_ips", formData),
       trusted_proxies: parseGeoBlockStringList("geoblock_trusted_proxies", formData),
+      fail_closed: parseGeoBlockCheckbox(formData.get("geoblock_fail_closed")),
       response_status: responseStatus,
       response_body: responseBody,
       response_headers: parseGeoBlockResponseHeaders(formData),

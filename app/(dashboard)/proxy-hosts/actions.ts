@@ -319,6 +319,7 @@ function parseGeoBlockConfig(formData: FormData): {
     allow_cidrs: parseStringList("geoblock_allow_cidrs"),
     allow_ips: parseStringList("geoblock_allow_ips"),
     trusted_proxies: parseStringList("geoblock_trusted_proxies"),
+    fail_closed: formData.get("geoblock_fail_closed") === "on",
     response_status: parseOptionalNumber(formData.get("geoblock_response_status")) ?? 403,
     response_body: parseOptionalText(formData.get("geoblock_response_body")) ?? "Forbidden",
     response_headers: parseResponseHeaders(formData),

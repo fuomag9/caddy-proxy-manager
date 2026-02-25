@@ -6,10 +6,12 @@ import {
   AccordionSummary,
   Autocomplete,
   Box,
+  Checkbox,
   Chip,
   CircularProgress,
   Collapse,
   Divider,
+  FormControlLabel,
   Grid,
   IconButton,
   Stack,
@@ -467,6 +469,19 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                     placeholder="private_ranges, 10.0.0.0/8..."
                     helperText="Used to parse X-Forwarded-For. Use private_ranges for all RFC-1918 ranges."
                   />
+
+                  <Tooltip title="When enabled, requests where the real client IP cannot be determined (e.g. behind a trusted proxy with no usable X-Forwarded-For) are blocked. Default: off (fail-open).">
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          name="geoblock_fail_closed"
+                          defaultChecked={initial?.fail_closed ?? false}
+                          size="small"
+                        />
+                      }
+                      label={<Typography variant="body2">Fail closed (block indeterminate IPs)</Typography>}
+                    />
+                  </Tooltip>
 
                   <Divider />
 

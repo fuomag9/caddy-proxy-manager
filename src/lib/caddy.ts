@@ -730,6 +730,7 @@ function mergeGeoBlockSettings(
     allow_ips: [...(global.allow_ips ?? []), ...(host.allow_ips ?? [])],
     trusted_proxies: [...(global.trusted_proxies ?? []), ...(host.trusted_proxies ?? [])],
     // Host config wins for scalar fields
+    fail_closed: host.fail_closed || global.fail_closed || false,
     response_status: host.response_status ?? global.response_status ?? 403,
     response_body: host.response_body ?? global.response_body ?? "Forbidden",
     response_headers: { ...(global.response_headers ?? {}), ...(host.response_headers ?? {}) },
@@ -784,6 +785,7 @@ function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> 
   if (config.allow_ips?.length) handler.allow_ips = config.allow_ips;
 
   if (config.trusted_proxies?.length) handler.trusted_proxies = config.trusted_proxies;
+  if (config.fail_closed) handler.fail_closed = true;
 
   if (config.redirect_url) {
     handler.redirect_url = config.redirect_url;

@@ -64,6 +64,9 @@ export type GeoBlockSettings = {
 
   // Trusted proxies for X-Forwarded-For parsing
   trusted_proxies: string[];
+  // When true, block requests where the real client IP cannot be determined
+  // (e.g. connection from trusted proxy but no usable XFF entry). Default: false (fail-open)
+  fail_closed: boolean;
 
   // Block response customization
   response_status: number;        // default 403
