@@ -1,9 +1,10 @@
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { config } from "../config";
 import { findUserByEmail, findUserByProviderSubject, getUserById } from "../models/user";
 import db from "../db";
-import { users } from "../db/schema";
+import { users, linkingTokens } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { nowIso } from "../db";
 
@@ -120,6 +121,33 @@ export async function verifyLinkingToken(token: string): Promise<LinkingTokenPay
     console.error("Token verification failed:", error);
     return null;
   }
+}
+
+/**
+ * Store a linking JWT in the DB and return an opaque 64-char hex ID
+ */
+export async function storeLinkingToken(token: string): Promise<string> {
+  const id = randomBytes(32).toString("hex");
+  await db.insert(linkingTokens).values({
+    id,
+    token,
+    createdAt: nowIso()
+  });
+  return id;
+}
+
+/**
+ * Retrieve and delete a linking token by its opaque ID (one-time use).
+ * Returns null if the ID is not found.
+ */
+export async function retrieveLinkingToken(id: string): Promise<string | null> {
+  const rows = await db.select().from(linkingTokens).where(eq(linkingTokens.id, id)).limit(1);
+  if (rows.length === 0) {
+    return null;
+  }
+  const { token } = rows[0];
+  await db.delete(linkingTokens).where(eq(linkingTokens.id, id));
+  return token;
 }
 
 /**

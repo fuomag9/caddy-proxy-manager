@@ -36,6 +36,27 @@
       "when": 1770395358533,
       "tag": "0004_slimy_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1770395358534,
+      "tag": "0005_remove_static_response",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1770395358535,
+      "tag": "0006_remove_redirects",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1740441600000,
+      "tag": "0007_linking_tokens",
+      "breakpoints": true
     }
   ]
 }

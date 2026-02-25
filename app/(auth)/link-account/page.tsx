@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/src/lib/auth";
-import { verifyLinkingToken } from "@/src/lib/services/account-linking";
+import { retrieveLinkingToken, verifyLinkingToken } from "@/src/lib/services/account-linking";
 import LinkAccountClient from "./LinkAccountClient";
 
 interface LinkAccountPageProps {
@@ -17,17 +17,24 @@ export default async function LinkAccountPage({ searchParams }: LinkAccountPageP
     redirect("/");
   }
 
-  // Get linking token from error parameter (NextAuth redirects with error param)
+  // Get linking ID from error parameter (NextAuth redirects with error param)
   const errorParam = searchParams.error || "";
 
   if (!errorParam.startsWith("LINKING_REQUIRED:")) {
     redirect("/login?error=Invalid linking request");
   }
 
-  const linkingToken = errorParam.replace("LINKING_REQUIRED:", "");
+  const linkingId = errorParam.replace("LINKING_REQUIRED:", "");
+
+  // Retrieve the raw JWT from the server-side store (one-time use)
+  const rawToken = await retrieveLinkingToken(linkingId);
+
+  if (!rawToken) {
+    redirect("/login?error=Linking token expired or invalid");
+  }
 
   // Verify token and decode
-  const tokenPayload = await verifyLinkingToken(linkingToken);
+  const tokenPayload = await verifyLinkingToken(rawToken);
 
   if (!tokenPayload) {
     redirect("/login?error=Linking token expired or invalid");
@@ -37,7 +44,7 @@ export default async function LinkAccountPage({ searchParams }: LinkAccountPageP
     <LinkAccountClient
       provider={tokenPayload.provider}
       email={tokenPayload.email}
-      linkingToken={linkingToken}
+      linkingToken={rawToken}
     />
   );
 }

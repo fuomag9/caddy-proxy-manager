@@ -178,3 +178,9 @@ export const auditEvents = sqliteTable("audit_events", {
   data: text("data"),
   createdAt: text("created_at").notNull()
 });
+
+export const linkingTokens = sqliteTable("linking_tokens", {
+  id: text("id").primaryKey(),
+  token: text("token").notNull(),
+  createdAt: text("created_at").notNull()
+});

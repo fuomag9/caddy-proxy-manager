@@ -8,7 +8,7 @@ import { config } from "./config";
 import { users } from "./db/schema";
 import { findUserByProviderSubject, findUserByEmail, createUser, getUserById } from "./models/user";
 import { createAuditEvent } from "./models/audit";
-import { decideLinkingStrategy, createLinkingToken, autoLinkOAuth, linkOAuthAuthenticated } from "./services/account-linking";
+import { decideLinkingStrategy, createLinkingToken, storeLinkingToken, autoLinkOAuth, linkOAuthAuthenticated } from "./services/account-linking";
 
 declare module "next-auth" {
   interface Session {
@@ -304,8 +304,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             user.email
           );
 
-          // Redirect to link-account page with token
-          throw new Error(`LINKING_REQUIRED:${linkingToken}`);
+          const linkingId = await storeLinkingToken(linkingToken);
+
+          // Redirect to link-account page with opaque ID (not the JWT)
+          throw new Error(`LINKING_REQUIRED:${linkingId}`);
         }
 
         // New OAuth user - create account (defaults to admin role)
@@ -333,6 +335,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         return true;
       } catch (error) {
+        // LINKING_REQUIRED is expected flow — rethrow so NextAuth can redirect
+        if (error instanceof Error && error.message.startsWith("LINKING_REQUIRED:")) {
+          throw error;
+        }
+
         console.error("OAuth sign-in error:", error);
 
         // Audit log for failed OAuth attempts
