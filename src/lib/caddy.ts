@@ -49,6 +49,22 @@ const DEFAULT_AUTHENTIK_HEADERS = [
 
 const DEFAULT_AUTHENTIK_TRUSTED_PROXIES = ["private_ranges"];
 
+// The caddy-blocker-plugin accepts only literal IP/CIDR strings, not Caddy's
+// "private_ranges" shorthand. Expand it before building the blocker config.
+const PRIVATE_RANGES_CIDRS = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+  "127.0.0.0/8",
+  "fd00::/8",
+  "::1/128"
+];
+
+function expandPrivateRanges(proxies: string[]): string[] {
+  if (!proxies.includes("private_ranges")) return proxies;
+  return proxies.flatMap((p) => (p === "private_ranges" ? PRIVATE_RANGES_CIDRS : [p]));
+}
+
 type ProxyHostRow = {
   id: number;
   name: string;
@@ -784,7 +800,7 @@ function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> 
   if (config.allow_cidrs?.length) handler.allow_cidrs = config.allow_cidrs;
   if (config.allow_ips?.length) handler.allow_ips = config.allow_ips;
 
-  if (config.trusted_proxies?.length) handler.trusted_proxies = config.trusted_proxies;
+  if (config.trusted_proxies?.length) handler.trusted_proxies = expandPrivateRanges(config.trusted_proxies);
   if (config.fail_closed) handler.fail_closed = true;
 
   if (config.redirect_url) {
