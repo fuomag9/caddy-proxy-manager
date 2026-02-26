@@ -52,9 +52,12 @@ services:
       OAUTH_TOKEN_URL: ${OAUTH_TOKEN_URL:-}
       OAUTH_USERINFO_URL: ${OAUTH_USERINFO_URL:-}
       OAUTH_ALLOW_AUTO_LINKING: ${OAUTH_ALLOW_AUTO_LINKING:-false}
+    group_add:
+      - "${CADDY_GID:-10000}"  # caddy's GID — lets the web user read /logs/access.log
     volumes:
       - caddy-manager-data:/app/data
       - geoip-data:/usr/share/GeoIP:ro,z
+      - caddy-logs:/logs:ro
     depends_on:
       caddy:
         condition: service_healthy

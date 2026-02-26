@@ -27,6 +27,7 @@ import ShieldIcon from "@mui/icons-material/Shield";
 import SettingsIcon from "@mui/icons-material/Settings";
 import HistoryIcon from "@mui/icons-material/History";
 import LogoutIcon from "@mui/icons-material/Logout";
+import BarChartIcon from "@mui/icons-material/BarChart";
 
 type User = {
   id: string;
@@ -37,6 +38,7 @@ type User = {
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: DashboardIcon },
+  { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/proxy-hosts", label: "Proxy Hosts", icon: DnsIcon },
   { href: "/access-lists", label: "Access Lists", icon: SecurityIcon },
   { href: "/certificates", label: "Certificates", icon: ShieldIcon },

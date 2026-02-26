@@ -185,3 +185,30 @@ export const linkingTokens = sqliteTable("linking_tokens", {
   createdAt: text("created_at").notNull(),
   expiresAt: text("expires_at").notNull()
 });
+
+export const trafficEvents = sqliteTable(
+  'traffic_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    ts: integer('ts').notNull(),
+    clientIp: text('client_ip').notNull(),
+    countryCode: text('country_code'),
+    host: text('host').notNull().default(''),
+    method: text('method').notNull().default(''),
+    uri: text('uri').notNull().default(''),
+    status: integer('status').notNull().default(0),
+    proto: text('proto').notNull().default(''),
+    bytesSent: integer('bytes_sent').notNull().default(0),
+    userAgent: text('user_agent').notNull().default(''),
+    isBlocked: integer('is_blocked', { mode: 'boolean' }).notNull().default(false),
+  },
+  (table) => ({
+    tsIdx: index('idx_traffic_events_ts').on(table.ts),
+    hostTsIdx: index('idx_traffic_events_host_ts').on(table.host, table.ts),
+  })
+);
+
+export const logParseState = sqliteTable('log_parse_state', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});

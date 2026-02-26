@@ -1,0 +1,13 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requireUser } from '@/src/lib/auth';
+import { getAnalyticsBlocked, type Interval } from '@/src/lib/analytics-db';
+
+export async function GET(req: NextRequest) {
+  await requireUser();
+  const { searchParams } = req.nextUrl;
+  const interval = (searchParams.get('interval') ?? '24h') as Interval;
+  const host = searchParams.get('host') ?? 'all';
+  const page = parseInt(searchParams.get('page') ?? '1', 10);
+  const data = await getAnalyticsBlocked(interval, host, page);
+  return NextResponse.json(data);
+}

@@ -12,6 +12,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SecurityIcon from "@mui/icons-material/Security";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import { ReactNode } from "react";
+import { getAnalyticsSummary } from "@/src/lib/analytics-db";
 
 type StatCard = {
   label: string;
@@ -40,23 +41,27 @@ async function loadStats(): Promise<StatCard[]> {
 
 export default async function OverviewPage() {
   const session = await requireAdmin();
-  const stats = await loadStats();
-  const recentEvents = await db
-    .select({
-      action: auditEvents.action,
-      entityType: auditEvents.entityType,
-      summary: auditEvents.summary,
-      createdAt: auditEvents.createdAt
-    })
-    .from(auditEvents)
-    .orderBy(desc(auditEvents.createdAt))
-    .limit(8);
+  const [stats, trafficSummary, recentEventsRaw] = await Promise.all([
+    loadStats(),
+    getAnalyticsSummary('24h', 'all').catch(() => null),
+    db
+      .select({
+        action: auditEvents.action,
+        entityType: auditEvents.entityType,
+        summary: auditEvents.summary,
+        createdAt: auditEvents.createdAt
+      })
+      .from(auditEvents)
+      .orderBy(desc(auditEvents.createdAt))
+      .limit(8),
+  ]);
 
   return (
     <OverviewClient
       userName={session.user.name ?? session.user.email ?? "Admin"}
       stats={stats}
-      recentEvents={recentEvents.map((event) => ({
+      trafficSummary={trafficSummary}
+      recentEvents={recentEventsRaw.map((event) => ({
         summary: event.summary ?? `${event.action} on ${event.entityType}`,
         created_at: toIso(event.createdAt)!
       }))}

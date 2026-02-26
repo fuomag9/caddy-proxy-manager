@@ -17,13 +17,20 @@ type RecentEvent = {
   created_at: string;
 };
 
+type TrafficSummary = {
+  totalRequests: number;
+  blockedPercent: number;
+} | null;
+
 export default function OverviewClient({
   userName,
   stats,
+  trafficSummary,
   recentEvents
 }: {
   userName: string;
   stats: StatCard[];
+  trafficSummary: TrafficSummary;
   recentEvents: RecentEvent[];
 }) {
   return (
@@ -90,6 +97,51 @@ export default function OverviewClient({
             </Card>
           </Grid>
         ))}
+
+        {/* Traffic (24h) card */}
+        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+          <Card elevation={0} sx={{ height: "100%", border: "1px solid rgba(148, 163, 184, 0.14)" }}>
+            <CardActionArea
+              component={Link}
+              href="/analytics"
+              sx={{
+                height: "100%",
+                p: 0,
+                "&:hover": {
+                  background: "linear-gradient(135deg, rgba(127, 91, 255, 0.16), rgba(34, 211, 238, 0.08))"
+                }
+              }}
+            >
+              <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <Box sx={{ color: "rgba(127, 91, 255, 0.8)", display: "flex", alignItems: "center" }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/>
+                  </svg>
+                </Box>
+                {trafficSummary ? (
+                  <>
+                    <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: "-0.03em" }}>
+                      {trafficSummary.totalRequests.toLocaleString()}
+                    </Typography>
+                    <Typography color="text.secondary" sx={{ fontWeight: 500 }}>
+                      Traffic (24h)
+                      {trafficSummary.totalRequests > 0 && (
+                        <Box component="span" sx={{ ml: 1, color: trafficSummary.blockedPercent > 0 ? "error.light" : "text.secondary", fontSize: "0.8em" }}>
+                          · {trafficSummary.blockedPercent}% blocked
+                        </Box>
+                      )}
+                    </Typography>
+                  </>
+                ) : (
+                  <>
+                    <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: "-0.03em" }}>—</Typography>
+                    <Typography color="text.secondary" sx={{ fontWeight: 500 }}>Traffic (24h)</Typography>
+                  </>
+                )}
+              </CardContent>
+            </CardActionArea>
+          </Card>
+        </Grid>
       </Grid>
 
       <Stack spacing={2}>

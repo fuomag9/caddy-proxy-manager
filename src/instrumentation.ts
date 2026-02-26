@@ -48,6 +48,26 @@ export async function register() {
       // Don't throw - monitoring is a nice-to-have feature
     }
 
+    // Start log parser for analytics
+    const { initLogParser, parseNewLogEntries, stopLogParser } = await import("./lib/log-parser");
+    try {
+      await initLogParser();
+      const logParserInterval = setInterval(async () => {
+        try {
+          await parseNewLogEntries();
+        } catch (err) {
+          console.error("Log parser interval error:", err);
+        }
+      }, 30_000);
+      process.on("SIGTERM", () => {
+        stopLogParser();
+        clearInterval(logParserInterval);
+      });
+      console.log("Log parser started");
+    } catch (error) {
+      console.error("Failed to start log parser:", error);
+    }
+
     // Start periodic instance sync if configured (master mode only)
     const { getInstanceMode, getSyncIntervalMs, syncInstances } = await import("./lib/instance-sync");
     try {
