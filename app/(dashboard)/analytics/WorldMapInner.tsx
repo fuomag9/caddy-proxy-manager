@@ -86,7 +86,6 @@ const OCEAN = '#0b1628';
 const MAP_STYLE: any = {
   version: 8,
   name: 'blank',
-  projection: { type: 'naturalEarth' },
   sources: {},
   layers: [
     { id: 'bg', type: 'background', paint: { 'background-color': OCEAN } },
@@ -196,7 +195,7 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
         borderRadius: 2,
         overflow: 'hidden',
         border: '1px solid rgba(148,163,184,0.08)',
-        height: 320,
+        height: 340,
       }}>
         <MapGL
           ref={mapRef}
