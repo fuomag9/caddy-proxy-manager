@@ -6,7 +6,7 @@ import { feature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import { Box, CircularProgress } from '@mui/material';
 
-const WORLD_ATLAS = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+const WORLD_ATLAS = '/geo/countries-110m.json';
 
 // ISO 3166-1 alpha-2 → numeric
 const A2N: Record<string, string> = {
