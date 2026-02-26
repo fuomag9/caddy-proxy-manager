@@ -4,11 +4,10 @@ import { useEffect, useState } from 'react';
 import { geoNaturalEarth1, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, Typography } from '@mui/material';
 
 const WORLD_ATLAS = '/geo/countries-110m.json';
 
-// ISO 3166-1 alpha-2 → numeric
 const A2N: Record<string, string> = {
   AF:'4',AL:'8',DZ:'12',AD:'20',AO:'24',AG:'28',AR:'32',AM:'51',
   AU:'36',AT:'40',AZ:'31',BS:'44',BH:'48',BD:'50',BB:'52',BY:'112',
@@ -39,35 +38,81 @@ const A2N: Record<string, string> = {
   UY:'858',UZ:'860',VU:'548',VE:'862',VN:'704',YE:'887',ZM:'894',
   ZW:'716',PS:'275',
 };
+const N2A: Record<string, string> = Object.fromEntries(Object.entries(A2N).map(([a, n]) => [n, a]));
 
-const N2A: Record<string, string> = Object.fromEntries(
-  Object.entries(A2N).map(([a, n]) => [n, a])
-);
+const NAMES: Record<string, string> = {
+  AF:'Afghanistan',AL:'Albania',DZ:'Algeria',AD:'Andorra',AO:'Angola',AG:'Antigua & Barbuda',
+  AR:'Argentina',AM:'Armenia',AU:'Australia',AT:'Austria',AZ:'Azerbaijan',BS:'Bahamas',
+  BH:'Bahrain',BD:'Bangladesh',BB:'Barbados',BY:'Belarus',BE:'Belgium',BZ:'Belize',
+  BJ:'Benin',BT:'Bhutan',BO:'Bolivia',BA:'Bosnia & Herzegovina',BW:'Botswana',BR:'Brazil',
+  BN:'Brunei',BG:'Bulgaria',BF:'Burkina Faso',BI:'Burundi',CV:'Cape Verde',KH:'Cambodia',
+  CM:'Cameroon',CA:'Canada',CF:'Central African Rep.',TD:'Chad',CL:'Chile',CN:'China',
+  CO:'Colombia',KM:'Comoros',CG:'Congo',CD:'DR Congo',CR:'Costa Rica',CI:"Côte d'Ivoire",
+  HR:'Croatia',CU:'Cuba',CY:'Cyprus',CZ:'Czech Republic',DK:'Denmark',DJ:'Djibouti',
+  DM:'Dominica',DO:'Dominican Republic',EC:'Ecuador',EG:'Egypt',SV:'El Salvador',
+  GQ:'Equatorial Guinea',ER:'Eritrea',EE:'Estonia',SZ:'Eswatini',ET:'Ethiopia',
+  FJ:'Fiji',FI:'Finland',FR:'France',GA:'Gabon',GM:'Gambia',GE:'Georgia',DE:'Germany',
+  GH:'Ghana',GR:'Greece',GD:'Grenada',GT:'Guatemala',GN:'Guinea',GW:'Guinea-Bissau',
+  GY:'Guyana',HT:'Haiti',HN:'Honduras',HU:'Hungary',IS:'Iceland',IN:'India',ID:'Indonesia',
+  IR:'Iran',IQ:'Iraq',IE:'Ireland',IL:'Israel',IT:'Italy',JM:'Jamaica',JP:'Japan',
+  JO:'Jordan',KZ:'Kazakhstan',KE:'Kenya',KI:'Kiribati',KP:'North Korea',KR:'South Korea',
+  KW:'Kuwait',KG:'Kyrgyzstan',LA:'Laos',LV:'Latvia',LB:'Lebanon',LS:'Lesotho',LR:'Liberia',
+  LY:'Libya',LI:'Liechtenstein',LT:'Lithuania',LU:'Luxembourg',MG:'Madagascar',MW:'Malawi',
+  MY:'Malaysia',MV:'Maldives',ML:'Mali',MT:'Malta',MH:'Marshall Islands',MR:'Mauritania',
+  MU:'Mauritius',MX:'Mexico',FM:'Micronesia',MD:'Moldova',MC:'Monaco',MN:'Mongolia',
+  ME:'Montenegro',MA:'Morocco',MZ:'Mozambique',MM:'Myanmar',NA:'Namibia',NR:'Nauru',
+  NP:'Nepal',NL:'Netherlands',NZ:'New Zealand',NI:'Nicaragua',NE:'Niger',NG:'Nigeria',
+  NO:'Norway',OM:'Oman',PK:'Pakistan',PW:'Palau',PA:'Panama',PG:'Papua New Guinea',
+  PY:'Paraguay',PE:'Peru',PH:'Philippines',PL:'Poland',PT:'Portugal',QA:'Qatar',
+  RO:'Romania',RU:'Russia',RW:'Rwanda',KN:'Saint Kitts & Nevis',LC:'Saint Lucia',
+  VC:'Saint Vincent',WS:'Samoa',SM:'San Marino',ST:'São Tomé & Príncipe',SA:'Saudi Arabia',
+  SN:'Senegal',RS:'Serbia',SC:'Seychelles',SL:'Sierra Leone',SG:'Singapore',SK:'Slovakia',
+  SI:'Slovenia',SB:'Solomon Islands',SO:'Somalia',ZA:'South Africa',SS:'South Sudan',
+  ES:'Spain',LK:'Sri Lanka',SD:'Sudan',SR:'Suriname',SE:'Sweden',CH:'Switzerland',
+  SY:'Syria',TW:'Taiwan',TJ:'Tajikistan',TZ:'Tanzania',TH:'Thailand',TL:'Timor-Leste',
+  TG:'Togo',TO:'Tonga',TT:'Trinidad & Tobago',TN:'Tunisia',TR:'Turkey',TM:'Turkmenistan',
+  TV:'Tuvalu',UG:'Uganda',UA:'Ukraine',AE:'United Arab Emirates',GB:'United Kingdom',
+  US:'United States',UY:'Uruguay',UZ:'Uzbekistan',VU:'Vanuatu',VE:'Venezuela',
+  VN:'Vietnam',YE:'Yemen',ZM:'Zambia',ZW:'Zimbabwe',PS:'Palestine',
+};
 
-function colorForCount(count: number, max: number): string {
-  if (!count) return '#22263a';
-  const t = Math.sqrt(Math.min(count / Math.max(max, 1), 1));
-  const r = Math.round(0x1a + (0x3b - 0x1a) * t);
-  const g = Math.round(0x3a + (0x82 - 0x3a) * t);
-  const b = Math.round(0x5c + (0xf6 - 0x5c) * t);
-  return `rgb(${r},${g},${b})`;
+function flag(code: string): string {
+  if (!code || code.length !== 2) return '🌐';
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 }
 
-export interface CountryStats { countryCode: string; total: number; blocked: number; }
+function colorForCount(count: number, max: number, hovered: boolean): string {
+  if (hovered) return '#7dd3fc'; // sky-300 on hover
+  if (!count) return '#162032';  // near-ocean, slightly lighter
+  // Power curve so even small values show up
+  const t = Math.pow(Math.min(count / Math.max(max, 1), 1), 0.35);
+  // #1e3a8a → #3b82f6 → #93c5fd
+  const stops = [
+    [0x1e, 0x3a, 0x8a],
+    [0x3b, 0x82, 0xf6],
+    [0x93, 0xc5, 0xfd],
+  ];
+  const seg = t < 0.5 ? 0 : 1;
+  const lt = t < 0.5 ? t * 2 : (t - 0.5) * 2;
+  const [r1, g1, b1] = stops[seg];
+  const [r2, g2, b2] = stops[seg + 1];
+  return `rgb(${Math.round(r1 + (r2 - r1) * lt)},${Math.round(g1 + (g2 - g1) * lt)},${Math.round(b1 + (b2 - b1) * lt)})`;
+}
 
 interface PathEntry { id: string; d: string; }
+interface TooltipInfo { x: number; y: number; alpha2: string; count: number; blocked: number; }
+export interface CountryStats { countryCode: string; total: number; blocked: number; }
 
 export default function WorldMapInner({ data }: { data: CountryStats[] }) {
   const [paths, setPaths] = useState<PathEntry[] | null>(null);
+  const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(WORLD_ATLAS)
       .then(r => r.json())
       .then((topology: Topology) => {
-        const countries = feature(
-          topology,
-          topology.objects.countries as GeometryCollection
-        );
+        const countries = feature(topology, topology.objects.countries as GeometryCollection);
         const projection = geoNaturalEarth1().scale(153).translate([480, 250]);
         const pathGen = geoPath(projection);
         const result: PathEntry[] = [];
@@ -82,36 +127,115 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
 
   if (paths === null) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 240 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 280 }}>
         <CircularProgress size={24} />
       </Box>
     );
   }
 
   const countMap = new Map(data.map(d => [d.countryCode, d.total]));
+  const blockedMap = new Map(data.map(d => [d.countryCode, d.blocked]));
   const max = data.reduce((m, d) => Math.max(m, d.total), 0);
 
   return (
-    <Box sx={{ width: '100%', lineHeight: 0 }}>
-      <svg viewBox="0 0 960 500" style={{ width: '100%', height: 'auto' }}>
-        {paths.map(({ id, d }) => {
-          const alpha2 = N2A[id] ?? null;
-          const count = alpha2 ? (countMap.get(alpha2) ?? 0) : 0;
-          return (
-            <path
-              key={id}
-              d={d}
-              fill={colorForCount(count, max)}
-              stroke="#0f172a"
-              strokeWidth={0.5}
-            >
-              {alpha2 && count > 0 && (
-                <title>{alpha2}: {count.toLocaleString()} requests</title>
-              )}
-            </path>
-          );
-        })}
-      </svg>
+    <Box sx={{ position: 'relative', width: '100%' }}>
+      <Box
+        sx={{
+          borderRadius: 2,
+          overflow: 'hidden',
+          border: '1px solid rgba(148,163,184,0.08)',
+          lineHeight: 0,
+        }}
+      >
+        <svg
+          viewBox="0 0 960 500"
+          style={{ width: '100%', height: 'auto', display: 'block' }}
+          onMouseLeave={() => { setHovered(null); setTooltip(null); }}
+        >
+          {/* Ocean */}
+          <rect width="960" height="500" fill="#0b1628" />
+
+          {paths.map(({ id, d }) => {
+            const alpha2 = N2A[id] ?? null;
+            const count = alpha2 ? (countMap.get(alpha2) ?? 0) : 0;
+            const isHovered = hovered === id;
+            return (
+              <path
+                key={id}
+                d={d}
+                fill={colorForCount(count, max, isHovered)}
+                stroke="#0b1628"
+                strokeWidth={0.6}
+                style={{ cursor: alpha2 ? 'crosshair' : 'default', transition: 'fill 0.12s' }}
+                onMouseEnter={e => {
+                  setHovered(id);
+                  if (alpha2) setTooltip({ x: e.clientX, y: e.clientY, alpha2, count, blocked: blockedMap.get(alpha2) ?? 0 });
+                }}
+                onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : t)}
+              />
+            );
+          })}
+        </svg>
+      </Box>
+
+      {/* Legend */}
+      {max > 0 && (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5, px: 0.5 }}>
+          <Typography variant="caption" color="text.disabled">Low</Typography>
+          <Box sx={{
+            flex: 1, height: 5, borderRadius: 3,
+            background: 'linear-gradient(to right, #1e3a8a, #3b82f6, #93c5fd)',
+          }} />
+          <Typography variant="caption" color="text.disabled">High</Typography>
+        </Box>
+      )}
+
+      {/* Floating tooltip */}
+      {tooltip && (
+        <Box
+          sx={{
+            position: 'fixed',
+            left: tooltip.x + 16,
+            top: tooltip.y - 8,
+            zIndex: 9999,
+            pointerEvents: 'none',
+            bgcolor: 'rgba(10, 18, 35, 0.97)',
+            border: '1px solid rgba(148,163,184,0.18)',
+            borderRadius: 1.5,
+            px: 1.5,
+            py: 1,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(12px)',
+            minWidth: 160,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+            <span style={{ fontSize: 18, lineHeight: 1 }}>{flag(tooltip.alpha2)}</span>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: '#f1f5f9', lineHeight: 1 }}>
+              {NAMES[tooltip.alpha2] ?? tooltip.alpha2}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3 }}>
+              <Typography variant="caption" color="text.secondary">Requests</Typography>
+              <Typography variant="caption" sx={{ color: '#60a5fa', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {tooltip.count.toLocaleString()}
+              </Typography>
+            </Box>
+            {tooltip.blocked > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3 }}>
+                <Typography variant="caption" color="text.secondary">Blocked</Typography>
+                <Typography variant="caption" sx={{ color: '#f87171', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                  {tooltip.blocked.toLocaleString()}
+                </Typography>
+              </Box>
+            )}
+            {tooltip.count === 0 && (
+              <Typography variant="caption" color="text.disabled">No traffic recorded</Typography>
+            )}
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }
