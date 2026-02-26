@@ -3,13 +3,20 @@ import db from './db';
 import { trafficEvents } from './db/schema';
 import { existsSync } from 'node:fs';
 
-export type Interval = '24h' | '7d' | '30d';
+export type Interval = '1h' | '12h' | '24h' | '7d' | '30d';
 
 const LOG_FILE = '/logs/access.log';
 
+const INTERVAL_SECONDS: Record<Interval, number> = {
+  '1h': 3600,
+  '12h': 43200,
+  '24h': 86400,
+  '7d': 7 * 86400,
+  '30d': 30 * 86400,
+};
+
 function getIntervalStart(interval: Interval): number {
-  const seconds = interval === '24h' ? 86400 : interval === '7d' ? 7 * 86400 : 30 * 86400;
-  return Math.floor(Date.now() / 1000) - seconds;
+  return Math.floor(Date.now() / 1000) - INTERVAL_SECONDS[interval];
 }
 
 function buildWhere(interval: Interval, host: string) {
@@ -67,7 +74,8 @@ export interface TimelineBucket {
 }
 
 export async function getAnalyticsTimeline(interval: Interval, host: string): Promise<TimelineBucket[]> {
-  const bucketSize = interval === '24h' ? 3600 : interval === '7d' ? 21600 : 86400;
+  const BUCKET: Record<Interval, number> = { '1h': 300, '12h': 1800, '24h': 3600, '7d': 21600, '30d': 86400 };
+  const bucketSize = BUCKET[interval];
   const where = buildWhere(interval, host);
 
   const rows = db

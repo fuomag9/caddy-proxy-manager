@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { geoNaturalEarth1, geoPath } from 'd3-geo';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import MapGL, { Layer, Source, type MapRef, type MapLayerMouseEvent } from 'react-map-gl/maplibre';
 import { feature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import { Box, CircularProgress, Typography } from '@mui/material';
-
-const WORLD_ATLAS = '/geo/countries-110m.json';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 const A2N: Record<string, string> = {
   AF:'4',AL:'8',DZ:'12',AD:'20',AO:'24',AG:'28',AR:'32',AM:'51',
@@ -81,104 +80,172 @@ function flag(code: string): string {
   return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 }
 
-function colorForCount(count: number, max: number, hovered: boolean): string {
-  if (hovered) return '#7dd3fc'; // sky-300 on hover
-  if (!count) return '#162032';  // near-ocean, slightly lighter
-  // Power curve so even small values show up
-  const t = Math.pow(Math.min(count / Math.max(max, 1), 1), 0.35);
-  // #1e3a8a → #3b82f6 → #93c5fd
-  const stops = [
-    [0x1e, 0x3a, 0x8a],
-    [0x3b, 0x82, 0xf6],
-    [0x93, 0xc5, 0xfd],
-  ];
-  const seg = t < 0.5 ? 0 : 1;
-  const lt = t < 0.5 ? t * 2 : (t - 0.5) * 2;
-  const [r1, g1, b1] = stops[seg];
-  const [r2, g2, b2] = stops[seg + 1];
-  return `rgb(${Math.round(r1 + (r2 - r1) * lt)},${Math.round(g1 + (g2 - g1) * lt)},${Math.round(b1 + (b2 - b1) * lt)})`;
-}
+const OCEAN = '#0b1628';
 
-interface PathEntry { id: string; d: string; }
-interface TooltipInfo { x: number; y: number; alpha2: string; count: number; blocked: number; }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MAP_STYLE: any = {
+  version: 8,
+  name: 'blank',
+  projection: { type: 'naturalEarth' },
+  sources: {},
+  layers: [
+    { id: 'bg', type: 'background', paint: { 'background-color': OCEAN } },
+  ],
+};
+
 export interface CountryStats { countryCode: string; total: number; blocked: number; }
 
-export default function WorldMapInner({ data }: { data: CountryStats[] }) {
-  const [paths, setPaths] = useState<PathEntry[] | null>(null);
-  const [tooltip, setTooltip] = useState<TooltipInfo | null>(null);
-  const [hovered, setHovered] = useState<string | null>(null);
+interface TooltipState { x: number; y: number; alpha2: string; total: number; blocked: number; }
 
+export default function WorldMapInner({ data }: { data: CountryStats[] }) {
+  const mapRef = useRef<MapRef>(null);
+  const [baseGeojson, setBaseGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const hoveredIdRef = useRef<string | number | null>(null);
+
+  const countMap = useMemo(() => new Map(data.map(d => [d.countryCode, d.total])), [data]);
+  const blockedMap = useMemo(() => new Map(data.map(d => [d.countryCode, d.blocked])), [data]);
+  const max = useMemo(() => data.reduce((m, d) => Math.max(m, d.total), 0), [data]);
+
+  // Load topology once
   useEffect(() => {
-    fetch(WORLD_ATLAS)
+    fetch('/geo/countries-110m.json')
       .then(r => r.json())
-      .then((topology: Topology) => {
-        const countries = feature(topology, topology.objects.countries as GeometryCollection);
-        const projection = geoNaturalEarth1().scale(153).translate([480, 250]);
-        const pathGen = geoPath(projection);
-        const result: PathEntry[] = [];
-        for (const f of countries.features) {
-          const d = pathGen(f);
-          if (d) result.push({ id: String(f.id ?? ''), d });
-        }
-        setPaths(result);
+      .then((topo: Topology) => {
+        setBaseGeojson(feature(topo, topo.objects.countries as GeometryCollection) as GeoJSON.FeatureCollection);
       })
-      .catch(() => setPaths([]));
+      .catch(() => setBaseGeojson({ type: 'FeatureCollection', features: [] }));
   }, []);
 
-  if (paths === null) {
+  // Enrich GeoJSON with traffic properties whenever data or topology changes
+  const geojson = useMemo<GeoJSON.FeatureCollection | null>(() => {
+    if (!baseGeojson) return null;
+    const safeMax = Math.max(max, 1);
+    return {
+      ...baseGeojson,
+      features: baseGeojson.features.map(f => {
+        const numId = String(f.id ?? '');
+        const alpha2 = N2A[numId] ?? null;
+        const total = alpha2 ? (countMap.get(alpha2) ?? 0) : 0;
+        const blocked = alpha2 ? (blockedMap.get(alpha2) ?? 0) : 0;
+        return {
+          ...f,
+          properties: { ...f.properties, alpha2, total, blocked, norm: total / safeMax },
+        };
+      }),
+    };
+  }, [baseGeojson, countMap, blockedMap, max]);
+
+  const onMouseMove = useCallback((e: MapLayerMouseEvent) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+
+    const [f] = e.features ?? [];
+    if (!f) {
+      if (hoveredIdRef.current != null) {
+        map.setFeatureState({ source: 'countries', id: hoveredIdRef.current }, { hover: false });
+        hoveredIdRef.current = null;
+      }
+      setTooltip(null);
+      return;
+    }
+
+    const fId = f.id ?? null;
+    if (fId !== hoveredIdRef.current) {
+      if (hoveredIdRef.current != null) {
+        map.setFeatureState({ source: 'countries', id: hoveredIdRef.current }, { hover: false });
+      }
+      hoveredIdRef.current = fId;
+      if (fId != null) map.setFeatureState({ source: 'countries', id: fId }, { hover: true });
+    }
+
+    const alpha2 = (f.properties?.alpha2 as string | null) ?? null;
+    if (alpha2) {
+      setTooltip({
+        x: e.originalEvent.clientX,
+        y: e.originalEvent.clientY,
+        alpha2,
+        total: (f.properties?.total as number) ?? 0,
+        blocked: (f.properties?.blocked as number) ?? 0,
+      });
+    } else {
+      setTooltip(null);
+    }
+  }, []);
+
+  const onMouseLeave = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (map && hoveredIdRef.current != null) {
+      map.setFeatureState({ source: 'countries', id: hoveredIdRef.current }, { hover: false });
+      hoveredIdRef.current = null;
+    }
+    setTooltip(null);
+  }, []);
+
+  if (!geojson) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 280 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
         <CircularProgress size={24} />
       </Box>
     );
   }
 
-  const countMap = new Map(data.map(d => [d.countryCode, d.total]));
-  const blockedMap = new Map(data.map(d => [d.countryCode, d.blocked]));
-  const max = data.reduce((m, d) => Math.max(m, d.total), 0);
-
   return (
-    <Box sx={{ position: 'relative', width: '100%' }}>
-      <Box
-        sx={{
-          borderRadius: 2,
-          overflow: 'hidden',
-          border: '1px solid rgba(148,163,184,0.08)',
-          lineHeight: 0,
-        }}
-      >
-        <svg
-          viewBox="0 0 960 500"
-          style={{ width: '100%', height: 'auto', display: 'block' }}
-          onMouseLeave={() => { setHovered(null); setTooltip(null); }}
+    <Box sx={{ position: 'relative' }}>
+      <Box sx={{
+        borderRadius: 2,
+        overflow: 'hidden',
+        border: '1px solid rgba(148,163,184,0.08)',
+        height: 320,
+      }}>
+        <MapGL
+          ref={mapRef}
+          mapStyle={MAP_STYLE}
+          initialViewState={{ longitude: 0, latitude: 20, zoom: 0 }}
+          interactiveLayerIds={['countries-fill']}
+          onMouseMove={onMouseMove}
+          onMouseLeave={onMouseLeave}
+          style={{ width: '100%', height: '100%' }}
+          attributionControl={false}
+          scrollZoom={false}
+          dragRotate={false}
+          pitchWithRotate={false}
+          cursor={tooltip ? 'crosshair' : 'default'}
         >
-          {/* Ocean */}
-          <rect width="960" height="500" fill="#0b1628" />
 
-          {paths.map(({ id, d }) => {
-            const alpha2 = N2A[id] ?? null;
-            const count = alpha2 ? (countMap.get(alpha2) ?? 0) : 0;
-            const isHovered = hovered === id;
-            return (
-              <path
-                key={id}
-                d={d}
-                fill={colorForCount(count, max, isHovered)}
-                stroke="#0b1628"
-                strokeWidth={0.6}
-                style={{ cursor: alpha2 ? 'crosshair' : 'default', transition: 'fill 0.12s' }}
-                onMouseEnter={e => {
-                  setHovered(id);
-                  if (alpha2) setTooltip({ x: e.clientX, y: e.clientY, alpha2, count, blocked: blockedMap.get(alpha2) ?? 0 });
-                }}
-                onMouseMove={e => setTooltip(t => t ? { ...t, x: e.clientX, y: e.clientY } : t)}
-              />
-            );
-          })}
-        </svg>
+          <Source id="countries" type="geojson" data={geojson}>
+            <Layer
+              id="countries-fill"
+              type="fill"
+              paint={{
+                'fill-color': [
+                  'case',
+                  ['boolean', ['feature-state', 'hover'], false],
+                  '#7dd3fc',
+                  [
+                    'interpolate', ['linear'],
+                    ['coalesce', ['get', 'norm'], 0],
+                    0, '#162032',
+                    0.001, '#1e3a8a',
+                    0.5, '#3b82f6',
+                    1, '#93c5fd',
+                  ],
+                ],
+                'fill-opacity': 1,
+              }}
+            />
+            <Layer
+              id="countries-outline"
+              type="line"
+              paint={{
+                'line-color': OCEAN,
+                'line-width': 0.6,
+              }}
+            />
+          </Source>
+        </MapGL>
       </Box>
 
-      {/* Legend */}
       {max > 0 && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5, px: 0.5 }}>
           <Typography variant="caption" color="text.disabled">Low</Typography>
@@ -190,7 +257,6 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
         </Box>
       )}
 
-      {/* Floating tooltip */}
       {tooltip && (
         <Box
           sx={{
@@ -219,7 +285,7 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3 }}>
               <Typography variant="caption" color="text.secondary">Requests</Typography>
               <Typography variant="caption" sx={{ color: '#60a5fa', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                {tooltip.count.toLocaleString()}
+                {tooltip.total.toLocaleString()}
               </Typography>
             </Box>
             {tooltip.blocked > 0 && (
@@ -230,7 +296,7 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
                 </Typography>
               </Box>
             )}
-            {tooltip.count === 0 && (
+            {tooltip.total === 0 && (
               <Typography variant="caption" color="text.disabled">No traffic recorded</Typography>
             )}
           </Box>
