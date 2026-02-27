@@ -81,72 +81,29 @@ function flag(code: string): string {
   return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 }
 
-// Split polygon rings that cross the antimeridian (±180°) so MapLibre renders them correctly.
-// Without this, countries like Russia get drawn as a giant polygon spanning the whole map.
+// Unwrap polygon rings so consecutive vertices never jump more than 180° in longitude.
+// This prevents MapLibre from drawing giant artifacts for countries crossing ±180° (Russia, Fiji, etc.).
+// Coordinates outside [-180, 180] are intentional — MapLibre renders them via world-copy tiling.
 function cutAntimeridian(fc: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
-  const wrapLng = (lng: number) => ((lng + 180) % 360 + 360) % 360 - 180;
-
-  function fixRing(ring: GeoJSON.Position[]): GeoJSON.Position[][] {
-    // Detect antimeridian crossing: consecutive points jump > 180° in longitude
-    let hasCrossing = false;
-    for (let i = 0; i < ring.length - 1; i++) {
-      if (Math.abs(ring[i][0] - ring[i + 1][0]) > 180) { hasCrossing = true; break; }
+  function unwrapRing(ring: GeoJSON.Position[]): GeoJSON.Position[] {
+    if (ring.length === 0) return ring;
+    const out: GeoJSON.Position[] = [[ring[0][0], ring[0][1]]];
+    for (let i = 1; i < ring.length; i++) {
+      let lng = ring[i][0];
+      const prev = out[i - 1][0];
+      while (lng - prev > 180) lng -= 360;
+      while (prev - lng > 180) lng += 360;
+      out.push([lng, ring[i][1]]);
     }
-    if (!hasCrossing) return [ring.map(([lng, lat]) => [wrapLng(lng), lat])];
-
-    // Split into west (<0) and east (≥0) halves by normalizing each segment
-    const west: GeoJSON.Position[] = [];
-    const east: GeoJSON.Position[] = [];
-    let side: 'w' | 'e' = ring[0][0] >= 0 ? 'e' : 'w';
-
-    for (let i = 0; i < ring.length - 1; i++) {
-      const cur: GeoJSON.Position = [wrapLng(ring[i][0]), ring[i][1]];
-      const nxt: GeoJSON.Position = [wrapLng(ring[i + 1][0]), ring[i + 1][1]];
-      const crosses = Math.abs(ring[i][0] - ring[i + 1][0]) > 180;
-
-      if (side === 'e') {
-        east.push(cur);
-        if (crosses) {
-          // interpolate lat at boundary
-          const t = (180 - cur[0]) / ((nxt[0] + 360) - cur[0]);
-          const lat = cur[1] + t * (nxt[1] - cur[1]);
-          east.push([180, lat]);
-          west.push([-180, lat]);
-          side = 'w';
-        }
-      } else {
-        west.push(cur);
-        if (crosses) {
-          const t = (-180 - cur[0]) / ((nxt[0] - 360) - cur[0]);
-          const lat = cur[1] + t * (nxt[1] - cur[1]);
-          west.push([-180, lat]);
-          east.push([180, lat]);
-          side = 'e';
-        }
-      }
-    }
-    // Close each ring
-    if (east.length > 2) east.push(east[0]);
-    if (west.length > 2) west.push(west[0]);
-    return [east.length > 2 ? east : [], west.length > 2 ? west : []].filter(r => r.length > 2);
-  }
-
-  function fixPolygon(coords: GeoJSON.Position[][]): GeoJSON.Polygon[] {
-    const fixed = coords.flatMap(ring => fixRing(ring));
-    if (fixed.length <= 1) return [{ type: 'Polygon', coordinates: fixed.length === 1 ? [fixed[0]] : coords }];
-    // Separate outer rings (area > 0 by winding) — simplified: just wrap each piece
-    return fixed.map(r => ({ type: 'Polygon' as const, coordinates: [r] }));
+    return out;
   }
 
   function fixGeometry(geom: GeoJSON.Geometry): GeoJSON.Geometry {
     if (geom.type === 'Polygon') {
-      const polys = fixPolygon(geom.coordinates);
-      if (polys.length === 1) return polys[0];
-      return { type: 'MultiPolygon', coordinates: polys.map(p => p.coordinates) };
+      return { ...geom, coordinates: geom.coordinates.map(unwrapRing) };
     }
     if (geom.type === 'MultiPolygon') {
-      const all = geom.coordinates.flatMap(fixPolygon);
-      return { type: 'MultiPolygon', coordinates: all.map(p => p.coordinates) };
+      return { ...geom, coordinates: geom.coordinates.map(p => p.map(unwrapRing)) };
     }
     return geom;
   }
