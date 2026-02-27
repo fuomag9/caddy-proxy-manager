@@ -36,7 +36,7 @@ export type ManagedCertView = { id: number; name: string; domain_names: string[]
 const PER_PAGE = 25;
 
 interface PageProps {
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string }>;
 }
 
 function parsePemInfo(pem: string): { validTo: string; validFrom: string; issuer: string; sanDomains: string[] } | null {
@@ -74,7 +74,8 @@ function getExpiryStatus(validToIso: string): CertExpiryStatus {
 
 export default async function CertificatesPage({ searchParams }: PageProps) {
   await requireAdmin();
-  const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
+  const { page: pageParam } = await searchParams;
+  const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const offset = (page - 1) * PER_PAGE;
   const acmeCertMap = scanAcmeCerts();
 

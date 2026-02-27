@@ -6,13 +6,14 @@ import { requireAdmin } from "@/src/lib/auth";
 const PER_PAGE = 50;
 
 interface PageProps {
-  searchParams: { page?: string; search?: string };
+  searchParams: Promise<{ page?: string; search?: string }>;
 }
 
 export default async function AuditLogPage({ searchParams }: PageProps) {
   await requireAdmin();
-  const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
-  const search = searchParams.search?.trim() || undefined;
+  const { page: pageParam, search: searchParam } = await searchParams;
+  const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
+  const search = searchParam?.trim() || undefined;
   const offset = (page - 1) * PER_PAGE;
 
   const [events, total, users] = await Promise.all([
