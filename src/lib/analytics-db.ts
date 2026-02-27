@@ -267,5 +267,6 @@ export async function getAnalyticsHosts(): Promise<string[]> {
     } catch { /* ignore malformed rows */ }
   }
 
-  return Array.from(hostSet).sort();
+  const isIp = (h: string) => /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(h);
+  return Array.from(hostSet).filter(h => !isIp(h)).sort();
 }
