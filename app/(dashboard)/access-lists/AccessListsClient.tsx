@@ -122,6 +122,18 @@ export default function AccessListsClient({ lists, pagination }: Props) {
         ))}
       </Stack>
 
+      {pageCount > 1 && (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+          <Pagination
+            count={pageCount}
+            page={pagination.page}
+            onChange={handlePageChange}
+            color="primary"
+            shape="rounded"
+          />
+        </Box>
+      )}
+
       <Stack spacing={2} component="section">
         <Typography variant="h6" fontWeight={600}>
           Create access list
@@ -148,18 +160,6 @@ export default function AccessListsClient({ lists, pagination }: Props) {
           </CardContent>
         </Card>
       </Stack>
-
-      {pageCount > 1 && (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-          <Pagination
-            count={pageCount}
-            page={pagination.page}
-            onChange={handlePageChange}
-            color="primary"
-            shape="rounded"
-          />
-        </Box>
-      )}
     </Stack>
   );
 }

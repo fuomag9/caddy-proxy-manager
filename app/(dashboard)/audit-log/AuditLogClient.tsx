@@ -24,6 +24,9 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(initialSearch);
+  useEffect(() => {
+    setSearchTerm(initialSearch);
+  }, [initialSearch]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateSearch = useCallback(
