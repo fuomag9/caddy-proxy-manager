@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Chip, Stack, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
+import { DataTable } from "@/src/components/ui/DataTable";
 
 type EventRow = {
   id: number;
@@ -11,26 +13,69 @@ type EventRow = {
   summary: string;
 };
 
-export default function AuditLogClient({ events }: { events: EventRow[] }) {
-  const [searchTerm, setSearchTerm] = useState("");
+type Props = {
+  events: EventRow[];
+  pagination: { total: number; page: number; perPage: number };
+  initialSearch: string;
+};
 
-  const filteredEvents = useMemo(() => {
-    if (!searchTerm.trim()) return events;
+export default function AuditLogClient({ events, pagination, initialSearch }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const search = searchTerm.toLowerCase();
-    return events.filter((event) => {
-      // Search in user
-      if (event.user.toLowerCase().includes(search)) return true;
+  const updateSearch = useCallback(
+    (value: string) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        const params = new URLSearchParams(searchParams.toString());
+        if (value.trim()) {
+          params.set("search", value.trim());
+        } else {
+          params.delete("search");
+        }
+        params.delete("page"); // reset to page 1 on new search
+        router.push(`${pathname}?${params.toString()}`);
+      }, 400);
+    },
+    [router, pathname, searchParams]
+  );
 
-      // Search in summary
-      if (event.summary.toLowerCase().includes(search)) return true;
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
-      // Search in timestamp
-      if (new Date(event.created_at).toLocaleString().toLowerCase().includes(search)) return true;
-
-      return false;
-    });
-  }, [events, searchTerm]);
+  const columns = [
+    {
+      id: "created_at",
+      label: "Time",
+      width: 180,
+      render: (r: EventRow) => (
+        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+          {new Date(r.created_at).toLocaleString()}
+        </Typography>
+      ),
+    },
+    {
+      id: "user",
+      label: "User",
+      width: 160,
+      render: (r: EventRow) => (
+        <Chip label={r.user} size="small" variant="outlined" />
+      ),
+    },
+    {
+      id: "summary",
+      label: "Event",
+      render: (r: EventRow) => (
+        <Typography variant="body2">{r.summary}</Typography>
+      ),
+    },
+  ];
 
   return (
     <Stack spacing={2} sx={{ width: "100%" }}>
@@ -42,50 +87,26 @@ export default function AuditLogClient({ events }: { events: EventRow[] }) {
       <TextField
         placeholder="Search audit log..."
         value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
+        onChange={(e) => {
+          setSearchTerm(e.target.value);
+          updateSearch(e.target.value);
+        }}
         slotProps={{
           input: {
-            startAdornment: <SearchIcon sx={{ mr: 1, color: "rgba(255, 255, 255, 0.5)" }} />
-          }
+            startAdornment: <SearchIcon sx={{ mr: 1, color: "rgba(255, 255, 255, 0.5)" }} />,
+          },
         }}
-        sx={{
-          maxWidth: 500,
-          "& .MuiOutlinedInput-root": {
-            bgcolor: "rgba(20, 20, 22, 0.6)",
-            "&:hover": {
-              bgcolor: "rgba(20, 20, 22, 0.8)"
-            }
-          }
-        }}
+        size="small"
+        sx={{ maxWidth: 400 }}
       />
-      <TableContainer component={Paper} sx={{ bgcolor: "background.paper" }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>When</TableCell>
-              <TableCell>User</TableCell>
-              <TableCell>Summary</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredEvents.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} align="center" sx={{ py: 6, color: "text.secondary" }}>
-                  {searchTerm ? "No audit log entries match your search." : "No audit log entries found."}
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredEvents.map((event) => (
-                <TableRow key={event.id} hover>
-                  <TableCell>{new Date(event.created_at).toLocaleString()}</TableCell>
-                  <TableCell>{event.user}</TableCell>
-                  <TableCell>{event.summary}</TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+
+      <DataTable
+        columns={columns}
+        data={events}
+        keyField="id"
+        emptyMessage="No audit events found"
+        pagination={pagination}
+      />
     </Stack>
   );
 }
