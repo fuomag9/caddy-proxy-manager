@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -22,36 +23,39 @@ type Props = {
   accessLists: AccessList[];
   authentikDefaults: AuthentikSettings | null;
   pagination: { total: number; page: number; perPage: number };
+  initialSearch: string;
 };
 
-export default function ProxyHostsClient({ hosts, certificates, accessLists, authentikDefaults, pagination }: Props) {
+export default function ProxyHostsClient({ hosts, certificates, accessLists, authentikDefaults, pagination, initialSearch }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(initialSearch);
 
-  const filteredHosts = useMemo(() => {
-    if (!searchTerm.trim()) return hosts;
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const search = searchTerm.toLowerCase();
-    return hosts.filter((host) => {
-      // Search in name
-      if (host.name.toLowerCase().includes(search)) return true;
-      // Search in domains
-      if (host.domains.some(domain => domain.toLowerCase().includes(search))) return true;
-      // Search in upstreams
-      if (host.upstreams.some(upstream => upstream.toLowerCase().includes(search))) return true;
+  useEffect(() => {
+    setSearchTerm(initialSearch);
+  }, [initialSearch]);
 
-      const certificate = host.certificate_id
-        ? certificates.find(c => c.id === host.certificate_id)
-        : null;
-      const certName = certificate?.name ?? "Managed by Caddy (Auto)";
-      if (certName.toLowerCase().includes(search)) return true;
-
-      return false;
-    });
-  }, [hosts, certificates, searchTerm]);
+  function handleSearchChange(value: string) {
+    setSearchTerm(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (value.trim()) {
+        params.set("search", value.trim());
+      } else {
+        params.delete("search");
+      }
+      params.set("page", "1");
+      router.push(`${pathname}?${params.toString()}`);
+    }, 400);
+  }
 
   const handleToggleEnabled = async (id: number, enabled: boolean) => {
     await toggleProxyHostAction(id, enabled);
@@ -151,13 +155,13 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
 
       <SearchField
         value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
+        onChange={(e) => handleSearchChange(e.target.value)}
         placeholder="Search hosts..."
       />
 
       <DataTable
         columns={columns}
-        data={filteredHosts}
+        data={hosts}
         keyField="id"
         emptyMessage={searchTerm ? "No hosts match your search" : "No proxy hosts found"}
         pagination={pagination}
