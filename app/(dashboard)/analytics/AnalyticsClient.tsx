@@ -7,11 +7,13 @@ import {
   Alert,
   Autocomplete,
   Box,
+  Button,
   Card,
   CardContent,
   Checkbox,
   Chip,
   CircularProgress,
+  Divider,
   Grid,
   ListItemText,
   Pagination,
@@ -334,6 +336,39 @@ export default function AnalyticsClient() {
               disableCloseOnSelect
               limitTags={2}
               sx={{ minWidth: 220, maxWidth: 380 }}
+              ListboxProps={{
+                // Prevent scroll from the dropdown list leaking to the page
+                style: { overscrollBehavior: 'contain' },
+              }}
+              PaperComponent={({ children, ...paperProps }) => (
+                <Paper {...paperProps}>
+                  {/* Select all / none — onMouseDown preventDefault keeps the popup open */}
+                  <Box
+                    onMouseDown={e => e.preventDefault()}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.5 }}
+                  >
+                    <Button
+                      size="small"
+                      variant="text"
+                      sx={{ fontSize: 12, py: 0.25, minWidth: 0 }}
+                      onClick={() => setSelectedHosts(allHosts)}
+                    >
+                      Select all
+                    </Button>
+                    <Typography variant="caption" color="text.disabled">·</Typography>
+                    <Button
+                      size="small"
+                      variant="text"
+                      sx={{ fontSize: 12, py: 0.25, minWidth: 0 }}
+                      onClick={() => setSelectedHosts([])}
+                    >
+                      Clear
+                    </Button>
+                  </Box>
+                  <Divider />
+                  {children}
+                </Paper>
+              )}
               renderOption={(props, option, { selected }) => (
                 <li {...props} key={option}>
                   <Checkbox size="small" checked={selected} sx={{ mr: 0.5, p: 0.5 }} />
