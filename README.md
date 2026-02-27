@@ -8,7 +8,7 @@ Web interface for managing [Caddy Server](https://caddyserver.com/) reverse prox
 
 [Report Bug](https://github.com/fuomag9/caddy-proxy-manager/issues) • [Request Feature](https://github.com/fuomag9/caddy-proxy-manager/issues)
 
-<img width="100%" alt="Dashboard screenshot" src="site/assets/screenshots/dashboard-main.png" />
+<img width="100%" alt="Dashboard" src="site/assets/screenshots/dashboard-main.png" />
 
 ## Overview
 
@@ -26,11 +26,6 @@ This project provides a web UI for Caddy Server, eliminating the need to manuall
 - Custom certificate import (internal CA, wildcards, etc.)
 - Audit logging of all configuration changes with full-text search
 - Built with Next.js 16, React 19, Drizzle ORM, and TypeScript
-
-<img width="49%" alt="Proxy Hosts" src="site/assets/screenshots/proxy-hosts.png" /> <img width="49%" alt="Certificates" src="site/assets/screenshots/certificates.png" />
-<img width="49%" alt="Proxy Editor" src="site/assets/screenshots/proxy-editor.png" /> <img width="49%" alt="Audit Log" src="site/assets/screenshots/audit-log.png" />
-
-<img width="100%" alt="Analytics" src="site/assets/screenshots/analytics.png" />
 
 ---
 
