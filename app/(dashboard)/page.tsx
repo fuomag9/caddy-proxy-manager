@@ -7,7 +7,7 @@ import {
   certificates,
   proxyHosts
 } from "@/src/lib/db/schema";
-import { count, desc } from "drizzle-orm";
+import { count, desc, isNull, isNotNull, eq, sql } from "drizzle-orm";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SecurityIcon from "@mui/icons-material/Security";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
@@ -22,14 +22,19 @@ type StatCard = {
 };
 
 async function loadStats(): Promise<StatCard[]> {
-  const [proxyHostCountResult, certificateCountResult, accessListCountResult] =
+  const [proxyHostCountResult, acmeCertCountResult, importedCertCountResult, accessListCountResult] =
     await Promise.all([
       db.select({ value: count() }).from(proxyHosts),
-      db.select({ value: count() }).from(certificates),
+      // Proxy hosts with no explicit cert → Caddy auto-issues one ACME cert per host
+      db.select({ value: count() }).from(proxyHosts).where(isNull(proxyHosts.certificateId)),
+      // Imported certs with actual PEM data (valid, user-managed)
+      db.select({ value: count() }).from(certificates).where(
+        sql`${certificates.type} = 'imported' AND ${certificates.certificatePem} IS NOT NULL`
+      ),
       db.select({ value: count() }).from(accessLists)
     ]);
   const proxyHostsCount = proxyHostCountResult[0]?.value ?? 0;
-  const certificatesCount = certificateCountResult[0]?.value ?? 0;
+  const certificatesCount = (acmeCertCountResult[0]?.value ?? 0) + (importedCertCountResult[0]?.value ?? 0);
   const accessListsCount = accessListCountResult[0]?.value ?? 0;
 
   return [
