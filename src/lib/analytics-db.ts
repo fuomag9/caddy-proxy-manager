@@ -1,4 +1,4 @@
-import { sql, and, gte, eq } from 'drizzle-orm';
+import { sql, and, gte, lte, eq } from 'drizzle-orm';
 import db from './db';
 import { trafficEvents } from './db/schema';
 import { existsSync } from 'node:fs';
@@ -7,7 +7,7 @@ export type Interval = '1h' | '12h' | '24h' | '7d' | '30d';
 
 const LOG_FILE = '/logs/access.log';
 
-const INTERVAL_SECONDS: Record<Interval, number> = {
+export const INTERVAL_SECONDS: Record<Interval, number> = {
   '1h': 3600,
   '12h': 43200,
   '24h': 86400,
@@ -15,13 +15,8 @@ const INTERVAL_SECONDS: Record<Interval, number> = {
   '30d': 30 * 86400,
 };
 
-function getIntervalStart(interval: Interval): number {
-  return Math.floor(Date.now() / 1000) - INTERVAL_SECONDS[interval];
-}
-
-function buildWhere(interval: Interval, host: string) {
-  const since = getIntervalStart(interval);
-  const conditions = [gte(trafficEvents.ts, since)];
+function buildWhere(from: number, to: number, host: string) {
+  const conditions = [gte(trafficEvents.ts, from), lte(trafficEvents.ts, to)];
   if (host !== 'all' && host !== '') conditions.push(eq(trafficEvents.host, host));
   return and(...conditions);
 }
@@ -37,9 +32,9 @@ export interface AnalyticsSummary {
   loggingDisabled: boolean;
 }
 
-export async function getAnalyticsSummary(interval: Interval, host: string): Promise<AnalyticsSummary> {
+export async function getAnalyticsSummary(from: number, to: number, host: string): Promise<AnalyticsSummary> {
   const loggingDisabled = !existsSync(LOG_FILE);
-  const where = buildWhere(interval, host);
+  const where = buildWhere(from, to, host);
 
   const row = db
     .select({
@@ -73,10 +68,17 @@ export interface TimelineBucket {
   blocked: number;
 }
 
-export async function getAnalyticsTimeline(interval: Interval, host: string): Promise<TimelineBucket[]> {
-  const BUCKET: Record<Interval, number> = { '1h': 300, '12h': 1800, '24h': 3600, '7d': 21600, '30d': 86400 };
-  const bucketSize = BUCKET[interval];
-  const where = buildWhere(interval, host);
+function bucketSizeForDuration(seconds: number): number {
+  if (seconds <= 3600) return 300;
+  if (seconds <= 43200) return 1800;
+  if (seconds <= 86400) return 3600;
+  if (seconds <= 7 * 86400) return 21600;
+  return 86400;
+}
+
+export async function getAnalyticsTimeline(from: number, to: number, host: string): Promise<TimelineBucket[]> {
+  const bucketSize = bucketSizeForDuration(to - from);
+  const where = buildWhere(from, to, host);
 
   const rows = db
     .select({
@@ -105,8 +107,8 @@ export interface CountryStats {
   blocked: number;
 }
 
-export async function getAnalyticsCountries(interval: Interval, host: string): Promise<CountryStats[]> {
-  const where = buildWhere(interval, host);
+export async function getAnalyticsCountries(from: number, to: number, host: string): Promise<CountryStats[]> {
+  const where = buildWhere(from, to, host);
 
   const rows = db
     .select({
@@ -135,8 +137,8 @@ export interface ProtoStats {
   percent: number;
 }
 
-export async function getAnalyticsProtocols(interval: Interval, host: string): Promise<ProtoStats[]> {
-  const where = buildWhere(interval, host);
+export async function getAnalyticsProtocols(from: number, to: number, host: string): Promise<ProtoStats[]> {
+  const where = buildWhere(from, to, host);
 
   const rows = db
     .select({
@@ -166,8 +168,8 @@ export interface UAStats {
   percent: number;
 }
 
-export async function getAnalyticsUserAgents(interval: Interval, host: string): Promise<UAStats[]> {
-  const where = buildWhere(interval, host);
+export async function getAnalyticsUserAgents(from: number, to: number, host: string): Promise<UAStats[]> {
+  const where = buildWhere(from, to, host);
 
   const rows = db
     .select({
@@ -210,9 +212,9 @@ export interface BlockedPage {
   pages: number;
 }
 
-export async function getAnalyticsBlocked(interval: Interval, host: string, page: number): Promise<BlockedPage> {
+export async function getAnalyticsBlocked(from: number, to: number, host: string, page: number): Promise<BlockedPage> {
   const pageSize = 10;
-  const where = and(buildWhere(interval, host), eq(trafficEvents.isBlocked, true));
+  const where = and(buildWhere(from, to, host), eq(trafficEvents.isBlocked, true));
 
   const totalRow = db.select({ total: sql<number>`count(*)` }).from(trafficEvents).where(where).get();
   const total = totalRow?.total ?? 0;

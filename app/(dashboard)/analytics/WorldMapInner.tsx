@@ -140,12 +140,21 @@ const FILL_LAYER: Omit<FillLayerSpecification, 'source'> = {
   },
 };
 
-const HIGHLIGHT_LAYER: Omit<FillLayerSpecification, 'source'> = {
-  id: 'countries-highlight',
+const SELECTED_LAYER: Omit<FillLayerSpecification, 'source'> = {
+  id: 'countries-selected',
   type: 'fill',
   paint: {
     'fill-color': '#7dd3fc',
     'fill-opacity': 0.45,
+  },
+};
+
+const HOVER_LAYER: Omit<FillLayerSpecification, 'source'> = {
+  id: 'countries-hover',
+  type: 'fill',
+  paint: {
+    'fill-color': '#7dd3fc',
+    'fill-opacity': 0.30,
   },
 };
 
@@ -195,10 +204,11 @@ export default function WorldMapInner({ data, selectedCountry }: { data: Country
         const alpha2 = N2A[String(Number(f.id ?? 0))] ?? null;
         const total = alpha2 ? (countMap.get(alpha2) ?? 0) : 0;
         const blocked = alpha2 ? (blockedMap.get(alpha2) ?? 0) : 0;
-        return { ...f, properties: { ...f.properties, alpha2, total, blocked, norm: total / safeMax } };
+        const isSelected = alpha2 !== null && alpha2 === selectedCountry;
+        return { ...f, properties: { ...f.properties, alpha2, total, blocked, norm: total / safeMax, isSelected } };
       }),
     };
-  }, [baseGeojson, countMap, blockedMap, max]);
+  }, [baseGeojson, countMap, blockedMap, max, selectedCountry]);
 
   const onHover = useCallback((event: MapLayerMouseEvent) => {
     const f = event.features?.[0];
@@ -213,10 +223,41 @@ export default function WorldMapInner({ data, selectedCountry }: { data: Country
     });
   }, []);
 
-  const highlightFilter = useMemo<ExpressionSpecification>(() => {
-    const target = hoverInfo?.alpha2 ?? selectedCountry ?? null;
-    return target ? ['==', ['get', 'alpha2'], target] : ['boolean', false];
-  }, [hoverInfo?.alpha2, selectedCountry]);
+  // Hover filter: only tracks mouse position, changes on every mousemove
+  const hoverFilter = useMemo<ExpressionSpecification>(() => {
+    const a2 = hoverInfo?.alpha2 ?? null;
+    return a2 ? ['==', ['get', 'alpha2'], a2] : ['boolean', false];
+  }, [hoverInfo?.alpha2]);
+
+  // Centroid popup for the table-selected country (shown when not hovering)
+  const selectedInfo = useMemo(() => {
+    if (!selectedCountry || !geojson) return null;
+    const feat = geojson.features.find(f => f.properties?.alpha2 === selectedCountry);
+    if (!feat?.geometry) return null;
+
+    const positions: GeoJSON.Position[] = [];
+    const collect = (geom: GeoJSON.Geometry) => {
+      if (geom.type === 'Polygon') geom.coordinates.forEach(r => positions.push(...r));
+      else if (geom.type === 'MultiPolygon') geom.coordinates.forEach(p => p.forEach(r => positions.push(...r)));
+    };
+    collect(feat.geometry);
+    if (positions.length === 0) return null;
+
+    const lngs = positions.map(c => c[0]);
+    const lats = positions.map(c => c[1]);
+    // Clamp longitude to [-180, 180] for the popup anchor
+    const rawLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+    const longitude = ((rawLng + 180) % 360 + 360) % 360 - 180;
+    const latitude = Math.max(-85, Math.min(85, (Math.min(...lats) + Math.max(...lats)) / 2));
+
+    return {
+      longitude,
+      latitude,
+      alpha2: selectedCountry,
+      total: (feat.properties?.total as number) ?? 0,
+      blocked: (feat.properties?.blocked as number) ?? 0,
+    };
+  }, [selectedCountry, geojson]);
 
   if (!geojson) {
     return (
@@ -267,45 +308,52 @@ export default function WorldMapInner({ data, selectedCountry }: { data: Country
         >
           <Source id="countries" type="geojson" data={geojson}>
             <Layer {...FILL_LAYER} source="countries" />
-            <Layer {...HIGHLIGHT_LAYER} source="countries" filter={highlightFilter} />
+            {/* Selected: data-driven via isSelected property baked into geojson — reliable on click */}
+            <Layer {...SELECTED_LAYER} source="countries" filter={['==', ['get', 'isSelected'], true]} />
+            {/* Hover: filter-driven, changes on mousemove */}
+            <Layer {...HOVER_LAYER} source="countries" filter={hoverFilter} />
             <Layer {...OUTLINE_LAYER} source="countries" />
           </Source>
 
-          {hoverInfo && (
-            <Popup
-              longitude={hoverInfo.longitude}
-              latitude={hoverInfo.latitude}
-              offset={[0, -6] as [number, number]}
-              closeButton={false}
-              closeOnClick={false}
-              anchor="bottom"
-              className="wm-popup"
-            >
-              <div style={{ color: '#f1f5f9', fontFamily: 'inherit', fontSize: 13 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, fontWeight: 600, fontSize: 14 }}>
-                  <span style={{ fontSize: 20, lineHeight: 1 }}>{hoverInfo.alpha2 ? flag(hoverInfo.alpha2) : '🌐'}</span>
-                  <span>{hoverInfo.alpha2 ? (NAMES[hoverInfo.alpha2] ?? hoverInfo.alpha2) : 'Territory'}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
-                  <span style={{ color: '#94a3b8' }}>Requests</span>
-                  <span style={{ color: '#60a5fa', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                    {hoverInfo.total.toLocaleString()}
-                  </span>
-                </div>
-                {hoverInfo.blocked > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, marginTop: 3 }}>
-                    <span style={{ color: '#94a3b8' }}>Blocked</span>
-                    <span style={{ color: '#f87171', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                      {hoverInfo.blocked.toLocaleString()}
+          {/* Hover popup (takes precedence) or selected-country popup */}
+          {(hoverInfo ?? selectedInfo) && (() => {
+            const info = hoverInfo ?? selectedInfo!;
+            return (
+              <Popup
+                longitude={info.longitude}
+                latitude={info.latitude}
+                offset={[0, -6] as [number, number]}
+                closeButton={false}
+                closeOnClick={false}
+                anchor="bottom"
+                className="wm-popup"
+              >
+                <div style={{ color: '#f1f5f9', fontFamily: 'inherit', fontSize: 13 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, fontWeight: 600, fontSize: 14 }}>
+                    <span style={{ fontSize: 20, lineHeight: 1 }}>{info.alpha2 ? flag(info.alpha2) : '🌐'}</span>
+                    <span>{info.alpha2 ? (NAMES[info.alpha2] ?? info.alpha2) : 'Territory'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+                    <span style={{ color: '#94a3b8' }}>Requests</span>
+                    <span style={{ color: '#60a5fa', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      {info.total.toLocaleString()}
                     </span>
                   </div>
-                )}
-                {hoverInfo.total === 0 && (
-                  <div style={{ color: '#475569', marginTop: 3, fontSize: 12 }}>No traffic recorded</div>
-                )}
-              </div>
-            </Popup>
-          )}
+                  {info.blocked > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, marginTop: 3 }}>
+                      <span style={{ color: '#94a3b8' }}>Blocked</span>
+                      <span style={{ color: '#f87171', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        {info.blocked.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                  {info.total === 0 && (
+                    <div style={{ color: '#475569', marginTop: 3, fontSize: 12 }}>No traffic recorded</div>
+                  )}
+                </div>
+              </Popup>
+            );
+          })()}
         </MapGL>
       </Box>
 

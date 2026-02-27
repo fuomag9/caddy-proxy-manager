@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
@@ -44,6 +44,17 @@ const WorldMap = dynamic(() => import('./WorldMapInner'), {
 // ── Types (mirrored from analytics-db — can't import server-only code) ────────
 
 type Interval = '1h' | '12h' | '24h' | '7d' | '30d';
+type DisplayInterval = Interval | 'custom';
+
+const INTERVAL_SECONDS_CLIENT: Record<Interval, number> = {
+  '1h': 3600, '12h': 43200, '24h': 86400, '7d': 7 * 86400, '30d': 30 * 86400,
+};
+
+/** Format a datetime-local string for <input type="datetime-local"> (local time, no seconds) */
+function toDatetimeLocal(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 interface AnalyticsSummary {
   totalRequests: number;
@@ -97,12 +108,10 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-function formatTs(ts: number, interval: Interval): string {
+function formatTs(ts: number, rangeSeconds: number): string {
   const d = new Date(ts * 1000);
-  if (interval === '1h') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (interval === '12h') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (interval === '24h') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (interval === '7d') return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (rangeSeconds <= 86400) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (rangeSeconds <= 7 * 86400) return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
@@ -134,9 +143,13 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function AnalyticsClient() {
-  const [interval, setIntervalVal] = useState<Interval>('24h');
+  const [interval, setIntervalVal] = useState<DisplayInterval>('1h');
   const [host, setHost] = useState<string>('all');
   const [hosts, setHosts] = useState<string[]>([]);
+
+  // Custom range (datetime-local strings: "YYYY-MM-DDTHH:MM")
+  const [customFrom, setCustomFrom] = useState<string>('');
+  const [customTo, setCustomTo] = useState<string>('');
 
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [timeline, setTimeline] = useState<TimelineBucket[]>([]);
@@ -147,15 +160,42 @@ export default function AnalyticsClient() {
   const [loading, setLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
+  /** How many seconds the current selection spans — used for chart axis labels */
+  const rangeSeconds = useMemo(() => {
+    if (interval === 'custom' && customFrom && customTo) {
+      const diff = Math.floor(new Date(customTo).getTime() / 1000) - Math.floor(new Date(customFrom).getTime() / 1000);
+      return diff > 0 ? diff : 3600;
+    }
+    return INTERVAL_SECONDS_CLIENT[interval as Interval] ?? 3600;
+  }, [interval, customFrom, customTo]);
+
+  /** Build the query string for all analytics endpoints */
+  const buildParams = useCallback((extra = '') => {
+    const h = `host=${encodeURIComponent(host)}`;
+    if (interval === 'custom' && customFrom && customTo) {
+      const from = Math.floor(new Date(customFrom).getTime() / 1000);
+      const to = Math.floor(new Date(customTo).getTime() / 1000);
+      return `?from=${from}&to=${to}&${h}${extra}`;
+    }
+    return `?interval=${interval}&${h}${extra}`;
+  }, [interval, host, customFrom, customTo]);
+
   // Fetch hosts once
   useEffect(() => {
     fetch('/api/analytics/hosts').then(r => r.json()).then(setHosts).catch(() => {});
   }, []);
 
-  // Fetch all analytics data when interval or host changes
+  // Fetch all analytics data when range/host changes
+  // For custom: only fetch when both dates are set and from < to
   useEffect(() => {
+    if (interval === 'custom') {
+      if (!customFrom || !customTo) return;
+      const from = new Date(customFrom).getTime();
+      const to = new Date(customTo).getTime();
+      if (from >= to) return;
+    }
     setLoading(true);
-    const params = `?interval=${interval}&host=${encodeURIComponent(host)}`;
+    const params = buildParams();
     Promise.all([
       fetch(`/api/analytics/summary${params}`).then(r => r.json()),
       fetch(`/api/analytics/timeline${params}`).then(r => r.json()),
@@ -171,16 +211,15 @@ export default function AnalyticsClient() {
       setUserAgents(u);
       setBlocked(b);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [interval, host]);
+  }, [buildParams, interval, customFrom, customTo]);
 
   const fetchBlockedPage = useCallback((page: number) => {
-    const params = `?interval=${interval}&host=${encodeURIComponent(host)}&page=${page}`;
-    fetch(`/api/analytics/blocked${params}`).then(r => r.json()).then(setBlocked).catch(() => {});
-  }, [interval, host]);
+    fetch(`/api/analytics/blocked${buildParams(`&page=${page}`)}`).then(r => r.json()).then(setBlocked).catch(() => {});
+  }, [buildParams]);
 
   // ── Chart configs ─────────────────────────────────────────────────────────
 
-  const timelineLabels = timeline.map(b => formatTs(b.ts, interval));
+  const timelineLabels = timeline.map(b => formatTs(b.ts, rangeSeconds));
   const timelineOptions: ApexOptions = {
     ...DARK_CHART,
     chart: { ...DARK_CHART.chart, type: 'area', stacked: true, id: 'timeline' },
@@ -235,19 +274,69 @@ export default function AnalyticsClient() {
             Analytics
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center">
+        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
           <ToggleButtonGroup
             value={interval}
             exclusive
             size="small"
-            onChange={(_e, v) => { if (v) setIntervalVal(v); }}
+            onChange={(_e, v) => {
+              if (!v) return;
+              if (v === 'custom' && !customFrom) {
+                // Pre-fill custom range with last 24h
+                const now = new Date();
+                const ago = new Date(now.getTime() - 86400 * 1000);
+                setCustomFrom(toDatetimeLocal(ago));
+                setCustomTo(toDatetimeLocal(now));
+              }
+              setIntervalVal(v);
+            }}
           >
             <ToggleButton value="1h">1h</ToggleButton>
             <ToggleButton value="12h">12h</ToggleButton>
             <ToggleButton value="24h">24h</ToggleButton>
             <ToggleButton value="7d">7d</ToggleButton>
             <ToggleButton value="30d">30d</ToggleButton>
+            <ToggleButton value="custom">Custom</ToggleButton>
           </ToggleButtonGroup>
+
+          {interval === 'custom' && (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <input
+                type="datetime-local"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={e => setCustomFrom(e.target.value)}
+                style={{
+                  background: 'rgba(30,41,59,0.8)',
+                  border: '1px solid rgba(148,163,184,0.2)',
+                  borderRadius: 6,
+                  color: '#f1f5f9',
+                  padding: '5px 8px',
+                  fontSize: 13,
+                  colorScheme: 'dark',
+                  outline: 'none',
+                }}
+              />
+              <Typography variant="caption" color="text.disabled">–</Typography>
+              <input
+                type="datetime-local"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={e => setCustomTo(e.target.value)}
+                style={{
+                  background: 'rgba(30,41,59,0.8)',
+                  border: '1px solid rgba(148,163,184,0.2)',
+                  borderRadius: 6,
+                  color: '#f1f5f9',
+                  padding: '5px 8px',
+                  fontSize: 13,
+                  colorScheme: 'dark',
+                  outline: 'none',
+                }}
+              />
+            </Stack>
+          )}
+
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <Select
               value={host}
