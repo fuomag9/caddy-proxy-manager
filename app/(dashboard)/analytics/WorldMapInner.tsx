@@ -163,7 +163,7 @@ export interface CountryStats { countryCode: string; total: number; blocked: num
 interface HoverInfo {
   longitude: number;
   latitude: number;
-  alpha2: string;
+  alpha2: string | null;
   total: number;
   blocked: number;
 }
@@ -177,7 +177,7 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
   const max = useMemo(() => data.reduce((m, d) => Math.max(m, d.total), 0), [data]);
 
   useEffect(() => {
-    fetch('/geo/countries-110m.json')
+    fetch('/geo/countries-50m.json')
       .then(r => r.json())
       .then((topo: Topology) => {
         const fc = feature(topo, topo.objects.countries as GeometryCollection) as GeoJSON.FeatureCollection;
@@ -203,8 +203,7 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
   const onHover = useCallback((event: MapLayerMouseEvent) => {
     const f = event.features?.[0];
     if (!f) { setHoverInfo(null); return; }
-    const alpha2 = f.properties?.alpha2 as string | null;
-    if (!alpha2) { setHoverInfo(null); return; }
+    const alpha2 = (f.properties?.alpha2 as string | null) ?? null;
     setHoverInfo({
       longitude: event.lngLat.lng,
       latitude: event.lngLat.lat,
@@ -215,7 +214,9 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
   }, []);
 
   const highlightFilter = useMemo<ExpressionSpecification>(
-    () => ['==', ['get', 'alpha2'], hoverInfo?.alpha2 ?? ''],
+    () => hoverInfo?.alpha2
+      ? ['==', ['get', 'alpha2'], hoverInfo.alpha2]
+      : ['boolean', false],
     [hoverInfo?.alpha2],
   );
 
@@ -283,8 +284,8 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
             >
               <div style={{ color: '#f1f5f9', fontFamily: 'inherit', fontSize: 13 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, fontWeight: 600, fontSize: 14 }}>
-                  <span style={{ fontSize: 20, lineHeight: 1 }}>{flag(hoverInfo.alpha2)}</span>
-                  <span>{NAMES[hoverInfo.alpha2] ?? hoverInfo.alpha2}</span>
+                  <span style={{ fontSize: 20, lineHeight: 1 }}>{hoverInfo.alpha2 ? flag(hoverInfo.alpha2) : '🌐'}</span>
+                  <span>{hoverInfo.alpha2 ? (NAMES[hoverInfo.alpha2] ?? hoverInfo.alpha2) : 'Territory'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
                   <span style={{ color: '#94a3b8' }}>Requests</span>
