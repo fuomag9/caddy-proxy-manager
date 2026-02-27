@@ -192,7 +192,7 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
     return {
       ...baseGeojson,
       features: baseGeojson.features.map(f => {
-        const alpha2 = N2A[String(f.id ?? '')] ?? null;
+        const alpha2 = N2A[String(Number(f.id ?? 0))] ?? null;
         const total = alpha2 ? (countMap.get(alpha2) ?? 0) : 0;
         const blocked = alpha2 ? (blockedMap.get(alpha2) ?? 0) : 0;
         return { ...f, properties: { ...f.properties, alpha2, total, blocked, norm: total / safeMax } };
