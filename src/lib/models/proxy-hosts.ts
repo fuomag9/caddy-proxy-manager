@@ -2,7 +2,7 @@ import db, { nowIso, toIso } from "../db";
 import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { proxyHosts } from "../db/schema";
-import { desc, eq, count, ilike, or } from "drizzle-orm";
+import { desc, eq, count, like, or } from "drizzle-orm";
 import { getAuthentikSettings, getGeoBlockSettings, GeoBlockSettings } from "../settings";
 
 const DEFAULT_AUTHENTIK_HEADERS = [
@@ -1332,9 +1332,9 @@ export async function listProxyHosts(): Promise<ProxyHost[]> {
 export async function countProxyHosts(search?: string): Promise<number> {
   const where = search
     ? or(
-        ilike(proxyHosts.name, `%${search}%`),
-        ilike(proxyHosts.domains, `%${search}%`),
-        ilike(proxyHosts.upstreams, `%${search}%`)
+        like(proxyHosts.name, `%${search}%`),
+        like(proxyHosts.domains, `%${search}%`),
+        like(proxyHosts.upstreams, `%${search}%`)
       )
     : undefined;
   const [row] = await db.select({ value: count() }).from(proxyHosts).where(where);
@@ -1344,9 +1344,9 @@ export async function countProxyHosts(search?: string): Promise<number> {
 export async function listProxyHostsPaginated(limit: number, offset: number, search?: string): Promise<ProxyHost[]> {
   const where = search
     ? or(
-        ilike(proxyHosts.name, `%${search}%`),
-        ilike(proxyHosts.domains, `%${search}%`),
-        ilike(proxyHosts.upstreams, `%${search}%`)
+        like(proxyHosts.name, `%${search}%`),
+        like(proxyHosts.domains, `%${search}%`),
+        like(proxyHosts.upstreams, `%${search}%`)
       )
     : undefined;
   const hosts = await db

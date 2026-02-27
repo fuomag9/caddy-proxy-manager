@@ -1,6 +1,6 @@
 import db, { toIso, nowIso } from "../db";
 import { auditEvents } from "../db/schema";
-import { desc, ilike, or, count } from "drizzle-orm";
+import { desc, like, or, count } from "drizzle-orm";
 
 export type AuditEvent = {
   id: number;
@@ -15,9 +15,9 @@ export type AuditEvent = {
 export async function countAuditEvents(search?: string): Promise<number> {
   const where = search
     ? or(
-        ilike(auditEvents.summary, `%${search}%`),
-        ilike(auditEvents.action, `%${search}%`),
-        ilike(auditEvents.entityType, `%${search}%`)
+        like(auditEvents.summary, `%${search}%`),
+        like(auditEvents.action, `%${search}%`),
+        like(auditEvents.entityType, `%${search}%`)
       )
     : undefined;
   const [row] = await db.select({ value: count() }).from(auditEvents).where(where);
@@ -31,9 +31,9 @@ export async function listAuditEvents(
 ): Promise<AuditEvent[]> {
   const where = search
     ? or(
-        ilike(auditEvents.summary, `%${search}%`),
-        ilike(auditEvents.action, `%${search}%`),
-        ilike(auditEvents.entityType, `%${search}%`)
+        like(auditEvents.summary, `%${search}%`),
+        like(auditEvents.action, `%${search}%`),
+        like(auditEvents.entityType, `%${search}%`)
       )
     : undefined;
   const events = await db
