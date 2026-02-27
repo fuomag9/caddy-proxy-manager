@@ -1,7 +1,7 @@
 import { X509Certificate } from 'node:crypto';
 import db from '@/src/lib/db';
 import { proxyHosts, certificates } from '@/src/lib/db/schema';
-import { isNull, isNotNull } from 'drizzle-orm';
+import { isNull, isNotNull, count } from 'drizzle-orm';
 import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
 import { scanAcmeCerts } from '@/src/lib/acme-certs';
@@ -32,6 +32,12 @@ export type ImportedCertView = {
 };
 
 export type ManagedCertView = { id: number; name: string; domain_names: string[] };
+
+const PER_PAGE = 25;
+
+interface PageProps {
+  searchParams: { page?: string };
+}
 
 function parsePemInfo(pem: string): { validTo: string; validFrom: string; issuer: string; sanDomains: string[] } | null {
   try {
@@ -66,11 +72,13 @@ function getExpiryStatus(validToIso: string): CertExpiryStatus {
   return 'ok';
 }
 
-export default async function CertificatesPage() {
+export default async function CertificatesPage({ searchParams }: PageProps) {
   await requireAdmin();
+  const page = Math.max(1, parseInt(searchParams.page ?? "1", 10) || 1);
+  const offset = (page - 1) * PER_PAGE;
   const acmeCertMap = scanAcmeCerts();
 
-  const [acmeRows, certRows, usageRows] = await Promise.all([
+  const [acmeRows, acmeTotal, certRows, usageRows] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -80,7 +88,15 @@ export default async function CertificatesPage() {
         enabled: proxyHosts.enabled,
       })
       .from(proxyHosts)
-      .where(isNull(proxyHosts.certificateId)),
+      .where(isNull(proxyHosts.certificateId))
+      .orderBy(proxyHosts.name)
+      .limit(PER_PAGE)
+      .offset(offset),
+    db
+      .select({ value: count() })
+      .from(proxyHosts)
+      .where(isNull(proxyHosts.certificateId))
+      .then(([r]) => r?.value ?? 0),
     db.select().from(certificates),
     db
       .select({
@@ -152,6 +168,7 @@ export default async function CertificatesPage() {
       acmeHosts={acmeHosts}
       importedCerts={importedCerts}
       managedCerts={managedCerts}
+      acmePagination={{ total: acmeTotal, page, perPage: PER_PAGE }}
     />
   );
 }

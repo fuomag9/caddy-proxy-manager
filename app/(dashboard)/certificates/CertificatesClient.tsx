@@ -28,6 +28,7 @@ type Props = {
   acmeHosts: AcmeHost[];
   importedCerts: ImportedCertView[];
   managedCerts: ManagedCertView[];
+  acmePagination: { total: number; page: number; perPage: number };
 };
 
 function formatDate(iso: string): string {
@@ -54,7 +55,7 @@ function ExpiryChip({
   return <Chip label={`Expires ${formatDate(validTo)}`} color="success" size="small" />;
 }
 
-export default function CertificatesClient({ acmeHosts, importedCerts, managedCerts }: Props) {
+export default function CertificatesClient({ acmeHosts, importedCerts, managedCerts, acmePagination }: Props) {
   const acmeColumns = [
     {
       id: 'name',
@@ -124,6 +125,7 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
           data={acmeHosts}
           keyField="id"
           emptyMessage="No proxy hosts using automatic ACME certificates"
+          pagination={acmePagination}
         />
       </Stack>
 
