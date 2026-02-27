@@ -11,6 +11,7 @@ import {
   ListItem,
   ListItemSecondaryAction,
   ListItemText,
+  Pagination,
   Stack,
   TextField,
   Typography
@@ -24,12 +25,24 @@ import {
   deleteAccessListAction,
   updateAccessListAction
 } from "./actions";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type Props = {
   lists: AccessList[];
+  pagination: { total: number; page: number; perPage: number };
 };
 
-export default function AccessListsClient({ lists }: Props) {
+export default function AccessListsClient({ lists, pagination }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const pageCount = Math.ceil(pagination.total / pagination.perPage);
+
+  function handlePageChange(_: React.ChangeEvent<unknown>, page: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(page));
+    router.push(`${pathname}?${params.toString()}`);
+  }
   return (
     <Stack spacing={4} sx={{ width: "100%" }}>
       <Stack spacing={1}>
@@ -135,6 +148,18 @@ export default function AccessListsClient({ lists }: Props) {
           </CardContent>
         </Card>
       </Stack>
+
+      {pageCount > 1 && (
+        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+          <Pagination
+            count={pageCount}
+            page={pagination.page}
+            onChange={handlePageChange}
+            color="primary"
+            shape="rounded"
+          />
+        </Box>
+      )}
     </Stack>
   );
 }
