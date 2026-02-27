@@ -1,6 +1,6 @@
 import db, { toIso, nowIso } from "../db";
 import { auditEvents } from "../db/schema";
-import { desc } from "drizzle-orm";
+import { desc, ilike, or, count } from "drizzle-orm";
 
 export type AuditEvent = {
   id: number;
@@ -12,12 +12,37 @@ export type AuditEvent = {
   created_at: string;
 };
 
-export async function listAuditEvents(limit = 100): Promise<AuditEvent[]> {
+export async function countAuditEvents(search?: string): Promise<number> {
+  const where = search
+    ? or(
+        ilike(auditEvents.summary, `%${search}%`),
+        ilike(auditEvents.action, `%${search}%`),
+        ilike(auditEvents.entityType, `%${search}%`)
+      )
+    : undefined;
+  const [row] = await db.select({ value: count() }).from(auditEvents).where(where);
+  return row?.value ?? 0;
+}
+
+export async function listAuditEvents(
+  limit = 100,
+  offset = 0,
+  search?: string
+): Promise<AuditEvent[]> {
+  const where = search
+    ? or(
+        ilike(auditEvents.summary, `%${search}%`),
+        ilike(auditEvents.action, `%${search}%`),
+        ilike(auditEvents.entityType, `%${search}%`)
+      )
+    : undefined;
   const events = await db
     .select()
     .from(auditEvents)
+    .where(where)
     .orderBy(desc(auditEvents.createdAt))
-    .limit(limit);
+    .limit(limit)
+    .offset(offset);
 
   return events.map((event) => ({
     id: event.id,
@@ -26,7 +51,7 @@ export async function listAuditEvents(limit = 100): Promise<AuditEvent[]> {
     entity_type: event.entityType,
     entity_id: event.entityId,
     summary: event.summary,
-    created_at: toIso(event.createdAt)!
+    created_at: toIso(event.createdAt)!,
   }));
 }
 

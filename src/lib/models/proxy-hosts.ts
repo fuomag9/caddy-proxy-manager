@@ -2,7 +2,7 @@ import db, { nowIso, toIso } from "../db";
 import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { proxyHosts } from "../db/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, count } from "drizzle-orm";
 import { getAuthentikSettings, getGeoBlockSettings, GeoBlockSettings } from "../settings";
 
 const DEFAULT_AUTHENTIK_HEADERS = [
@@ -1326,6 +1326,21 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
 
 export async function listProxyHosts(): Promise<ProxyHost[]> {
   const hosts = await db.select().from(proxyHosts).orderBy(desc(proxyHosts.createdAt));
+  return hosts.map(parseProxyHost);
+}
+
+export async function countProxyHosts(): Promise<number> {
+  const [row] = await db.select({ value: count() }).from(proxyHosts);
+  return row?.value ?? 0;
+}
+
+export async function listProxyHostsPaginated(limit: number, offset: number): Promise<ProxyHost[]> {
+  const hosts = await db
+    .select()
+    .from(proxyHosts)
+    .orderBy(desc(proxyHosts.createdAt))
+    .limit(limit)
+    .offset(offset);
   return hosts.map(parseProxyHost);
 }
 
