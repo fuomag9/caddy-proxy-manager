@@ -335,7 +335,7 @@ export default function AnalyticsClient() {
               onChange={(_e, v) => setSelectedHosts(v)}
               disableCloseOnSelect
               limitTags={2}
-              sx={{ minWidth: 220, maxWidth: 380 }}
+              sx={{ width: 260, flexShrink: 0 }}
               ListboxProps={{
                 // Prevent scroll from the dropdown list leaking to the page
                 style: { overscrollBehavior: 'contain' },
@@ -383,7 +383,7 @@ export default function AnalyticsClient() {
                       key={option}
                       label={option}
                       size="small"
-                      sx={{ maxWidth: 140 }}
+                      sx={{ maxWidth: 100, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
                     />
                   ));
                 }
