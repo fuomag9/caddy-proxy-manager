@@ -21,9 +21,10 @@ type Props = {
   certificates: Certificate[];
   accessLists: AccessList[];
   authentikDefaults: AuthentikSettings | null;
+  pagination: { total: number; page: number; perPage: number };
 };
 
-export default function ProxyHostsClient({ hosts, certificates, accessLists, authentikDefaults }: Props) {
+export default function ProxyHostsClient({ hosts, certificates, accessLists, authentikDefaults, pagination }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
@@ -159,6 +160,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
         data={filteredHosts}
         keyField="id"
         emptyMessage={searchTerm ? "No hosts match your search" : "No proxy hosts found"}
+        pagination={pagination}
       />
 
       <CreateHostDialog
