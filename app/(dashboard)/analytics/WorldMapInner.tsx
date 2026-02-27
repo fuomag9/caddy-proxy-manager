@@ -168,7 +168,7 @@ interface HoverInfo {
   blocked: number;
 }
 
-export default function WorldMapInner({ data }: { data: CountryStats[] }) {
+export default function WorldMapInner({ data, selectedCountry }: { data: CountryStats[]; selectedCountry?: string | null }) {
   const [baseGeojson, setBaseGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
@@ -213,12 +213,10 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
     });
   }, []);
 
-  const highlightFilter = useMemo<ExpressionSpecification>(
-    () => hoverInfo?.alpha2
-      ? ['==', ['get', 'alpha2'], hoverInfo.alpha2]
-      : ['boolean', false],
-    [hoverInfo?.alpha2],
-  );
+  const highlightFilter = useMemo<ExpressionSpecification>(() => {
+    const target = hoverInfo?.alpha2 ?? selectedCountry ?? null;
+    return target ? ['==', ['get', 'alpha2'], target] : ['boolean', false];
+  }, [hoverInfo?.alpha2, selectedCountry]);
 
   if (!geojson) {
     return (

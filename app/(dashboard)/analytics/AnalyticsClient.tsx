@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
@@ -39,7 +39,7 @@ const WorldMap = dynamic(() => import('./WorldMapInner'), {
       <CircularProgress size={24} />
     </Box>
   ),
-});
+}) as React.ComponentType<{ data: import('./WorldMapInner').CountryStats[]; selectedCountry?: string | null }>;
 
 // ── Types (mirrored from analytics-db — can't import server-only code) ────────
 
@@ -145,6 +145,7 @@ export default function AnalyticsClient() {
   const [userAgents, setUserAgents] = useState<UAStats[]>([]);
   const [blocked, setBlocked] = useState<BlockedPage | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
   // Fetch hosts once
   useEffect(() => {
@@ -330,7 +331,7 @@ export default function AnalyticsClient() {
                     Traffic by Country
                   </Typography>
                   <Box sx={{ flex: 1, minHeight: 0 }}>
-                    <WorldMap data={countries} />
+                    <WorldMap data={countries} selectedCountry={selectedCountry} />
                   </Box>
                 </CardContent>
               </Card>
@@ -354,7 +355,16 @@ export default function AnalyticsClient() {
                       </TableHead>
                       <TableBody>
                         {countries.slice(0, 10).map(c => (
-                          <TableRow key={c.countryCode} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.04)' } }}>
+                          <TableRow
+                            key={c.countryCode}
+                            onClick={() => setSelectedCountry(s => s === c.countryCode ? null : c.countryCode)}
+                            sx={{
+                              cursor: 'pointer',
+                              '& td': { borderColor: 'rgba(255,255,255,0.04)' },
+                              bgcolor: selectedCountry === c.countryCode ? 'rgba(125,211,252,0.08)' : 'transparent',
+                              '&:hover': { bgcolor: 'rgba(125,211,252,0.05)' },
+                            }}
+                          >
                             <TableCell>
                               <Stack direction="row" alignItems="center" spacing={1}>
                                 <span>{countryFlag(c.countryCode)}</span>

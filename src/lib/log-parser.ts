@@ -62,6 +62,12 @@ function lookupCountry(ip: string): string | null {
 interface CaddyLogEntry {
   ts?: number;
   msg?: string;
+  plugin?: string;
+  // fields on "request blocked" entries (top-level)
+  client_ip?: string;
+  method?: string;
+  uri?: string;
+  // fields on "handled request" entries
   status?: number;
   size?: number;
   request?: {
@@ -75,7 +81,23 @@ interface CaddyLogEntry {
   };
 }
 
-function parseLine(line: string): typeof trafficEvents.$inferInsert | null {
+// Build a set of signatures from caddy-blocker's "request blocked" entries so we
+// can mark the corresponding "handled request" rows correctly instead of using
+// status === 403 (which would also catch legitimate upstream 403s).
+function collectBlockedSignatures(lines: string[]): Set<string> {
+  const blocked = new Set<string>();
+  for (const line of lines) {
+    let entry: CaddyLogEntry;
+    try { entry = JSON.parse(line.trim()); } catch { continue; }
+    if (entry.msg !== 'request blocked' || entry.plugin !== 'caddy-blocker') continue;
+    const ts = Math.floor(entry.ts ?? 0);
+    const key = `${ts}|${entry.client_ip ?? ''}|${entry.method ?? ''}|${entry.uri ?? ''}`;
+    blocked.add(key);
+  }
+  return blocked;
+}
+
+function parseLine(line: string, blocked: Set<string>): typeof trafficEvents.$inferInsert | null {
   let entry: CaddyLogEntry;
   try {
     entry = JSON.parse(line);
@@ -88,41 +110,45 @@ function parseLine(line: string): typeof trafficEvents.$inferInsert | null {
 
   const req = entry.request ?? {};
   const clientIp = req.client_ip || req.remote_ip || '';
+  const ts = Math.floor(entry.ts ?? Date.now() / 1000);
+  const method = req.method ?? '';
+  const uri = req.uri ?? '';
   const status = entry.status ?? 0;
 
+  const key = `${ts}|${clientIp}|${method}|${uri}`;
+
   return {
-    ts: Math.floor(entry.ts ?? Date.now() / 1000),
+    ts,
     clientIp,
     countryCode: clientIp ? lookupCountry(clientIp) : null,
     host: req.host ?? '',
-    method: req.method ?? '',
-    uri: req.uri ?? '',
+    method,
+    uri,
     status,
     proto: req.proto ?? '',
     bytesSent: entry.size ?? 0,
     userAgent: req.headers?.['User-Agent']?.[0] ?? '',
-    isBlocked: status === 403,
+    isBlocked: blocked.has(key),
   };
 }
 
-async function readLines(startOffset: number): Promise<{ rows: typeof trafficEvents.$inferInsert[]; newOffset: number }> {
+async function readLines(startOffset: number): Promise<{ lines: string[]; newOffset: number }> {
   return new Promise((resolve, reject) => {
-    const rows: typeof trafficEvents.$inferInsert[] = [];
+    const lines: string[] = [];
     let bytesRead = 0;
 
     const stream = createReadStream(LOG_FILE, { start: startOffset, encoding: 'utf8' });
     stream.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'ENOENT') resolve({ rows: [], newOffset: startOffset });
+      if (err.code === 'ENOENT') resolve({ lines: [], newOffset: startOffset });
       else reject(err);
     });
 
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
     rl.on('line', (line) => {
       bytesRead += Buffer.byteLength(line, 'utf8') + 1; // +1 for newline
-      const row = parseLine(line.trim());
-      if (row) rows.push(row);
+      if (line.trim()) lines.push(line.trim());
     });
-    rl.on('close', () => resolve({ rows, newOffset: startOffset + bytesRead }));
+    rl.on('close', () => resolve({ lines, newOffset: startOffset + bytesRead }));
     rl.on('error', reject);
   });
 }
@@ -165,11 +191,13 @@ export async function parseNewLogEntries(): Promise<void> {
     // Detect log rotation: file shrank
     const startOffset = currentSize < storedSize ? 0 : storedOffset;
 
-    const { rows, newOffset } = await readLines(startOffset);
+    const { lines, newOffset } = await readLines(startOffset);
 
-    if (rows.length > 0) {
+    if (lines.length > 0) {
+      const blocked = collectBlockedSignatures(lines);
+      const rows = lines.map(l => parseLine(l, blocked)).filter(r => r !== null);
       insertBatch(rows);
-      console.log(`[log-parser] inserted ${rows.length} traffic events`);
+      console.log(`[log-parser] inserted ${rows.length} traffic events (${blocked.size} blocked)`);
     }
 
     setState('access_log_offset', String(newOffset));
