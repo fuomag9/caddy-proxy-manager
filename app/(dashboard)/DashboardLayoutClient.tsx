@@ -38,8 +38,8 @@ type User = {
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: DashboardIcon },
-  { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/proxy-hosts", label: "Proxy Hosts", icon: DnsIcon },
+  { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/access-lists", label: "Access Lists", icon: SecurityIcon },
   { href: "/certificates", label: "Certificates", icon: ShieldIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
