@@ -81,6 +81,82 @@ function flag(code: string): string {
   return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 }
 
+// Split polygon rings that cross the antimeridian (±180°) so MapLibre renders them correctly.
+// Without this, countries like Russia get drawn as a giant polygon spanning the whole map.
+function cutAntimeridian(fc: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  const wrapLng = (lng: number) => ((lng + 180) % 360 + 360) % 360 - 180;
+
+  function fixRing(ring: GeoJSON.Position[]): GeoJSON.Position[][] {
+    // Detect antimeridian crossing: consecutive points jump > 180° in longitude
+    let hasCrossing = false;
+    for (let i = 0; i < ring.length - 1; i++) {
+      if (Math.abs(ring[i][0] - ring[i + 1][0]) > 180) { hasCrossing = true; break; }
+    }
+    if (!hasCrossing) return [ring.map(([lng, lat]) => [wrapLng(lng), lat])];
+
+    // Split into west (<0) and east (≥0) halves by normalizing each segment
+    const west: GeoJSON.Position[] = [];
+    const east: GeoJSON.Position[] = [];
+    let side: 'w' | 'e' = ring[0][0] >= 0 ? 'e' : 'w';
+
+    for (let i = 0; i < ring.length - 1; i++) {
+      const cur: GeoJSON.Position = [wrapLng(ring[i][0]), ring[i][1]];
+      const nxt: GeoJSON.Position = [wrapLng(ring[i + 1][0]), ring[i + 1][1]];
+      const crosses = Math.abs(ring[i][0] - ring[i + 1][0]) > 180;
+
+      if (side === 'e') {
+        east.push(cur);
+        if (crosses) {
+          // interpolate lat at boundary
+          const t = (180 - cur[0]) / ((nxt[0] + 360) - cur[0]);
+          const lat = cur[1] + t * (nxt[1] - cur[1]);
+          east.push([180, lat]);
+          west.push([-180, lat]);
+          side = 'w';
+        }
+      } else {
+        west.push(cur);
+        if (crosses) {
+          const t = (-180 - cur[0]) / ((nxt[0] - 360) - cur[0]);
+          const lat = cur[1] + t * (nxt[1] - cur[1]);
+          west.push([-180, lat]);
+          east.push([180, lat]);
+          side = 'e';
+        }
+      }
+    }
+    // Close each ring
+    if (east.length > 2) east.push(east[0]);
+    if (west.length > 2) west.push(west[0]);
+    return [east.length > 2 ? east : [], west.length > 2 ? west : []].filter(r => r.length > 2);
+  }
+
+  function fixPolygon(coords: GeoJSON.Position[][]): GeoJSON.Polygon[] {
+    const fixed = coords.flatMap(ring => fixRing(ring));
+    if (fixed.length <= 1) return [{ type: 'Polygon', coordinates: fixed.length === 1 ? [fixed[0]] : coords }];
+    // Separate outer rings (area > 0 by winding) — simplified: just wrap each piece
+    return fixed.map(r => ({ type: 'Polygon' as const, coordinates: [r] }));
+  }
+
+  function fixGeometry(geom: GeoJSON.Geometry): GeoJSON.Geometry {
+    if (geom.type === 'Polygon') {
+      const polys = fixPolygon(geom.coordinates);
+      if (polys.length === 1) return polys[0];
+      return { type: 'MultiPolygon', coordinates: polys.map(p => p.coordinates) };
+    }
+    if (geom.type === 'MultiPolygon') {
+      const all = geom.coordinates.flatMap(fixPolygon);
+      return { type: 'MultiPolygon', coordinates: all.map(p => p.coordinates) };
+    }
+    return geom;
+  }
+
+  return {
+    ...fc,
+    features: fc.features.map(f => f.geometry ? { ...f, geometry: fixGeometry(f.geometry) } : f),
+  };
+}
+
 const OCEAN = '#0a1628';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,7 +223,8 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
     fetch('/geo/countries-110m.json')
       .then(r => r.json())
       .then((topo: Topology) => {
-        setBaseGeojson(feature(topo, topo.objects.countries as GeometryCollection) as GeoJSON.FeatureCollection);
+        const fc = feature(topo, topo.objects.countries as GeometryCollection) as GeoJSON.FeatureCollection;
+        setBaseGeojson(cutAntimeridian(fc));
       })
       .catch(() => setBaseGeojson({ type: 'FeatureCollection', features: [] }));
   }, []);
