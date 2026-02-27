@@ -375,17 +375,28 @@ export default function AnalyticsClient() {
                   <ListItemText primary={option} primaryTypographyProps={{ variant: 'body2', noWrap: true }} />
                 </li>
               )}
-              renderTags={(value, getTagProps) =>
-                value.map((option, index) => (
+              renderTags={(value, getTagProps) => {
+                if (value.length <= 2) {
+                  return value.map((option, index) => (
+                    <Chip
+                      {...getTagProps({ index })}
+                      key={option}
+                      label={option}
+                      size="small"
+                      sx={{ maxWidth: 140 }}
+                    />
+                  ));
+                }
+                // Collapse to a single count chip so the input never grows tall
+                return [
                   <Chip
-                    {...getTagProps({ index })}
-                    key={option}
-                    label={option}
+                    key="count"
+                    label={`${value.length} hosts`}
                     size="small"
-                    sx={{ maxWidth: 120 }}
-                  />
-                ))
-              }
+                    onDelete={() => setSelectedHosts([])}
+                  />,
+                ];
+              }}
               renderInput={(params) => (
                 <TextField
                   {...params}
