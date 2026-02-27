@@ -68,7 +68,7 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
       </Box>
 
       {/* 2-column squircle nav grid */}
-      <Box sx={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, alignContent: "start" }}>
+      <Box sx={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, alignContent: "space-evenly" }}>
         {NAV_ITEMS.map((item) => {
           const selected = pathname === item.href;
           const Icon = item.icon;
