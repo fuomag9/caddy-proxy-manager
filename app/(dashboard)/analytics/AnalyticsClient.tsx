@@ -324,12 +324,14 @@ export default function AnalyticsClient() {
           {/* World map + Countries */}
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 7 }}>
-              <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)', height: '100%' }}>
-                <CardContent>
+              <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                   <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
                     Traffic by Country
                   </Typography>
-                  <WorldMap data={countries} />
+                  <Box sx={{ flex: 1, minHeight: 0 }}>
+                    <WorldMap data={countries} />
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>

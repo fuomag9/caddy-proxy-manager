@@ -229,7 +229,7 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
   }
 
   return (
-    <Box sx={{ position: 'relative' }}>
+    <Box sx={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Override MapLibre popup chrome to match dark theme */}
       <style>{`
         .wm-popup .maplibregl-popup-content {
@@ -248,7 +248,8 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
         borderRadius: 2,
         overflow: 'hidden',
         border: '1px solid rgba(148,163,184,0.08)',
-        height: 340,
+        flex: 1,
+        minHeight: 280,
       }}>
         <MapGL
           mapStyle={MAP_STYLE}
