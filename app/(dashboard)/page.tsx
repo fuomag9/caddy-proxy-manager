@@ -43,7 +43,7 @@ export default async function OverviewPage() {
   const session = await requireAdmin();
   const [stats, trafficSummary, recentEventsRaw] = await Promise.all([
     loadStats(),
-    getAnalyticsSummary(Math.floor(Date.now() / 1000) - 86400, Math.floor(Date.now() / 1000), 'all').catch(() => null),
+    getAnalyticsSummary(Math.floor(Date.now() / 1000) - 86400, Math.floor(Date.now() / 1000), []).catch(() => null),
     db
       .select({
         action: auditEvents.action,

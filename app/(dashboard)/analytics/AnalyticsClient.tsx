@@ -5,27 +5,31 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import {
   Alert,
+  Autocomplete,
   Box,
   Card,
   CardContent,
+  Checkbox,
+  Chip,
   CircularProgress,
-  FormControl,
   Grid,
-  MenuItem,
+  ListItemText,
   Pagination,
   Paper,
-  Select,
-  SelectChangeEvent,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
+import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import type { ApexOptions } from 'apexcharts';
 
 // ── Dynamic imports (browser-only) ────────────────────────────────────────────
@@ -50,11 +54,6 @@ const INTERVAL_SECONDS_CLIENT: Record<Interval, number> = {
   '1h': 3600, '12h': 43200, '24h': 86400, '7d': 7 * 86400, '30d': 30 * 86400,
 };
 
-/** Format a datetime-local string for <input type="datetime-local"> (local time, no seconds) */
-function toDatetimeLocal(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
 
 interface AnalyticsSummary {
   totalRequests: number;
@@ -144,12 +143,12 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 
 export default function AnalyticsClient() {
   const [interval, setIntervalVal] = useState<DisplayInterval>('1h');
-  const [host, setHost] = useState<string>('all');
-  const [hosts, setHosts] = useState<string[]>([]);
+  const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
+  const [allHosts, setAllHosts] = useState<string[]>([]);
 
-  // Custom range (datetime-local strings: "YYYY-MM-DDTHH:MM")
-  const [customFrom, setCustomFrom] = useState<string>('');
-  const [customTo, setCustomTo] = useState<string>('');
+  // Custom range as Dayjs objects
+  const [customFrom, setCustomFrom] = useState<Dayjs | null>(null);
+  const [customTo, setCustomTo] = useState<Dayjs | null>(null);
 
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [timeline, setTimeline] = useState<TimelineBucket[]>([]);
@@ -163,7 +162,7 @@ export default function AnalyticsClient() {
   /** How many seconds the current selection spans — used for chart axis labels */
   const rangeSeconds = useMemo(() => {
     if (interval === 'custom' && customFrom && customTo) {
-      const diff = Math.floor(new Date(customTo).getTime() / 1000) - Math.floor(new Date(customFrom).getTime() / 1000);
+      const diff = customTo.unix() - customFrom.unix();
       return diff > 0 ? diff : 3600;
     }
     return INTERVAL_SECONDS_CLIENT[interval as Interval] ?? 3600;
@@ -171,28 +170,25 @@ export default function AnalyticsClient() {
 
   /** Build the query string for all analytics endpoints */
   const buildParams = useCallback((extra = '') => {
-    const h = `host=${encodeURIComponent(host)}`;
+    const h = selectedHosts.length > 0
+      ? `hosts=${selectedHosts.map(encodeURIComponent).join(',')}`
+      : '';
+    const sep = h ? `&${h}` : '';
     if (interval === 'custom' && customFrom && customTo) {
-      const from = Math.floor(new Date(customFrom).getTime() / 1000);
-      const to = Math.floor(new Date(customTo).getTime() / 1000);
-      return `?from=${from}&to=${to}&${h}${extra}`;
+      return `?from=${customFrom.unix()}&to=${customTo.unix()}${sep}${extra}`;
     }
-    return `?interval=${interval}&${h}${extra}`;
-  }, [interval, host, customFrom, customTo]);
+    return `?interval=${interval}${sep}${extra}`;
+  }, [interval, selectedHosts, customFrom, customTo]);
 
-  // Fetch hosts once
+  // Fetch all configured+active hosts once
   useEffect(() => {
-    fetch('/api/analytics/hosts').then(r => r.json()).then(setHosts).catch(() => {});
+    fetch('/api/analytics/hosts').then(r => r.json()).then(setAllHosts).catch(() => {});
   }, []);
 
-  // Fetch all analytics data when range/host changes
-  // For custom: only fetch when both dates are set and from < to
+  // Fetch all analytics data when range/host selection changes
   useEffect(() => {
     if (interval === 'custom') {
-      if (!customFrom || !customTo) return;
-      const from = new Date(customFrom).getTime();
-      const to = new Date(customTo).getTime();
-      if (from >= to) return;
+      if (!customFrom || !customTo || customFrom.unix() >= customTo.unix()) return;
     }
     setLoading(true);
     const params = buildParams();
@@ -274,80 +270,96 @@ export default function AnalyticsClient() {
             Analytics
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-          <ToggleButtonGroup
-            value={interval}
-            exclusive
-            size="small"
-            onChange={(_e, v) => {
-              if (!v) return;
-              if (v === 'custom' && !customFrom) {
-                // Pre-fill custom range with last 24h
-                const now = new Date();
-                const ago = new Date(now.getTime() - 86400 * 1000);
-                setCustomFrom(toDatetimeLocal(ago));
-                setCustomTo(toDatetimeLocal(now));
-              }
-              setIntervalVal(v);
-            }}
-          >
-            <ToggleButton value="1h">1h</ToggleButton>
-            <ToggleButton value="12h">12h</ToggleButton>
-            <ToggleButton value="24h">24h</ToggleButton>
-            <ToggleButton value="7d">7d</ToggleButton>
-            <ToggleButton value="30d">30d</ToggleButton>
-            <ToggleButton value="custom">Custom</ToggleButton>
-          </ToggleButtonGroup>
-
-          {interval === 'custom' && (
-            <Stack direction="row" spacing={1} alignItems="center">
-              <input
-                type="datetime-local"
-                value={customFrom}
-                max={customTo || undefined}
-                onChange={e => setCustomFrom(e.target.value)}
-                style={{
-                  background: 'rgba(30,41,59,0.8)',
-                  border: '1px solid rgba(148,163,184,0.2)',
-                  borderRadius: 6,
-                  color: '#f1f5f9',
-                  padding: '5px 8px',
-                  fontSize: 13,
-                  colorScheme: 'dark',
-                  outline: 'none',
-                }}
-              />
-              <Typography variant="caption" color="text.disabled">–</Typography>
-              <input
-                type="datetime-local"
-                value={customTo}
-                min={customFrom || undefined}
-                onChange={e => setCustomTo(e.target.value)}
-                style={{
-                  background: 'rgba(30,41,59,0.8)',
-                  border: '1px solid rgba(148,163,184,0.2)',
-                  borderRadius: 6,
-                  color: '#f1f5f9',
-                  padding: '5px 8px',
-                  fontSize: 13,
-                  colorScheme: 'dark',
-                  outline: 'none',
-                }}
-              />
-            </Stack>
-          )}
-
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <Select
-              value={host}
-              onChange={(e: SelectChangeEvent) => setHost(e.target.value)}
-              displayEmpty
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+            <ToggleButtonGroup
+              value={interval}
+              exclusive
+              size="small"
+              onChange={(_e, v) => {
+                if (!v) return;
+                if (v === 'custom' && !customFrom) {
+                  setCustomFrom(dayjs().subtract(24, 'hour'));
+                  setCustomTo(dayjs());
+                }
+                setIntervalVal(v);
+              }}
             >
-              <MenuItem value="all">All hosts</MenuItem>
-              {hosts.map(h => <MenuItem key={h} value={h}>{h}</MenuItem>)}
-            </Select>
-          </FormControl>
-        </Stack>
+              <ToggleButton value="1h">1h</ToggleButton>
+              <ToggleButton value="12h">12h</ToggleButton>
+              <ToggleButton value="24h">24h</ToggleButton>
+              <ToggleButton value="7d">7d</ToggleButton>
+              <ToggleButton value="30d">30d</ToggleButton>
+              <ToggleButton value="custom">Custom</ToggleButton>
+            </ToggleButtonGroup>
+
+            {interval === 'custom' && (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <DateTimePicker
+                  value={customFrom}
+                  maxDateTime={customTo ?? undefined}
+                  onChange={setCustomFrom}
+                  slotProps={{
+                    textField: {
+                      size: 'small',
+                      sx: { width: 200 },
+                    },
+                  }}
+                  format="DD/MM/YYYY HH:mm"
+                  ampm={false}
+                />
+                <Typography variant="caption" color="text.disabled" sx={{ flexShrink: 0 }}>–</Typography>
+                <DateTimePicker
+                  value={customTo}
+                  minDateTime={customFrom ?? undefined}
+                  onChange={setCustomTo}
+                  slotProps={{
+                    textField: {
+                      size: 'small',
+                      sx: { width: 200 },
+                    },
+                  }}
+                  format="DD/MM/YYYY HH:mm"
+                  ampm={false}
+                />
+              </Stack>
+            )}
+
+            <Autocomplete
+              multiple
+              size="small"
+              options={allHosts}
+              value={selectedHosts}
+              onChange={(_e, v) => setSelectedHosts(v)}
+              disableCloseOnSelect
+              limitTags={2}
+              sx={{ minWidth: 220, maxWidth: 380 }}
+              renderOption={(props, option, { selected }) => (
+                <li {...props} key={option}>
+                  <Checkbox size="small" checked={selected} sx={{ mr: 0.5, p: 0.5 }} />
+                  <ListItemText primary={option} primaryTypographyProps={{ variant: 'body2', noWrap: true }} />
+                </li>
+              )}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    key={option}
+                    label={option}
+                    size="small"
+                    sx={{ maxWidth: 120 }}
+                  />
+                ))
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder={selectedHosts.length === 0 ? 'All hosts' : undefined}
+                />
+              )}
+            />
+          </Stack>
+        </LocalizationProvider>
       </Stack>
 
       {/* Logging disabled alert */}

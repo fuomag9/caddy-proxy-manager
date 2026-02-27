@@ -5,10 +5,11 @@ import { getAnalyticsBlocked, INTERVAL_SECONDS } from '@/src/lib/analytics-db';
 export async function GET(req: NextRequest) {
   await requireUser();
   const { searchParams } = req.nextUrl;
-  const host = searchParams.get('host') ?? 'all';
+  const hostsParam = searchParams.get('hosts') ?? '';
+  const hosts = hostsParam ? hostsParam.split(',').filter(Boolean) : [];
   const page = parseInt(searchParams.get('page') ?? '1', 10);
   const { from, to } = resolveRange(searchParams);
-  const data = await getAnalyticsBlocked(from, to, host, page);
+  const data = await getAnalyticsBlocked(from, to, hosts, page);
   return NextResponse.json(data);
 }
 

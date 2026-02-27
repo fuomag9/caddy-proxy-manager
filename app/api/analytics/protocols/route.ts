@@ -5,9 +5,10 @@ import { getAnalyticsProtocols, INTERVAL_SECONDS } from '@/src/lib/analytics-db'
 export async function GET(req: NextRequest) {
   await requireUser();
   const { searchParams } = req.nextUrl;
-  const host = searchParams.get('host') ?? 'all';
+  const hostsParam = searchParams.get('hosts') ?? '';
+  const hosts = hostsParam ? hostsParam.split(',').filter(Boolean) : [];
   const { from, to } = resolveRange(searchParams);
-  const data = await getAnalyticsProtocols(from, to, host);
+  const data = await getAnalyticsProtocols(from, to, hosts);
   return NextResponse.json(data);
 }
 

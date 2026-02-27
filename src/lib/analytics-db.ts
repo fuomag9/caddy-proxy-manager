@@ -1,6 +1,6 @@
-import { sql, and, gte, lte, eq } from 'drizzle-orm';
+import { sql, and, gte, lte, eq, inArray } from 'drizzle-orm';
 import db from './db';
-import { trafficEvents } from './db/schema';
+import { trafficEvents, proxyHosts } from './db/schema';
 import { existsSync } from 'node:fs';
 
 export type Interval = '1h' | '12h' | '24h' | '7d' | '30d';
@@ -15,9 +15,13 @@ export const INTERVAL_SECONDS: Record<Interval, number> = {
   '30d': 30 * 86400,
 };
 
-function buildWhere(from: number, to: number, host: string) {
+function buildWhere(from: number, to: number, hosts: string[]) {
   const conditions = [gte(trafficEvents.ts, from), lte(trafficEvents.ts, to)];
-  if (host !== 'all' && host !== '') conditions.push(eq(trafficEvents.host, host));
+  if (hosts.length === 1) {
+    conditions.push(eq(trafficEvents.host, hosts[0]));
+  } else if (hosts.length > 1) {
+    conditions.push(inArray(trafficEvents.host, hosts));
+  }
   return and(...conditions);
 }
 
@@ -32,9 +36,9 @@ export interface AnalyticsSummary {
   loggingDisabled: boolean;
 }
 
-export async function getAnalyticsSummary(from: number, to: number, host: string): Promise<AnalyticsSummary> {
+export async function getAnalyticsSummary(from: number, to: number, hosts: string[]): Promise<AnalyticsSummary> {
   const loggingDisabled = !existsSync(LOG_FILE);
-  const where = buildWhere(from, to, host);
+  const where = buildWhere(from, to, hosts);
 
   const row = db
     .select({
@@ -76,9 +80,9 @@ function bucketSizeForDuration(seconds: number): number {
   return 86400;
 }
 
-export async function getAnalyticsTimeline(from: number, to: number, host: string): Promise<TimelineBucket[]> {
+export async function getAnalyticsTimeline(from: number, to: number, hosts: string[]): Promise<TimelineBucket[]> {
   const bucketSize = bucketSizeForDuration(to - from);
-  const where = buildWhere(from, to, host);
+  const where = buildWhere(from, to, hosts);
 
   const rows = db
     .select({
@@ -107,8 +111,8 @@ export interface CountryStats {
   blocked: number;
 }
 
-export async function getAnalyticsCountries(from: number, to: number, host: string): Promise<CountryStats[]> {
-  const where = buildWhere(from, to, host);
+export async function getAnalyticsCountries(from: number, to: number, hosts: string[]): Promise<CountryStats[]> {
+  const where = buildWhere(from, to, hosts);
 
   const rows = db
     .select({
@@ -137,8 +141,8 @@ export interface ProtoStats {
   percent: number;
 }
 
-export async function getAnalyticsProtocols(from: number, to: number, host: string): Promise<ProtoStats[]> {
-  const where = buildWhere(from, to, host);
+export async function getAnalyticsProtocols(from: number, to: number, hosts: string[]): Promise<ProtoStats[]> {
+  const where = buildWhere(from, to, hosts);
 
   const rows = db
     .select({
@@ -168,8 +172,8 @@ export interface UAStats {
   percent: number;
 }
 
-export async function getAnalyticsUserAgents(from: number, to: number, host: string): Promise<UAStats[]> {
-  const where = buildWhere(from, to, host);
+export async function getAnalyticsUserAgents(from: number, to: number, hosts: string[]): Promise<UAStats[]> {
+  const where = buildWhere(from, to, hosts);
 
   const rows = db
     .select({
@@ -212,9 +216,9 @@ export interface BlockedPage {
   pages: number;
 }
 
-export async function getAnalyticsBlocked(from: number, to: number, host: string, page: number): Promise<BlockedPage> {
+export async function getAnalyticsBlocked(from: number, to: number, hosts: string[], page: number): Promise<BlockedPage> {
   const pageSize = 10;
-  const where = and(buildWhere(from, to, host), eq(trafficEvents.isBlocked, true));
+  const where = and(buildWhere(from, to, hosts), eq(trafficEvents.isBlocked, true));
 
   const totalRow = db.select({ total: sql<number>`count(*)` }).from(trafficEvents).where(where).get();
   const total = totalRow?.total ?? 0;
@@ -245,10 +249,23 @@ export async function getAnalyticsBlocked(from: number, to: number, host: string
 // ── Hosts ────────────────────────────────────────────────────────────────────
 
 export async function getAnalyticsHosts(): Promise<string[]> {
-  const rows = db
-    .selectDistinct({ host: trafficEvents.host })
-    .from(trafficEvents)
-    .orderBy(trafficEvents.host)
-    .all();
-  return rows.map((r) => r.host).filter(Boolean);
+  const hostSet = new Set<string>();
+
+  // Hosts that appear in traffic events
+  const trafficRows = db.selectDistinct({ host: trafficEvents.host }).from(trafficEvents).all();
+  for (const r of trafficRows) if (r.host) hostSet.add(r.host);
+
+  // All domains configured on proxy hosts (even those with no traffic yet)
+  const proxyRows = db.select({ domains: proxyHosts.domains }).from(proxyHosts).all();
+  for (const r of proxyRows) {
+    try {
+      const domains = JSON.parse(r.domains) as string[];
+      for (const d of domains) {
+        const trimmed = d?.trim().toLowerCase();
+        if (trimmed) hostSet.add(trimmed);
+      }
+    } catch { /* ignore malformed rows */ }
+  }
+
+  return Array.from(hostSet).sort();
 }
