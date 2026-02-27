@@ -19,7 +19,7 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
   <link rel="stylesheet" href="styles.css" />
   <script defer src="scripts.js"></script>
@@ -31,143 +31,190 @@
   <header>
     <div class="container header-inner">
       <a href="#" class="logo">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-            stroke-linejoin="round" />
-          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-            stroke-linejoin="round" />
-          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-            stroke-linejoin="round" />
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         Caddy Proxy Manager
       </a>
       <nav class="nav-links">
         <a href="#features">Features</a>
-        <a href="#architecture">Architecture</a>
-        <a href="#deployment">Data</a>
+        <a href="#spotlights">Showcase</a>
+        <a href="#deployment">Install</a>
         <a href="https://github.com/fuomag9/caddy-proxy-manager" target="_blank">GitHub</a>
       </nav>
     </div>
   </header>
 
   <main>
+    <!-- Hero -->
     <section class="hero container">
+      <div class="hero-eyebrow">Open Source · Docker · Next.js</div>
       <h1>Control Every Edge.</h1>
-      <p>The modern, secure context for your reverse proxy. Manage Caddy with an intuitive interface, automatic HTTPS,
-        geo blocking, and detailed audit logging.</p>
+      <p>The modern web interface for Caddy Server. Automatic HTTPS, geo blocking, traffic analytics, and a full audit trail — all in one place.</p>
 
       <div class="btn-group">
         <a href="#deployment" class="btn btn-primary">Get Started</a>
-        <a href="https://github.com/fuomag9/caddy-proxy-manager" target="_blank" class="btn btn-secondary">View
-          Source</a>
+        <a href="https://github.com/fuomag9/caddy-proxy-manager" target="_blank" class="btn btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          View Source
+        </a>
       </div>
 
       <div class="showcase">
         <div class="screenshot-main">
-          <img src="assets/screenshots/analytics.png" alt="Caddy Proxy Manager Analytics" loading="lazy" />
+          <img src="assets/screenshots/dashboard-main.png" alt="Caddy Proxy Manager Dashboard" loading="lazy" />
         </div>
       </div>
     </section>
 
+    <!-- Features Grid -->
     <section id="features" class="container features">
       <div class="section-header">
+        <div class="eyebrow">Everything included</div>
         <h2>Powerful Simplicity</h2>
         <p>Everything you need to manage your infrastructure, nothing you don't.</p>
       </div>
 
       <div class="grid">
         <div class="card">
+          <div class="card-icon">⇄</div>
           <h3>Reverse Proxy</h3>
           <p>Configure upstream pools, load balancing, custom headers, and per-host enable/disable with a clean editor.</p>
         </div>
         <div class="card">
+          <div class="card-icon">🔒</div>
           <h3>Auto HTTPS</h3>
-          <p>Automatic TLS certificates for every proxy host via Caddy ACME. Supports Let's Encrypt, ZeroSSL, and Cloudflare DNS-01.</p>
+          <p>Automatic TLS for every proxy host via Caddy ACME. Let's Encrypt, ZeroSSL, and Cloudflare DNS-01 out of the box.</p>
         </div>
         <div class="card">
+          <div class="card-icon">📈</div>
           <h3>Traffic Analytics</h3>
-          <p>Live request charts, country-level traffic map, top user agents, and blocked request log — across any time range.</p>
+          <p>Live request charts, country heatmap, top user agents, and blocked request log across any time range.</p>
         </div>
         <div class="card">
+          <div class="card-icon">🌍</div>
           <h3>Geo Blocking</h3>
-          <p>Block or allow traffic by country, continent, ASN, CIDR range, or exact IP — per proxy host, with allow-override rules.</p>
+          <p>Block or allow by country, continent, ASN, CIDR, or exact IP — per host, with priority allow-override rules.</p>
         </div>
         <div class="card">
+          <div class="card-icon">🔑</div>
           <h3>Access Control</h3>
-          <p>Protect endpoints with HTTP basic auth lists or full OAuth2/OIDC SSO via any OIDC-compliant provider.</p>
+          <p>HTTP basic auth lists or full OAuth2/OIDC SSO via Authentik, Keycloak, Auth0, and any OIDC provider.</p>
         </div>
         <div class="card">
+          <div class="card-icon">📋</div>
           <h3>Audit Log</h3>
-          <p>Every change is tracked and searchable. See who modified what and when, with full event history.</p>
+          <p>Every configuration change is tracked and full-text searchable. See who did what and when.</p>
         </div>
         <div class="card">
+          <div class="card-icon">🛡️</div>
           <h3>Certificate Visibility</h3>
-          <p>See issuer, expiry status, and health for every ACME-managed certificate — no more guessing what Caddy obtained.</p>
+          <p>Issuer, expiry status, and health for every ACME-managed cert — no more guessing what Caddy obtained.</p>
         </div>
         <div class="card">
+          <div class="card-icon">🐳</div>
           <h3>Docker Ready</h3>
-          <p>Deploys in seconds with a single docker-compose file. Persistent data via volumes, stateless app logic.</p>
+          <p>Up in seconds with a single docker-compose file. Persistent volumes, stateless app, easy to backup.</p>
         </div>
       </div>
     </section>
 
-    <section id="architecture" class="container tech-stack">
-      <div class="section-header">
-        <h2>Designed for Reliability</h2>
-      </div>
-      <div class="tech-grid">
-        <div class="secondary-screenshots">
-          <img src="assets/screenshots/proxy-hosts.png" alt="Proxy Hosts" loading="lazy" />
-          <img src="assets/screenshots/certificates.png" alt="Certificates" loading="lazy" />
-          <img src="assets/screenshots/proxy-editor.png" alt="Proxy Editor" loading="lazy" />
-          <img src="assets/screenshots/audit-log.png" alt="Audit Log" loading="lazy" />
-        </div>
-        <div>
-          <ul class="tech-list">
-            <li>
-              <h4>Caddy Powered</h4>
-              <p>Uses Caddy's native Admin API for real-time configuration updates without restarts.</p>
-            </li>
-            <li>
-              <h4>Type-Safe & Secure</h4>
-              <p>End-to-end type safety with TypeScript. Secure session management and input validation.</p>
-            </li>
-            <li>
-              <h4>SQLite Database</h4>
-              <p>Self-contained data storage. Easy to backup, migrate, and maintain.</p>
-            </li>
-            <li>
-              <h4>React Interface</h4>
-              <p>A responsive, dark-mode first UI built with the latest React patterns for a snappy experience.</p>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </section>
+    <!-- Feature Spotlights -->
+    <div id="spotlights">
 
+      <section class="spotlight-section">
+        <div class="spotlight container">
+          <div class="spotlight-text">
+            <div class="eyebrow">Traffic Intelligence</div>
+            <h2>See every request,<br>in real time.</h2>
+            <p>Charts, country heatmaps, user agent breakdowns, and a paginated blocked-request log. Filter by host or pick any time range from the last hour to 30 days.</p>
+          </div>
+          <div class="spotlight-image">
+            <img src="assets/screenshots/analytics-top.png" alt="Analytics dashboard" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <section class="spotlight-section spotlight-reverse">
+        <div class="spotlight container">
+          <div class="spotlight-text">
+            <div class="eyebrow">Proxy Management</div>
+            <h2>Every reverse proxy,<br>one interface.</h2>
+            <p>Search across all hosts, toggle them on or off instantly, and configure upstreams, load balancing, and access lists — without touching a config file.</p>
+          </div>
+          <div class="spotlight-image">
+            <img src="assets/screenshots/proxy-hosts.png" alt="Proxy Hosts" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <section class="spotlight-section">
+        <div class="spotlight container">
+          <div class="spotlight-text">
+            <div class="eyebrow">TLS Certificates</div>
+            <h2>HTTPS by default.<br>Visibility built in.</h2>
+            <p>Caddy handles certificate issuance automatically. The Certificates page shows issuer, expiry, and status for every managed cert — and lets you import custom ones when needed.</p>
+          </div>
+          <div class="spotlight-image">
+            <img src="assets/screenshots/certificates.png" alt="Certificates" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <section class="spotlight-section spotlight-reverse">
+        <div class="spotlight container">
+          <div class="spotlight-text">
+            <div class="eyebrow">Configuration</div>
+            <h2>Every option,<br>without the YAML.</h2>
+            <p>The host editor exposes load balancing policies, Authentik forward auth, custom DNS resolvers, upstream DNS pinning, geo blocking rules, and HSTS — all from a single form.</p>
+          </div>
+          <div class="spotlight-image">
+            <img src="assets/screenshots/proxy-editor.png" alt="Proxy Editor" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Deploy -->
     <section id="deployment" class="deployment">
-      <div class="container section-header">
-        <h2>Deploy in Seconds</h2>
-        <p>Get up and running with Docker Compose.</p>
+      <div class="container deploy-inner">
+        <div class="section-header">
+          <div class="eyebrow">Open Source</div>
+          <h2>Deploy in Seconds</h2>
+          <p>A single docker-compose file is all you need.</p>
+        </div>
 
         <div class="code-block">
-          <span class="comment"># Clone the repository</span>
-          <span class="command">git clone https://github.com/fuomag9/caddy-proxy-manager.git</span>
-          <span class="command">cd caddy-proxy-manager</span>
-          <br>
-          <span class="comment"># Setup environment</span>
-          <span class="command">cp .env.example .env</span>
-          <br>
-          <span class="comment"># Start the stack</span>
-          <span class="command">docker compose up -d</span>
+          <div class="code-line"><span class="comment"># Clone and configure</span></div>
+          <div class="code-line"><span class="command">git clone https://github.com/fuomag9/caddy-proxy-manager.git</span></div>
+          <div class="code-line"><span class="command">cd caddy-proxy-manager && cp .env.example .env</span></div>
+          <div class="code-line">&nbsp;</div>
+          <div class="code-line"><span class="comment"># Configure the environment</span></div>
+          <div class="code-line"><span class="command">nano .env</span></div>
+          <div class="code-line">&nbsp;</div>
+          <div class="code-line"><span class="comment"># Start</span></div>
+          <div class="code-line"><span class="command">docker compose up -d</span></div>
         </div>
+
+        <p class="deploy-note">Access at <code>http://localhost:3000</code> · Data persists in Docker volumes</p>
       </div>
     </section>
   </main>
 
   <footer>
-    <div class="container">
-      <p>&copy; <span id="year"></span> Caddy Proxy Manager. Released under the MIT License.</p>
+    <div class="container footer-inner">
+      <a href="#" class="logo footer-logo">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Caddy Proxy Manager
+      </a>
+      <p>&copy; <span id="year"></span> Released under the MIT License.</p>
     </div>
   </footer>
 </body>
