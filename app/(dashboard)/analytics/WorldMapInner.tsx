@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import MapGL, { Layer, Source, type MapRef, type MapLayerMouseEvent } from 'react-map-gl/maplibre';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import MapGL, { Layer, Popup, Source, type MapLayerMouseEvent } from 'react-map-gl/maplibre';
 import { feature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
+import type { ExpressionSpecification, FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -80,33 +81,68 @@ function flag(code: string): string {
   return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
 }
 
-const OCEAN = '#0b1628';
+const OCEAN = '#0a1628';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const MAP_STYLE: any = {
   version: 8,
   name: 'blank',
   sources: {},
-  layers: [
-    { id: 'bg', type: 'background', paint: { 'background-color': OCEAN } },
-  ],
+  layers: [{ id: 'bg', type: 'background', paint: { 'background-color': OCEAN } }],
+};
+
+const FILL_LAYER: Omit<FillLayerSpecification, 'source'> = {
+  id: 'countries-fill',
+  type: 'fill',
+  paint: {
+    'fill-color': [
+      'interpolate', ['linear'],
+      ['coalesce', ['get', 'norm'], 0],
+      0,     '#1e293b',  // no traffic — slate-800, clearly distinct from ocean
+      0.001, '#1e3a8a',  // any traffic
+      0.4,   '#3b82f6',
+      1,     '#93c5fd',
+    ] as ExpressionSpecification,
+    'fill-opacity': 1,
+  },
+};
+
+const HIGHLIGHT_LAYER: Omit<FillLayerSpecification, 'source'> = {
+  id: 'countries-highlight',
+  type: 'fill',
+  paint: {
+    'fill-color': '#7dd3fc',
+    'fill-opacity': 0.45,
+  },
+};
+
+const OUTLINE_LAYER: Omit<LineLayerSpecification, 'source'> = {
+  id: 'countries-outline',
+  type: 'line',
+  paint: {
+    'line-color': 'rgba(148,163,184,0.18)',
+    'line-width': 0.6,
+  },
 };
 
 export interface CountryStats { countryCode: string; total: number; blocked: number; }
 
-interface TooltipState { x: number; y: number; alpha2: string; total: number; blocked: number; }
+interface HoverInfo {
+  longitude: number;
+  latitude: number;
+  alpha2: string;
+  total: number;
+  blocked: number;
+}
 
 export default function WorldMapInner({ data }: { data: CountryStats[] }) {
-  const mapRef = useRef<MapRef>(null);
   const [baseGeojson, setBaseGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
-  const hoveredIdRef = useRef<string | number | null>(null);
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
 
   const countMap = useMemo(() => new Map(data.map(d => [d.countryCode, d.total])), [data]);
   const blockedMap = useMemo(() => new Map(data.map(d => [d.countryCode, d.blocked])), [data]);
   const max = useMemo(() => data.reduce((m, d) => Math.max(m, d.total), 0), [data]);
 
-  // Load topology once
   useEffect(() => {
     fetch('/geo/countries-110m.json')
       .then(r => r.json())
@@ -116,70 +152,38 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
       .catch(() => setBaseGeojson({ type: 'FeatureCollection', features: [] }));
   }, []);
 
-  // Enrich GeoJSON with traffic properties whenever data or topology changes
   const geojson = useMemo<GeoJSON.FeatureCollection | null>(() => {
     if (!baseGeojson) return null;
     const safeMax = Math.max(max, 1);
     return {
       ...baseGeojson,
       features: baseGeojson.features.map(f => {
-        const numId = String(f.id ?? '');
-        const alpha2 = N2A[numId] ?? null;
+        const alpha2 = N2A[String(f.id ?? '')] ?? null;
         const total = alpha2 ? (countMap.get(alpha2) ?? 0) : 0;
         const blocked = alpha2 ? (blockedMap.get(alpha2) ?? 0) : 0;
-        return {
-          ...f,
-          properties: { ...f.properties, alpha2, total, blocked, norm: total / safeMax },
-        };
+        return { ...f, properties: { ...f.properties, alpha2, total, blocked, norm: total / safeMax } };
       }),
     };
   }, [baseGeojson, countMap, blockedMap, max]);
 
-  const onMouseMove = useCallback((e: MapLayerMouseEvent) => {
-    const map = mapRef.current?.getMap();
-    if (!map) return;
-
-    const [f] = e.features ?? [];
-    if (!f) {
-      if (hoveredIdRef.current != null) {
-        map.setFeatureState({ source: 'countries', id: hoveredIdRef.current }, { hover: false });
-        hoveredIdRef.current = null;
-      }
-      setTooltip(null);
-      return;
-    }
-
-    const fId = f.id ?? null;
-    if (fId !== hoveredIdRef.current) {
-      if (hoveredIdRef.current != null) {
-        map.setFeatureState({ source: 'countries', id: hoveredIdRef.current }, { hover: false });
-      }
-      hoveredIdRef.current = fId;
-      if (fId != null) map.setFeatureState({ source: 'countries', id: fId }, { hover: true });
-    }
-
-    const alpha2 = (f.properties?.alpha2 as string | null) ?? null;
-    if (alpha2) {
-      setTooltip({
-        x: e.originalEvent.clientX,
-        y: e.originalEvent.clientY,
-        alpha2,
-        total: (f.properties?.total as number) ?? 0,
-        blocked: (f.properties?.blocked as number) ?? 0,
-      });
-    } else {
-      setTooltip(null);
-    }
+  const onHover = useCallback((event: MapLayerMouseEvent) => {
+    const f = event.features?.[0];
+    if (!f) { setHoverInfo(null); return; }
+    const alpha2 = f.properties?.alpha2 as string | null;
+    if (!alpha2) { setHoverInfo(null); return; }
+    setHoverInfo({
+      longitude: event.lngLat.lng,
+      latitude: event.lngLat.lat,
+      alpha2,
+      total: (f.properties?.total as number) ?? 0,
+      blocked: (f.properties?.blocked as number) ?? 0,
+    });
   }, []);
 
-  const onMouseLeave = useCallback(() => {
-    const map = mapRef.current?.getMap();
-    if (map && hoveredIdRef.current != null) {
-      map.setFeatureState({ source: 'countries', id: hoveredIdRef.current }, { hover: false });
-      hoveredIdRef.current = null;
-    }
-    setTooltip(null);
-  }, []);
+  const highlightFilter = useMemo<ExpressionSpecification>(
+    () => ['==', ['get', 'alpha2'], hoverInfo?.alpha2 ?? ''],
+    [hoverInfo?.alpha2],
+  );
 
   if (!geojson) {
     return (
@@ -191,6 +195,20 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
 
   return (
     <Box sx={{ position: 'relative' }}>
+      {/* Override MapLibre popup chrome to match dark theme */}
+      <style>{`
+        .wm-popup .maplibregl-popup-content {
+          background: rgba(8,16,30,0.96) !important;
+          border: 1px solid rgba(148,163,184,0.15) !important;
+          border-radius: 10px !important;
+          padding: 10px 14px !important;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
+          backdrop-filter: blur(12px) !important;
+          min-width: 152px;
+        }
+        .wm-popup .maplibregl-popup-tip { display: none !important; }
+      `}</style>
+
       <Box sx={{
         borderRadius: 2,
         overflow: 'hidden',
@@ -198,50 +216,62 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
         height: 340,
       }}>
         <MapGL
-          ref={mapRef}
           mapStyle={MAP_STYLE}
-          initialViewState={{ longitude: 0, latitude: 20, zoom: 0 }}
+          initialViewState={{
+            bounds: [[-168, -56], [168, 74]],
+            fitBoundsOptions: { padding: 4 },
+          }}
+          minZoom={0.5}
           interactiveLayerIds={['countries-fill']}
-          onMouseMove={onMouseMove}
-          onMouseLeave={onMouseLeave}
+          onMouseMove={onHover}
+          onMouseLeave={() => setHoverInfo(null)}
           style={{ width: '100%', height: '100%' }}
           attributionControl={false}
-          scrollZoom={false}
           dragRotate={false}
           pitchWithRotate={false}
-          cursor={tooltip ? 'crosshair' : 'default'}
+          cursor={hoverInfo ? 'crosshair' : 'grab'}
         >
-
           <Source id="countries" type="geojson" data={geojson}>
-            <Layer
-              id="countries-fill"
-              type="fill"
-              paint={{
-                'fill-color': [
-                  'case',
-                  ['boolean', ['feature-state', 'hover'], false],
-                  '#7dd3fc',
-                  [
-                    'interpolate', ['linear'],
-                    ['coalesce', ['get', 'norm'], 0],
-                    0, '#162032',
-                    0.001, '#1e3a8a',
-                    0.5, '#3b82f6',
-                    1, '#93c5fd',
-                  ],
-                ],
-                'fill-opacity': 1,
-              }}
-            />
-            <Layer
-              id="countries-outline"
-              type="line"
-              paint={{
-                'line-color': OCEAN,
-                'line-width': 0.6,
-              }}
-            />
+            <Layer {...FILL_LAYER} source="countries" />
+            <Layer {...HIGHLIGHT_LAYER} source="countries" filter={highlightFilter} />
+            <Layer {...OUTLINE_LAYER} source="countries" />
           </Source>
+
+          {hoverInfo && (
+            <Popup
+              longitude={hoverInfo.longitude}
+              latitude={hoverInfo.latitude}
+              offset={[0, -6] as [number, number]}
+              closeButton={false}
+              closeOnClick={false}
+              anchor="bottom"
+              className="wm-popup"
+            >
+              <div style={{ color: '#f1f5f9', fontFamily: 'inherit', fontSize: 13 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, fontWeight: 600, fontSize: 14 }}>
+                  <span style={{ fontSize: 20, lineHeight: 1 }}>{flag(hoverInfo.alpha2)}</span>
+                  <span>{NAMES[hoverInfo.alpha2] ?? hoverInfo.alpha2}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20 }}>
+                  <span style={{ color: '#94a3b8' }}>Requests</span>
+                  <span style={{ color: '#60a5fa', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    {hoverInfo.total.toLocaleString()}
+                  </span>
+                </div>
+                {hoverInfo.blocked > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, marginTop: 3 }}>
+                    <span style={{ color: '#94a3b8' }}>Blocked</span>
+                    <span style={{ color: '#f87171', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                      {hoverInfo.blocked.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {hoverInfo.total === 0 && (
+                  <div style={{ color: '#475569', marginTop: 3, fontSize: 12 }}>No traffic recorded</div>
+                )}
+              </div>
+            </Popup>
+          )}
         </MapGL>
       </Box>
 
@@ -253,52 +283,6 @@ export default function WorldMapInner({ data }: { data: CountryStats[] }) {
             background: 'linear-gradient(to right, #1e3a8a, #3b82f6, #93c5fd)',
           }} />
           <Typography variant="caption" color="text.disabled">High</Typography>
-        </Box>
-      )}
-
-      {tooltip && (
-        <Box
-          sx={{
-            position: 'fixed',
-            left: tooltip.x + 16,
-            top: tooltip.y - 8,
-            zIndex: 9999,
-            pointerEvents: 'none',
-            bgcolor: 'rgba(10, 18, 35, 0.97)',
-            border: '1px solid rgba(148,163,184,0.18)',
-            borderRadius: 1.5,
-            px: 1.5,
-            py: 1,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(12px)',
-            minWidth: 160,
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
-            <span style={{ fontSize: 18, lineHeight: 1 }}>{flag(tooltip.alpha2)}</span>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: '#f1f5f9', lineHeight: 1 }}>
-              {NAMES[tooltip.alpha2] ?? tooltip.alpha2}
-            </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3 }}>
-              <Typography variant="caption" color="text.secondary">Requests</Typography>
-              <Typography variant="caption" sx={{ color: '#60a5fa', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                {tooltip.total.toLocaleString()}
-              </Typography>
-            </Box>
-            {tooltip.blocked > 0 && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3 }}>
-                <Typography variant="caption" color="text.secondary">Blocked</Typography>
-                <Typography variant="caption" sx={{ color: '#f87171', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                  {tooltip.blocked.toLocaleString()}
-                </Typography>
-              </Box>
-            )}
-            {tooltip.total === 0 && (
-              <Typography variant="caption" color="text.disabled">No traffic recorded</Typography>
-            )}
-          </Box>
         </Box>
       )}
     </Box>

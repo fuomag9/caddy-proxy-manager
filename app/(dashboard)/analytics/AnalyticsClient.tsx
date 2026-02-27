@@ -43,7 +43,7 @@ const WorldMap = dynamic(() => import('./WorldMapInner'), {
 
 // ── Types (mirrored from analytics-db — can't import server-only code) ────────
 
-type Interval = '24h' | '7d' | '30d';
+type Interval = '1h' | '12h' | '24h' | '7d' | '30d';
 
 interface AnalyticsSummary {
   totalRequests: number;
@@ -99,6 +99,8 @@ function formatBytes(bytes: number): string {
 
 function formatTs(ts: number, interval: Interval): string {
   const d = new Date(ts * 1000);
+  if (interval === '1h') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (interval === '12h') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if (interval === '24h') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if (interval === '7d') return d.toLocaleDateString([], { weekday: 'short' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
@@ -239,6 +241,8 @@ export default function AnalyticsClient() {
             size="small"
             onChange={(_e, v) => { if (v) setIntervalVal(v); }}
           >
+            <ToggleButton value="1h">1h</ToggleButton>
+            <ToggleButton value="12h">12h</ToggleButton>
             <ToggleButton value="24h">24h</ToggleButton>
             <ToggleButton value="7d">7d</ToggleButton>
             <ToggleButton value="30d">30d</ToggleButton>
