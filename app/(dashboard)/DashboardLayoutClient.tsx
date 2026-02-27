@@ -21,13 +21,13 @@ import {
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import RouterIcon from "@mui/icons-material/Router";
-import LockIcon from "@mui/icons-material/Lock";
-import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
-import SettingsIcon from "@mui/icons-material/Settings";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import LogoutIcon from "@mui/icons-material/Logout";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import BarChartIcon from "@mui/icons-material/BarChart";
+import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import SecurityIcon from "@mui/icons-material/Security";
+import SettingsIcon from "@mui/icons-material/Settings";
+import HistoryIcon from "@mui/icons-material/History";
+import LogoutIcon from "@mui/icons-material/Logout";
 
 type User = {
   id: string;
@@ -38,12 +38,12 @@ type User = {
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: DashboardIcon },
-  { href: "/proxy-hosts", label: "Proxy Hosts", icon: RouterIcon },
+  { href: "/proxy-hosts", label: "Proxy Hosts", icon: SwapHorizIcon },
   { href: "/analytics", label: "Analytics", icon: BarChartIcon },
-  { href: "/access-lists", label: "Access Lists", icon: LockIcon },
-  { href: "/certificates", label: "Certificates", icon: WorkspacePremiumIcon },
+  { href: "/access-lists", label: "Access Lists", icon: VpnKeyIcon },
+  { href: "/certificates", label: "Certificates", icon: SecurityIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
-  { href: "/audit-log", label: "Audit Log", icon: AssignmentIcon }
+  { href: "/audit-log", label: "Audit Log", icon: HistoryIcon }
 ] as const;
 
 const DRAWER_WIDTH = 260;
