@@ -9,7 +9,10 @@ import {
   Button,
   Divider,
   Drawer,
+  List,
   ListItemButton,
+  ListItemIcon,
+  ListItemText,
   Stack,
   Typography,
   useTheme,
@@ -67,65 +70,41 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
         </Typography>
       </Box>
 
-      {/* 2-column squircle nav grid */}
-      <Box sx={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, alignContent: "space-evenly" }}>
+      <List sx={{ flex: 1, gap: 0.5, display: "flex", flexDirection: "column" }}>
         {NAV_ITEMS.map((item) => {
           const selected = pathname === item.href;
           const Icon = item.icon;
           return (
-            <Box
+            <ListItemButton
               key={item.href}
               component={Link}
               href={item.href}
+              selected={selected}
               onClick={() => isMobile && setMobileOpen(false)}
               sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 0.75,
-                aspectRatio: "1",
-                borderRadius: "22%",
-                textDecoration: "none",
-                cursor: "pointer",
-                bgcolor: selected
-                  ? "primary.main"
-                  : "rgba(255,255,255,0.04)",
+                mb: 0.5,
+                borderRadius: 3,
                 color: selected ? "primary.contrastText" : "text.secondary",
-                border: "1px solid",
-                borderColor: selected
-                  ? "primary.main"
-                  : "rgba(255,255,255,0.06)",
-                transition: "all 0.15s ease",
-                "&:hover": {
-                  bgcolor: selected
-                    ? "primary.dark"
-                    : "rgba(255,255,255,0.08)",
-                  color: selected ? "primary.contrastText" : "text.primary",
-                  borderColor: selected
-                    ? "primary.dark"
-                    : "rgba(255,255,255,0.12)",
+                "& .MuiListItemIcon-root": {
+                  color: selected ? "inherit" : "text.secondary",
+                  minWidth: 40,
                 },
               }}
             >
-              <Icon sx={{ fontSize: 22 }} />
-              <Typography
-                variant="caption"
-                sx={{
+              <ListItemIcon>
+                <Icon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  variant: "body2",
                   fontWeight: selected ? 600 : 500,
-                  fontSize: "0.68rem",
-                  lineHeight: 1.2,
-                  textAlign: "center",
-                  px: 0.5,
-                  color: "inherit",
                 }}
-              >
-                {item.label}
-              </Typography>
-            </Box>
+              />
+            </ListItemButton>
           );
         })}
-      </Box>
+      </List>
 
       <Box sx={{ mt: 2 }}>
         <Divider sx={{ mb: 2, borderColor: "rgba(255,255,255,0.05)" }} />
