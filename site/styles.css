@@ -23,7 +23,9 @@ body {
   color: var(--fg);
   font-family: var(--font-sans);
   line-height: 1.6;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
 }
 
@@ -92,7 +94,7 @@ header {
 
 /* ── Hero ── */
 .hero {
-  padding: 9rem 0 5rem;
+  padding: 6.5rem 0 4rem;
   text-align: center;
 }
 
@@ -107,11 +109,12 @@ header {
 }
 
 .hero h1 {
-  font-size: clamp(3rem, 7vw, 5.5rem);
+  font-size: clamp(3rem, 7vw, 5.25rem);
   font-weight: 900;
   letter-spacing: -0.04em;
-  line-height: 1.0;
-  margin-bottom: 1.5rem;
+  line-height: 1.08;
+  margin-bottom: 1.25rem;
+  padding: 0 0.04em 0.12em;
   background: linear-gradient(160deg, #fff 0%, #86868b 100%);
   background-clip: text;
   -webkit-background-clip: text;
@@ -121,8 +124,8 @@ header {
 .hero > p {
   font-size: 1.2rem;
   color: var(--fg-muted);
-  max-width: 580px;
-  margin: 0 auto 2.5rem;
+  max-width: 680px;
+  margin: 0 auto 2rem;
   line-height: 1.7;
 }
 
@@ -130,7 +133,7 @@ header {
   display: flex;
   justify-content: center;
   gap: 0.75rem;
-  margin-bottom: 5rem;
+  margin-bottom: 3rem;
 }
 
 .btn {
@@ -387,7 +390,7 @@ footer p {
 
   .spotlight-text { max-width: 100%; }
 
-  .hero { padding: 6rem 0 4rem; }
+  .hero { padding: 5rem 0 3.5rem; }
 
   .grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 
@@ -396,6 +399,10 @@ footer p {
 
 @media (max-width: 600px) {
   .nav-links { display: none; }
-  .hero h1 { font-size: 2.75rem; }
+  .hero h1 {
+    font-size: 2.75rem;
+    line-height: 1.12;
+    padding-bottom: 0.1em;
+  }
   .btn-group { flex-direction: column; align-items: center; }
 }
