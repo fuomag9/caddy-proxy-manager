@@ -36,6 +36,33 @@ type DataTableProps<T> = {
   };
 };
 
+function PaginationBar({ page, perPage, total }: { page: number; perPage: number; total: number }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const pageCount = Math.ceil(total / perPage);
+
+  if (pageCount <= 1) return null;
+
+  function handlePageChange(_: React.ChangeEvent<unknown>, newPage: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(newPage));
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  return (
+    <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
+      <Pagination
+        count={pageCount}
+        page={page}
+        onChange={handlePageChange}
+        color="primary"
+        shape="rounded"
+      />
+    </Box>
+  );
+}
+
 export function DataTable<T>({
   columns,
   data,
@@ -44,20 +71,6 @@ export function DataTable<T>({
   loading = false,
   pagination,
 }: DataTableProps<T>) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const pageCount = pagination
-    ? Math.ceil(pagination.total / pagination.perPage)
-    : 0;
-
-  function handlePageChange(_: React.ChangeEvent<unknown>, page: number) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("page", String(page));
-    router.push(`${pathname}?${params.toString()}`);
-  }
-
   return (
     <Box>
       <TableContainer component={Card} variant="outlined">
@@ -97,17 +110,7 @@ export function DataTable<T>({
         </Table>
       </TableContainer>
 
-      {pagination && pageCount > 1 && (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-          <Pagination
-            count={pageCount}
-            page={pagination.page}
-            onChange={handlePageChange}
-            color="primary"
-            shape="rounded"
-          />
-        </Box>
-      )}
+      {pagination && <PaginationBar {...pagination} />}
     </Box>
   );
 }

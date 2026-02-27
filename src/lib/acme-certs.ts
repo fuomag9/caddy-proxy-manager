@@ -82,7 +82,7 @@ export function scanAcmeCerts(): Map<string, AcmeCertInfo> {
       for (const domain of sanDomains) {
         // Keep the cert with the latest validTo for each domain
         const existing = map.get(domain);
-        if (!existing || info.validTo > existing.validTo) {
+        if (!existing || new Date(info.validTo).getTime() > new Date(existing.validTo).getTime()) {
           map.set(domain, info);
         }
       }
