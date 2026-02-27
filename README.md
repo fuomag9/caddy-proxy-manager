@@ -30,6 +30,8 @@ This project provides a web UI for Caddy Server, eliminating the need to manuall
 <img width="49%" alt="Proxy Hosts" src="site/assets/screenshots/proxy-hosts.png" /> <img width="49%" alt="Certificates" src="site/assets/screenshots/certificates.png" />
 <img width="49%" alt="Proxy Editor" src="site/assets/screenshots/proxy-editor.png" /> <img width="49%" alt="Audit Log" src="site/assets/screenshots/audit-log.png" />
 
+<img width="100%" alt="Analytics" src="site/assets/screenshots/analytics.png" />
+
 ---
 
 ## Installation
@@ -51,6 +53,7 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 ## Features
 
 - **Proxy Hosts** - Reverse proxies with custom headers, multiple upstreams, load balancing, and enable/disable toggle
+- **Analytics** - Live traffic charts, country map, top user agents, and blocked request log with configurable time ranges
 - **Search & Pagination** - Server-side search and pagination on all data tables (proxy hosts, access lists, audit log, certificates)
 - **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host
 - **Access Lists** - Multi-account HTTP basic auth protection assignable per proxy host

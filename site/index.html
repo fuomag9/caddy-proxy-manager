@@ -64,7 +64,7 @@
 
       <div class="showcase">
         <div class="screenshot-main">
-          <img src="assets/screenshots/dashboard-main.png" alt="Caddy Proxy Manager Dashboard" loading="lazy" />
+          <img src="assets/screenshots/analytics.png" alt="Caddy Proxy Manager Analytics" loading="lazy" />
         </div>
       </div>
     </section>
@@ -78,13 +78,15 @@
       <div class="grid">
         <div class="card">
           <h3>Reverse Proxy</h3>
-          <p>Easily configure upstream pools, custom headers, and routing rules with a type-safe editor.</p>
+          <p>Configure upstream pools, load balancing, custom headers, and per-host enable/disable with a clean editor.</p>
         </div>
         <div class="card">
           <h3>Auto HTTPS</h3>
-          <p>Zero-configuration TLS certificates via Let's Encrypt. Supports Cloudflare DNS-01 and HTTP-01 challenges
-            out of the
-            box.</p>
+          <p>Automatic TLS certificates for every proxy host via Caddy ACME. Supports Let's Encrypt, ZeroSSL, and Cloudflare DNS-01.</p>
+        </div>
+        <div class="card">
+          <h3>Traffic Analytics</h3>
+          <p>Live request charts, country-level traffic map, top user agents, and blocked request log — across any time range.</p>
         </div>
         <div class="card">
           <h3>Geo Blocking</h3>
@@ -92,19 +94,19 @@
         </div>
         <div class="card">
           <h3>Access Control</h3>
-          <p>Secure your endpoints with basic auth, IP access lists, or valid OAuth2/OIDC sessions.</p>
+          <p>Protect endpoints with HTTP basic auth lists or full OAuth2/OIDC SSO via any OIDC-compliant provider.</p>
         </div>
         <div class="card">
           <h3>Audit Log</h3>
-          <p>Every change is tracked. See who modified what and when, with full configuration diffs.</p>
+          <p>Every change is tracked and searchable. See who modified what and when, with full event history.</p>
         </div>
         <div class="card">
-          <h3>Modern Stack</h3>
-          <p>Built with Next.js 16, React Server Components, and Drizzle ORM for maximum performance.</p>
+          <h3>Certificate Visibility</h3>
+          <p>See issuer, expiry status, and health for every ACME-managed certificate — no more guessing what Caddy obtained.</p>
         </div>
         <div class="card">
           <h3>Docker Ready</h3>
-          <p>Deploys in seconds with a single docker-compose file. Stateless application logic with persistent data.</p>
+          <p>Deploys in seconds with a single docker-compose file. Persistent data via volumes, stateless app logic.</p>
         </div>
       </div>
     </section>
@@ -115,8 +117,10 @@
       </div>
       <div class="tech-grid">
         <div class="secondary-screenshots">
-          <img src="assets/screenshots/audit-log.png" alt="Audit Log" loading="lazy" />
+          <img src="assets/screenshots/proxy-hosts.png" alt="Proxy Hosts" loading="lazy" />
+          <img src="assets/screenshots/certificates.png" alt="Certificates" loading="lazy" />
           <img src="assets/screenshots/proxy-editor.png" alt="Proxy Editor" loading="lazy" />
+          <img src="assets/screenshots/audit-log.png" alt="Audit Log" loading="lazy" />
         </div>
         <div>
           <ul class="tech-list">
