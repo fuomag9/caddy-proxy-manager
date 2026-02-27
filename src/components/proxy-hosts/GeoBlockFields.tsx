@@ -25,9 +25,9 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import DeleteIcon from "@mui/icons-material/Delete";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ErrorIcon from "@mui/icons-material/Error";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import PublicIcon from "@mui/icons-material/Public";
 import SearchIcon from "@mui/icons-material/Search";
@@ -61,7 +61,7 @@ function GeoIpStatus() {
   const noneLoaded = !status?.country && !status?.asn;
 
   const color = allLoaded ? "success" : noneLoaded ? "error" : "warning";
-  const Icon = allLoaded ? CheckCircleOutlineIcon : noneLoaded ? ErrorOutlineIcon : WarningAmberIcon;
+  const Icon = allLoaded ? CheckCircleIcon : noneLoaded ? ErrorIcon : WarningAmberIcon;
   const label = allLoaded ? "GeoIP ready" : noneLoaded ? "GeoIP missing" : "GeoIP partial";
   const tooltip = noneLoaded
     ? "GeoIP databases not found — country/continent/ASN blocking will not work. Enable the geoipupdate service."
@@ -552,7 +552,7 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
               />
               <Tooltip title="Remove">
                 <IconButton size="small" color="error" onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))} sx={{ mt: 0.5 }}>
-                  <DeleteOutlineIcon fontSize="small" />
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             </Stack>

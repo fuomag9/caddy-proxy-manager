@@ -1,7 +1,7 @@
 "use client";
 
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import InfoIcon from "@mui/icons-material/Info";
 import {
   Accordion,
   AccordionDetails,
@@ -39,7 +39,7 @@ export default function CertificatesClient({ certificates }: Props) {
         </Typography>
       </Stack>
 
-      <Alert severity="info" icon={<InfoOutlinedIcon />}>
+      <Alert severity="info" icon={<InfoIcon />}>
         <Typography variant="body2" fontWeight={600} gutterBottom>
           How Caddy handles certificates:
         </Typography>

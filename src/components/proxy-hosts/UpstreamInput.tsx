@@ -1,7 +1,7 @@
 
 import { Box, Button, IconButton, Stack, TextField, Tooltip, Typography, Autocomplete, InputAdornment } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
+import RemoveCircleIcon from "@mui/icons-material/RemoveCircle";
 import { useState } from "react";
 
 const PROTOCOL_OPTIONS = ["http://", "https://"];
@@ -115,7 +115,7 @@ export function UpstreamInput({
                                     color="error"
                                     sx={{ mt: 0.5 }}
                                 >
-                                    <RemoveCircleOutlineIcon fontSize="small" />
+                                    <RemoveCircleIcon fontSize="small" />
                                 </IconButton>
                             </span>
                         </Tooltip>

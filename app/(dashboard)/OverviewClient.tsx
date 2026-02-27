@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Grid from "@mui/material/Grid";
 import { Card, CardActionArea, CardContent, Paper, Stack, Typography, Box } from "@mui/material";
+import BarChartIcon from "@mui/icons-material/BarChart";
 import { ReactNode } from "react";
 
 type StatCard = {
@@ -114,9 +115,7 @@ export default function OverviewClient({
             >
               <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Box sx={{ color: "rgba(127, 91, 255, 0.8)", display: "flex", alignItems: "center" }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="35" height="35" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/>
-                  </svg>
+                  <BarChartIcon fontSize="large" />
                 </Box>
                 {trafficSummary ? (
                   <>
