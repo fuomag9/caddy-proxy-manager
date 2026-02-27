@@ -58,6 +58,7 @@ services:
       - caddy-manager-data:/app/data
       - geoip-data:/usr/share/GeoIP:ro,z
       - caddy-logs:/logs:ro
+      - caddy-data:/caddy-data:ro
     depends_on:
       caddy:
         condition: service_healthy
