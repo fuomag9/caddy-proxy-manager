@@ -15,3 +15,4 @@ CLAUDE.local.md
 /caddy-proxy-manager.wiki
 docs/plans
 /.playwright-mcp
+docker-compose.override.yml

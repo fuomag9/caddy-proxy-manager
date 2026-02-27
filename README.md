@@ -15,16 +15,20 @@ Web interface for managing [Caddy Server](https://caddyserver.com/) reverse prox
 This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a Material UI interface.
 
 **Key features:**
-- Reverse proxy configuration with multiple upstreams and custom headers
+- Reverse proxy configuration with multiple upstreams, load balancing, and custom headers
+- Server-side search and pagination across all data tables
 - HTTP basic auth access lists with multi-account support
 - OAuth2/OIDC authentication support
 - Automatic HTTPS via Caddy's ACME (Let's Encrypt) with Cloudflare DNS-01 support
-- ACME certificate visibility (issuer + expiry) in the Certificates page
+- ACME certificate visibility with real issuer, expiry status, and per-host tracking
 - Optional upstream DNS pinning (resolve upstream hostnames on config apply)
 - Geo blocking per proxy host — block/allow by country, continent, ASN, CIDR, or IP
 - Custom certificate import (internal CA, wildcards, etc.)
-- Audit logging of all configuration changes
+- Audit logging of all configuration changes with full-text search
 - Built with Next.js 16, React 19, Drizzle ORM, and TypeScript
+
+<img width="49%" alt="Proxy Hosts" src="site/assets/screenshots/proxy-hosts.png" /> <img width="49%" alt="Certificates" src="site/assets/screenshots/certificates.png" />
+<img width="49%" alt="Proxy Editor" src="site/assets/screenshots/proxy-editor.png" /> <img width="49%" alt="Audit Log" src="site/assets/screenshots/audit-log.png" />
 
 ---
 
@@ -46,12 +50,13 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 
 ## Features
 
-- **Proxy Hosts** - Reverse proxies with custom headers and multiple upstreams
+- **Proxy Hosts** - Reverse proxies with custom headers, multiple upstreams, load balancing, and enable/disable toggle
+- **Search & Pagination** - Server-side search and pagination on all data tables (proxy hosts, access lists, audit log, certificates)
 - **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host
-- **Access Lists** - Multi-account HTTP basic auth
-- **Certificates** - Automatic Let's Encrypt certificates via Caddy + manual SSL/TLS import
+- **Access Lists** - Multi-account HTTP basic auth protection assignable per proxy host
+- **Certificates** - Automatic HTTPS for every proxy host via Caddy ACME (Let's Encrypt / ZeroSSL), with issuer and expiry visibility + manual SSL/TLS import
 - **Settings** - ACME email, Cloudflare DNS-01, and upstream DNS pinning defaults
-- **Audit Log** - Configuration change tracking
+- **Audit Log** - Searchable configuration change history with user attribution
 
 ---
 
