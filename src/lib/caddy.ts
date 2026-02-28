@@ -1586,7 +1586,8 @@ async function buildCaddyDocument() {
             http_access: {
               writer: {
                 output: "file",
-                filename: "/logs/access.log"
+                filename: "/logs/access.log",
+                mode: "0640"
               },
               encoder: {
                 format: loggingFormat

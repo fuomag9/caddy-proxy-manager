@@ -139,7 +139,7 @@ async function readLines(startOffset: number): Promise<{ lines: string[]; newOff
 
     const stream = createReadStream(LOG_FILE, { start: startOffset, encoding: 'utf8' });
     stream.on('error', (err: NodeJS.ErrnoException) => {
-      if (err.code === 'ENOENT') resolve({ lines: [], newOffset: startOffset });
+      if (err.code === 'ENOENT' || err.code === 'EACCES') resolve({ lines: [], newOffset: startOffset });
       else reject(err);
     });
 
