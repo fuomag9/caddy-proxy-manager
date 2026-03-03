@@ -25,6 +25,16 @@ const VALID_UPSTREAM_DNS_FAMILIES: UpstreamDnsAddressFamily[] = ["ipv6", "ipv4",
 
 export type GeoBlockMode = "merge" | "override";
 
+export type WafMode = "merge" | "override";
+
+export type WafHostConfig = {
+  enabled?: boolean;
+  mode?: 'Off' | 'DetectionOnly' | 'On';
+  load_owasp_crs?: boolean;
+  custom_directives?: string;
+  waf_mode?: WafMode;
+};
+
 // Load Balancer Types
 export type LoadBalancingPolicy = "random" | "round_robin" | "least_conn" | "ip_hash" | "first" | "header" | "cookie" | "uri_hash";
 
@@ -198,6 +208,7 @@ type ProxyHostMeta = {
   upstream_dns_resolution?: UpstreamDnsResolutionMeta;
   geoblock?: GeoBlockSettings;
   geoblock_mode?: GeoBlockMode;
+  waf?: WafHostConfig;
 };
 
 export type ProxyHost = {
@@ -224,6 +235,7 @@ export type ProxyHost = {
   upstream_dns_resolution: UpstreamDnsResolutionConfig | null;
   geoblock: GeoBlockSettings | null;
   geoblock_mode: GeoBlockMode;
+  waf: WafHostConfig | null;
 };
 
 export type ProxyHostInput = {
@@ -247,6 +259,7 @@ export type ProxyHostInput = {
   upstream_dns_resolution?: UpstreamDnsResolutionInput | null;
   geoblock?: GeoBlockSettings | null;
   geoblock_mode?: GeoBlockMode;
+  waf?: WafHostConfig | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -996,6 +1009,14 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     next.geoblock_mode = input.geoblock_mode;
   }
 
+  if (input.waf !== undefined) {
+    if (input.waf) {
+      next.waf = input.waf;
+    } else {
+      delete next.waf;
+    }
+  }
+
   return serializeMeta(next);
 }
 
@@ -1320,7 +1341,8 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     dns_resolver: hydrateDnsResolver(meta.dns_resolver),
     upstream_dns_resolution: hydrateUpstreamDnsResolution(meta.upstream_dns_resolution),
     geoblock: hydrateGeoBlock(meta.geoblock),
-    geoblock_mode: meta.geoblock_mode ?? "merge"
+    geoblock_mode: meta.geoblock_mode ?? "merge",
+    waf: meta.waf ?? null,
   };
 }
 

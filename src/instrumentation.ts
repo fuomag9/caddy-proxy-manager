@@ -68,6 +68,26 @@ export async function register() {
       console.error("Failed to start log parser:", error);
     }
 
+    // Start WAF log parser for WAF event tracking
+    const { initWafLogParser, parseNewWafLogEntries, stopWafLogParser } = await import("./lib/waf-log-parser");
+    try {
+      await initWafLogParser();
+      const wafParserInterval = setInterval(async () => {
+        try {
+          await parseNewWafLogEntries();
+        } catch (err) {
+          console.error("WAF log parser interval error:", err);
+        }
+      }, 30_000);
+      process.on("SIGTERM", () => {
+        stopWafLogParser();
+        clearInterval(wafParserInterval);
+      });
+      console.log("WAF log parser started");
+    } catch (error) {
+      console.error("Failed to start WAF log parser:", error);
+    }
+
     // Start periodic instance sync if configured (master mode only)
     const { getInstanceMode, getSyncIntervalMs, syncInstances } = await import("./lib/instance-sync");
     try {

@@ -20,6 +20,7 @@ import { SettingsToggles } from "./SettingsToggles";
 import { UpstreamDnsResolutionFields } from "./UpstreamDnsResolutionFields";
 import { UpstreamInput } from "./UpstreamInput";
 import { GeoBlockFields } from "./GeoBlockFields";
+import { WafFields } from "./WafFields";
 
 export function CreateHostDialog({
     open,
@@ -128,6 +129,7 @@ export function CreateHostDialog({
                 <DnsResolverFields dnsResolver={initialData?.dns_resolver} />
                 <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstream_dns_resolution} />
                 <GeoBlockFields />
+                <WafFields value={initialData?.waf} />
             </Stack>
         </AppDialog>
     );
@@ -231,6 +233,7 @@ export function EditHostDialog({
                     geoblock_mode: host.geoblock_mode,
                   }}
                 />
+                <WafFields value={host.waf} />
             </Stack>
         </AppDialog>
     );

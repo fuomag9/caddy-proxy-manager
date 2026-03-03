@@ -27,6 +27,7 @@ import VpnKeyIcon from "@mui/icons-material/VpnKey";
 import SecurityIcon from "@mui/icons-material/Security";
 import SettingsIcon from "@mui/icons-material/Settings";
 import HistoryIcon from "@mui/icons-material/History";
+import GppBadIcon from "@mui/icons-material/GppBad";
 import LogoutIcon from "@mui/icons-material/Logout";
 
 type User = {
@@ -43,7 +44,8 @@ const NAV_ITEMS = [
   { href: "/access-lists", label: "Access Lists", icon: VpnKeyIcon },
   { href: "/certificates", label: "Certificates", icon: SecurityIcon },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
-  { href: "/audit-log", label: "Audit Log", icon: HistoryIcon }
+  { href: "/audit-log", label: "Audit Log", icon: HistoryIcon },
+  { href: "/waf-events", label: "WAF Events", icon: GppBadIcon }
 ] as const;
 
 const DRAWER_WIDTH = 260;

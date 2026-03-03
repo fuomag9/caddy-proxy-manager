@@ -210,3 +210,18 @@ export async function getGeoBlockSettings(): Promise<GeoBlockSettings | null> {
 export async function saveGeoBlockSettings(settings: GeoBlockSettings): Promise<void> {
   await setSetting("geoblock", settings);
 }
+
+export type WafSettings = {
+  enabled: boolean;
+  mode: 'Off' | 'DetectionOnly' | 'On';
+  load_owasp_crs: boolean;
+  custom_directives: string;
+};
+
+export async function getWafSettings(): Promise<WafSettings | null> {
+  return await getEffectiveSetting<WafSettings>("waf");
+}
+
+export async function saveWafSettings(s: WafSettings): Promise<void> {
+  await setSetting("waf", s);
+}

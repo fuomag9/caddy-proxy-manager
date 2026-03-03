@@ -15,11 +15,13 @@ import {
   getDnsSettings,
   getUpstreamDnsResolutionSettings,
   getGeoBlockSettings,
+  getWafSettings,
   setSetting,
   type DnsSettings,
   type UpstreamDnsAddressFamily,
   type UpstreamDnsResolutionSettings,
-  type GeoBlockSettings
+  type GeoBlockSettings,
+  type WafSettings
 } from "./settings";
 import { syncInstances } from "./instance-sync";
 import {
@@ -27,7 +29,7 @@ import {
   certificates,
   proxyHosts
 } from "./db/schema";
-import { type GeoBlockMode } from "./models/proxy-hosts";
+import { type GeoBlockMode, type WafHostConfig } from "./models/proxy-hosts";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -103,6 +105,7 @@ type ProxyHostMeta = {
   upstream_dns_resolution?: UpstreamDnsResolutionMeta;
   geoblock?: GeoBlockSettings;
   geoblock_mode?: GeoBlockMode;
+  waf?: WafHostConfig;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -781,6 +784,70 @@ function resolveEffectiveGeoBlock(
   return null;
 }
 
+function resolveEffectiveWaf(
+  global: WafSettings | null,
+  host: WafHostConfig | null | undefined
+): WafSettings | null {
+  const hostEnabled = host?.enabled;
+  const globalEnabled = global?.enabled;
+
+  if (!hostEnabled && !globalEnabled) return null;
+
+  // Override mode: use host config entirely
+  if (host && host.waf_mode === "override") {
+    if (!hostEnabled) return null;
+    return {
+      enabled: true,
+      mode: host.mode ?? 'DetectionOnly',
+      load_owasp_crs: host.load_owasp_crs ?? false,
+      custom_directives: host.custom_directives ?? '',
+    };
+  }
+
+  // Merge mode: start with global, overlay host fields
+  if (host && global) {
+    return {
+      enabled: true,
+      mode: host.mode ?? global.mode,
+      load_owasp_crs: host.load_owasp_crs ?? global.load_owasp_crs,
+      custom_directives: [global.custom_directives, host.custom_directives].filter(Boolean).join('\n'),
+    };
+  }
+
+  if (host?.enabled) {
+    return {
+      enabled: true,
+      mode: host.mode ?? 'DetectionOnly',
+      load_owasp_crs: host.load_owasp_crs ?? false,
+      custom_directives: host.custom_directives ?? '',
+    };
+  }
+  if (global?.enabled) return global;
+  return null;
+}
+
+function buildWafHandler(waf: WafSettings): Record<string, unknown> {
+  const directives = [
+    `SecRuleEngine ${waf.mode}`,
+    'SecAuditEngine On',
+    'SecAuditLog /logs/waf-audit.log',
+    'SecAuditLogFormat JSON',
+    'SecAuditLogParts ABIJDEFHZ',
+    waf.custom_directives,
+  ].filter(Boolean).join('\n');
+
+  const handler: Record<string, unknown> = {
+    handler: 'waf',
+    directives,
+  };
+
+  if (waf.load_owasp_crs) {
+    handler.load_owasp_crs = true;
+  }
+
+  return handler;
+}
+
 function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> {
   const handler: Record<string, unknown> = {
     handler: "blocker",
@@ -820,6 +887,7 @@ type BuildProxyRoutesOptions = {
   globalDnsSettings: DnsSettings | null;
   globalUpstreamDnsResolutionSettings: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
+  globalWaf?: WafSettings | null;
 };
 
 async function buildProxyRoutes(
@@ -865,6 +933,14 @@ async function buildProxyRoutes(
     );
     if (effectiveGeoBlock?.enabled) {
       handlers.unshift(buildBlockerHandler(effectiveGeoBlock));
+    }
+
+    const effectiveWaf = resolveEffectiveWaf(
+      options.globalWaf ?? null,
+      meta.waf
+    );
+    if (effectiveWaf?.enabled && effectiveWaf.mode !== 'Off') {
+      handlers.unshift(buildWafHandler(effectiveWaf));
     }
 
     if (row.hsts_enabled) {
@@ -1501,11 +1577,12 @@ async function buildCaddyDocument() {
   }, new Map());
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
-  const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock] = await Promise.all([
+  const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf] = await Promise.all([
     getGeneralSettings(),
     getDnsSettings(),
     getUpstreamDnsResolutionSettings(),
-    getGeoBlockSettings()
+    getGeoBlockSettings(),
+    getWafSettings()
   ]);
   const { tlsApp, managedCertificateIds } = await buildTlsAutomation(certificateUsage, autoManagedDomains, {
     acmeEmail: generalSettings?.acmeEmail,
@@ -1524,7 +1601,8 @@ async function buildCaddyDocument() {
     {
       globalDnsSettings: dnsSettings,
       globalUpstreamDnsResolutionSettings: upstreamDnsResolutionSettings,
-      globalGeoBlock
+      globalGeoBlock,
+      globalWaf
     }
   );
 

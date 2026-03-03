@@ -12,7 +12,8 @@ import {
   type LoadBalancingPolicy,
   type DnsResolverInput,
   type UpstreamDnsResolutionInput,
-  type GeoBlockMode
+  type GeoBlockMode,
+  type WafHostConfig
 } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
@@ -384,6 +385,34 @@ function parseResponseHeaders(formData: FormData): Record<string, string> {
   return headers;
 }
 
+function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
+  if (!formData.has("waf_present")) return {};
+  const enabled = parseCheckbox(formData.get("waf_enabled"));
+  const rawMode = formData.get("waf_mode");
+  const wafMode: WafHostConfig["waf_mode"] = rawMode === "override" ? "override" : "merge";
+  const rawEngineMode = formData.get("waf_engine_mode");
+  const engineMode: WafHostConfig["mode"] =
+    rawEngineMode === "On" ? "On" : rawEngineMode === "Off" ? "Off" : "DetectionOnly";
+  const loadCrs = parseCheckbox(formData.get("waf_load_owasp_crs"));
+  const customDirectives = typeof formData.get("waf_custom_directives") === "string"
+    ? (formData.get("waf_custom_directives") as string).trim()
+    : "";
+
+  if (!enabled) {
+    return { waf: { enabled: false, waf_mode: wafMode } };
+  }
+
+  return {
+    waf: {
+      enabled: true,
+      mode: engineMode,
+      load_owasp_crs: loadCrs,
+      custom_directives: customDirectives,
+      waf_mode: wafMode,
+    }
+  };
+}
+
 function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefined {
   if (!formData.has("dns_present")) {
     return undefined;
@@ -505,7 +534,8 @@ export async function createProxyHostAction(
         load_balancer: parseLoadBalancerConfig(formData),
         dns_resolver: parseDnsResolverConfig(formData),
         upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
-        ...parseGeoBlockConfig(formData)
+        ...parseGeoBlockConfig(formData),
+        ...parseWafConfig(formData)
       },
       userId
     );
@@ -576,7 +606,8 @@ export async function updateProxyHostAction(
         load_balancer: parseLoadBalancerConfig(formData),
         dns_resolver: parseDnsResolverConfig(formData),
         upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
-        ...parseGeoBlockConfig(formData)
+        ...parseGeoBlockConfig(formData),
+        ...parseWafConfig(formData)
       },
       userId
     );

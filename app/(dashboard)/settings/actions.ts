@@ -5,8 +5,8 @@ import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings } from "@/src/lib/settings";
-import type { CloudflareSettings, GeoBlockSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings } from "@/src/lib/settings";
+import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
@@ -625,5 +625,36 @@ export async function syncSlaveInstancesAction(_prevState: ActionResult | null, 
   } catch (error) {
     console.error("Failed to sync slave instances:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to sync slave instances" };
+  }
+}
+
+export async function updateWafSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    const enabled = formData.get("waf_enabled") === "on";
+    const rawMode = formData.get("waf_mode");
+    const mode: WafSettings["mode"] =
+      rawMode === "On" ? "On" : rawMode === "Off" ? "Off" : "DetectionOnly";
+    const loadOwasp = formData.get("waf_load_owasp_crs") === "on";
+    const customDirectives = typeof formData.get("waf_custom_directives") === "string"
+      ? (formData.get("waf_custom_directives") as string).trim()
+      : "";
+
+    const config: WafSettings = { enabled, mode, load_owasp_crs: loadOwasp, custom_directives: customDirectives };
+    await saveWafSettings(config);
+
+    try {
+      await applyCaddyConfig();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      return { success: true, message: `Settings saved, but could not apply to Caddy: ${errorMsg}` };
+    }
+
+    revalidatePath("/settings");
+    return { success: true, message: "WAF settings saved." };
+  } catch (error) {
+    console.error("Failed to save WAF settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save WAF settings" };
   }
 }

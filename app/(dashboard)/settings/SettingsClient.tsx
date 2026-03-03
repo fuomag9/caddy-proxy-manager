@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Checkbox, FormControl, FormControlLabel, FormLabel, MenuItem, Radio, RadioGroup, Stack, Switch, TextField, Typography } from "@mui/material";
 import type {
   GeneralSettings,
   AuthentikSettings,
@@ -10,7 +10,8 @@ import type {
   LoggingSettings,
   DnsSettings,
   UpstreamDnsResolutionSettings,
-  GeoBlockSettings
+  GeoBlockSettings,
+  WafSettings
 } from "@/src/lib/settings";
 import { GeoBlockFields } from "@/src/components/proxy-hosts/GeoBlockFields";
 import {
@@ -27,7 +28,8 @@ import {
   deleteSlaveInstanceAction,
   toggleSlaveInstanceAction,
   syncSlaveInstancesAction,
-  updateGeoBlockSettingsAction
+  updateGeoBlockSettingsAction,
+  updateWafSettingsAction
 } from "./actions";
 
 type Props = {
@@ -43,6 +45,7 @@ type Props = {
   dns: DnsSettings | null;
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
+  globalWaf?: WafSettings | null;
   instanceSync: {
     mode: "standalone" | "master" | "slave";
     modeFromEnv: boolean;
@@ -87,6 +90,7 @@ export default function SettingsClient({
   dns,
   upstreamDnsResolution,
   globalGeoBlock,
+  globalWaf,
   instanceSync
 }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
@@ -104,6 +108,7 @@ export default function SettingsClient({
   const [slaveInstanceState, slaveInstanceFormAction] = useFormState(createSlaveInstanceAction, null);
   const [syncState, syncFormAction] = useFormState(syncSlaveInstancesAction, null);
   const [geoBlockState, geoBlockFormAction] = useFormState(updateGeoBlockSettingsAction, null);
+  const [wafState, wafFormAction] = useFormState(updateWafSettingsAction, null);
 
   const isSlave = instanceSync.mode === "slave";
   const isMaster = instanceSync.mode === "master";
@@ -772,6 +777,71 @@ export default function SettingsClient({
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save geoblocking settings
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            Web Application Firewall (WAF)
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Configure a global WAF applied to all proxy hosts. Per-host settings can merge with or override these defaults.
+            Powered by <strong>Coraza</strong> with optional OWASP Core Rule Set.
+          </Typography>
+          <Stack component="form" action={wafFormAction} spacing={2}>
+            {wafState?.message && (
+              <Alert severity={wafState.success ? "success" : "error"}>
+                {wafState.message}
+              </Alert>
+            )}
+            <FormControlLabel
+              control={<Switch name="waf_enabled" defaultChecked={globalWaf?.enabled ?? false} />}
+              label="Enable WAF globally"
+            />
+            <FormControl>
+              <FormLabel sx={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Engine Mode
+              </FormLabel>
+              <RadioGroup row name="waf_mode" defaultValue={globalWaf?.mode ?? "DetectionOnly"}>
+                <FormControlLabel value="Off" control={<Radio size="small" />} label="Off" />
+                <FormControlLabel value="DetectionOnly" control={<Radio size="small" />} label="Detection Only" />
+                <FormControlLabel value="On" control={<Radio size="small" />} label="On (Blocking)" />
+              </RadioGroup>
+            </FormControl>
+            <FormControlLabel
+              control={<Checkbox name="waf_load_owasp_crs" defaultChecked={globalWaf?.load_owasp_crs ?? true} />}
+              label={
+                <span>
+                  Load OWASP Core Rule Set{" "}
+                  <Typography component="span" variant="caption" color="text.secondary">
+                    (covers SQLi, XSS, LFI, RCE — recommended)
+                  </Typography>
+                </span>
+              }
+            />
+            <TextField
+              name="waf_custom_directives"
+              label="Custom SecLang Directives"
+              multiline
+              minRows={3}
+              maxRows={12}
+              defaultValue={globalWaf?.custom_directives ?? ""}
+              placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
+              inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
+              helperText="ModSecurity SecLang syntax. Applied after OWASP CRS if enabled."
+              fullWidth
+            />
+            <Alert severity="info" sx={{ fontSize: "0.8rem" }}>
+              WAF audit events are stored for 90 days and viewable under <strong>WAF Events</strong> in the sidebar.
+              Set mode to <em>Detection Only</em> first to observe traffic before enabling blocking.
+            </Alert>
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">
+                Save WAF settings
               </Button>
             </Box>
           </Stack>

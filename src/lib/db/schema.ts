@@ -212,3 +212,29 @@ export const logParseState = sqliteTable('log_parse_state', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 });
+
+export const wafEvents = sqliteTable(
+  'waf_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    ts: integer('ts').notNull(),
+    host: text('host').notNull().default(''),
+    clientIp: text('client_ip').notNull(),
+    countryCode: text('country_code'),
+    method: text('method').notNull().default(''),
+    uri: text('uri').notNull().default(''),
+    ruleId: integer('rule_id'),
+    ruleMessage: text('rule_message'),
+    severity: text('severity'),
+    rawData: text('raw_data'),
+  },
+  (table) => ({
+    tsIdx: index('idx_waf_events_ts').on(table.ts),
+    hostTsIdx: index('idx_waf_events_host_ts').on(table.host, table.ts),
+  })
+);
+
+export const wafLogParseState = sqliteTable('waf_log_parse_state', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
