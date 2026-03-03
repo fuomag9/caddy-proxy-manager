@@ -15,4 +15,5 @@ CLAUDE.local.md
 /caddy-proxy-manager.wiki
 docs/plans
 /.playwright-mcp
+/.worktrees
 docker-compose.override.yml
