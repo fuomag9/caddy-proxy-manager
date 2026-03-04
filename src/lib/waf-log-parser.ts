@@ -57,21 +57,24 @@ function lookupCountry(ip: string): string | null {
 interface CorazaAuditEntry {
   transaction?: {
     client_ip?: string;
+    // unix_timestamp is nanoseconds since epoch
+    unix_timestamp?: number;
+    timestamp?: string;
     request?: {
       method?: string;
       uri?: string;
-      host?: string;
+      // headers values are arrays of strings (lowercase keys)
+      headers?: Record<string, string[]>;
     };
-    timestamp?: string;
   };
+  // messages is absent/null when no rules match
   messages?: Array<{
-    rule?: {
-      id?: number;
+    data?: {
+      id?: string | number;
       msg?: string;
+      severity?: string;
     };
-    severity?: string;
-    data?: string;
-  }>;
+  }> | null;
 }
 
 function parseLine(line: string): typeof wafEvents.$inferInsert | null {
@@ -89,16 +92,29 @@ function parseLine(line: string): typeof wafEvents.$inferInsert | null {
   if (!clientIp) return null;
 
   const req = tx.request ?? {};
-  const ts = tx.timestamp ? Math.floor(new Date(tx.timestamp).getTime() / 1000) : Math.floor(Date.now() / 1000);
+
+  // unix_timestamp is nanoseconds; fall back to parsing timestamp string
+  let ts: number;
+  if (tx.unix_timestamp) {
+    ts = Math.floor(tx.unix_timestamp / 1e9);
+  } else if (tx.timestamp) {
+    ts = Math.floor(new Date(tx.timestamp).getTime() / 1000);
+  } else {
+    ts = Math.floor(Date.now() / 1000);
+  }
+
+  // Host header is an array under lowercase key
+  const hostArr = req.headers?.['host'] ?? req.headers?.['Host'];
+  const host = Array.isArray(hostArr) ? (hostArr[0] ?? '') : (hostArr ?? '');
 
   const firstMsg = entry.messages?.[0];
-  const ruleId = firstMsg?.rule?.id ?? null;
-  const ruleMessage = firstMsg?.rule?.msg ?? null;
-  const severity = firstMsg?.severity ?? null;
+  const ruleId = firstMsg?.data?.id != null ? Number(firstMsg.data.id) : null;
+  const ruleMessage = firstMsg?.data?.msg ?? null;
+  const severity = firstMsg?.data?.severity ?? null;
 
   return {
     ts,
-    host: req.host ?? '',
+    host,
     clientIp,
     countryCode: lookupCountry(clientIp),
     method: req.method ?? '',

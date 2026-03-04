@@ -827,25 +827,30 @@ function resolveEffectiveWaf(
 }
 
 function buildWafHandler(waf: WafSettings): Record<string, unknown> {
-  const directives = [
+  // directives must be string[] — coraza-caddy JSON API does not accept a joined string.
+  // load_owasp_crs is a Caddyfile-only directive and is silently ignored in JSON config;
+  // CRS must be loaded via Include directives instead.
+  const directives: string[] = [
     `SecRuleEngine ${waf.mode}`,
     'SecAuditEngine On',
     'SecAuditLog /logs/waf-audit.log',
     'SecAuditLogFormat JSON',
     'SecAuditLogParts ABIJDEFHZ',
-    waf.custom_directives,
-  ].filter(Boolean).join('\n');
-
-  const handler: Record<string, unknown> = {
-    handler: 'waf',
-    directives,
-  };
+    'SecResponseBodyAccess Off',
+  ];
 
   if (waf.load_owasp_crs) {
-    handler.load_owasp_crs = true;
+    directives.push(
+      'Include @owasp_crs/crs-setup.conf.example',
+      'Include @owasp_crs/rules/*.conf',
+    );
   }
 
-  return handler;
+  if (waf.custom_directives?.trim()) {
+    directives.push(waf.custom_directives.trim());
+  }
+
+  return { handler: 'waf', directives };
 }
 
 function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> {
