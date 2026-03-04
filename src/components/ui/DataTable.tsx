@@ -73,8 +73,8 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   return (
     <Box>
-      <TableContainer component={Card} variant="outlined">
-        <Table>
+      <TableContainer component={Card} variant="outlined" sx={{ overflowX: "auto" }}>
+        <Table sx={{ minWidth: 600 }}>
           <TableHead>
             <TableRow>
               {columns.map((col) => (

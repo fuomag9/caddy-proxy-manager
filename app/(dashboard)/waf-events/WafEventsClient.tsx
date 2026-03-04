@@ -60,9 +60,9 @@ export default function WafEventsClient({ events, pagination, initialSearch }: P
     {
       id: "ts",
       label: "Time",
-      width: 170,
+      width: 150,
       render: (r: WafEvent) => (
-        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
           {new Date(r.ts * 1000).toLocaleString()}
         </Typography>
       ),
@@ -70,26 +70,28 @@ export default function WafEventsClient({ events, pagination, initialSearch }: P
     {
       id: "severity",
       label: "Severity",
-      width: 110,
+      width: 100,
       render: (r: WafEvent) => <SeverityChip severity={r.severity} />,
     },
     {
       id: "host",
       label: "Host",
-      width: 200,
+      width: 150,
       render: (r: WafEvent) => (
-        <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
-          {r.host || <span style={{ opacity: 0.4 }}>—</span>}
-        </Typography>
+        <Tooltip title={r.host ?? ""} placement="top">
+          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8rem", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {r.host || <span style={{ opacity: 0.4 }}>—</span>}
+          </Typography>
+        </Tooltip>
       ),
     },
     {
       id: "clientIp",
       label: "Client IP",
-      width: 160,
+      width: 140,
       render: (r: WafEvent) => (
         <Stack direction="row" spacing={0.5} alignItems="center">
-          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
+          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
             {r.clientIp}
           </Typography>
           {r.countryCode && (
@@ -100,8 +102,8 @@ export default function WafEventsClient({ events, pagination, initialSearch }: P
     },
     {
       id: "method",
-      label: "Method",
-      width: 80,
+      label: "M",
+      width: 60,
       render: (r: WafEvent) => (
         <Chip label={r.method || "—"} size="small" variant="outlined" sx={{ fontFamily: "monospace", fontSize: "0.7rem" }} />
       ),
@@ -109,11 +111,12 @@ export default function WafEventsClient({ events, pagination, initialSearch }: P
     {
       id: "uri",
       label: "URI",
+      width: 200,
       render: (r: WafEvent) => (
         <Tooltip title={r.uri} placement="top">
           <Typography
             variant="body2"
-            sx={{ fontFamily: "monospace", fontSize: "0.8rem", maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            sx={{ fontFamily: "monospace", fontSize: "0.8rem", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           >
             {r.uri || <span style={{ opacity: 0.4 }}>—</span>}
           </Typography>
@@ -123,7 +126,7 @@ export default function WafEventsClient({ events, pagination, initialSearch }: P
     {
       id: "ruleId",
       label: "Rule ID",
-      width: 90,
+      width: 80,
       render: (r: WafEvent) => (
         <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
           {r.ruleId ?? "—"}
@@ -137,7 +140,7 @@ export default function WafEventsClient({ events, pagination, initialSearch }: P
         <Tooltip title={r.ruleMessage ?? ""} placement="top">
           <Typography
             variant="body2"
-            sx={{ maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
           >
             {r.ruleMessage ?? <span style={{ opacity: 0.4 }}>—</span>}
           </Typography>
