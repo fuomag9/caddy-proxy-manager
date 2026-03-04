@@ -827,9 +827,10 @@ function resolveEffectiveWaf(
 }
 
 function buildWafHandler(waf: WafSettings): Record<string, unknown> {
-  // directives is a single string (Go struct field type is string, not []string).
-  // load_owasp_crs is a Caddyfile-only directive silently ignored in JSON config;
-  // CRS must be loaded via Include directives inside the string instead.
+  // directives is a single string (Go struct type is string, not []string).
+  // load_owasp_crs: true makes the embedded CRS filesystem accessible (@owasp_crs prefix),
+  // but the rules still need to be explicitly included via Include directives.
+  // Both fields are required together to actually load and apply CRS rules.
   const parts = [
     `SecRuleEngine ${waf.mode}`,
     'SecAuditEngine On',
@@ -850,7 +851,9 @@ function buildWafHandler(waf: WafSettings): Record<string, unknown> {
     parts.push(waf.custom_directives.trim());
   }
 
-  return { handler: 'waf', directives: parts.join('\n') };
+  const handler: Record<string, unknown> = { handler: 'waf', directives: parts.join('\n') };
+  if (waf.load_owasp_crs) handler.load_owasp_crs = true;
+  return handler;
 }
 
 function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> {
