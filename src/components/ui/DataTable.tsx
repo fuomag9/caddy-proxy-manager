@@ -29,6 +29,7 @@ type DataTableProps<T> = {
   keyField: keyof T;
   emptyMessage?: string;
   loading?: boolean;
+  onRowClick?: (row: T) => void;
   pagination?: {
     total: number;
     page: number;
@@ -69,6 +70,7 @@ export function DataTable<T>({
   keyField,
   emptyMessage = "No data available",
   loading = false,
+  onRowClick,
   pagination,
 }: DataTableProps<T>) {
   return (
@@ -97,7 +99,11 @@ export function DataTable<T>({
               </TableRow>
             ) : (
               data.map((row) => (
-                <TableRow key={String(row[keyField])}>
+                <TableRow
+                  key={String(row[keyField])}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  sx={onRowClick ? { cursor: "pointer", "&:hover": { bgcolor: "action.hover" } } : undefined}
+                >
                   {columns.map((col) => (
                     <TableCell key={col.id} align={col.align || "left"}>
                       {col.render ? col.render(row) : (row as Record<string, unknown>)[col.id] as ReactNode}
