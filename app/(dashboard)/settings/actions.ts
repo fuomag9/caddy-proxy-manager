@@ -678,9 +678,9 @@ export async function suppressWafRuleForHostAction(ruleId: number, hostname: str
     if (!host) {
       return { success: false, message: `No proxy host found for ${hostname}.` };
     }
-    const existingWaf = host.waf ?? {};
+    const existingWaf = host.waf ?? { enabled: true, waf_mode: 'merge' as const };
     const ids = [...new Set([...(existingWaf.excluded_rule_ids ?? []), ruleId])];
-    await updateProxyHost(host.id, { waf: { ...existingWaf, enabled: existingWaf.enabled ?? false, excluded_rule_ids: ids } }, userId);
+    await updateProxyHost(host.id, { waf: { ...existingWaf, enabled: true, waf_mode: existingWaf.waf_mode ?? 'merge', excluded_rule_ids: ids } }, userId);
     revalidatePath("/proxy-hosts");
     revalidatePath("/waf-events");
     return { success: true, message: `Rule ${ruleId} suppressed for ${hostname}.` };
