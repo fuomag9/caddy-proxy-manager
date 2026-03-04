@@ -801,6 +801,7 @@ function resolveEffectiveWaf(
       mode: host.mode ?? 'DetectionOnly',
       load_owasp_crs: host.load_owasp_crs ?? false,
       custom_directives: host.custom_directives ?? '',
+      excluded_rule_ids: host.excluded_rule_ids,
     };
   }
 
@@ -811,6 +812,10 @@ function resolveEffectiveWaf(
       mode: host.mode ?? global.mode,
       load_owasp_crs: host.load_owasp_crs ?? global.load_owasp_crs,
       custom_directives: [global.custom_directives, host.custom_directives].filter(Boolean).join('\n'),
+      excluded_rule_ids: [
+        ...(global.excluded_rule_ids ?? []),
+        ...(host.excluded_rule_ids ?? []),
+      ],
     };
   }
 
@@ -820,6 +825,7 @@ function resolveEffectiveWaf(
       mode: host.mode ?? 'DetectionOnly',
       load_owasp_crs: host.load_owasp_crs ?? false,
       custom_directives: host.custom_directives ?? '',
+      excluded_rule_ids: host.excluded_rule_ids,
     };
   }
   if (global?.enabled) return global;
@@ -837,6 +843,7 @@ function buildWafHandler(waf: WafSettings): Record<string, unknown> {
       'Include @crs-setup.conf.example',
       'Include @owasp_crs/*.conf',
     ] : []),
+    ...(waf.excluded_rule_ids?.length ? [`SecRuleRemoveById ${waf.excluded_rule_ids.join(' ')}`] : []),
     `SecRuleEngine ${waf.mode}`,
     'SecAuditEngine On',
     'SecAuditLog /logs/waf-audit.log',

@@ -1,6 +1,6 @@
 import db from "../db";
 import { wafEvents } from "../db/schema";
-import { desc, like, or, count, and } from "drizzle-orm";
+import { desc, like, or, count, and, gte, lte, sql } from "drizzle-orm";
 
 export type WafEvent = {
   id: number;
@@ -32,6 +32,33 @@ export async function countWafEvents(search?: string): Promise<number> {
     .from(wafEvents)
     .where(buildSearch(search));
   return row?.value ?? 0;
+}
+
+export async function countWafEventsInRange(from: number, to: number): Promise<number> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(wafEvents)
+    .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to)));
+  return row?.value ?? 0;
+}
+
+export type TopWafRule = { ruleId: number; count: number; message: string | null };
+
+export async function getTopWafRules(from: number, to: number, limit = 10): Promise<TopWafRule[]> {
+  const rows = await db
+    .select({
+      ruleId: wafEvents.ruleId,
+      count: count(),
+      message: sql<string | null>`MAX(${wafEvents.ruleMessage})`,
+    })
+    .from(wafEvents)
+    .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to), sql`${wafEvents.ruleId} IS NOT NULL`))
+    .groupBy(wafEvents.ruleId)
+    .orderBy(desc(count()))
+    .limit(limit);
+  return rows
+    .filter((r): r is typeof r & { ruleId: number } => r.ruleId != null)
+    .map((r) => ({ ruleId: r.ruleId, count: r.count, message: r.message ?? null }));
 }
 
 export async function listWafEvents(limit = 50, offset = 0, search?: string): Promise<WafEvent[]> {

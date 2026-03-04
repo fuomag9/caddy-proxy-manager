@@ -2,6 +2,7 @@
 
 import {
   Box,
+  Button,
   Checkbox,
   Collapse,
   Divider,
@@ -12,11 +13,21 @@ import {
   Typography,
 } from "@mui/material";
 import GppBadIcon from "@mui/icons-material/GppBad";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useState } from "react";
 import { type WafHostConfig } from "@/src/lib/models/proxy-hosts";
+import { WafRuleExclusions } from "./WafRuleExclusions";
 
 type WafMode = "merge" | "override";
 type EngineMode = "Off" | "DetectionOnly" | "On";
+
+const QUICK_TEMPLATES = [
+  { label: "Allow IP", snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
+  { label: "Disable WAF for path", snippet: `SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"` },
+  { label: "Remove XSS rules", snippet: `SecRuleRemoveByTag "attack-xss"` },
+  { label: "Block User-Agent", snippet: `SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9002,phase:1,deny,status:403,log"` },
+];
 
 type Props = {
   value?: WafHostConfig | null;
@@ -29,6 +40,7 @@ export function WafFields({ value, showModeSelector = true }: Props) {
   const [engineMode, setEngineMode] = useState<EngineMode>(value?.mode ?? "DetectionOnly");
   const [loadCrs, setLoadCrs] = useState(value?.load_owasp_crs ?? true);
   const [customDirectives, setCustomDirectives] = useState(value?.custom_directives ?? "");
+  const [showTemplates, setShowTemplates] = useState(false);
 
   return (
     <Box
@@ -204,6 +216,11 @@ export function WafFields({ value, showModeSelector = true }: Props) {
             }
           />
 
+          {/* Excluded rule IDs */}
+          <Box mt={1.5}>
+            <WafRuleExclusions value={value?.excluded_rule_ids} />
+          </Box>
+
           {/* Custom directives */}
           <Box mt={1.5}>
             <TextField
@@ -218,6 +235,34 @@ export function WafFields({ value, showModeSelector = true }: Props) {
               helperText="ModSecurity SecLang syntax. Appended after OWASP CRS if enabled."
               fullWidth
             />
+          </Box>
+
+          {/* Quick Templates */}
+          <Box mt={0.5}>
+            <Button
+              size="small"
+              endIcon={<ExpandMoreIcon sx={{ transform: showTemplates ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />}
+              onClick={() => setShowTemplates((v) => !v)}
+              sx={{ color: "text.secondary", textTransform: "none", px: 0 }}
+            >
+              Quick Templates
+            </Button>
+            <Collapse in={showTemplates}>
+              <Stack spacing={0.75} mt={0.75}>
+                {QUICK_TEMPLATES.map((t) => (
+                  <Button
+                    key={t.label}
+                    size="small"
+                    variant="outlined"
+                    startIcon={<ContentCopyIcon fontSize="inherit" />}
+                    onClick={() => setCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
+                    sx={{ justifyContent: "flex-start", textTransform: "none", fontFamily: "monospace", fontSize: "0.72rem" }}
+                  >
+                    {t.label}
+                  </Button>
+                ))}
+              </Stack>
+            </Collapse>
           </Box>
         </Box>
       </Collapse>

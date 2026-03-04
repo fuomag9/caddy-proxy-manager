@@ -397,6 +397,10 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
   const customDirectives = typeof formData.get("waf_custom_directives") === "string"
     ? (formData.get("waf_custom_directives") as string).trim()
     : "";
+  const rawExcl = formData.get("waf_excluded_rule_ids");
+  const excluded_rule_ids: number[] = rawExcl
+    ? (JSON.parse(rawExcl as string) as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0)
+    : [];
 
   if (!enabled) {
     return { waf: { enabled: false, waf_mode: wafMode } };
@@ -408,6 +412,7 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
       mode: engineMode,
       load_owasp_crs: loadCrs,
       custom_directives: customDirectives,
+      excluded_rule_ids,
       waf_mode: wafMode,
     }
   };

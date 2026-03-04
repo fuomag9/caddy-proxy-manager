@@ -77,6 +77,9 @@ interface BlockedEvent {
 }
 interface BlockedPage { events: BlockedEvent[]; total: number; page: number; pages: number; }
 
+interface TopWafRule { ruleId: number; count: number; message: string | null; }
+interface WafStats { total: number; topRules: TopWafRule[]; }
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function countryFlag(code: string): string {
@@ -158,6 +161,7 @@ export default function AnalyticsClient() {
   const [protocols, setProtocols] = useState<ProtoStats[]>([]);
   const [userAgents, setUserAgents] = useState<UAStats[]>([]);
   const [blocked, setBlocked] = useState<BlockedPage | null>(null);
+  const [wafStats, setWafStats] = useState<WafStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
 
@@ -201,13 +205,15 @@ export default function AnalyticsClient() {
       fetch(`/api/analytics/protocols${params}`).then(r => r.json()),
       fetch(`/api/analytics/user-agents${params}`).then(r => r.json()),
       fetch(`/api/analytics/blocked${params}&page=1`).then(r => r.json()),
-    ]).then(([s, t, c, p, u, b]) => {
+      fetch(`/api/analytics/waf-stats${params}`).then(r => r.json()),
+    ]).then(([s, t, c, p, u, b, w]) => {
       setSummary(s);
       setTimeline(t);
       setCountries(c);
       setProtocols(p);
       setUserAgents(u);
       setBlocked(b);
+      setWafStats(w);
     }).catch(() => {}).finally(() => setLoading(false));
   }, [buildParams, interval, customFrom, customTo]);
 
@@ -427,25 +433,33 @@ export default function AnalyticsClient() {
         <>
           {/* Stats row */}
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <StatCard label="Total Requests" value={summary.totalRequests.toLocaleString()} />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <StatCard label="Unique IPs" value={summary.uniqueIps.toLocaleString()} />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <StatCard
                 label="Blocked Requests"
                 value={summary.blockedRequests.toLocaleString()}
                 color={summary.blockedRequests > 0 ? '#ef4444' : undefined}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
               <StatCard
                 label="Block Rate"
                 value={`${summary.blockedPercent}%`}
                 sub={`${formatBytes(summary.bytesServed)} served`}
                 color={summary.blockedPercent > 10 ? '#f59e0b' : undefined}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+              <StatCard
+                label="WAF Events"
+                value={(wafStats?.total ?? 0).toLocaleString()}
+                sub={wafStats && wafStats.topRules.length > 0 ? `${wafStats.topRules.length} rules triggered` : 'No WAF events'}
+                color={(wafStats?.total ?? 0) > 0 ? '#f59e0b' : undefined}
               />
             </Grid>
           </Grid>
@@ -644,6 +658,40 @@ export default function AnalyticsClient() {
               )}
             </CardContent>
           </Card>
+          {/* WAF Top Rules */}
+          {wafStats && wafStats.total > 0 && (
+            <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)' }}>
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
+                  Top WAF Rules Triggered
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      {['Rule ID', 'Message', 'Hits'].map(h => (
+                        <TableCell key={h} sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>{h}</TableCell>
+                      ))}
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {wafStats.topRules.map(rule => (
+                      <TableRow key={rule.ruleId} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.04)' } }}>
+                        <TableCell>
+                          <Typography variant="body2" fontFamily="monospace" color="warning.light">{rule.ruleId}</Typography>
+                        </TableCell>
+                        <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <Typography variant="body2" color="text.secondary" title={rule.message ?? undefined}>{rule.message ?? '—'}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>{rule.count.toLocaleString()}</Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
         </>
       )}
     </Stack>

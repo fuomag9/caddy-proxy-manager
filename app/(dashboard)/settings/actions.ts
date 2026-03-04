@@ -5,7 +5,8 @@ import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings } from "@/src/lib/settings";
+import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
 import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
 
 type ActionResult = {
@@ -628,6 +629,67 @@ export async function syncSlaveInstancesAction(_prevState: ActionResult | null, 
   }
 }
 
+export async function removeWafRuleGloballyAction(ruleId: number): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const current = await getWafSettings();
+    if (!current) return { success: false, message: "WAF settings not found." };
+    const ids = (current.excluded_rule_ids ?? []).filter((id) => id !== ruleId);
+    await saveWafSettings({ ...current, excluded_rule_ids: ids });
+    try { await applyCaddyConfig(); } catch { /* non-fatal */ }
+    revalidatePath("/settings");
+    revalidatePath("/waf-events");
+    return { success: true, message: `Rule ${ruleId} removed from exclusions.` };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Failed to remove WAF rule" };
+  }
+}
+
+export async function suppressWafRuleGloballyAction(ruleId: number): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const current = await getWafSettings();
+    if (!current?.enabled) {
+      return { success: false, message: "Global WAF is not enabled. Enable it in Settings first." };
+    }
+    const ids = [...new Set([...(current.excluded_rule_ids ?? []), ruleId])];
+    await saveWafSettings({ ...current, excluded_rule_ids: ids });
+    try {
+      await applyCaddyConfig();
+    } catch (err) {
+      revalidatePath("/settings");
+      return { success: true, message: `Rule ${ruleId} added to exclusions. Warning: could not reload Caddy.` };
+    }
+    revalidatePath("/settings");
+    revalidatePath("/waf-events");
+    return { success: true, message: `Rule ${ruleId} suppressed globally.` };
+  } catch (error) {
+    console.error("Failed to suppress WAF rule:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to suppress WAF rule" };
+  }
+}
+
+export async function suppressWafRuleForHostAction(ruleId: number, hostname: string): Promise<ActionResult> {
+  try {
+    const session = await requireAdmin();
+    const userId = Number(session.user.id);
+    const hosts = await listProxyHosts();
+    const host = hosts.find((h) => h.domains.includes(hostname));
+    if (!host) {
+      return { success: false, message: `No proxy host found for ${hostname}.` };
+    }
+    const existingWaf = host.waf ?? {};
+    const ids = [...new Set([...(existingWaf.excluded_rule_ids ?? []), ruleId])];
+    await updateProxyHost(host.id, { waf: { ...existingWaf, enabled: existingWaf.enabled ?? false, excluded_rule_ids: ids } }, userId);
+    revalidatePath("/proxy-hosts");
+    revalidatePath("/waf-events");
+    return { success: true, message: `Rule ${ruleId} suppressed for ${hostname}.` };
+  } catch (error) {
+    console.error("Failed to suppress WAF rule for host:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to suppress WAF rule" };
+  }
+}
+
 export async function updateWafSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
   try {
     await requireAdmin();
@@ -640,8 +702,12 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
     const customDirectives = typeof formData.get("waf_custom_directives") === "string"
       ? (formData.get("waf_custom_directives") as string).trim()
       : "";
+    const rawExcl = formData.get("waf_excluded_rule_ids");
+    const excluded_rule_ids: number[] = rawExcl
+      ? (JSON.parse(rawExcl as string) as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0)
+      : [];
 
-    const config: WafSettings = { enabled, mode, load_owasp_crs: loadOwasp, custom_directives: customDirectives };
+    const config: WafSettings = { enabled, mode, load_owasp_crs: loadOwasp, custom_directives: customDirectives, excluded_rule_ids };
     await saveWafSettings(config);
 
     try {

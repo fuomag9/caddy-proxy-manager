@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
+import { Chip, IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
+import SecurityIcon from "@mui/icons-material/Security";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -94,6 +95,26 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
           {host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
         </Typography>
       )
+    },
+    {
+      id: "waf",
+      label: "WAF",
+      render: (host: ProxyHost) => {
+        if (!host.waf?.enabled) return <Typography variant="body2" color="text.disabled">—</Typography>;
+        const excludedCount = host.waf.excluded_rule_ids?.length ?? 0;
+        return (
+          <Stack direction="row" alignItems="center" spacing={0.5}>
+            <SecurityIcon sx={{ fontSize: 16, color: 'success.light' }} />
+            {excludedCount > 0 && (
+              <Chip
+                label={`${excludedCount} suppressed`}
+                size="small"
+                sx={{ fontSize: 11, height: 20 }}
+              />
+            )}
+          </Stack>
+        );
+      }
     },
     {
       id: "status",

@@ -32,6 +32,7 @@ export type WafHostConfig = {
   mode?: 'Off' | 'DetectionOnly' | 'On';
   load_owasp_crs?: boolean;
   custom_directives?: string;
+  excluded_rule_ids?: number[];
   waf_mode?: WafMode;
 };
 
@@ -533,6 +534,10 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.geoblock_mode = meta.geoblock_mode;
   }
 
+  if (meta.waf) {
+    normalized.waf = meta.waf;
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
 }
 
@@ -550,7 +555,8 @@ function parseMeta(value: string | null): ProxyHostMeta {
       dns_resolver: sanitizeDnsResolverMeta(parsed.dns_resolver),
       upstream_dns_resolution: sanitizeUpstreamDnsResolutionMeta(parsed.upstream_dns_resolution),
       geoblock: parsed.geoblock,
-      geoblock_mode: parsed.geoblock_mode
+      geoblock_mode: parsed.geoblock_mode,
+      waf: parsed.waf,
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -1454,7 +1460,8 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     dns_resolver: dehydrateDnsResolver(existing.dns_resolver),
     upstream_dns_resolution: dehydrateUpstreamDnsResolution(existing.upstream_dns_resolution),
     geoblock: dehydrateGeoBlock(existing.geoblock),
-    ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {})
+    ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {}),
+    ...(existing.waf ? { waf: existing.waf } : {}),
   };
   const meta = buildMeta(existingMeta, input);
 
