@@ -42,6 +42,7 @@ export function WafFields({ value, showModeSelector = true }: Props) {
       }}
     >
       <input type="hidden" name="waf_present" value="1" />
+      <input type="hidden" name="waf_enabled" value={enabled ? "on" : ""} />
       <input type="hidden" name="waf_mode" value={wafMode} />
       <input type="hidden" name="waf_engine_mode" value={engineMode} />
       <input type="hidden" name="waf_load_owasp_crs" value={loadCrs ? "on" : ""} />
