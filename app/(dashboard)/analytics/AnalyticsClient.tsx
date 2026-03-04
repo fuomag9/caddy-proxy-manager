@@ -27,6 +27,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
@@ -77,8 +78,8 @@ interface BlockedEvent {
 }
 interface BlockedPage { events: BlockedEvent[]; total: number; page: number; pages: number; }
 
-interface TopWafRule { ruleId: number; count: number; message: string | null; }
-interface WafStats { total: number; topRules: TopWafRule[]; }
+interface TopWafRule { ruleId: number; count: number; message: string | null; hosts: { host: string; count: number }[]; }
+interface WafStats { total: number; topRules: TopWafRule[]; byCountry: { countryCode: string; count: number }[]; }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -263,6 +264,20 @@ export default function AnalyticsClient() {
     yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
   };
   const barSeries = [{ name: 'Requests', data: userAgents.map(u => u.count) }];
+
+  const wafRuleLabels = (wafStats?.topRules ?? []).map(r => `#${r.ruleId}`);
+  const wafBarOptions: ApexOptions = {
+    ...DARK_CHART,
+    chart: { ...DARK_CHART.chart, type: 'bar', id: 'waf-rules' },
+    colors: ['#f59e0b'],
+    plotOptions: { bar: { horizontal: true, borderRadius: 4 } },
+    dataLabels: { enabled: false },
+    xaxis: { categories: wafRuleLabels, labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
+    yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '12px' } } },
+  };
+  const wafBarSeries = [{ name: 'Hits', data: (wafStats?.topRules ?? []).map(r => r.count) }];
+
+  const wafByCountry = new Map((wafStats?.byCountry ?? []).map(r => [r.countryCode, r.count]));
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -511,6 +526,7 @@ export default function AnalyticsClient() {
                         <TableRow>
                           <TableCell sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)' }}>Country</TableCell>
                           <TableCell align="right" sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)' }}>Requests</TableCell>
+                          <TableCell align="right" sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)' }}>WAF</TableCell>
                           <TableCell align="right" sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)' }}>Blocked</TableCell>
                         </TableRow>
                       </TableHead>
@@ -534,6 +550,13 @@ export default function AnalyticsClient() {
                             </TableCell>
                             <TableCell align="right">
                               <Typography variant="body2">{c.total.toLocaleString()}</Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              {(() => { const wafCount = wafByCountry.get(c.countryCode) ?? 0; return (
+                                <Typography variant="body2" color={wafCount > 0 ? 'warning.light' : 'text.disabled'}>
+                                  {wafCount > 0 ? wafCount.toLocaleString() : '—'}
+                                </Typography>
+                              ); })()}
                             </TableCell>
                             <TableCell align="right">
                               <Typography variant="body2" color={c.blocked > 0 ? 'error.light' : 'text.secondary'}>
@@ -665,10 +688,11 @@ export default function AnalyticsClient() {
                 <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
                   Top WAF Rules Triggered
                 </Typography>
-                <Table size="small">
+                <ReactApexChart type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
+                <Table size="small" sx={{ mt: 2 }}>
                   <TableHead>
                     <TableRow>
-                      {['Rule ID', 'Message', 'Hits'].map(h => (
+                      {['Rule', 'Description', 'Hits', 'Triggered by'].map(h => (
                         <TableCell key={h} sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>{h}</TableCell>
                       ))}
                     </TableRow>
@@ -677,13 +701,26 @@ export default function AnalyticsClient() {
                     {wafStats.topRules.map(rule => (
                       <TableRow key={rule.ruleId} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.04)' } }}>
                         <TableCell>
-                          <Typography variant="body2" fontFamily="monospace" color="warning.light">{rule.ruleId}</Typography>
+                          <Typography variant="body2" fontFamily="monospace" color="warning.light">#{rule.ruleId}</Typography>
                         </TableCell>
-                        <TableCell sx={{ maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <Typography variant="body2" color="text.secondary" title={rule.message ?? undefined}>{rule.message ?? '—'}</Typography>
+                        <TableCell sx={{ maxWidth: 320 }}>
+                          {rule.message ? (
+                            <Tooltip title={rule.message} placement="top">
+                              <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 300 }}>{rule.message}</Typography>
+                            </Tooltip>
+                          ) : (
+                            <Typography variant="body2" color="text.disabled">—</Typography>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2" fontWeight={600}>{rule.count.toLocaleString()}</Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Stack direction="row" flexWrap="wrap" gap={0.5}>
+                            {rule.hosts.map(h => (
+                              <Chip key={h.host} label={`${h.host} ×${h.count}`} size="small" />
+                            ))}
+                          </Stack>
                         </TableCell>
                       </TableRow>
                     ))}

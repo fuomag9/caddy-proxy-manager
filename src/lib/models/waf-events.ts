@@ -61,6 +61,43 @@ export async function getTopWafRules(from: number, to: number, limit = 10): Prom
     .map((r) => ({ ruleId: r.ruleId, count: r.count, message: r.message ?? null }));
 }
 
+export type TopWafRuleWithHosts = {
+  ruleId: number;
+  count: number;
+  message: string | null;
+  hosts: { host: string; count: number }[];
+};
+
+export async function getTopWafRulesWithHosts(from: number, to: number, limit = 10): Promise<TopWafRuleWithHosts[]> {
+  const topRules = await getTopWafRules(from, to, limit);
+  if (topRules.length === 0) return [];
+
+  const ruleIds = topRules.map(r => r.ruleId);
+  const hostRows = await db
+    .select({ ruleId: wafEvents.ruleId, host: wafEvents.host, count: count() })
+    .from(wafEvents)
+    .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to), inArray(wafEvents.ruleId, ruleIds)))
+    .groupBy(wafEvents.ruleId, wafEvents.host)
+    .orderBy(desc(count()));
+
+  return topRules.map(rule => ({
+    ...rule,
+    hosts: hostRows
+      .filter(r => r.ruleId === rule.ruleId)
+      .map(r => ({ host: r.host, count: r.count })),
+  }));
+}
+
+export async function getWafEventCountries(from: number, to: number): Promise<{ countryCode: string; count: number }[]> {
+  const rows = await db
+    .select({ countryCode: wafEvents.countryCode, count: count() })
+    .from(wafEvents)
+    .where(and(gte(wafEvents.ts, from), lte(wafEvents.ts, to)))
+    .groupBy(wafEvents.countryCode)
+    .orderBy(desc(count()));
+  return rows.map(r => ({ countryCode: r.countryCode ?? 'XX', count: r.count }));
+}
+
 export async function getWafRuleMessages(ruleIds: number[]): Promise<Record<number, string | null>> {
   if (ruleIds.length === 0) return {};
   const rows = await db

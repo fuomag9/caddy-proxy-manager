@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/src/lib/auth';
 import { INTERVAL_SECONDS } from '@/src/lib/analytics-db';
-import { countWafEventsInRange, getTopWafRules } from '@/src/lib/models/waf-events';
+import { countWafEventsInRange, getTopWafRulesWithHosts, getWafEventCountries } from '@/src/lib/models/waf-events';
 
 function resolveRange(params: URLSearchParams): { from: number; to: number } {
   const fromParam = params.get('from');
@@ -18,9 +18,10 @@ function resolveRange(params: URLSearchParams): { from: number; to: number } {
 export async function GET(req: NextRequest) {
   await requireUser();
   const { from, to } = resolveRange(req.nextUrl.searchParams);
-  const [total, topRules] = await Promise.all([
+  const [total, topRules, byCountry] = await Promise.all([
     countWafEventsInRange(from, to),
-    getTopWafRules(from, to, 10),
+    getTopWafRulesWithHosts(from, to, 10),
+    getWafEventCountries(from, to),
   ]);
-  return NextResponse.json({ total, topRules });
+  return NextResponse.json({ total, topRules, byCountry });
 }
