@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Chip, IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
-import SecurityIcon from "@mui/icons-material/Security";
+import { IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -15,7 +14,6 @@ import { toggleProxyHostAction } from "./actions";
 import { PageHeader } from "@/src/components/ui/PageHeader";
 import { SearchField } from "@/src/components/ui/SearchField";
 import { DataTable } from "@/src/components/ui/DataTable";
-import { StatusChip } from "@/src/components/ui/StatusChip";
 import { CreateHostDialog, EditHostDialog, DeleteHostDialog } from "@/src/components/proxy-hosts/HostDialogs";
 
 type Props = {
@@ -94,33 +92,6 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
           {host.upstreams[0]}
           {host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
         </Typography>
-      )
-    },
-    {
-      id: "waf",
-      label: "WAF",
-      render: (host: ProxyHost) => {
-        if (!host.waf?.enabled) return <Typography variant="body2" color="text.disabled">—</Typography>;
-        const excludedCount = host.waf.excluded_rule_ids?.length ?? 0;
-        return (
-          <Stack direction="row" alignItems="center" spacing={0.5}>
-            <SecurityIcon sx={{ fontSize: 16, color: 'success.light' }} />
-            {excludedCount > 0 && (
-              <Chip
-                label={`${excludedCount} suppressed`}
-                size="small"
-                sx={{ fontSize: 11, height: 20 }}
-              />
-            )}
-          </Stack>
-        );
-      }
-    },
-    {
-      id: "status",
-      label: "Status",
-      render: (host: ProxyHost) => (
-        <StatusChip status={host.enabled ? "active" : "inactive"} label={host.enabled ? "Active" : "Paused"} />
       )
     },
     {

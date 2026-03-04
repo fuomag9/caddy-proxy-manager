@@ -458,6 +458,7 @@ export default function AnalyticsClient() {
               <StatCard
                 label="Blocked Requests"
                 value={summary.blockedRequests.toLocaleString()}
+                sub={(wafStats?.total ?? 0) > 0 ? `${wafStats!.total.toLocaleString()} from WAF` : undefined}
                 color={summary.blockedRequests > 0 ? '#ef4444' : undefined}
               />
             </Grid>
