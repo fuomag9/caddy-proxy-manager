@@ -828,9 +828,9 @@ function resolveEffectiveWaf(
 
 function buildWafHandler(waf: WafSettings): Record<string, unknown> {
   // directives is a single string (Go struct type is string, not []string).
-  // load_owasp_crs: true makes the embedded CRS filesystem accessible (@owasp_crs prefix),
-  // but the rules still need to be explicitly included via Include directives.
-  // Both fields are required together to actually load and apply CRS rules.
+  // load_owasp_crs: true makes the module load the embedded OWASP CRS automatically —
+  // no Include directives are needed for CRS itself (the Caddyfile adapter confirms this:
+  // `load_owasp_crs` with no directives is sufficient to load all rules).
   const parts = [
     `SecRuleEngine ${waf.mode}`,
     'SecAuditEngine On',
@@ -839,13 +839,6 @@ function buildWafHandler(waf: WafSettings): Record<string, unknown> {
     'SecAuditLogParts ABIJDEFHZ',
     'SecResponseBodyAccess Off',
   ];
-
-  if (waf.load_owasp_crs) {
-    parts.push(
-      'Include @owasp_crs/crs-setup.conf.example',
-      'Include @owasp_crs/rules/*.conf',
-    );
-  }
 
   if (waf.custom_directives?.trim()) {
     parts.push(waf.custom_directives.trim());
