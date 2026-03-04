@@ -828,10 +828,15 @@ function resolveEffectiveWaf(
 
 function buildWafHandler(waf: WafSettings): Record<string, unknown> {
   // directives is a single string (Go struct type is string, not []string).
-  // load_owasp_crs: true makes the module load the embedded OWASP CRS automatically —
-  // no Include directives are needed for CRS itself (the Caddyfile adapter confirms this:
-  // `load_owasp_crs` with no directives is sufficient to load all rules).
+  // load_owasp_crs: true merges the embedded CRS filesystem so that @-prefixed paths resolve.
+  // We then explicitly Include the CRS files in the correct order via SecLang directives.
+  // The @ prefix references files from the embedded coraza-coreruleset filesystem.
   const parts = [
+    'Include @coraza.conf-recommended',
+    ...(waf.load_owasp_crs ? [
+      'Include @crs-setup.conf.example',
+      'Include @owasp_crs/*.conf',
+    ] : []),
     `SecRuleEngine ${waf.mode}`,
     'SecAuditEngine On',
     'SecAuditLog /logs/waf-audit.log',
