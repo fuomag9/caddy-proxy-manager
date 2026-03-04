@@ -60,14 +60,26 @@ interface CorazaAuditEntry {
     // unix_timestamp is nanoseconds since epoch
     unix_timestamp?: number;
     timestamp?: string;
+    // is_interrupted: true means the request was blocked by the WAF
+    is_interrupted?: boolean;
+    // highest_severity from matched rules (may be empty due to Coraza bug)
+    highest_severity?: string;
     request?: {
       method?: string;
       uri?: string;
       // headers values are arrays of strings (lowercase keys)
       headers?: Record<string, string[]>;
     };
+    // messages inside transaction (Coraza JSON format)
+    messages?: Array<{
+      data?: {
+        id?: string | number;
+        msg?: string;
+        severity?: string;
+      };
+    }> | null;
   };
-  // messages is absent/null when no rules match
+  // messages may also appear at top level depending on Coraza version
   messages?: Array<{
     data?: {
       id?: string | number;
@@ -91,6 +103,11 @@ function parseLine(line: string): typeof wafEvents.$inferInsert | null {
   const clientIp = tx.client_ip ?? '';
   if (!clientIp) return null;
 
+  // Only store events where the WAF actually interrupted (blocked/detected) the request.
+  // Coraza currently does not populate the messages array in the audit log (known bug),
+  // so we fall back to is_interrupted as the filter.
+  if (!tx.is_interrupted) return null;
+
   const req = tx.request ?? {};
 
   // unix_timestamp is nanoseconds; fall back to parsing timestamp string
@@ -107,13 +124,13 @@ function parseLine(line: string): typeof wafEvents.$inferInsert | null {
   const hostArr = req.headers?.['host'] ?? req.headers?.['Host'];
   const host = Array.isArray(hostArr) ? (hostArr[0] ?? '') : (hostArr ?? '');
 
-  // Only store events where at least one rule matched
-  if (!entry.messages?.length) return null;
-
-  const firstMsg = entry.messages[0];
+  // Try to get rule info from messages (top-level or nested in transaction)
+  const msgs = entry.messages ?? tx.messages;
+  const firstMsg = msgs?.[0];
   const ruleId = firstMsg?.data?.id != null ? Number(firstMsg.data.id) : null;
   const ruleMessage = firstMsg?.data?.msg ?? null;
-  const severity = firstMsg?.data?.severity ?? null;
+  // Fall back to highest_severity from the transaction if messages are missing
+  const severity = firstMsg?.data?.severity ?? tx.highest_severity ?? null;
 
   return {
     ts,
