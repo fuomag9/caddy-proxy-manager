@@ -107,7 +107,10 @@ function parseLine(line: string): typeof wafEvents.$inferInsert | null {
   const hostArr = req.headers?.['host'] ?? req.headers?.['Host'];
   const host = Array.isArray(hostArr) ? (hostArr[0] ?? '') : (hostArr ?? '');
 
-  const firstMsg = entry.messages?.[0];
+  // Only store events where at least one rule matched
+  if (!entry.messages?.length) return null;
+
+  const firstMsg = entry.messages[0];
   const ruleId = firstMsg?.data?.id != null ? Number(firstMsg.data.id) : null;
   const ruleMessage = firstMsg?.data?.msg ?? null;
   const severity = firstMsg?.data?.severity ?? null;

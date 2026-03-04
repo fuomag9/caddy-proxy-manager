@@ -838,7 +838,7 @@ function buildWafHandler(waf: WafSettings): Record<string, unknown> {
       'Include @owasp_crs/*.conf',
     ] : []),
     `SecRuleEngine ${waf.mode}`,
-    'SecAuditEngine On',
+    'SecAuditEngine RelevantOnly',
     'SecAuditLog /logs/waf-audit.log',
     'SecAuditLogFormat JSON',
     'SecAuditLogParts ABIJDEFHZ',
