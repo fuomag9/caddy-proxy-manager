@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import WafEventsClient from "./WafEventsClient";
-import { listWafEvents, countWafEvents } from "@/src/lib/models/waf-events";
+import { listWafEvents, countWafEvents, getWafRuleMessages } from "@/src/lib/models/waf-events";
 import { getWafSettings } from "@/src/lib/settings";
 import { listProxyHosts } from "@/src/lib/models/proxy-hosts";
 import { requireAdmin } from "@/src/lib/auth";
@@ -26,6 +26,9 @@ export default async function WafEventsPage({ searchParams }: PageProps) {
     listProxyHosts(),
   ]);
 
+  const globalExcludedIds = globalWaf?.excluded_rule_ids ?? [];
+  const globalExcludedMessages = await getWafRuleMessages(globalExcludedIds);
+
   const hostWafMap: Record<string, number[]> = {};
   for (const host of hosts) {
     const ids = host.waf?.excluded_rule_ids ?? [];
@@ -39,7 +42,8 @@ export default async function WafEventsPage({ searchParams }: PageProps) {
       events={events}
       pagination={{ total, page, perPage: PER_PAGE }}
       initialSearch={search ?? ""}
-      globalExcluded={globalWaf?.excluded_rule_ids ?? []}
+      globalExcluded={globalExcludedIds}
+      globalExcludedMessages={globalExcludedMessages}
       globalWafEnabled={globalWaf?.enabled ?? false}
       hostWafMap={hostWafMap}
     />

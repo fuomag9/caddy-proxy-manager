@@ -18,6 +18,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import BlockIcon from "@mui/icons-material/Block";
@@ -35,6 +36,7 @@ type Props = {
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
   globalExcluded: number[];
+  globalExcludedMessages: Record<number, string | null>;
   globalWafEnabled: boolean;
   hostWafMap: Record<string, number[]>;
 };
@@ -222,10 +224,12 @@ function WafEventDrawer({
 
 function GlobalSuppressedRules({
   excluded,
+  messages,
   wafEnabled,
   onRemove,
 }: {
   excluded: number[];
+  messages: Record<number, string | null>;
   wafEnabled: boolean;
   onRemove: (ruleId: number) => void;
 }) {
@@ -265,18 +269,46 @@ function GlobalSuppressedRules({
             <Typography variant="caption">Open a WAF event and click "Suppress Globally" to add one.</Typography>
           </Box>
         ) : (
-          <Stack direction="row" flexWrap="wrap" gap={1}>
+          <Stack spacing={1}>
             {excluded.map((id) => (
-              <Chip
+              <Box
                 key={id}
-                label={id}
-                onDelete={() => handleRemove(id)}
-                deleteIcon={<DeleteIcon />}
-                disabled={pending}
-                sx={{ fontFamily: "monospace", fontWeight: 600 }}
-                color="error"
-                variant="outlined"
-              />
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  px: 2,
+                  py: 1.5,
+                  borderRadius: 1.5,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: "action.hover",
+                }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" fontFamily="monospace" fontWeight={700} color="error.light">
+                    Rule {id}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color={messages[id] ? "text.secondary" : "text.disabled"}
+                    sx={{ display: "block", mt: 0.25 }}
+                  >
+                    {messages[id] ?? "No description available — rule has not triggered yet"}
+                  </Typography>
+                </Box>
+                <Tooltip title="Remove suppression">
+                  <IconButton
+                    size="small"
+                    onClick={() => handleRemove(id)}
+                    disabled={pending}
+                    color="error"
+                    sx={{ flexShrink: 0 }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
             ))}
           </Stack>
         )}
@@ -295,7 +327,7 @@ function GlobalSuppressedRules({
   );
 }
 
-export default function WafEventsClient({ events, pagination, initialSearch, globalExcluded, globalWafEnabled, hostWafMap }: Props) {
+export default function WafEventsClient({ events, pagination, initialSearch, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -407,16 +439,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tab label="Events" />
-        <Tab
-          label={
-            <Stack direction="row" alignItems="center" spacing={0.75}>
-              <span>Suppressed Rules</span>
-              {localGlobalExcluded.length > 0 && (
-                <Chip label={localGlobalExcluded.length} size="small" color="error" sx={{ height: 18, fontSize: "0.65rem" }} />
-              )}
-            </Stack>
-          }
-        />
+        <Tab label="Suppressed Rules" />
       </Tabs>
 
       {tab === 0 && (
@@ -453,6 +476,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
       {tab === 1 && (
         <GlobalSuppressedRules
           excluded={localGlobalExcluded}
+          messages={globalExcludedMessages}
           wafEnabled={globalWafEnabled}
           onRemove={(ruleId) => setLocalGlobalExcluded((prev) => prev.filter((id) => id !== ruleId))}
         />

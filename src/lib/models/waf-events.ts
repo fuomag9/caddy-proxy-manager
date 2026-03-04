@@ -1,6 +1,6 @@
 import db from "../db";
 import { wafEvents } from "../db/schema";
-import { desc, like, or, count, and, gte, lte, sql } from "drizzle-orm";
+import { desc, like, or, count, and, gte, lte, sql, inArray } from "drizzle-orm";
 
 export type WafEvent = {
   id: number;
@@ -59,6 +59,22 @@ export async function getTopWafRules(from: number, to: number, limit = 10): Prom
   return rows
     .filter((r): r is typeof r & { ruleId: number } => r.ruleId != null)
     .map((r) => ({ ruleId: r.ruleId, count: r.count, message: r.message ?? null }));
+}
+
+export async function getWafRuleMessages(ruleIds: number[]): Promise<Record<number, string | null>> {
+  if (ruleIds.length === 0) return {};
+  const rows = await db
+    .select({
+      ruleId: wafEvents.ruleId,
+      message: sql<string | null>`MAX(${wafEvents.ruleMessage})`,
+    })
+    .from(wafEvents)
+    .where(inArray(wafEvents.ruleId, ruleIds))
+    .groupBy(wafEvents.ruleId);
+  return Object.fromEntries(
+    rows.filter((r): r is typeof r & { ruleId: number } => r.ruleId != null)
+        .map((r) => [r.ruleId, r.message ?? null])
+  );
 }
 
 export async function listWafEvents(limit = 50, offset = 0, search?: string): Promise<WafEvent[]> {
