@@ -5,7 +5,8 @@ import db from './db';
 import { wafEvents, wafLogParseState } from './db/schema';
 import { eq } from 'drizzle-orm';
 
-const LOG_FILE = '/logs/waf-audit.log';
+const AUDIT_LOG = '/logs/waf-audit.log';
+const RULES_LOG = '/logs/waf-rules.log';
 const GEOIP_DB = '/usr/share/GeoIP/GeoLite2-Country.mmdb';
 const BATCH_SIZE = 200;
 const RETENTION_DAYS = 90;
@@ -52,44 +53,84 @@ function lookupCountry(ip: string): string | null {
   }
 }
 
-// ── parsing ───────────────────────────────────────────────────────────────────
+// ── WAF rules log parsing ─────────────────────────────────────────────────────
+// Caddy's http.handlers.waf logger emits a JSON line per matched rule containing
+// the ModSecurity-format message string, e.g.:
+//   [id "941100"] [msg "XSS Attack ..."] [severity "critical"] [unique_id "abc123"]
+// We parse these to build a map of unique_id → first matched rule info.
+
+interface RuleInfo {
+  ruleId: number | null;
+  ruleMessage: string | null;
+  severity: string | null;
+}
+
+function extractBracketField(msg: string, field: string): string | null {
+  const m = msg.match(new RegExp(`\\[${field} "([^"]*)"\\]`));
+  return m ? m[1] : null;
+}
+
+async function readRulesLog(startOffset: number): Promise<{ ruleMap: Map<string, RuleInfo>; newOffset: number }> {
+  return new Promise((resolve, reject) => {
+    const ruleMap = new Map<string, RuleInfo>();
+    let bytesRead = 0;
+
+    const stream = createReadStream(RULES_LOG, { start: startOffset, encoding: 'utf8' });
+    stream.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'ENOENT' || err.code === 'EACCES') resolve({ ruleMap, newOffset: startOffset });
+      else reject(err);
+    });
+
+    const rl = createInterface({ input: stream, crlfDelay: Infinity });
+    rl.on('line', (line) => {
+      bytesRead += Buffer.byteLength(line, 'utf8') + 1;
+      if (!line.trim()) return;
+      try {
+        const entry = JSON.parse(line) as { msg?: string };
+        const msg = entry.msg ?? '';
+        const uniqueId = extractBracketField(msg, 'unique_id');
+        if (!uniqueId) return;
+        // Keep only the first detection rule per unique_id (skip anomaly evaluation rules)
+        if (ruleMap.has(uniqueId)) return;
+        const ruleIdStr = extractBracketField(msg, 'id');
+        const ruleId = ruleIdStr ? parseInt(ruleIdStr, 10) : null;
+        // Skip anomaly evaluation rule (949110 / 980130) — not a specific attack rule
+        if (ruleId === 949110 || ruleId === 980130) return;
+        ruleMap.set(uniqueId, {
+          ruleId,
+          ruleMessage: extractBracketField(msg, 'msg'),
+          severity: extractBracketField(msg, 'severity'),
+        });
+      } catch {
+        // skip malformed lines
+      }
+    });
+    rl.on('close', () => resolve({ ruleMap, newOffset: startOffset + bytesRead }));
+    rl.on('error', reject);
+  });
+}
+
+// ── audit log parsing ─────────────────────────────────────────────────────────
 
 interface CorazaAuditEntry {
   transaction?: {
+    id?: string;
     client_ip?: string;
     // unix_timestamp is nanoseconds since epoch
     unix_timestamp?: number;
     timestamp?: string;
-    // is_interrupted: true means the request was blocked by the WAF
+    // is_interrupted: true means the request was blocked/detected by the WAF
     is_interrupted?: boolean;
-    // highest_severity from matched rules (may be empty due to Coraza bug)
-    highest_severity?: string;
     request?: {
       method?: string;
       uri?: string;
-      // headers values are arrays of strings (lowercase keys)
+      // header values are arrays of strings (lowercase keys)
       headers?: Record<string, string[]>;
     };
-    // messages inside transaction (Coraza JSON format)
-    messages?: Array<{
-      data?: {
-        id?: string | number;
-        msg?: string;
-        severity?: string;
-      };
-    }> | null;
   };
-  // messages may also appear at top level depending on Coraza version
-  messages?: Array<{
-    data?: {
-      id?: string | number;
-      msg?: string;
-      severity?: string;
-    };
-  }> | null;
 }
 
-function parseLine(line: string): typeof wafEvents.$inferInsert | null {
+function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEvents.$inferInsert | null {
   let entry: CorazaAuditEntry;
   try {
     entry = JSON.parse(line);
@@ -104,8 +145,8 @@ function parseLine(line: string): typeof wafEvents.$inferInsert | null {
   if (!clientIp) return null;
 
   // Only store events where the WAF actually interrupted (blocked/detected) the request.
-  // Coraza currently does not populate the messages array in the audit log (known bug),
-  // so we fall back to is_interrupted as the filter.
+  // Coraza does not write matched rules to the audit log messages array (known bug),
+  // so we use is_interrupted as the primary filter.
   if (!tx.is_interrupted) return null;
 
   const req = tx.request ?? {};
@@ -124,13 +165,8 @@ function parseLine(line: string): typeof wafEvents.$inferInsert | null {
   const hostArr = req.headers?.['host'] ?? req.headers?.['Host'];
   const host = Array.isArray(hostArr) ? (hostArr[0] ?? '') : (hostArr ?? '');
 
-  // Try to get rule info from messages (top-level or nested in transaction)
-  const msgs = entry.messages ?? tx.messages;
-  const firstMsg = msgs?.[0];
-  const ruleId = firstMsg?.data?.id != null ? Number(firstMsg.data.id) : null;
-  const ruleMessage = firstMsg?.data?.msg ?? null;
-  // Fall back to highest_severity from the transaction if messages are missing
-  const severity = firstMsg?.data?.severity ?? tx.highest_severity ?? null;
+  // Look up rule info from the WAF rules log via the transaction unique_id
+  const ruleInfo = tx.id ? ruleMap.get(tx.id) : undefined;
 
   return {
     ts,
@@ -139,19 +175,19 @@ function parseLine(line: string): typeof wafEvents.$inferInsert | null {
     countryCode: lookupCountry(clientIp),
     method: req.method ?? '',
     uri: req.uri ?? '',
-    ruleId,
-    ruleMessage,
-    severity,
+    ruleId: ruleInfo?.ruleId ?? null,
+    ruleMessage: ruleInfo?.ruleMessage ?? null,
+    severity: ruleInfo?.severity ?? null,
     rawData: line,
   };
 }
 
-async function readLines(startOffset: number): Promise<{ lines: string[]; newOffset: number }> {
+async function readAuditLog(startOffset: number): Promise<{ lines: string[]; newOffset: number }> {
   return new Promise((resolve, reject) => {
     const lines: string[] = [];
     let bytesRead = 0;
 
-    const stream = createReadStream(LOG_FILE, { start: startOffset, encoding: 'utf8' });
+    const stream = createReadStream(AUDIT_LOG, { start: startOffset, encoding: 'utf8' });
     stream.on('error', (err: NodeJS.ErrnoException) => {
       if (err.code === 'ENOENT' || err.code === 'EACCES') resolve({ lines: [], newOffset: startOffset });
       else reject(err);
@@ -187,26 +223,39 @@ export async function initWafLogParser(): Promise<void> {
 
 export async function parseNewWafLogEntries(): Promise<void> {
   if (stopped) return;
-  if (!existsSync(LOG_FILE)) return;
+  if (!existsSync(AUDIT_LOG)) return;
 
   try {
+    // ── 1. Parse WAF rules log to build unique_id → rule info map ────────────
+    const rulesOffset = parseInt(getState('waf_rules_log_offset') ?? '0', 10);
+    const rulesSize = parseInt(getState('waf_rules_log_size') ?? '0', 10);
+
+    let currentRulesSize = 0;
+    if (existsSync(RULES_LOG)) {
+      try { currentRulesSize = statSync(RULES_LOG).size; } catch { /* ignore */ }
+    }
+    const rulesStartOffset = currentRulesSize < rulesSize ? 0 : rulesOffset;
+    const { ruleMap, newOffset: newRulesOffset } = await readRulesLog(rulesStartOffset);
+
+    setState('waf_rules_log_offset', String(newRulesOffset));
+    setState('waf_rules_log_size', String(currentRulesSize));
+
+    // ── 2. Parse audit log, enriching events with rule info from map ─────────
     const storedOffset = parseInt(getState('waf_audit_log_offset') ?? '0', 10);
     const storedSize = parseInt(getState('waf_audit_log_size') ?? '0', 10);
 
     let currentSize: number;
     try {
-      currentSize = statSync(LOG_FILE).size;
+      currentSize = statSync(AUDIT_LOG).size;
     } catch {
       return;
     }
 
-    // Detect log rotation
     const startOffset = currentSize < storedSize ? 0 : storedOffset;
-
-    const { lines, newOffset } = await readLines(startOffset);
+    const { lines, newOffset } = await readAuditLog(startOffset);
 
     if (lines.length > 0) {
-      const rows = lines.map(parseLine).filter((r): r is typeof wafEvents.$inferInsert => r !== null);
+      const rows = lines.map(l => parseLine(l, ruleMap)).filter((r): r is typeof wafEvents.$inferInsert => r !== null);
       if (rows.length > 0) {
         insertBatch(rows);
         console.log(`[waf-log-parser] inserted ${rows.length} WAF events`);

@@ -1662,26 +1662,26 @@ async function buildCaddyDocument() {
 
   const httpApp = Object.keys(servers).length > 0 ? { http: { servers } } : {};
 
-  // Build logging configuration if enabled
-  const loggingApp = loggingEnabled
-    ? {
-        logging: {
-          logs: {
-            http_access: {
-              writer: {
-                output: "file",
-                filename: "/logs/access.log",
-                mode: "0640"
-              },
-              encoder: {
-                format: loggingFormat
-              },
-              include: ["http.log.access"]
-            }
-          }
-        }
-      }
-    : {};
+  // Build logging configuration
+  const loggingLogs: Record<string, unknown> = {
+    // Always capture WAF rule match logs so the waf-log-parser can extract rule details.
+    // Coraza does not write matched rules to the audit log (known bug), but it does emit
+    // structured JSON lines via the http.handlers.waf logger for each matched rule.
+    waf_rules: {
+      writer: { output: "file", filename: "/logs/waf-rules.log", mode: "0640" },
+      encoder: { format: "json" },
+      include: ["http.handlers.waf"],
+      level: "ERROR"
+    }
+  };
+  if (loggingEnabled) {
+    loggingLogs.http_access = {
+      writer: { output: "file", filename: "/logs/access.log", mode: "0640" },
+      encoder: { format: loggingFormat },
+      include: ["http.log.access"]
+    };
+  }
+  const loggingApp = { logging: { logs: loggingLogs } };
 
   return {
     admin: {
