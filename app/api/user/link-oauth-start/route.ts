@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/src/lib/auth";
+import { auth, checkSameOrigin } from "@/src/lib/auth";
 import db, { nowIso } from "@/src/lib/db";
 import { pendingOAuthLinks } from "@/src/lib/db/schema";
 import { eq, and, lt } from "drizzle-orm";
 import { registerFailedAttempt } from "@/src/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
+  const originCheck = checkSameOrigin(request);
+  if (originCheck) return originCheck;
+
   try {
     const session = await auth();
     if (!session?.user?.id) {

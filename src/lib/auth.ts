@@ -1,4 +1,5 @@
 import NextAuth, { type DefaultSession } from "next-auth";
+import { type NextRequest, NextResponse } from "next/server";
 import Credentials from "next-auth/providers/credentials";
 import type { OAuthConfig } from "next-auth/providers";
 import bcrypt from "bcryptjs";
@@ -424,4 +425,24 @@ export async function requireAdmin() {
     throw new Error("Administrator privileges required");
   }
   return session;
+}
+
+/**
+ * Defense-in-depth CSRF check: verifies the Origin header matches the Host.
+ * Returns a 403 response if the origin is present and mismatched; otherwise null.
+ * Browsers always include Origin on cross-origin requests, so a mismatch means
+ * the request came from a different site.
+ */
+export function checkSameOrigin(request: NextRequest): NextResponse | null {
+  const origin = request.headers.get("origin");
+  if (!origin) return null; // same-origin requests may omit Origin
+
+  const host = request.headers.get("host");
+  try {
+    const originHost = new URL(origin).host;
+    if (originHost === host) return null;
+  } catch {
+    // unparseable origin — treat as mismatch
+  }
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }

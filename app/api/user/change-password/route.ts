@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/src/lib/auth";
+import { auth, checkSameOrigin } from "@/src/lib/auth";
 import { getUserById, updateUserPassword } from "@/src/lib/models/user";
 import { createAuditEvent } from "@/src/lib/models/audit";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: NextRequest) {
+  const originCheck = checkSameOrigin(request);
+  if (originCheck) return originCheck;
+
   try {
     const session = await auth();
     if (!session?.user?.id) {
