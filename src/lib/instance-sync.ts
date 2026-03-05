@@ -1,5 +1,5 @@
 import db, { nowIso } from "./db";
-import { accessListEntries, accessLists, certificates, proxyHosts } from "./db/schema";
+import { accessListEntries, accessLists, caCertificates, certificates, proxyHosts } from "./db/schema";
 import { getSetting, setSetting } from "./settings";
 import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
@@ -23,6 +23,7 @@ export type SyncPayload = {
   settings: SyncSettings;
   data: {
     certificates: Array<typeof certificates.$inferSelect>;
+    caCertificates: Array<typeof caCertificates.$inferSelect>;
     accessLists: Array<typeof accessLists.$inferSelect>;
     accessListEntries: Array<typeof accessListEntries.$inferSelect>;
     proxyHosts: Array<typeof proxyHosts.$inferSelect>;
@@ -231,8 +232,9 @@ export async function clearSyncedSetting(key: string): Promise<void> {
 }
 
 export async function buildSyncPayload(): Promise<SyncPayload> {
-  const [certRows, accessListRows, accessEntryRows, proxyRows] = await Promise.all([
+  const [certRows, caCertRows, accessListRows, accessEntryRows, proxyRows] = await Promise.all([
     db.select().from(certificates),
+    db.select().from(caCertificates),
     db.select().from(accessLists),
     db.select().from(accessListEntries),
     db.select().from(proxyHosts)
@@ -260,6 +262,11 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     createdBy: null
   }));
 
+  const sanitizedCaCertificates = caCertRows.map((row) => ({
+    ...row,
+    createdBy: null
+  }));
+
   const sanitizedProxyHosts = proxyRows.map((row) => ({
     ...row,
     ownerUserId: null
@@ -270,6 +277,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     settings,
     data: {
       certificates: sanitizedCertificates,
+      caCertificates: sanitizedCaCertificates,
       accessLists: sanitizedAccessLists,
       accessListEntries: accessEntryRows,
       proxyHosts: sanitizedProxyHosts
@@ -411,9 +419,13 @@ export async function applySyncPayload(payload: SyncPayload) {
     tx.delete(accessListEntries).run();
     tx.delete(accessLists).run();
     tx.delete(certificates).run();
+    tx.delete(caCertificates).run();
 
     if (payload.data.certificates.length > 0) {
       tx.insert(certificates).values(payload.data.certificates).run();
+    }
+    if (payload.data.caCertificates && payload.data.caCertificates.length > 0) {
+      tx.insert(caCertificates).values(payload.data.caCertificates).run();
     }
     if (payload.data.accessLists.length > 0) {
       tx.insert(accessLists).values(payload.data.accessLists).run();

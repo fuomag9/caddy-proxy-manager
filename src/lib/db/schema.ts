@@ -128,6 +128,15 @@ export const certificates = sqliteTable("certificates", {
   updatedAt: text("updated_at").notNull()
 });
 
+export const caCertificates = sqliteTable("ca_certificates", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  certificatePem: text("certificate_pem").notNull(),
+  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull()
+});
+
 export const proxyHosts = sqliteTable("proxy_hosts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),

@@ -5,6 +5,9 @@ import { isNull, isNotNull, count } from 'drizzle-orm';
 import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
 import { scanAcmeCerts } from '@/src/lib/acme-certs';
+import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-certificates';
+
+export type { CaCertificate };
 
 export type CertExpiryStatus = 'ok' | 'expiring_soon' | 'expired';
 
@@ -78,6 +81,8 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const offset = (page - 1) * PER_PAGE;
   const acmeCertMap = scanAcmeCerts();
+
+  const caCerts = await listCaCertificates();
 
   const [acmeRows, acmeTotal, certRows, usageRows] = await Promise.all([
     db
@@ -169,6 +174,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       acmeHosts={acmeHosts}
       importedCerts={importedCerts}
       managedCerts={managedCerts}
+      caCertificates={caCerts}
       acmePagination={{ total: acmeTotal, page, perPage: PER_PAGE }}
     />
   );

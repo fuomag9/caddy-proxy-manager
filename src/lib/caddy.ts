@@ -27,9 +27,10 @@ import { syncInstances } from "./instance-sync";
 import {
   accessListEntries,
   certificates,
+  caCertificates,
   proxyHosts
 } from "./db/schema";
-import { type GeoBlockMode, type WafHostConfig } from "./models/proxy-hosts";
+import { type GeoBlockMode, type WafHostConfig, type MtlsConfig } from "./models/proxy-hosts";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -687,6 +688,12 @@ function writeCertificateFiles(cert: CertificateRow) {
   return { certificate_file: certPath, key_file: keyPath };
 }
 
+function writeCaCertFile(caCert: { id: number; certificatePem: string }): string {
+  const caPath = join(CERTS_DIR, `ca-certificate-${caCert.id}.pem`);
+  writeFileSync(caPath, caCert.certificatePem, { encoding: "utf-8", mode: 0o600 });
+  return caPath;
+}
+
 function collectCertificateUsage(rows: ProxyHostRow[], certificates: Map<number, CertificateRow>) {
   const usage = new Map<number, CertificateUsage>();
   const autoManagedDomains = new Set<string>();
@@ -1311,10 +1318,41 @@ async function buildProxyRoutes(
   return routes;
 }
 
+function buildClientAuthentication(
+  domains: string[],
+  mTlsDomainMap: Map<string, number[]>,
+  caCertMap: Map<number, { id: number; certificatePem: string }>
+): Record<string, unknown> | null {
+  // Collect all CA cert IDs for any domain in this policy that has mTLS
+  const caCertIds = new Set<number>();
+  for (const domain of domains) {
+    const ids = mTlsDomainMap.get(domain.toLowerCase());
+    if (ids) {
+      for (const id of ids) caCertIds.add(id);
+    }
+  }
+  if (caCertIds.size === 0) return null;
+
+  const pemFiles: string[] = [];
+  for (const id of caCertIds) {
+    const ca = caCertMap.get(id);
+    if (!ca) continue;
+    pemFiles.push(writeCaCertFile(ca));
+  }
+  if (pemFiles.length === 0) return null;
+
+  return {
+    trusted_ca_certs_pem_files: pemFiles,
+    mode: "require_and_verify"
+  };
+}
+
 function buildTlsConnectionPolicies(
   usage: Map<number, CertificateUsage>,
   managedCertificatesWithAutomation: Set<number>,
-  autoManagedDomains: Set<string>
+  autoManagedDomains: Set<string>,
+  mTlsDomainMap: Map<string, number[]>,
+  caCertMap: Map<number, { id: number; certificatePem: string }>
 ) {
   const policies: Record<string, unknown>[] = [];
   const readyCertificates = new Set<number>();
@@ -1322,11 +1360,26 @@ function buildTlsConnectionPolicies(
   // Add policy for auto-managed domains (certificate_id = null)
   if (autoManagedDomains.size > 0) {
     const domains = Array.from(autoManagedDomains);
-    policies.push({
-      match: {
-        sni: domains
+    const clientAuth = buildClientAuthentication(domains, mTlsDomainMap, caCertMap);
+
+    if (clientAuth) {
+      // Split: mTLS domains get their own policy, non-mTLS get another
+      const mTlsDomains = domains.filter(d => mTlsDomainMap.has(d));
+      const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
+
+      if (mTlsDomains.length > 0) {
+        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap);
+        policies.push({
+          match: { sni: mTlsDomains },
+          client_authentication: mTlsAuth
+        });
       }
-    });
+      if (nonMTlsDomains.length > 0) {
+        policies.push({ match: { sni: nonMTlsDomains } });
+      }
+    } else {
+      policies.push({ match: { sni: domains } });
+    }
   }
 
   for (const [id, entry] of usage.entries()) {
@@ -1340,12 +1393,28 @@ function buildTlsConnectionPolicies(
       if (!files) {
         continue;
       }
-      policies.push({
-        match: {
-          sni: domains
-        },
-        certificates: [files]
-      });
+
+      const mTlsDomains = domains.filter(d => mTlsDomainMap.has(d));
+      const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
+
+      if (mTlsDomains.length > 0) {
+        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap);
+        policies.push({
+          match: { sni: mTlsDomains },
+          certificates: [files],
+          ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
+        });
+      }
+      if (nonMTlsDomains.length > 0) {
+        policies.push({
+          match: { sni: nonMTlsDomains },
+          certificates: [files]
+        });
+      }
+      if (mTlsDomains.length === 0 && nonMTlsDomains.length === 0) {
+        // all domains handled above
+      }
+
       readyCertificates.add(id);
       continue;
     }
@@ -1354,11 +1423,21 @@ function buildTlsConnectionPolicies(
       if (!managedCertificatesWithAutomation.has(id)) {
         continue;
       }
-      policies.push({
-        match: {
-          sni: domains
-        }
-      });
+
+      const mTlsDomains = domains.filter(d => mTlsDomainMap.has(d));
+      const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
+
+      if (mTlsDomains.length > 0) {
+        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap);
+        policies.push({
+          match: { sni: mTlsDomains },
+          ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
+        });
+      }
+      if (nonMTlsDomains.length > 0) {
+        policies.push({ match: { sni: nonMTlsDomains } });
+      }
+
       readyCertificates.add(id);
     }
   }
@@ -1506,7 +1585,7 @@ async function buildTlsAutomation(
 }
 
 async function buildCaddyDocument() {
-  const [proxyHostRecords, certRows, accessListEntryRecords] = await Promise.all([
+  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -1543,7 +1622,13 @@ async function buildCaddyDocument() {
         username: accessListEntries.username,
         passwordHash: accessListEntries.passwordHash
       })
-      .from(accessListEntries)
+      .from(accessListEntries),
+    db
+      .select({
+        id: caCertificates.id,
+        certificatePem: caCertificates.certificatePem
+      })
+      .from(caCertificates)
   ]);
 
   const proxyHostRows: ProxyHostRow[] = proxyHostRecords.map((h) => ({
@@ -1581,6 +1666,7 @@ async function buildCaddyDocument() {
   }));
 
   const certificateMap = new Map(certRowsMapped.map((cert) => [cert.id, cert]));
+  const caCertMap = new Map(caCertRows.map((ca) => [ca.id, ca]));
   const accessMap = accessListEntryRows.reduce<Map<number, AccessListEntryRow[]>>((map, entry) => {
     if (!map.has(entry.access_list_id)) {
       map.set(entry.access_list_id, []);
@@ -1588,6 +1674,18 @@ async function buildCaddyDocument() {
     map.get(entry.access_list_id)!.push(entry);
     return map;
   }, new Map());
+
+  // Build domain → CA cert IDs map for mTLS-enabled hosts
+  const mTlsDomainMap = new Map<string, number[]>();
+  for (const row of proxyHostRows) {
+    if (!row.enabled) continue;
+    const meta = parseJson<{ mtls?: MtlsConfig }>(row.meta, {});
+    if (!meta.mtls?.enabled || !meta.mtls.ca_certificate_ids?.length) continue;
+    const domains = parseJson<string[]>(row.domains, []).map(d => d.trim().toLowerCase()).filter(Boolean);
+    for (const domain of domains) {
+      mTlsDomainMap.set(domain, meta.mtls.ca_certificate_ids);
+    }
+  }
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
   const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf] = await Promise.all([
@@ -1604,7 +1702,9 @@ async function buildCaddyDocument() {
   const { policies: tlsConnectionPolicies, readyCertificates } = buildTlsConnectionPolicies(
     certificateUsage,
     managedCertificateIds,
-    autoManagedDomains
+    autoManagedDomains,
+    mTlsDomainMap,
+    caCertMap
   );
 
   const httpRoutes: CaddyHttpRoute[] = await buildProxyRoutes(

@@ -1,6 +1,7 @@
 import ProxyHostsClient from "./ProxyHostsClient";
 import { listProxyHostsPaginated, countProxyHosts } from "@/src/lib/models/proxy-hosts";
 import { listCertificates } from "@/src/lib/models/certificates";
+import { listCaCertificates } from "@/src/lib/models/ca-certificates";
 import { listAccessLists } from "@/src/lib/models/access-lists";
 import { getAuthentikSettings } from "@/src/lib/settings";
 import { requireAdmin } from "@/src/lib/auth";
@@ -18,10 +19,11 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
   const search = searchParam?.trim() || undefined;
   const offset = (page - 1) * PER_PAGE;
 
-  const [hosts, total, certificates, accessLists, authentikDefaults] = await Promise.all([
+  const [hosts, total, certificates, caCertificates, accessLists, authentikDefaults] = await Promise.all([
     listProxyHostsPaginated(PER_PAGE, offset, search),
     countProxyHosts(search),
     listCertificates(),
+    listCaCertificates(),
     listAccessLists(),
     getAuthentikSettings(),
   ]);
@@ -30,6 +32,7 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
     <ProxyHostsClient
       hosts={hosts}
       certificates={certificates}
+      caCertificates={caCertificates}
       accessLists={accessLists}
       authentikDefaults={authentikDefaults}
       pagination={{ total, page, perPage: PER_PAGE }}

@@ -200,6 +200,11 @@ type ProxyHostAuthentikMeta = {
   protected_paths?: string[];
 };
 
+export type MtlsConfig = {
+  enabled: boolean;
+  ca_certificate_ids: number[];
+};
+
 type ProxyHostMeta = {
   custom_reverse_proxy_json?: string;
   custom_pre_handlers_json?: string;
@@ -210,6 +215,7 @@ type ProxyHostMeta = {
   geoblock?: GeoBlockSettings;
   geoblock_mode?: GeoBlockMode;
   waf?: WafHostConfig;
+  mtls?: MtlsConfig;
 };
 
 export type ProxyHost = {
@@ -237,6 +243,7 @@ export type ProxyHost = {
   geoblock: GeoBlockSettings | null;
   geoblock_mode: GeoBlockMode;
   waf: WafHostConfig | null;
+  mtls: MtlsConfig | null;
 };
 
 export type ProxyHostInput = {
@@ -261,6 +268,7 @@ export type ProxyHostInput = {
   geoblock?: GeoBlockSettings | null;
   geoblock_mode?: GeoBlockMode;
   waf?: WafHostConfig | null;
+  mtls?: MtlsConfig | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -538,6 +546,10 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.waf = meta.waf;
   }
 
+  if (meta.mtls && meta.mtls.enabled) {
+    normalized.mtls = meta.mtls;
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
 }
 
@@ -557,6 +569,7 @@ function parseMeta(value: string | null): ProxyHostMeta {
       geoblock: parsed.geoblock,
       geoblock_mode: parsed.geoblock_mode,
       waf: parsed.waf,
+      mtls: parsed.mtls,
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -1023,6 +1036,14 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
+  if (input.mtls !== undefined) {
+    if (input.mtls && input.mtls.enabled) {
+      next.mtls = input.mtls;
+    } else {
+      delete next.mtls;
+    }
+  }
+
   return serializeMeta(next);
 }
 
@@ -1349,6 +1370,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     geoblock: hydrateGeoBlock(meta.geoblock),
     geoblock_mode: meta.geoblock_mode ?? "merge",
     waf: meta.waf ?? null,
+    mtls: meta.mtls ?? null,
   };
 }
 
@@ -1462,6 +1484,7 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     geoblock: dehydrateGeoBlock(existing.geoblock),
     ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {}),
     ...(existing.waf ? { waf: existing.waf } : {}),
+    ...(existing.mtls ? { mtls: existing.mtls } : {}),
   };
   const meta = buildMeta(existingMeta, input);
 

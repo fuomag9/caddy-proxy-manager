@@ -21,6 +21,8 @@ import { UpstreamDnsResolutionFields } from "./UpstreamDnsResolutionFields";
 import { UpstreamInput } from "./UpstreamInput";
 import { GeoBlockFields } from "./GeoBlockFields";
 import { WafFields } from "./WafFields";
+import { MtlsFields } from "./MtlsConfig";
+import type { CaCertificate } from "@/src/lib/models/ca-certificates";
 
 export function CreateHostDialog({
     open,
@@ -28,7 +30,8 @@ export function CreateHostDialog({
     certificates,
     accessLists,
     authentikDefaults,
-    initialData
+    initialData,
+    caCertificates = []
 }: {
     open: boolean;
     onClose: () => void;
@@ -36,6 +39,7 @@ export function CreateHostDialog({
     accessLists: AccessList[];
     authentikDefaults: AuthentikSettings | null;
     initialData?: ProxyHost | null;
+    caCertificates?: CaCertificate[];
 }) {
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
 
@@ -130,6 +134,7 @@ export function CreateHostDialog({
                 <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstream_dns_resolution} />
                 <GeoBlockFields />
                 <WafFields value={initialData?.waf} />
+                <MtlsFields value={initialData?.mtls} caCertificates={caCertificates} />
             </Stack>
         </AppDialog>
     );
@@ -140,13 +145,15 @@ export function EditHostDialog({
     host,
     onClose,
     certificates,
-    accessLists
+    accessLists,
+    caCertificates = []
 }: {
     open: boolean;
     host: ProxyHost;
     onClose: () => void;
     certificates: Certificate[];
     accessLists: AccessList[];
+    caCertificates?: CaCertificate[];
 }) {
     const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
 
@@ -234,6 +241,7 @@ export function EditHostDialog({
                   }}
                 />
                 <WafFields value={host.waf} />
+                <MtlsFields value={host.mtls} caCertificates={caCertificates} />
             </Stack>
         </AppDialog>
     );

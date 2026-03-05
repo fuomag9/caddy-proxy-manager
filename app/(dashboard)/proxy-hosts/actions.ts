@@ -13,7 +13,8 @@ import {
   type DnsResolverInput,
   type UpstreamDnsResolutionInput,
   type GeoBlockMode,
-  type WafHostConfig
+  type WafHostConfig,
+  type MtlsConfig
 } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
@@ -474,6 +475,14 @@ function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefine
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function parseMtlsConfig(formData: FormData): MtlsConfig | null {
+  if (!formData.has("mtls_present")) return null;
+  const enabled = formData.get("mtls_enabled") === "true";
+  if (!enabled) return null;
+  const ids = formData.getAll("mtls_ca_cert_id").map(Number).filter(n => Number.isFinite(n) && n > 0);
+  return { enabled, ca_certificate_ids: ids };
+}
+
 function parseUpstreamDnsResolutionConfig(formData: FormData): UpstreamDnsResolutionInput | undefined {
   if (!formData.has("upstream_dns_resolution_present")) {
     return undefined;
@@ -540,7 +549,8 @@ export async function createProxyHostAction(
         dns_resolver: parseDnsResolverConfig(formData),
         upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
         ...parseGeoBlockConfig(formData),
-        ...parseWafConfig(formData)
+        ...parseWafConfig(formData),
+        mtls: parseMtlsConfig(formData)
       },
       userId
     );
@@ -612,7 +622,8 @@ export async function updateProxyHostAction(
         dns_resolver: parseDnsResolverConfig(formData),
         upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
         ...parseGeoBlockConfig(formData),
-        ...parseWafConfig(formData)
+        ...parseWafConfig(formData),
+        mtls: formData.has("mtls_present") ? parseMtlsConfig(formData) : undefined
       },
       userId
     );

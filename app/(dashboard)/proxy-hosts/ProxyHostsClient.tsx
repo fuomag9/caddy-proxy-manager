@@ -9,6 +9,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import type { AccessList } from "@/src/lib/models/access-lists";
 import type { Certificate } from "@/src/lib/models/certificates";
 import type { ProxyHost } from "@/src/lib/models/proxy-hosts";
+import type { CaCertificate } from "@/src/lib/models/ca-certificates";
 import type { AuthentikSettings } from "@/src/lib/settings";
 import { toggleProxyHostAction } from "./actions";
 import { PageHeader } from "@/src/components/ui/PageHeader";
@@ -20,12 +21,13 @@ type Props = {
   hosts: ProxyHost[];
   certificates: Certificate[];
   accessLists: AccessList[];
+  caCertificates: CaCertificate[];
   authentikDefaults: AuthentikSettings | null;
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
 };
 
-export default function ProxyHostsClient({ hosts, certificates, accessLists, authentikDefaults, pagination, initialSearch }: Props) {
+export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
@@ -170,6 +172,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
         certificates={certificates}
         accessLists={accessLists}
         authentikDefaults={authentikDefaults}
+        caCertificates={caCertificates}
       />
 
       {editHost && (
@@ -179,6 +182,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, aut
           onClose={() => setEditHost(null)}
           certificates={certificates}
           accessLists={accessLists}
+          caCertificates={caCertificates}
         />
       )}
 

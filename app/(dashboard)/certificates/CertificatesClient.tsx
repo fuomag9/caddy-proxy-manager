@@ -12,22 +12,30 @@ import {
   CardContent,
   Chip,
   Divider,
+  IconButton,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { DataTable } from "@/src/components/ui/DataTable";
 import {
   createCertificateAction,
   deleteCertificateAction,
   updateCertificateAction,
 } from "./actions";
-import type { AcmeHost, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
+import type { AcmeHost, CaCertificate, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
+import { useState } from "react";
+import { CreateCaCertDialog, EditCaCertDialog, DeleteCaCertDialog } from "@/src/components/ca-certificates/CaCertDialogs";
 
 type Props = {
   acmeHosts: AcmeHost[];
   importedCerts: ImportedCertView[];
   managedCerts: ManagedCertView[];
+  caCertificates: CaCertificate[];
   acmePagination: { total: number; page: number; perPage: number };
 };
 
@@ -55,7 +63,10 @@ function ExpiryChip({
   return <Chip label={`Expires ${formatDate(validTo)}`} color="success" size="small" />;
 }
 
-export default function CertificatesClient({ acmeHosts, importedCerts, managedCerts, acmePagination }: Props) {
+export default function CertificatesClient({ acmeHosts, importedCerts, managedCerts, caCertificates, acmePagination }: Props) {
+  const [createCaOpen, setCreateCaOpen] = useState(false);
+  const [editCaCert, setEditCaCert] = useState<CaCertificate | null>(null);
+  const [deleteCaCert, setDeleteCaCert] = useState<CaCertificate | null>(null);
   const acmeColumns = [
     {
       id: 'name',
@@ -419,6 +430,96 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
             </Stack>
           </AccordionDetails>
         </Accordion>
+      )}
+
+      {/* Client CA Certificates */}
+      <Accordion defaultExpanded={caCertificates.length > 0} disableGutters>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Typography fontWeight={700}>Client CA Certificates</Typography>
+            <Chip label={caCertificates.length} size="small" />
+          </Stack>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Stack spacing={2}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">
+                CA certificates used for mTLS — clients must present a certificate signed by one of these CAs.
+              </Typography>
+              <Button
+                startIcon={<AddIcon />}
+                variant="outlined"
+                size="small"
+                onClick={() => setCreateCaOpen(true)}
+              >
+                Add CA Certificate
+              </Button>
+            </Stack>
+
+            {caCertificates.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No client CA certificates configured.
+              </Typography>
+            ) : (
+              <DataTable
+                columns={[
+                  {
+                    id: "name",
+                    label: "Name",
+                    render: (ca: CaCertificate) => <Typography fontWeight={600}>{ca.name}</Typography>,
+                  },
+                  {
+                    id: "created_at",
+                    label: "Added",
+                    render: (ca: CaCertificate) => (
+                      <Typography variant="body2" color="text.secondary">
+                        {new Date(ca.created_at).toLocaleDateString()}
+                      </Typography>
+                    ),
+                  },
+                  {
+                    id: "actions",
+                    label: "",
+                    render: (ca: CaCertificate) => (
+                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        <Tooltip title="Edit">
+                          <IconButton size="small" onClick={() => setEditCaCert(ca)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton size="small" color="error" onClick={() => setDeleteCaCert(ca)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    ),
+                  },
+                ]}
+                data={caCertificates}
+                keyField="id"
+                emptyMessage="No CA certificates found"
+              />
+            )}
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
+
+      {/* CA Cert Dialogs */}
+      <CreateCaCertDialog open={createCaOpen} onClose={() => setCreateCaOpen(false)} />
+      {editCaCert && (
+        <EditCaCertDialog
+          open={!!editCaCert}
+          cert={editCaCert}
+          onClose={() => setEditCaCert(null)}
+        />
+      )}
+      {deleteCaCert && (
+        <DeleteCaCertDialog
+          open={!!deleteCaCert}
+          cert={deleteCaCert}
+          onClose={() => setDeleteCaCert(null)}
+        />
       )}
     </Stack>
   );
