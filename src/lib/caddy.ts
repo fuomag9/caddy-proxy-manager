@@ -688,10 +688,12 @@ function writeCertificateFiles(cert: CertificateRow) {
   return { certificate_file: certPath, key_file: keyPath };
 }
 
-function writeCaCertFile(caCert: { id: number; certificatePem: string }): string {
-  const caPath = join(CERTS_DIR, `ca-certificate-${caCert.id}.pem`);
-  writeFileSync(caPath, caCert.certificatePem, { encoding: "utf-8", mode: 0o600 });
-  return caPath;
+function pemToBase64Der(pem: string): string {
+  // Strip PEM headers/footers and whitespace — what remains is the base64-encoded DER
+  return pem
+    .replace(/-----BEGIN CERTIFICATE-----/, "")
+    .replace(/-----END CERTIFICATE-----/, "")
+    .replace(/\s+/g, "");
 }
 
 function collectCertificateUsage(rows: ProxyHostRow[], certificates: Map<number, CertificateRow>) {
@@ -1333,16 +1335,16 @@ function buildClientAuthentication(
   }
   if (caCertIds.size === 0) return null;
 
-  const pemFiles: string[] = [];
+  const derCerts: string[] = [];
   for (const id of caCertIds) {
     const ca = caCertMap.get(id);
     if (!ca) continue;
-    pemFiles.push(writeCaCertFile(ca));
+    derCerts.push(pemToBase64Der(ca.certificatePem));
   }
-  if (pemFiles.length === 0) return null;
+  if (derCerts.length === 0) return null;
 
   return {
-    trusted_ca_certs_pem_files: pemFiles,
+    trusted_ca_certs: derCerts,
     mode: "require_and_verify"
   };
 }
@@ -1356,6 +1358,7 @@ function buildTlsConnectionPolicies(
 ) {
   const policies: Record<string, unknown>[] = [];
   const readyCertificates = new Set<number>();
+  const importedCertPems: { certificate: string; key: string }[] = [];
 
   // Add policy for auto-managed domains (certificate_id = null)
   if (autoManagedDomains.size > 0) {
@@ -1389,10 +1392,15 @@ function buildTlsConnectionPolicies(
     }
 
     if (entry.certificate.type === "imported") {
-      const files = writeCertificateFiles(entry.certificate);
-      if (!files) {
+      if (!entry.certificate.certificate_pem || !entry.certificate.private_key_pem) {
         continue;
       }
+
+      // Collect PEMs for tls.certificates.load_pem (inline, no shared filesystem needed)
+      importedCertPems.push({
+        certificate: entry.certificate.certificate_pem.trim(),
+        key: entry.certificate.private_key_pem.trim()
+      });
 
       const mTlsDomains = domains.filter(d => mTlsDomainMap.has(d));
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
@@ -1401,18 +1409,11 @@ function buildTlsConnectionPolicies(
         const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap);
         policies.push({
           match: { sni: mTlsDomains },
-          certificates: [files],
           ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
         });
       }
       if (nonMTlsDomains.length > 0) {
-        policies.push({
-          match: { sni: nonMTlsDomains },
-          certificates: [files]
-        });
-      }
-      if (mTlsDomains.length === 0 && nonMTlsDomains.length === 0) {
-        // all domains handled above
+        policies.push({ match: { sni: nonMTlsDomains } });
       }
 
       readyCertificates.add(id);
@@ -1444,7 +1445,8 @@ function buildTlsConnectionPolicies(
 
   return {
     policies,
-    readyCertificates
+    readyCertificates,
+    importedCertPems
   };
 }
 
@@ -1699,7 +1701,7 @@ async function buildCaddyDocument() {
     acmeEmail: generalSettings?.acmeEmail,
     dnsSettings
   });
-  const { policies: tlsConnectionPolicies, readyCertificates } = buildTlsConnectionPolicies(
+  const { policies: tlsConnectionPolicies, readyCertificates, importedCertPems } = buildTlsConnectionPolicies(
     certificateUsage,
     managedCertificateIds,
     autoManagedDomains,
@@ -1798,7 +1800,12 @@ async function buildCaddyDocument() {
     ...loggingApp,
     apps: {
       ...httpApp,
-      ...(tlsApp ? { tls: tlsApp } : {})
+      ...(tlsApp || importedCertPems.length > 0 ? {
+        tls: {
+          ...(tlsApp ?? {}),
+          ...(importedCertPems.length > 0 ? { certificates: { load_pem: importedCertPems } } : {})
+        }
+      } : {})
     }
   };
 }
