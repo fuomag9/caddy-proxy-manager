@@ -132,6 +132,7 @@ export const caCertificates = sqliteTable("ca_certificates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   certificatePem: text("certificate_pem").notNull(),
+  privateKeyPem: text("private_key_pem"),
   createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull()

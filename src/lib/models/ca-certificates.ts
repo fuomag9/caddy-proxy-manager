@@ -17,6 +17,7 @@ export type CaCertificate = {
   id: number;
   name: string;
   certificate_pem: string;
+  has_private_key: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -24,6 +25,7 @@ export type CaCertificate = {
 export type CaCertificateInput = {
   name: string;
   certificate_pem: string;
+  private_key_pem?: string;
 };
 
 type CaCertificateRow = typeof caCertificates.$inferSelect;
@@ -33,6 +35,7 @@ function parseCaCertificate(row: CaCertificateRow): CaCertificate {
     id: row.id,
     name: row.name,
     certificate_pem: row.certificatePem,
+    has_private_key: !!row.privateKeyPem,
     created_at: toIso(row.createdAt)!,
     updated_at: toIso(row.updatedAt)!
   };
@@ -41,6 +44,13 @@ function parseCaCertificate(row: CaCertificateRow): CaCertificate {
 export async function listCaCertificates(): Promise<CaCertificate[]> {
   const rows = await db.select().from(caCertificates).orderBy(desc(caCertificates.createdAt));
   return rows.map(parseCaCertificate);
+}
+
+export async function getCaCertificatePrivateKey(id: number): Promise<string | null> {
+  const cert = await db.query.caCertificates.findFirst({
+    where: (table, { eq }) => eq(table.id, id)
+  });
+  return cert?.privateKeyPem ?? null;
 }
 
 export async function getCaCertificate(id: number): Promise<CaCertificate | null> {
@@ -57,6 +67,7 @@ export async function createCaCertificate(input: CaCertificateInput, actorUserId
     .values({
       name: input.name.trim(),
       certificatePem: input.certificate_pem.trim(),
+      privateKeyPem: input.private_key_pem?.trim() ?? null,
       createdBy: actorUserId,
       createdAt: now,
       updatedAt: now
@@ -90,6 +101,7 @@ export async function updateCaCertificate(id: number, input: Partial<CaCertifica
     .set({
       name: input.name?.trim() ?? existing.name,
       certificatePem: input.certificate_pem?.trim() ?? existing.certificate_pem,
+      ...(input.private_key_pem !== undefined ? { privateKeyPem: input.private_key_pem?.trim() ?? null } : {}),
       updatedAt: now
     })
     .where(eq(caCertificates.id, id));

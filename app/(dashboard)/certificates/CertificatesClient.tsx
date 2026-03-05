@@ -29,7 +29,7 @@ import {
 } from "./actions";
 import type { AcmeHost, CaCertificate, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
 import { useState } from "react";
-import { CreateCaCertDialog, EditCaCertDialog, DeleteCaCertDialog } from "@/src/components/ca-certificates/CaCertDialogs";
+import { CreateCaCertDialog, EditCaCertDialog, DeleteCaCertDialog, IssueClientCertDialog } from "@/src/components/ca-certificates/CaCertDialogs";
 
 type Props = {
   acmeHosts: AcmeHost[];
@@ -67,6 +67,7 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
   const [createCaOpen, setCreateCaOpen] = useState(false);
   const [editCaCert, setEditCaCert] = useState<CaCertificate | null>(null);
   const [deleteCaCert, setDeleteCaCert] = useState<CaCertificate | null>(null);
+  const [issueCaCert, setIssueCaCert] = useState<CaCertificate | null>(null);
   const acmeColumns = [
     {
       id: 'name',
@@ -482,6 +483,13 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
                     label: "",
                     render: (ca: CaCertificate) => (
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        {ca.has_private_key && (
+                          <Tooltip title="Issue Client Certificate">
+                            <Button size="small" variant="outlined" onClick={() => setIssueCaCert(ca)}>
+                              Issue Cert
+                            </Button>
+                          </Tooltip>
+                        )}
                         <Tooltip title="Edit">
                           <IconButton size="small" onClick={() => setEditCaCert(ca)}>
                             <EditIcon fontSize="small" />
@@ -519,6 +527,13 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
           open={!!deleteCaCert}
           cert={deleteCaCert}
           onClose={() => setDeleteCaCert(null)}
+        />
+      )}
+      {issueCaCert && (
+        <IssueClientCertDialog
+          open={!!issueCaCert}
+          cert={issueCaCert}
+          onClose={() => setIssueCaCert(null)}
         />
       )}
     </Stack>
