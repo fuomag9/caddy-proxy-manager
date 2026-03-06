@@ -213,7 +213,7 @@ export async function saveGeoBlockSettings(settings: GeoBlockSettings): Promise<
 
 export type WafSettings = {
   enabled: boolean;
-  mode: 'Off' | 'DetectionOnly' | 'On';
+  mode: 'Off' | 'On';
   load_owasp_crs: boolean;
   custom_directives: string;
   excluded_rule_ids?: number[];

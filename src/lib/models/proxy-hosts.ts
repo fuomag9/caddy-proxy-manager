@@ -29,7 +29,7 @@ export type WafMode = "merge" | "override";
 
 export type WafHostConfig = {
   enabled?: boolean;
-  mode?: 'Off' | 'DetectionOnly' | 'On';
+  mode?: 'Off' | 'On';
   load_owasp_crs?: boolean;
   custom_directives?: string;
   excluded_rule_ids?: number[];

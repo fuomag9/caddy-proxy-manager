@@ -20,7 +20,7 @@ import { type WafHostConfig } from "@/src/lib/models/proxy-hosts";
 import { WafRuleExclusions } from "./WafRuleExclusions";
 
 type WafMode = "merge" | "override";
-type EngineMode = "Off" | "DetectionOnly" | "On" | "inherit";
+type EngineMode = "Off" | "On" | "inherit";
 
 const QUICK_TEMPLATES = [
   { label: "Allow IP", snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
@@ -154,7 +154,7 @@ export function WafFields({ value, showModeSelector = true }: Props) {
             Engine Mode
           </Typography>
           <Stack direction="row" spacing={1} mt={0.75}>
-            {(["inherit", "Off", "DetectionOnly", "On"] as EngineMode[]).map((v) => (
+            {(["inherit", "Off", "On"] as EngineMode[]).map((v) => (
               <Box
                 key={v}
                 onClick={() => setEngineMode(v)}
@@ -187,7 +187,7 @@ export function WafFields({ value, showModeSelector = true }: Props) {
                   color={engineMode === v ? "error.main" : "text.secondary"}
                   sx={{ transition: "all 0.15s ease", fontSize: "0.8rem" }}
                 >
-                  {v === "DetectionOnly" ? "Detect only" : v === "inherit" ? "Global default" : v}
+                  {v === "inherit" ? "Global default" : v}
                 </Typography>
               </Box>
             ))}

@@ -697,7 +697,7 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
     const enabled = formData.get("waf_enabled") === "on";
     const rawMode = formData.get("waf_mode");
     const mode: WafSettings["mode"] =
-      rawMode === "On" ? "On" : rawMode === "Off" ? "Off" : "DetectionOnly";
+      rawMode === "Off" ? "Off" : "On";
     const loadOwasp = formData.get("waf_load_owasp_crs") === "on";
     const customDirectives = typeof formData.get("waf_custom_directives") === "string"
       ? (formData.get("waf_custom_directives") as string).trim()

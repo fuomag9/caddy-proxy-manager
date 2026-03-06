@@ -798,7 +798,7 @@ function resolveEffectiveWaf(
     if (!hostEnabled) return null;
     return {
       enabled: true,
-      mode: host.mode ?? 'DetectionOnly',
+      mode: host.mode ?? 'On',
       load_owasp_crs: host.load_owasp_crs ?? false,
       custom_directives: host.custom_directives ?? '',
       excluded_rule_ids: host.excluded_rule_ids,
@@ -822,7 +822,7 @@ function resolveEffectiveWaf(
   if (host?.enabled) {
     return {
       enabled: true,
-      mode: host.mode ?? 'DetectionOnly',
+      mode: host.mode ?? 'On',
       load_owasp_crs: host.load_owasp_crs ?? false,
       custom_directives: host.custom_directives ?? '',
       excluded_rule_ids: host.excluded_rule_ids,
@@ -844,14 +844,8 @@ function buildWafHandler(waf: WafSettings): Record<string, unknown> {
       'Include @owasp_crs/*.conf',
     ] : []),
     ...(waf.excluded_rule_ids?.length ? [`SecRuleRemoveById ${waf.excluded_rule_ids.join(' ')}`] : []),
-    `SecRuleEngine ${waf.mode}`,
-    // In DetectionOnly mode, coraza-caddy has a bug where it still blocks requests if the anomaly
-    // score exceeds the threshold (is_interrupted becomes true). Work around this by setting the
-    // inbound/outbound anomaly score thresholds to an unreachable value so rule 949110/980130
-    // never fires and no request is ever interrupted in DetectionOnly mode.
-    ...(waf.mode === 'DetectionOnly' ? [
-      'SecAction "id:9998001,phase:1,nolog,pass,t:none,setvar:tx.inbound_anomaly_score_threshold=9999999,setvar:tx.outbound_anomaly_score_threshold=9999999"',
-    ] : []),
+    // DetectionOnly is no longer exposed in the UI; legacy DB values are coerced to On.
+    `SecRuleEngine ${waf.mode === 'DetectionOnly' ? 'On' : waf.mode}`,
     // RelevantOnly logs transactions where a rule fired with the auditlog action (which all OWASP
     // CRS rules include via SecDefaultAction), covering both blocked and DetectionOnly hits.
     // Clean requests with no rule matches are silently skipped, avoiding massive log growth.

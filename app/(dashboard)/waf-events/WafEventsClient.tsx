@@ -469,7 +469,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
             columns={columns}
             data={events}
             keyField="id"
-            emptyMessage="No WAF events found. Enable the WAF in Settings and send some traffic — blocked requests appear when the engine is On, detected-only events appear in Detection Only mode."
+            emptyMessage="No WAF events found. Enable the WAF in Settings and send some traffic to see events here."
             pagination={pagination}
             onRowClick={setSelected}
           />

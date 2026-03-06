@@ -393,7 +393,7 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
   const wafMode: WafHostConfig["waf_mode"] = rawMode === "override" ? "override" : "merge";
   const rawEngineMode = formData.get("waf_engine_mode");
   const engineMode: WafHostConfig["mode"] =
-    rawEngineMode === "On" ? "On" : rawEngineMode === "Off" ? "Off" : rawEngineMode === "DetectionOnly" ? "DetectionOnly" : undefined;
+    rawEngineMode === "On" ? "On" : rawEngineMode === "Off" ? "Off" : undefined;
   const loadCrs = parseCheckbox(formData.get("waf_load_owasp_crs"));
   const customDirectives = typeof formData.get("waf_custom_directives") === "string"
     ? (formData.get("waf_custom_directives") as string).trim()

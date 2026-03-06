@@ -811,9 +811,8 @@ export default function SettingsClient({
               <FormLabel sx={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 Engine Mode
               </FormLabel>
-              <RadioGroup row name="waf_mode" defaultValue={globalWaf?.mode ?? "DetectionOnly"}>
+              <RadioGroup row name="waf_mode" defaultValue={globalWaf?.mode === "Off" ? "Off" : "On"}>
                 <FormControlLabel value="Off" control={<Radio size="small" />} label="Off" />
-                <FormControlLabel value="DetectionOnly" control={<Radio size="small" />} label="Detection Only" />
                 <FormControlLabel value="On" control={<Radio size="small" />} label="On (Blocking)" />
               </RadioGroup>
             </FormControl>
@@ -874,8 +873,7 @@ export default function SettingsClient({
               </Collapse>
             </Box>
             <Alert severity="info" sx={{ fontSize: "0.8rem" }}>
-              WAF events (blocked requests) are stored for 90 days and viewable under <strong>WAF Events</strong> in the sidebar.
-              Events only appear when the engine is set to <em>On (Blocking)</em> — Detection Only mode matches rules without blocking and produces no events here.
+              WAF events are stored for 90 days and viewable under <strong>WAF Events</strong> in the sidebar.
             </Alert>
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
