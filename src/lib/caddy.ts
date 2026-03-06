@@ -1394,24 +1394,21 @@ function buildTlsConnectionPolicies(
   // Add policy for auto-managed domains (certificate_id = null)
   if (autoManagedDomains.size > 0) {
     const domains = Array.from(autoManagedDomains);
-    const clientAuth = buildAuth(domains);
+    // Split first so mTLS domains always get their own policy, regardless of auth result.
+    const mTlsDomains = domains.filter(d => mTlsDomainMap.has(d));
+    const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
-    if (clientAuth) {
-      // Split: mTLS domains get their own policy, non-mTLS get another
-      const mTlsDomains = domains.filter(d => mTlsDomainMap.has(d));
-      const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
-
-      if (mTlsDomains.length > 0) {
-        policies.push({
-          match: { sni: mTlsDomains },
-          client_authentication: buildAuth(mTlsDomains)
-        });
+    if (mTlsDomains.length > 0) {
+      const mTlsAuth = buildAuth(mTlsDomains);
+      if (mTlsAuth) {
+        policies.push({ match: { sni: mTlsDomains }, client_authentication: mTlsAuth });
+      } else {
+        // All CAs have all certs revoked — drop connections rather than allow through without mTLS
+        policies.push({ match: { sni: mTlsDomains }, drop: true });
       }
-      if (nonMTlsDomains.length > 0) {
-        policies.push({ match: { sni: nonMTlsDomains } });
-      }
-    } else {
-      policies.push({ match: { sni: domains } });
+    }
+    if (nonMTlsDomains.length > 0) {
+      policies.push({ match: { sni: nonMTlsDomains } });
     }
   }
 
@@ -1437,10 +1434,11 @@ function buildTlsConnectionPolicies(
 
       if (mTlsDomains.length > 0) {
         const mTlsAuth = buildAuth(mTlsDomains);
-        policies.push({
-          match: { sni: mTlsDomains },
-          ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
-        });
+        if (mTlsAuth) {
+          policies.push({ match: { sni: mTlsDomains }, client_authentication: mTlsAuth });
+        } else {
+          policies.push({ match: { sni: mTlsDomains }, drop: true });
+        }
       }
       if (nonMTlsDomains.length > 0) {
         policies.push({ match: { sni: nonMTlsDomains } });
@@ -1460,10 +1458,11 @@ function buildTlsConnectionPolicies(
 
       if (mTlsDomains.length > 0) {
         const mTlsAuth = buildAuth(mTlsDomains);
-        policies.push({
-          match: { sni: mTlsDomains },
-          ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
-        });
+        if (mTlsAuth) {
+          policies.push({ match: { sni: mTlsDomains }, client_authentication: mTlsAuth });
+        } else {
+          policies.push({ match: { sni: mTlsDomains }, drop: true });
+        }
       }
       if (nonMTlsDomains.length > 0) {
         policies.push({ match: { sni: nonMTlsDomains } });
