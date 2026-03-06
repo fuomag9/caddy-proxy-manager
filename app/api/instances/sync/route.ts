@@ -111,6 +111,37 @@ function isAccessList(value: unknown): value is SyncPayload["data"]["accessLists
   );
 }
 
+function isCaCertificate(value: unknown): value is SyncPayload["data"]["caCertificates"][number] {
+  if (!isRecord(value)) return false;
+  return (
+    isNumber(value.id) &&
+    isString(value.name) &&
+    isString(value.certificatePem) &&
+    isNullableString(value.privateKeyPem) &&
+    isNullableNumber(value.createdBy) &&
+    isString(value.createdAt) &&
+    isString(value.updatedAt)
+  );
+}
+
+function isIssuedClientCertificate(value: unknown): value is SyncPayload["data"]["issuedClientCertificates"][number] {
+  if (!isRecord(value)) return false;
+  return (
+    isNumber(value.id) &&
+    isNumber(value.caCertificateId) &&
+    isString(value.commonName) &&
+    isString(value.serialNumber) &&
+    isString(value.fingerprintSha256) &&
+    isString(value.certificatePem) &&
+    isString(value.validFrom) &&
+    isString(value.validTo) &&
+    isNullableString(value.revokedAt) &&
+    isNullableNumber(value.createdBy) &&
+    isString(value.createdAt) &&
+    isString(value.updatedAt)
+  );
+}
+
 function isAccessListEntry(value: unknown): value is SyncPayload["data"]["accessListEntries"][number] {
   if (!isRecord(value)) return false;
   return (
@@ -183,6 +214,8 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
 
   return (
     validateArray(d.certificates, isCertificate) &&
+    validateArray(d.caCertificates, isCaCertificate) &&
+    validateArray(d.issuedClientCertificates, isIssuedClientCertificate) &&
     validateArray(d.accessLists, isAccessList) &&
     validateArray(d.accessListEntries, isAccessListEntry) &&
     validateArray(d.proxyHosts, isProxyHost)
@@ -223,7 +256,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Sync payload too large" }, { status: 413 });
     }
     payload = JSON.parse(bodyText);
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 

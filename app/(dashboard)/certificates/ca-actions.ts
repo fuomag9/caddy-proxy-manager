@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { createCaCertificate, deleteCaCertificate, updateCaCertificate, getCaCertificatePrivateKey } from "@/src/lib/models/ca-certificates";
+import { createIssuedClientCertificate, revokeIssuedClientCertificate } from "@/src/lib/models/issued-client-certificates";
 import { X509Certificate } from "node:crypto";
 import forge from "node-forge";
 
@@ -101,7 +102,8 @@ export async function issueClientCertificateAction(
   caCertId: number,
   formData: FormData
 ): Promise<IssuedClientCert> {
-  await requireAdmin();
+  const session = await requireAdmin();
+  const userId = Number(session.user.id);
   const commonName = String(formData.get("common_name") ?? "").trim();
   const validityDays = Math.min(3650, Math.max(1, parseInt(String(formData.get("validity_days") ?? "365"), 10) || 365));
   const exportPassword = String(formData.get("export_password") ?? "");
@@ -137,6 +139,22 @@ export async function issueClientCertificateAction(
   ]);
 
   cert.sign(caKey, forge.md.sha256.create());
+  const certificatePem = forge.pki.certificateToPem(cert);
+  const certificate = new X509Certificate(certificatePem);
+
+  await createIssuedClientCertificate(
+    {
+      ca_certificate_id: caCertId,
+      common_name: commonName,
+      serial_number: cert.serialNumber.toUpperCase(),
+      fingerprint_sha256: certificate.fingerprint256,
+      certificate_pem: certificatePem,
+      valid_from: new Date(certificate.validFrom).toISOString(),
+      valid_to: new Date(certificate.validTo).toISOString()
+    },
+    userId
+  );
+  revalidatePath("/certificates");
 
   const pkcs12Asn1 = forge.pkcs12.toPkcs12Asn1(
     keypair.privateKey,
@@ -154,4 +172,12 @@ export async function issueClientCertificateAction(
     passwordProtected: true,
     exportAlgorithm,
   };
+}
+
+export async function revokeIssuedClientCertificateAction(id: number): Promise<{ revokedAt: string }> {
+  const session = await requireAdmin();
+  const userId = Number(session.user.id);
+  const record = await revokeIssuedClientCertificate(id, userId);
+  revalidatePath("/certificates");
+  return { revokedAt: record.revoked_at! };
 }

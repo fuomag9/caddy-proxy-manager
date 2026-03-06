@@ -27,15 +27,15 @@ import {
   deleteCertificateAction,
   updateCertificateAction,
 } from "./actions";
-import type { AcmeHost, CaCertificate, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
+import type { AcmeHost, CaCertificateView, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
 import { useState } from "react";
-import { CreateCaCertDialog, EditCaCertDialog, DeleteCaCertDialog, IssueClientCertDialog } from "@/src/components/ca-certificates/CaCertDialogs";
+import { CreateCaCertDialog, EditCaCertDialog, DeleteCaCertDialog, IssueClientCertDialog, ManageIssuedClientCertsDialog } from "@/src/components/ca-certificates/CaCertDialogs";
 
 type Props = {
   acmeHosts: AcmeHost[];
   importedCerts: ImportedCertView[];
   managedCerts: ManagedCertView[];
-  caCertificates: CaCertificate[];
+  caCertificates: CaCertificateView[];
   acmePagination: { total: number; page: number; perPage: number };
 };
 
@@ -65,9 +65,10 @@ function ExpiryChip({
 
 export default function CertificatesClient({ acmeHosts, importedCerts, managedCerts, caCertificates, acmePagination }: Props) {
   const [createCaOpen, setCreateCaOpen] = useState(false);
-  const [editCaCert, setEditCaCert] = useState<CaCertificate | null>(null);
-  const [deleteCaCert, setDeleteCaCert] = useState<CaCertificate | null>(null);
-  const [issueCaCert, setIssueCaCert] = useState<CaCertificate | null>(null);
+  const [editCaCert, setEditCaCert] = useState<CaCertificateView | null>(null);
+  const [deleteCaCert, setDeleteCaCert] = useState<CaCertificateView | null>(null);
+  const [issueCaCert, setIssueCaCert] = useState<CaCertificateView | null>(null);
+  const [manageIssuedCaCert, setManageIssuedCaCert] = useState<CaCertificateView | null>(null);
   const acmeColumns = [
     {
       id: 'name',
@@ -445,7 +446,8 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
           <Stack spacing={2}>
             <Stack direction="row" alignItems="center" justifyContent="space-between">
               <Typography variant="body2" color="text.secondary">
-                CA certificates used for mTLS — clients must present a certificate signed by one of these CAs.
+                CA certificates used for mTLS. New client certificates issued from this UI are tracked here and can be
+                revoked individually; previously issued certificates are not backfilled.
               </Typography>
               <Button
                 startIcon={<AddIcon />}
@@ -467,21 +469,43 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
                   {
                     id: "name",
                     label: "Name",
-                    render: (ca: CaCertificate) => <Typography fontWeight={600}>{ca.name}</Typography>,
+                    render: (ca: CaCertificateView) => <Typography fontWeight={600}>{ca.name}</Typography>,
                   },
                   {
                     id: "created_at",
                     label: "Added",
-                    render: (ca: CaCertificate) => (
+                    render: (ca: CaCertificateView) => (
                       <Typography variant="body2" color="text.secondary">
                         {new Date(ca.created_at).toLocaleDateString()}
                       </Typography>
                     ),
                   },
                   {
+                    id: "issued",
+                    label: "Issued Client Certs",
+                    render: (ca: CaCertificateView) => {
+                      const activeCount = ca.issuedCerts.filter((issued) => !issued.revoked_at).length;
+                      if (ca.issuedCerts.length === 0) {
+                        return (
+                          <Typography variant="body2" color="text.secondary">
+                            None
+                          </Typography>
+                        );
+                      }
+                      return (
+                        <Chip
+                          label={`${activeCount}/${ca.issuedCerts.length} active`}
+                          size="small"
+                          color={activeCount > 0 ? "success" : "default"}
+                          variant="outlined"
+                        />
+                      );
+                    },
+                  },
+                  {
                     id: "actions",
                     label: "",
-                    render: (ca: CaCertificate) => (
+                    render: (ca: CaCertificateView) => (
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                         {ca.has_private_key && (
                           <Tooltip title="Issue Client Certificate">
@@ -490,6 +514,14 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
                             </Button>
                           </Tooltip>
                         )}
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => setManageIssuedCaCert(ca)}
+                          disabled={ca.issuedCerts.length === 0}
+                        >
+                          Issued
+                        </Button>
                         <Tooltip title="Edit">
                           <IconButton size="small" onClick={() => setEditCaCert(ca)}>
                             <EditIcon fontSize="small" />
@@ -534,6 +566,14 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
           open={!!issueCaCert}
           cert={issueCaCert}
           onClose={() => setIssueCaCert(null)}
+        />
+      )}
+      {manageIssuedCaCert && (
+        <ManageIssuedClientCertsDialog
+          open={!!manageIssuedCaCert}
+          cert={manageIssuedCaCert}
+          issuedCerts={manageIssuedCaCert.issuedCerts}
+          onClose={() => setManageIssuedCaCert(null)}
         />
       )}
     </Stack>

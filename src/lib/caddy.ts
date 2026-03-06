@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { Resolver } from "node:dns/promises";
 import { join } from "node:path";
 import { isIP } from "node:net";
@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import db, { nowIso } from "./db";
+import { isNull } from "drizzle-orm";
 import { config } from "./config";
 import {
   getCloudflareSettings,
@@ -28,6 +29,7 @@ import {
   accessListEntries,
   certificates,
   caCertificates,
+  issuedClientCertificates,
   proxyHosts
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig } from "./models/proxy-hosts";
@@ -677,17 +679,6 @@ async function resolveUpstreamDials(
   };
 }
 
-function writeCertificateFiles(cert: CertificateRow) {
-  if (cert.type !== "imported" || !cert.certificate_pem || !cert.private_key_pem) {
-    return null;
-  }
-  const certPath = join(CERTS_DIR, `certificate-${cert.id}.pem`);
-  const keyPath = join(CERTS_DIR, `certificate-${cert.id}.key.pem`);
-  writeFileSync(certPath, cert.certificate_pem, { encoding: "utf-8", mode: 0o600 });
-  writeFileSync(keyPath, cert.private_key_pem, { encoding: "utf-8", mode: 0o600 });
-  return { certificate_file: certPath, key_file: keyPath };
-}
-
 function pemToBase64Der(pem: string): string {
   // Strip PEM headers/footers and whitespace — what remains is the base64-encoded DER
   return pem
@@ -1039,7 +1030,7 @@ async function buildProxyRoutes(
     let outpostRoute: CaddyHttpRoute | null = null;
     if (authentik) {
       // Parse the outpost upstream URL to extract host:port for Caddy's dial field
-      let outpostDial = authentik.outpostUpstream;
+      let outpostDial: string;
       try {
         const url = new URL(authentik.outpostUpstream);
         const port = url.port || (url.protocol === "https:" ? "443" : "80");
@@ -1113,7 +1104,7 @@ async function buildProxyRoutes(
       if (loadBalancing) {
         reverseProxyHandler.load_balancing = loadBalancing;
       }
-      const healthChecks = buildHealthChecksConfig(lbConfig, dnsConfig);
+      const healthChecks = buildHealthChecksConfig(lbConfig);
       if (healthChecks) {
         reverseProxyHandler.health_checks = healthChecks;
       }
@@ -1323,9 +1314,12 @@ async function buildProxyRoutes(
 function buildClientAuthentication(
   domains: string[],
   mTlsDomainMap: Map<string, number[]>,
-  caCertMap: Map<number, { id: number; certificatePem: string }>
+  caCertMap: Map<number, { id: number; certificatePem: string }>,
+  issuedClientCertMap: Map<number, string[]>
 ): Record<string, unknown> | null {
-  // Collect all CA cert IDs for any domain in this policy that has mTLS
+  // Collect all CA cert IDs for any domain in this policy that has mTLS.
+  // If a CA has managed issued client certs, trust only the active leaf certs
+  // for that CA so revocation can be enforced by removing them from the pool.
   const caCertIds = new Set<number>();
   for (const domain of domains) {
     const ids = mTlsDomainMap.get(domain.toLowerCase());
@@ -1337,6 +1331,14 @@ function buildClientAuthentication(
 
   const derCerts: string[] = [];
   for (const id of caCertIds) {
+    const issuedLeafCerts = issuedClientCertMap.get(id) ?? [];
+    if (issuedLeafCerts.length > 0) {
+      for (const certPem of issuedLeafCerts) {
+        derCerts.push(pemToBase64Der(certPem));
+      }
+      continue;
+    }
+
     const ca = caCertMap.get(id);
     if (!ca) continue;
     derCerts.push(pemToBase64Der(ca.certificatePem));
@@ -1354,7 +1356,8 @@ function buildTlsConnectionPolicies(
   managedCertificatesWithAutomation: Set<number>,
   autoManagedDomains: Set<string>,
   mTlsDomainMap: Map<string, number[]>,
-  caCertMap: Map<number, { id: number; certificatePem: string }>
+  caCertMap: Map<number, { id: number; certificatePem: string }>,
+  issuedClientCertMap: Map<number, string[]>
 ) {
   const policies: Record<string, unknown>[] = [];
   const readyCertificates = new Set<number>();
@@ -1363,7 +1366,7 @@ function buildTlsConnectionPolicies(
   // Add policy for auto-managed domains (certificate_id = null)
   if (autoManagedDomains.size > 0) {
     const domains = Array.from(autoManagedDomains);
-    const clientAuth = buildClientAuthentication(domains, mTlsDomainMap, caCertMap);
+    const clientAuth = buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap);
 
     if (clientAuth) {
       // Split: mTLS domains get their own policy, non-mTLS get another
@@ -1371,7 +1374,7 @@ function buildTlsConnectionPolicies(
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
       if (mTlsDomains.length > 0) {
-        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap);
+        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap, issuedClientCertMap);
         policies.push({
           match: { sni: mTlsDomains },
           client_authentication: mTlsAuth
@@ -1406,7 +1409,7 @@ function buildTlsConnectionPolicies(
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
       if (mTlsDomains.length > 0) {
-        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap);
+        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap, issuedClientCertMap);
         policies.push({
           match: { sni: mTlsDomains },
           ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
@@ -1429,7 +1432,7 @@ function buildTlsConnectionPolicies(
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
       if (mTlsDomains.length > 0) {
-        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap);
+        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap, issuedClientCertMap);
         policies.push({
           match: { sni: mTlsDomains },
           ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
@@ -1587,7 +1590,7 @@ async function buildTlsAutomation(
 }
 
 async function buildCaddyDocument() {
-  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows] = await Promise.all([
+  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -1630,7 +1633,14 @@ async function buildCaddyDocument() {
         id: caCertificates.id,
         certificatePem: caCertificates.certificatePem
       })
-      .from(caCertificates)
+      .from(caCertificates),
+    db
+      .select({
+        caCertificateId: issuedClientCertificates.caCertificateId,
+        certificatePem: issuedClientCertificates.certificatePem
+      })
+      .from(issuedClientCertificates)
+      .where(isNull(issuedClientCertificates.revokedAt))
   ]);
 
   const proxyHostRows: ProxyHostRow[] = proxyHostRecords.map((h) => ({
@@ -1669,6 +1679,12 @@ async function buildCaddyDocument() {
 
   const certificateMap = new Map(certRowsMapped.map((cert) => [cert.id, cert]));
   const caCertMap = new Map(caCertRows.map((ca) => [ca.id, ca]));
+  const issuedClientCertMap = issuedClientCertRows.reduce<Map<number, string[]>>((map, record) => {
+    const current = map.get(record.caCertificateId) ?? [];
+    current.push(record.certificatePem);
+    map.set(record.caCertificateId, current);
+    return map;
+  }, new Map());
   const accessMap = accessListEntryRows.reduce<Map<number, AccessListEntryRow[]>>((map, entry) => {
     if (!map.has(entry.access_list_id)) {
       map.set(entry.access_list_id, []);
@@ -1706,7 +1722,8 @@ async function buildCaddyDocument() {
     managedCertificateIds,
     autoManagedDomains,
     mTlsDomainMap,
-    caCertMap
+    caCertMap,
+    issuedClientCertMap
   );
 
   const httpRoutes: CaddyHttpRoute[] = await buildProxyRoutes(
@@ -1863,7 +1880,10 @@ export async function applyCaddyConfig() {
     const causeCode = err?.cause?.code;
 
     if (causeCode === "ENOTFOUND" || causeCode === "ECONNREFUSED") {
-      throw new Error(`Unable to reach Caddy API at ${config.caddyApiUrl}. Ensure Caddy is running and accessible.`);
+      throw new Error(
+        `Unable to reach Caddy API at ${config.caddyApiUrl}. Ensure Caddy is running and accessible.`,
+        { cause: error }
+      );
     }
 
     throw error;
@@ -2017,7 +2037,7 @@ type DnsResolverRouteConfig = {
   timeout: string | null;
 };
 
-function buildHealthChecksConfig(config: LoadBalancerRouteConfig, dnsConfig: DnsResolverRouteConfig | null): Record<string, unknown> | null {
+function buildHealthChecksConfig(config: LoadBalancerRouteConfig): Record<string, unknown> | null {
   const healthChecks: Record<string, unknown> = {};
 
   // Active health checks

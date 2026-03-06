@@ -6,8 +6,14 @@ import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
 import { scanAcmeCerts } from '@/src/lib/acme-certs';
 import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-certificates';
+import { listIssuedClientCertificates, type IssuedClientCertificate } from '@/src/lib/models/issued-client-certificates';
 
 export type { CaCertificate };
+export type { IssuedClientCertificate };
+
+export type CaCertificateView = CaCertificate & {
+  issuedCerts: IssuedClientCertificate[];
+};
 
 export type CertExpiryStatus = 'ok' | 'expiring_soon' | 'expired';
 
@@ -82,7 +88,10 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
   const offset = (page - 1) * PER_PAGE;
   const acmeCertMap = scanAcmeCerts();
 
-  const caCerts = await listCaCertificates();
+  const [caCerts, issuedClientCerts] = await Promise.all([
+    listCaCertificates(),
+    listIssuedClientCertificates()
+  ]);
 
   const [acmeRows, acmeTotal, certRows, usageRows] = await Promise.all([
     db
@@ -149,6 +158,16 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
 
   const importedCerts: ImportedCertView[] = [];
   const managedCerts: ManagedCertView[] = [];
+  const issuedByCa = issuedClientCerts.reduce<Map<number, IssuedClientCertificate[]>>((map, cert) => {
+    const current = map.get(cert.ca_certificate_id) ?? [];
+    current.push(cert);
+    map.set(cert.ca_certificate_id, current);
+    return map;
+  }, new Map());
+  const caCertificateViews: CaCertificateView[] = caCerts.map((cert) => ({
+    ...cert,
+    issuedCerts: issuedByCa.get(cert.id) ?? [],
+  }));
 
   for (const cert of certRows) {
     const domainNames = JSON.parse(cert.domainNames) as string[];
@@ -174,7 +193,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       acmeHosts={acmeHosts}
       importedCerts={importedCerts}
       managedCerts={managedCerts}
-      caCertificates={caCerts}
+      caCertificates={caCertificateViews}
       acmePagination={{ total: acmeTotal, page, perPage: PER_PAGE }}
     />
   );

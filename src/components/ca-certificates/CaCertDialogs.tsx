@@ -4,6 +4,9 @@ import {
   Alert,
   Box,
   Button,
+  Card,
+  CardContent,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -19,13 +22,16 @@ import {
   Typography,
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
-import { useTransition, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { CaCertificate } from "@/src/lib/models/ca-certificates";
+import type { IssuedClientCertificate } from "@/src/lib/models/issued-client-certificates";
 import {
   createCaCertificateAction,
   deleteCaCertificateAction,
   generateCaCertificateAction,
   issueClientCertificateAction,
+  revokeIssuedClientCertificateAction,
   updateCaCertificateAction,
 } from "@/app/(dashboard)/certificates/ca-actions";
 
@@ -51,6 +57,14 @@ function decodeBase64(base64: string): ArrayBuffer {
 
 function sanitizeFilenameSegment(value: string): string {
   return value.trim().replace(/[^a-z0-9._-]+/gi, "_").replace(/^_+|_+$/g, "") || "client";
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
+function formatFingerprint(value: string): string {
+  return value.match(/.{1,2}/g)?.join(":") ?? value;
 }
 
 export function CreateCaCertDialog({
@@ -240,6 +254,7 @@ export function IssueClientCertDialog({
   cert: CaCertificate;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [issued, setIssued] = useState<{
     pkcs12Base64: string;
@@ -267,6 +282,7 @@ export function IssueClientCertDialog({
           ...result,
           name: sanitizeFilenameSegment(String(formData.get("common_name") ?? "client")),
         });
+        router.refresh();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to issue certificate");
       }
@@ -356,6 +372,133 @@ export function IssueClientCertDialog({
           <Button variant="contained" onClick={handleClose}>Done</Button>
         </DialogActions>
       )}
+    </Dialog>
+  );
+}
+
+export function ManageIssuedClientCertsDialog({
+  open,
+  cert,
+  issuedCerts,
+  onClose,
+}: {
+  open: boolean;
+  cert: CaCertificate;
+  issuedCerts: IssuedClientCertificate[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [items, setItems] = useState<IssuedClientCertificate[]>(issuedCerts);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    setItems(issuedCerts);
+    setError(null);
+  }, [issuedCerts, open]);
+
+  function handleRevoke(id: number) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await revokeIssuedClientCertificateAction(id);
+        setItems((current) =>
+          current.map((item) =>
+            item.id === id ? { ...item, revoked_at: result.revokedAt, updated_at: result.revokedAt } : item
+          )
+        );
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to revoke certificate");
+      }
+    });
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle>Issued Client Certificates</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} mt={1}>
+          <Alert severity="info">
+            Revoking a client certificate removes it from the trusted mTLS client certificate pool for hosts using{" "}
+            <strong>{cert.name}</strong>.
+          </Alert>
+          {error && <Typography color="error" variant="body2">{error}</Typography>}
+          {items.length === 0 ? (
+            <Typography color="text.secondary" variant="body2">
+              No issued client certificates are currently tracked for this CA. Certificates issued from this UI will
+              appear here and can then be revoked individually.
+            </Typography>
+          ) : (
+            items.map((item) => {
+              const expired = new Date(item.valid_to).getTime() < Date.now();
+              return (
+                <Card key={item.id} variant="outlined">
+                  <CardContent>
+                    <Stack spacing={1.5}>
+                      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
+                        <Box>
+                          <Typography variant="h6" fontWeight={600}>
+                            {item.common_name}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Serial {item.serial_number}
+                          </Typography>
+                        </Box>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" justifyContent="flex-end">
+                          <Chip
+                            label={item.revoked_at ? "Revoked" : "Active"}
+                            color={item.revoked_at ? "default" : "success"}
+                            size="small"
+                          />
+                          <Chip
+                            label={expired ? `Expired ${formatDateTime(item.valid_to)}` : `Expires ${formatDateTime(item.valid_to)}`}
+                            color={expired ? "error" : "default"}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Stack>
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary">
+                        Issued {formatDateTime(item.created_at)}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
+                      >
+                        SHA-256 {formatFingerprint(item.fingerprint_sha256)}
+                      </Typography>
+                      {item.revoked_at ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Revoked {formatDateTime(item.revoked_at)}
+                        </Typography>
+                      ) : (
+                        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            disabled={isPending}
+                            onClick={() => handleRevoke(item.id)}
+                          >
+                            {isPending ? "Revoking..." : "Revoke"}
+                          </Button>
+                        </Box>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={isPending}>Close</Button>
+      </DialogActions>
     </Dialog>
   );
 }

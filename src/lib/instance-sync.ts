@@ -1,5 +1,5 @@
 import db, { nowIso } from "./db";
-import { accessListEntries, accessLists, caCertificates, certificates, proxyHosts } from "./db/schema";
+import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, proxyHosts } from "./db/schema";
 import { getSetting, setSetting } from "./settings";
 import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
@@ -24,6 +24,7 @@ export type SyncPayload = {
   data: {
     certificates: Array<typeof certificates.$inferSelect>;
     caCertificates: Array<typeof caCertificates.$inferSelect>;
+    issuedClientCertificates: Array<typeof issuedClientCertificates.$inferSelect>;
     accessLists: Array<typeof accessLists.$inferSelect>;
     accessListEntries: Array<typeof accessListEntries.$inferSelect>;
     proxyHosts: Array<typeof proxyHosts.$inferSelect>;
@@ -232,9 +233,10 @@ export async function clearSyncedSetting(key: string): Promise<void> {
 }
 
 export async function buildSyncPayload(): Promise<SyncPayload> {
-  const [certRows, caCertRows, accessListRows, accessEntryRows, proxyRows] = await Promise.all([
+  const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows] = await Promise.all([
     db.select().from(certificates),
     db.select().from(caCertificates),
+    db.select().from(issuedClientCertificates),
     db.select().from(accessLists),
     db.select().from(accessListEntries),
     db.select().from(proxyHosts)
@@ -267,6 +269,11 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     createdBy: null
   }));
 
+  const sanitizedIssuedClientCertificates = issuedClientCertRows.map((row) => ({
+    ...row,
+    createdBy: null
+  }));
+
   const sanitizedProxyHosts = proxyRows.map((row) => ({
     ...row,
     ownerUserId: null
@@ -278,6 +285,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     data: {
       certificates: sanitizedCertificates,
       caCertificates: sanitizedCaCertificates,
+      issuedClientCertificates: sanitizedIssuedClientCertificates,
       accessLists: sanitizedAccessLists,
       accessListEntries: accessEntryRows,
       proxyHosts: sanitizedProxyHosts
@@ -305,7 +313,6 @@ export async function syncInstances(): Promise<{ total: number; success: number;
 
   const httpAllowed = isHttpSyncAllowed();
   const payload = await buildSyncPayload();
-  let skippedHttp = 0;
 
   // Sync database-configured instances
   const dbResults = await Promise.all(
@@ -396,7 +403,7 @@ export async function syncInstances(): Promise<{ total: number; success: number;
 
   const allResults = [...dbResults, ...envResults];
   const success = allResults.filter((r) => r.ok).length;
-  skippedHttp = allResults.filter((r) => r.skippedHttp).length;
+  const skippedHttp = allResults.filter((r) => r.skippedHttp).length;
   const failed = allResults.length - success - skippedHttp;
 
   return { total: allResults.length, success, failed, skippedHttp };
@@ -418,6 +425,7 @@ export async function applySyncPayload(payload: SyncPayload) {
     tx.delete(proxyHosts).run();
     tx.delete(accessListEntries).run();
     tx.delete(accessLists).run();
+    tx.delete(issuedClientCertificates).run();
     tx.delete(certificates).run();
     tx.delete(caCertificates).run();
 
@@ -426,6 +434,9 @@ export async function applySyncPayload(payload: SyncPayload) {
     }
     if (payload.data.caCertificates && payload.data.caCertificates.length > 0) {
       tx.insert(caCertificates).values(payload.data.caCertificates).run();
+    }
+    if (payload.data.issuedClientCertificates && payload.data.issuedClientCertificates.length > 0) {
+      tx.insert(issuedClientCertificates).values(payload.data.issuedClientCertificates).run();
     }
     if (payload.data.accessLists.length > 0) {
       tx.insert(accessLists).values(payload.data.accessLists).run();

@@ -138,6 +138,30 @@ export const caCertificates = sqliteTable("ca_certificates", {
   updatedAt: text("updated_at").notNull()
 });
 
+export const issuedClientCertificates = sqliteTable(
+  "issued_client_certificates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    caCertificateId: integer("ca_certificate_id")
+      .references(() => caCertificates.id, { onDelete: "cascade" })
+      .notNull(),
+    commonName: text("common_name").notNull(),
+    serialNumber: text("serial_number").notNull(),
+    fingerprintSha256: text("fingerprint_sha256").notNull(),
+    certificatePem: text("certificate_pem").notNull(),
+    validFrom: text("valid_from").notNull(),
+    validTo: text("valid_to").notNull(),
+    revokedAt: text("revoked_at"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull()
+  },
+  (table) => ({
+    caCertificateIdx: index("issued_client_certificates_ca_idx").on(table.caCertificateId),
+    revokedAtIdx: index("issued_client_certificates_revoked_at_idx").on(table.revokedAt)
+  })
+);
+
 export const proxyHosts = sqliteTable("proxy_hosts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
