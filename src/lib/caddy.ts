@@ -852,9 +852,10 @@ function buildWafHandler(waf: WafSettings): Record<string, unknown> {
     ...(waf.mode === 'DetectionOnly' ? [
       'SecAction "id:9998001,phase:1,nolog,pass,t:none,setvar:tx.inbound_anomaly_score_threshold=9999999,setvar:tx.outbound_anomaly_score_threshold=9999999"',
     ] : []),
-    // Log all transactions so DetectionOnly hits are captured and shown in WAF Events.
-    // Body parts are excluded (see SecAuditLogParts below) so large uploads don't bloat the log.
-    'SecAuditEngine On',
+    // RelevantOnly logs transactions where a rule fired with the auditlog action (which all OWASP
+    // CRS rules include via SecDefaultAction), covering both blocked and DetectionOnly hits.
+    // Clean requests with no rule matches are silently skipped, avoiding massive log growth.
+    'SecAuditEngine RelevantOnly',
     'SecAuditLog /logs/waf-audit.log',
     'SecAuditLogFormat JSON',
     // Omit request/response bodies (parts I, J, E) and intermediate response headers (D)
