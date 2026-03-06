@@ -844,8 +844,7 @@ function buildWafHandler(waf: WafSettings): Record<string, unknown> {
       'Include @owasp_crs/*.conf',
     ] : []),
     ...(waf.excluded_rule_ids?.length ? [`SecRuleRemoveById ${waf.excluded_rule_ids.join(' ')}`] : []),
-    // DetectionOnly is no longer exposed in the UI; legacy DB values are coerced to On.
-    `SecRuleEngine ${waf.mode === 'DetectionOnly' ? 'On' : waf.mode}`,
+    `SecRuleEngine ${waf.mode}`,
     // RelevantOnly logs transactions where a rule fired with the auditlog action (which all OWASP
     // CRS rules include via SecDefaultAction), covering both blocked and DetectionOnly hits.
     // Clean requests with no rule matches are silently skipped, avoiding massive log growth.
