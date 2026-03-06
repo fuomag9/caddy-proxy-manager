@@ -46,11 +46,16 @@ export async function updateCaCertificateAction(id: number, formData: FormData) 
   revalidatePath("/certificates");
 }
 
-export async function deleteCaCertificateAction(id: number) {
+export async function deleteCaCertificateAction(id: number): Promise<{ success: boolean; error?: string }> {
   const session = await requireAdmin();
   const userId = Number(session.user.id);
-  await deleteCaCertificate(id, userId);
-  revalidatePath("/certificates");
+  try {
+    await deleteCaCertificate(id, userId);
+    revalidatePath("/certificates");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Failed to delete CA certificate" };
+  }
 }
 
 export async function generateCaCertificateAction(formData: FormData): Promise<{ id: number }> {

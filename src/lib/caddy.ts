@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import db, { nowIso } from "./db";
-import { isNull } from "drizzle-orm";
+import { isNull, isNotNull } from "drizzle-orm";
 import { config } from "./config";
 import {
   getCloudflareSettings,
@@ -1320,11 +1320,10 @@ function buildClientAuthentication(
   domains: string[],
   mTlsDomainMap: Map<string, number[]>,
   caCertMap: Map<number, { id: number; certificatePem: string }>,
-  issuedClientCertMap: Map<number, string[]>
+  issuedClientCertMap: Map<number, string[]>,
+  cAsWithAnyIssuedCerts: Set<number>
 ): Record<string, unknown> | null {
   // Collect all CA cert IDs for any domain in this policy that has mTLS.
-  // If a CA has managed issued client certs, trust only the active leaf certs
-  // for that CA so revocation can be enforced by removing them from the pool.
   const caCertIds = new Set<number>();
   for (const domain of domains) {
     const ids = mTlsDomainMap.get(domain.toLowerCase());
@@ -1334,26 +1333,35 @@ function buildClientAuthentication(
   }
   if (caCertIds.size === 0) return null;
 
-  const derCerts: string[] = [];
+  // For CAs that have never issued tracked certs: trust any cert signed by that CA.
+  // For CAs that have issued tracked certs: pin to only the active (non-revoked) leaf
+  // certs so revocation is enforced. trusted_leaf_certs bypasses chain validation and
+  // accepts only those exact certificates — do NOT also put the CA in trusted_ca_certs
+  // or that would allow any cert signed by it (defeating revocation).
+  const trustedCaCerts: string[] = [];
+  const trustedLeafCerts: string[] = [];
+
   for (const id of caCertIds) {
-    const issuedLeafCerts = issuedClientCertMap.get(id) ?? [];
-    if (issuedLeafCerts.length > 0) {
-      for (const certPem of issuedLeafCerts) {
-        derCerts.push(pemToBase64Der(certPem));
+    if (cAsWithAnyIssuedCerts.has(id)) {
+      // Managed CA: only trust active leaf certs (revoked ones are absent from the map)
+      const activeLeafCerts = issuedClientCertMap.get(id) ?? [];
+      for (const certPem of activeLeafCerts) {
+        trustedLeafCerts.push(pemToBase64Der(certPem));
       }
-      continue;
+    } else {
+      // Unmanaged CA: trust any cert in the chain
+      const ca = caCertMap.get(id);
+      if (!ca) continue;
+      trustedCaCerts.push(pemToBase64Der(ca.certificatePem));
     }
-
-    const ca = caCertMap.get(id);
-    if (!ca) continue;
-    derCerts.push(pemToBase64Der(ca.certificatePem));
   }
-  if (derCerts.length === 0) return null;
 
-  return {
-    trusted_ca_certs: derCerts,
-    mode: "require_and_verify"
-  };
+  if (trustedCaCerts.length === 0 && trustedLeafCerts.length === 0) return null;
+
+  const result: Record<string, unknown> = { mode: "require_and_verify" };
+  if (trustedCaCerts.length > 0) result.trusted_ca_certs = trustedCaCerts;
+  if (trustedLeafCerts.length > 0) result.trusted_leaf_certs = trustedLeafCerts;
+  return result;
 }
 
 function buildTlsConnectionPolicies(
@@ -1362,16 +1370,20 @@ function buildTlsConnectionPolicies(
   autoManagedDomains: Set<string>,
   mTlsDomainMap: Map<string, number[]>,
   caCertMap: Map<number, { id: number; certificatePem: string }>,
-  issuedClientCertMap: Map<number, string[]>
+  issuedClientCertMap: Map<number, string[]>,
+  cAsWithAnyIssuedCerts: Set<number>
 ) {
   const policies: Record<string, unknown>[] = [];
   const readyCertificates = new Set<number>();
   const importedCertPems: { certificate: string; key: string }[] = [];
 
+  const buildAuth = (domains: string[]) =>
+    buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap, cAsWithAnyIssuedCerts);
+
   // Add policy for auto-managed domains (certificate_id = null)
   if (autoManagedDomains.size > 0) {
     const domains = Array.from(autoManagedDomains);
-    const clientAuth = buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap);
+    const clientAuth = buildAuth(domains);
 
     if (clientAuth) {
       // Split: mTLS domains get their own policy, non-mTLS get another
@@ -1379,10 +1391,9 @@ function buildTlsConnectionPolicies(
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
       if (mTlsDomains.length > 0) {
-        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap, issuedClientCertMap);
         policies.push({
           match: { sni: mTlsDomains },
-          client_authentication: mTlsAuth
+          client_authentication: buildAuth(mTlsDomains)
         });
       }
       if (nonMTlsDomains.length > 0) {
@@ -1414,7 +1425,7 @@ function buildTlsConnectionPolicies(
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
       if (mTlsDomains.length > 0) {
-        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap, issuedClientCertMap);
+        const mTlsAuth = buildAuth(mTlsDomains);
         policies.push({
           match: { sni: mTlsDomains },
           ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
@@ -1437,7 +1448,7 @@ function buildTlsConnectionPolicies(
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
       if (mTlsDomains.length > 0) {
-        const mTlsAuth = buildClientAuthentication(mTlsDomains, mTlsDomainMap, caCertMap, issuedClientCertMap);
+        const mTlsAuth = buildAuth(mTlsDomains);
         policies.push({
           match: { sni: mTlsDomains },
           ...(mTlsAuth ? { client_authentication: mTlsAuth } : {})
@@ -1595,7 +1606,7 @@ async function buildTlsAutomation(
 }
 
 async function buildCaddyDocument() {
-  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows] = await Promise.all([
+  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows, allIssuedCaCertIds] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -1645,7 +1656,13 @@ async function buildCaddyDocument() {
         certificatePem: issuedClientCertificates.certificatePem
       })
       .from(issuedClientCertificates)
-      .where(isNull(issuedClientCertificates.revokedAt))
+      .where(isNull(issuedClientCertificates.revokedAt)),
+    // Distinct CA IDs that have ever had a tracked issued cert (including revoked).
+    // Used to distinguish "managed" CAs (pin to leaf certs) from "unmanaged" CAs
+    // (trust any cert signed by that CA).
+    db
+      .selectDistinct({ caCertificateId: issuedClientCertificates.caCertificateId })
+      .from(issuedClientCertificates)
   ]);
 
   const proxyHostRows: ProxyHostRow[] = proxyHostRecords.map((h) => ({
@@ -1690,6 +1707,7 @@ async function buildCaddyDocument() {
     map.set(record.caCertificateId, current);
     return map;
   }, new Map());
+  const cAsWithAnyIssuedCerts = new Set(allIssuedCaCertIds.map(r => r.caCertificateId));
   const accessMap = accessListEntryRows.reduce<Map<number, AccessListEntryRow[]>>((map, entry) => {
     if (!map.has(entry.access_list_id)) {
       map.set(entry.access_list_id, []);
@@ -1728,7 +1746,8 @@ async function buildCaddyDocument() {
     autoManagedDomains,
     mTlsDomainMap,
     caCertMap,
-    issuedClientCertMap
+    issuedClientCertMap,
+    cAsWithAnyIssuedCerts
   );
 
   const httpRoutes: CaddyHttpRoute[] = await buildProxyRoutes(

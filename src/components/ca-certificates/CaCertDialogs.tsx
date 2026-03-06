@@ -518,11 +518,11 @@ export function DeleteCaCertDialog({
   function handleDelete() {
     setError(null);
     startTransition(async () => {
-      try {
-        await deleteCaCertificateAction(cert.id);
+      const result = await deleteCaCertificateAction(cert.id);
+      if (result.success) {
         onClose();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to delete");
+      } else {
+        setError(result.error ?? "Failed to delete");
       }
     });
   }
