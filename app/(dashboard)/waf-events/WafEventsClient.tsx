@@ -57,6 +57,12 @@ function SeverityChip({ severity }: { severity: string | null }) {
   return <Chip label={upper} size="small" color={color} variant="outlined" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />;
 }
 
+function BlockedChip({ blocked }: { blocked: boolean }) {
+  return blocked
+    ? <Chip label="Blocked" size="small" color="error" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />
+    : <Chip label="Detected" size="small" color="warning" variant="outlined" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />;
+}
+
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <Box>
@@ -120,6 +126,7 @@ function WafEventDrawer({
           <Stack spacing={2.5} sx={{ height: "100%", overflow: "auto" }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between">
               <Stack direction="row" alignItems="center" spacing={1}>
+                <BlockedChip blocked={event.blocked} />
                 <SeverityChip severity={event.severity} />
                 <Typography variant="h6" fontWeight={600}>WAF Event</Typography>
               </Stack>
@@ -368,6 +375,10 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
       ),
     },
     {
+      id: "blocked", label: "Action", width: 90,
+      render: (r: WafEvent) => <BlockedChip blocked={r.blocked} />,
+    },
+    {
       id: "severity", label: "Severity", width: 100,
       render: (r: WafEvent) => <SeverityChip severity={r.severity} />,
     },
@@ -458,7 +469,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
             columns={columns}
             data={events}
             keyField="id"
-            emptyMessage="No WAF events found. Enable the WAF in Settings and send some traffic to see events here."
+            emptyMessage="No WAF events found. Enable the WAF in Settings and send some traffic — blocked requests appear when the engine is On, detected-only events appear in Detection Only mode."
             pagination={pagination}
             onRowClick={setSelected}
           />

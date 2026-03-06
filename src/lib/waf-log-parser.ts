@@ -144,11 +144,6 @@ function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEven
   const clientIp = tx.client_ip ?? '';
   if (!clientIp) return null;
 
-  // Only store events where the WAF actually interrupted (blocked/detected) the request.
-  // Coraza does not write matched rules to the audit log messages array (known bug),
-  // so we use is_interrupted as the primary filter.
-  if (!tx.is_interrupted) return null;
-
   const req = tx.request ?? {};
 
   // unix_timestamp is nanoseconds; fall back to parsing timestamp string
@@ -168,6 +163,12 @@ function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEven
   // Look up rule info from the WAF rules log via the transaction unique_id
   const ruleInfo = tx.id ? ruleMap.get(tx.id) : undefined;
 
+  const blocked = tx.is_interrupted ?? false;
+
+  // Only store events where a specific rule matched or the request was blocked.
+  // Audit log entries without any rule match are clean requests and can be discarded.
+  if (!blocked && !ruleInfo) return null;
+
   return {
     ts,
     host,
@@ -179,6 +180,7 @@ function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEven
     ruleMessage: ruleInfo?.ruleMessage ?? null,
     severity: ruleInfo?.severity ?? null,
     rawData: line,
+    blocked,
   };
 }
 

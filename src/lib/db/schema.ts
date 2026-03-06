@@ -261,6 +261,7 @@ export const wafEvents = sqliteTable(
     ruleMessage: text('rule_message'),
     severity: text('severity'),
     rawData: text('raw_data'),
+    blocked: integer('blocked', { mode: 'boolean' }).notNull().default(true),
   },
   (table) => ({
     tsIdx: index('idx_waf_events_ts').on(table.ts),

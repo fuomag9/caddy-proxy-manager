@@ -874,8 +874,8 @@ export default function SettingsClient({
               </Collapse>
             </Box>
             <Alert severity="info" sx={{ fontSize: "0.8rem" }}>
-              WAF audit events are stored for 90 days and viewable under <strong>WAF Events</strong> in the sidebar.
-              Set mode to <em>Detection Only</em> first to observe traffic before enabling blocking.
+              WAF events (blocked requests) are stored for 90 days and viewable under <strong>WAF Events</strong> in the sidebar.
+              Events only appear when the engine is set to <em>On (Blocking)</em> — Detection Only mode matches rules without blocking and produces no events here.
             </Alert>
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">

@@ -14,6 +14,7 @@ export type WafEvent = {
   ruleMessage: string | null;
   severity: string | null;
   rawData: string | null;
+  blocked: boolean;
 };
 
 function buildSearch(search?: string) {
@@ -135,5 +136,6 @@ export async function listWafEvents(limit = 50, offset = 0, search?: string): Pr
     ruleMessage: r.ruleMessage ?? null,
     severity: r.severity ?? null,
     rawData: r.rawData ?? null,
+    blocked: r.blocked ?? true,
   }));
 }

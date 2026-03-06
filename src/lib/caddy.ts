@@ -845,10 +845,21 @@ function buildWafHandler(waf: WafSettings): Record<string, unknown> {
     ] : []),
     ...(waf.excluded_rule_ids?.length ? [`SecRuleRemoveById ${waf.excluded_rule_ids.join(' ')}`] : []),
     `SecRuleEngine ${waf.mode}`,
+    // In DetectionOnly mode, coraza-caddy has a bug where it still blocks requests if the anomaly
+    // score exceeds the threshold (is_interrupted becomes true). Work around this by setting the
+    // inbound/outbound anomaly score thresholds to an unreachable value so rule 949110/980130
+    // never fires and no request is ever interrupted in DetectionOnly mode.
+    ...(waf.mode === 'DetectionOnly' ? [
+      'SecAction "id:9998001,phase:1,nolog,pass,t:none,setvar:tx.inbound_anomaly_score_threshold=9999999,setvar:tx.outbound_anomaly_score_threshold=9999999"',
+    ] : []),
+    // Log all transactions so DetectionOnly hits are captured and shown in WAF Events.
+    // Body parts are excluded (see SecAuditLogParts below) so large uploads don't bloat the log.
     'SecAuditEngine On',
     'SecAuditLog /logs/waf-audit.log',
     'SecAuditLogFormat JSON',
-    'SecAuditLogParts ABIJDEFHZ',
+    // Omit request/response bodies (parts I, J, E) and intermediate response headers (D)
+    // to prevent logging multi-MB payloads. Headers (B, F) and rule match trailer (H) are kept.
+    'SecAuditLogParts ABFHZ',
     'SecResponseBodyAccess Off',
   ];
 
