@@ -587,6 +587,9 @@ function normalizeAuthentikInput(
   if (input === null) {
     return undefined;
   }
+  if (input.enabled === false) {
+    return undefined;
+  }
 
   const next: ProxyHostAuthentikMeta = { ...(existing ?? {}) };
 

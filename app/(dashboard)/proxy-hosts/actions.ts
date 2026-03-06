@@ -129,7 +129,7 @@ async function validateAndSanitizeCertificateId(
   return { certificateId };
 }
 
-function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | undefined {
+function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | null | undefined {
   if (!formData.has("authentik_present")) {
     return undefined;
   }
@@ -140,6 +140,11 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
       ? parseCheckbox(formData.get("authentik_enabled"))
       : false
     : undefined;
+
+  if (enabledIndicator && enabledValue === false) {
+    return null;
+  }
+
   const outpostDomain = parseOptionalText(formData.get("authentik_outpost_domain"));
   const outpostUpstream = parseOptionalText(formData.get("authentik_outpost_upstream"));
   const authEndpoint = parseOptionalText(formData.get("authentik_auth_endpoint"));
