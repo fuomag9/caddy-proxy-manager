@@ -1,17 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useFormState } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
+  Collapse,
   Divider,
   Drawer,
+  FormControlLabel,
   IconButton,
   Snackbar,
   Stack,
+  Switch,
   Tab,
   Tabs,
   TextField,
@@ -23,13 +28,17 @@ import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import BlockIcon from "@mui/icons-material/Block";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataTable } from "@/src/components/ui/DataTable";
 import type { WafEvent } from "@/src/lib/models/waf-events";
+import type { WafSettings } from "@/src/lib/settings";
 import {
   suppressWafRuleGloballyAction,
   suppressWafRuleForHostAction,
   removeWafRuleGloballyAction,
   lookupWafRuleMessageAction,
+  updateWafSettingsAction,
 } from "../settings/actions";
 
 type Props = {
@@ -40,6 +49,7 @@ type Props = {
   globalExcludedMessages: Record<number, string | null>;
   globalWafEnabled: boolean;
   hostWafMap: Record<string, number[]>;
+  globalWaf: WafSettings | null;
 };
 
 const SEVERITY_COLOR: Record<string, "error" | "warning" | "info" | "default"> = {
@@ -453,7 +463,7 @@ function GlobalSuppressedRules({
   );
 }
 
-export default function WafEventsClient({ events, pagination, initialSearch, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap }: Props) {
+export default function WafEventsClient({ events, pagination, initialSearch, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap, globalWaf }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -463,6 +473,9 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const [localGlobalExcluded, setLocalGlobalExcluded] = useState(globalExcluded);
   const [localGlobalMessages, setLocalGlobalMessages] = useState(globalExcludedMessages);
   const [localHostWafMap, setLocalHostWafMap] = useState(hostWafMap);
+  const [wafState, wafFormAction] = useFormState(updateWafSettingsAction, null);
+  const [wafCustomDirectives, setWafCustomDirectives] = useState(globalWaf?.custom_directives ?? "");
+  const [wafShowTemplates, setWafShowTemplates] = useState(false);
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -571,6 +584,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tab label="Events" />
         <Tab label="Suppressed Rules" />
+        <Tab label="Settings" />
       </Tabs>
 
       {tab === 0 && (
@@ -615,6 +629,83 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
             setLocalGlobalMessages((prev) => ({ ...prev, [ruleId]: message }));
           }}
         />
+      )}
+
+      {tab === 2 && (
+        <Stack spacing={3} sx={{ maxWidth: 720 }}>
+          <Box>
+            <Typography variant="h6" fontWeight={600}>WAF Settings</Typography>
+            <Typography variant="body2" color="text.secondary" mt={0.5}>
+              Configure the global Web Application Firewall. Per-host settings can merge with or override these defaults.
+              Powered by <strong>Coraza</strong> with optional OWASP Core Rule Set.
+            </Typography>
+          </Box>
+          <Stack component="form" action={wafFormAction} spacing={2}>
+            {wafState?.message && (
+              <Alert severity={wafState.success ? "success" : "error"}>{wafState.message}</Alert>
+            )}
+            <FormControlLabel
+              control={<Switch name="waf_enabled" defaultChecked={globalWaf?.enabled ?? false} />}
+              label="Enable WAF globally (blocking)"
+            />
+            <FormControlLabel
+              control={<Checkbox name="waf_load_owasp_crs" defaultChecked={globalWaf?.load_owasp_crs ?? true} />}
+              label={
+                <span>Load OWASP Core Rule Set{" "}
+                  <Typography component="span" variant="caption" color="text.secondary">
+                    (covers SQLi, XSS, LFI, RCE — recommended)
+                  </Typography>
+                </span>
+              }
+            />
+            {/* WafRuleExclusions intentionally omitted — managed in Suppressed Rules tab */}
+            <TextField
+              name="waf_custom_directives"
+              label="Custom SecLang Directives"
+              multiline minRows={3} maxRows={12}
+              value={wafCustomDirectives}
+              onChange={(e) => setWafCustomDirectives(e.target.value)}
+              placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
+              inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
+              helperText="ModSecurity SecLang syntax. Applied after OWASP CRS if enabled."
+              fullWidth
+            />
+            <Box>
+              <Button
+                size="small"
+                endIcon={<ExpandMoreIcon sx={{ transform: wafShowTemplates ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />}
+                onClick={() => setWafShowTemplates((v) => !v)}
+                sx={{ color: "text.secondary", textTransform: "none", px: 0 }}
+              >
+                Quick Templates
+              </Button>
+              <Collapse in={wafShowTemplates}>
+                <Stack spacing={0.75} mt={0.75}>
+                  {[
+                    { label: "Allow IP", snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
+                    { label: "Disable WAF for path", snippet: `SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"` },
+                    { label: "Remove XSS rules", snippet: `SecRuleRemoveByTag "attack-xss"` },
+                    { label: "Block User-Agent", snippet: `SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9002,phase:1,deny,status:403,log"` },
+                  ].map((t) => (
+                    <Button key={t.label} size="small" variant="outlined"
+                      startIcon={<ContentCopyIcon fontSize="inherit" />}
+                      onClick={() => setWafCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
+                      sx={{ justifyContent: "flex-start", textTransform: "none", fontFamily: "monospace", fontSize: "0.72rem" }}
+                    >
+                      {t.label}
+                    </Button>
+                  ))}
+                </Stack>
+              </Collapse>
+            </Box>
+            <Alert severity="info" sx={{ fontSize: "0.8rem" }}>
+              Rule exclusions are managed on the <strong>Suppressed Rules</strong> tab.
+            </Alert>
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">Save WAF settings</Button>
+            </Box>
+          </Stack>
+        </Stack>
       )}
     </Stack>
   );

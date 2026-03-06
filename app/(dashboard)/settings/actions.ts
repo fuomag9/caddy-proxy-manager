@@ -645,7 +645,7 @@ export async function removeWafRuleGloballyAction(ruleId: number): Promise<Actio
     await saveWafSettings({ ...current, excluded_rule_ids: ids });
     try { await applyCaddyConfig(); } catch { /* non-fatal */ }
     revalidatePath("/settings");
-    revalidatePath("/waf-events");
+    revalidatePath("/waf");
     return { success: true, message: `Rule ${ruleId} removed from exclusions.` };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Failed to remove WAF rule" };
@@ -656,11 +656,9 @@ export async function suppressWafRuleGloballyAction(ruleId: number): Promise<Act
   try {
     await requireAdmin();
     const current = await getWafSettings();
-    if (!current?.enabled) {
-      return { success: false, message: "Global WAF is not enabled. Enable it in Settings first." };
-    }
-    const ids = [...new Set([...(current.excluded_rule_ids ?? []), ruleId])];
-    await saveWafSettings({ ...current, excluded_rule_ids: ids });
+    const base = current ?? { enabled: false, mode: "Off" as const, load_owasp_crs: true, custom_directives: "", excluded_rule_ids: [] };
+    const ids = [...new Set([...(base.excluded_rule_ids ?? []), ruleId])];
+    await saveWafSettings({ ...base, excluded_rule_ids: ids });
     try {
       await applyCaddyConfig();
     } catch (err) {
@@ -668,7 +666,7 @@ export async function suppressWafRuleGloballyAction(ruleId: number): Promise<Act
       return { success: true, message: `Rule ${ruleId} added to exclusions. Warning: could not reload Caddy.` };
     }
     revalidatePath("/settings");
-    revalidatePath("/waf-events");
+    revalidatePath("/waf");
     return { success: true, message: `Rule ${ruleId} suppressed globally.` };
   } catch (error) {
     console.error("Failed to suppress WAF rule:", error);
@@ -689,7 +687,7 @@ export async function suppressWafRuleForHostAction(ruleId: number, hostname: str
     const ids = [...new Set([...(existingWaf.excluded_rule_ids ?? []), ruleId])];
     await updateProxyHost(host.id, { waf: { ...existingWaf, enabled: true, waf_mode: existingWaf.waf_mode ?? 'merge', excluded_rule_ids: ids } }, userId);
     revalidatePath("/proxy-hosts");
-    revalidatePath("/waf-events");
+    revalidatePath("/waf");
     return { success: true, message: `Rule ${ruleId} suppressed for ${hostname}.` };
   } catch (error) {
     console.error("Failed to suppress WAF rule for host:", error);
@@ -708,9 +706,14 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
       ? (formData.get("waf_custom_directives") as string).trim()
       : "";
     const rawExcl = formData.get("waf_excluded_rule_ids");
-    const excluded_rule_ids: number[] = rawExcl
-      ? (JSON.parse(rawExcl as string) as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0)
-      : [];
+    let excluded_rule_ids: number[];
+    if (rawExcl !== null) {
+      excluded_rule_ids = (JSON.parse(rawExcl as string) as unknown[])
+        .filter((x): x is number => Number.isInteger(x) && (x as number) > 0);
+    } else {
+      const existing = await getWafSettings();
+      excluded_rule_ids = existing?.excluded_rule_ids ?? [];
+    }
 
     const config: WafSettings = { enabled, mode, load_owasp_crs: loadOwasp, custom_directives: customDirectives, excluded_rule_ids };
     await saveWafSettings(config);
@@ -723,6 +726,7 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
     }
 
     revalidatePath("/settings");
+    revalidatePath("/waf");
     return { success: true, message: "WAF settings saved." };
   } catch (error) {
     console.error("Failed to save WAF settings:", error);

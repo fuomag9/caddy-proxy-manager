@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { Alert, Box, Button, Card, CardContent, Checkbox, Collapse, FormControlLabel, MenuItem, Stack, Switch, TextField, Typography } from "@mui/material";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import type {
   GeneralSettings,
   AuthentikSettings,
@@ -13,10 +11,8 @@ import type {
   DnsSettings,
   UpstreamDnsResolutionSettings,
   GeoBlockSettings,
-  WafSettings
 } from "@/src/lib/settings";
 import { GeoBlockFields } from "@/src/components/proxy-hosts/GeoBlockFields";
-import { WafRuleExclusions } from "@/src/components/proxy-hosts/WafRuleExclusions";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
@@ -32,7 +28,6 @@ import {
   toggleSlaveInstanceAction,
   syncSlaveInstancesAction,
   updateGeoBlockSettingsAction,
-  updateWafSettingsAction
 } from "./actions";
 
 type Props = {
@@ -48,7 +43,6 @@ type Props = {
   dns: DnsSettings | null;
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
-  globalWaf?: WafSettings | null;
   instanceSync: {
     mode: "standalone" | "master" | "slave";
     modeFromEnv: boolean;
@@ -93,7 +87,6 @@ export default function SettingsClient({
   dns,
   upstreamDnsResolution,
   globalGeoBlock,
-  globalWaf,
   instanceSync
 }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
@@ -111,9 +104,6 @@ export default function SettingsClient({
   const [slaveInstanceState, slaveInstanceFormAction] = useFormState(createSlaveInstanceAction, null);
   const [syncState, syncFormAction] = useFormState(syncSlaveInstancesAction, null);
   const [geoBlockState, geoBlockFormAction] = useFormState(updateGeoBlockSettingsAction, null);
-  const [wafState, wafFormAction] = useFormState(updateWafSettingsAction, null);
-  const [wafCustomDirectives, setWafCustomDirectives] = useState(globalWaf?.custom_directives ?? "");
-  const [wafShowTemplates, setWafShowTemplates] = useState(false);
 
   const isSlave = instanceSync.mode === "slave";
   const isMaster = instanceSync.mode === "master";
@@ -788,92 +778,6 @@ export default function SettingsClient({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" fontWeight={600} gutterBottom>
-            Web Application Firewall (WAF)
-          </Typography>
-          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
-            Configure a global WAF applied to all proxy hosts. Per-host settings can merge with or override these defaults.
-            Powered by <strong>Coraza</strong> with optional OWASP Core Rule Set.
-          </Typography>
-          <Stack component="form" action={wafFormAction} spacing={2}>
-            {wafState?.message && (
-              <Alert severity={wafState.success ? "success" : "error"}>
-                {wafState.message}
-              </Alert>
-            )}
-            <FormControlLabel
-              control={<Switch name="waf_enabled" defaultChecked={globalWaf?.enabled ?? false} />}
-              label="Enable WAF globally (blocking)"
-            />
-            <FormControlLabel
-              control={<Checkbox name="waf_load_owasp_crs" defaultChecked={globalWaf?.load_owasp_crs ?? true} />}
-              label={
-                <span>
-                  Load OWASP Core Rule Set{" "}
-                  <Typography component="span" variant="caption" color="text.secondary">
-                    (covers SQLi, XSS, LFI, RCE — recommended)
-                  </Typography>
-                </span>
-              }
-            />
-            <WafRuleExclusions value={globalWaf?.excluded_rule_ids} />
-            <TextField
-              name="waf_custom_directives"
-              label="Custom SecLang Directives"
-              multiline
-              minRows={3}
-              maxRows={12}
-              value={wafCustomDirectives}
-              onChange={(e) => setWafCustomDirectives(e.target.value)}
-              placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
-              inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-              helperText="ModSecurity SecLang syntax. Applied after OWASP CRS if enabled."
-              fullWidth
-            />
-            <Box>
-              <Button
-                size="small"
-                endIcon={<ExpandMoreIcon sx={{ transform: wafShowTemplates ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />}
-                onClick={() => setWafShowTemplates((v) => !v)}
-                sx={{ color: "text.secondary", textTransform: "none", px: 0 }}
-              >
-                Quick Templates
-              </Button>
-              <Collapse in={wafShowTemplates}>
-                <Stack spacing={0.75} mt={0.75}>
-                  {[
-                    { label: "Allow IP", snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
-                    { label: "Disable WAF for path", snippet: `SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"` },
-                    { label: "Remove XSS rules", snippet: `SecRuleRemoveByTag "attack-xss"` },
-                    { label: "Block User-Agent", snippet: `SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9002,phase:1,deny,status:403,log"` },
-                  ].map((t) => (
-                    <Button
-                      key={t.label}
-                      size="small"
-                      variant="outlined"
-                      startIcon={<ContentCopyIcon fontSize="inherit" />}
-                      onClick={() => setWafCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
-                      sx={{ justifyContent: "flex-start", textTransform: "none", fontFamily: "monospace", fontSize: "0.72rem" }}
-                    >
-                      {t.label}
-                    </Button>
-                  ))}
-                </Stack>
-              </Collapse>
-            </Box>
-            <Alert severity="info" sx={{ fontSize: "0.8rem" }}>
-              WAF events are stored for 90 days and viewable under <strong>WAF Events</strong> in the sidebar.
-            </Alert>
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">
-                Save WAF settings
-              </Button>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
     </Stack>
   );
 }

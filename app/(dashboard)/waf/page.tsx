@@ -12,7 +12,7 @@ interface PageProps {
   searchParams: Promise<{ page?: string; search?: string }>;
 }
 
-export default async function WafEventsPage({ searchParams }: PageProps) {
+export default async function WafPage({ searchParams }: PageProps) {
   await requireAdmin();
   const { page: pageParam, search: searchParam } = await searchParams;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
@@ -46,6 +46,7 @@ export default async function WafEventsPage({ searchParams }: PageProps) {
       globalExcludedMessages={globalExcludedMessages}
       globalWafEnabled={globalWaf?.enabled ?? false}
       hostWafMap={hostWafMap}
+      globalWaf={globalWaf ?? null}
     />
   );
 }

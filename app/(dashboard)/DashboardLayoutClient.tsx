@@ -40,12 +40,12 @@ type User = {
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: DashboardIcon },
   { href: "/proxy-hosts", label: "Proxy Hosts", icon: SwapHorizIcon },
-  { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/access-lists", label: "Access Lists", icon: VpnKeyIcon },
   { href: "/certificates", label: "Certificates", icon: SecurityIcon },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
+  { href: "/waf", label: "WAF", icon: GppBadIcon },
+  { href: "/analytics", label: "Analytics", icon: BarChartIcon },
   { href: "/audit-log", label: "Audit Log", icon: HistoryIcon },
-  { href: "/waf-events", label: "WAF Events", icon: GppBadIcon }
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 
 const DRAWER_WIDTH = 260;
