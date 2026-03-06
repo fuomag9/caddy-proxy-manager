@@ -37,7 +37,9 @@ type Props = {
 export function WafFields({ value, showModeSelector = true }: Props) {
   const [enabled, setEnabled] = useState(value?.enabled ?? false);
   const [wafMode, setWafMode] = useState<WafMode>(value?.waf_mode ?? "merge");
-  const [engineMode, setEngineMode] = useState<EngineMode>(value?.mode ?? "inherit");
+  const [engineMode, setEngineMode] = useState<EngineMode>(
+    value?.mode === "Off" || value?.mode === "On" ? value.mode : "inherit"
+  );
   const [loadCrs, setLoadCrs] = useState(value?.load_owasp_crs ?? true);
   const [customDirectives, setCustomDirectives] = useState(value?.custom_directives ?? "");
   const [showTemplates, setShowTemplates] = useState(false);
