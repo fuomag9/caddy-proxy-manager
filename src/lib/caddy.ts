@@ -1333,33 +1333,44 @@ function buildClientAuthentication(
   }
   if (caCertIds.size === 0) return null;
 
-  // For CAs that have never issued tracked certs: trust any cert signed by that CA.
-  // For CAs that have issued tracked certs: pin to only the active (non-revoked) leaf
-  // certs so revocation is enforced. trusted_leaf_certs bypasses chain validation and
-  // accepts only those exact certificates — do NOT also put the CA in trusted_ca_certs
-  // or that would allow any cert signed by it (defeating revocation).
+  // trusted_leaf_certs is an ADDITIONAL check on top of CA chain validation
+  // (Caddy rejects without trusted_ca_certs even when trusted_leaf_certs is set).
+  //
+  // Strategy:
+  //  - Unmanaged CA (no tracked issued certs): trust any cert signed by that CA
+  //    → CA cert in trusted_ca_certs only.
+  //  - Managed CA with active certs: trust only those specific leaf certs
+  //    → CA cert in trusted_ca_certs (for chain validation) +
+  //      active leaf certs in trusted_leaf_certs (revocation enforcement).
+  //  - Managed CA with ALL certs revoked: exclude it from trusted_ca_certs so
+  //    chain validation fails — no cert from it will be accepted.
   const trustedCaCerts: string[] = [];
   const trustedLeafCerts: string[] = [];
 
   for (const id of caCertIds) {
+    const ca = caCertMap.get(id);
+    if (!ca) continue;
+
     if (cAsWithAnyIssuedCerts.has(id)) {
-      // Managed CA: only trust active leaf certs (revoked ones are absent from the map)
+      // Managed CA: enforce revocation via leaf pinning
       const activeLeafCerts = issuedClientCertMap.get(id) ?? [];
+      if (activeLeafCerts.length === 0) {
+        // All certs revoked: exclude CA so chain validation fails for its certs
+        continue;
+      }
+      trustedCaCerts.push(pemToBase64Der(ca.certificatePem));
       for (const certPem of activeLeafCerts) {
         trustedLeafCerts.push(pemToBase64Der(certPem));
       }
     } else {
       // Unmanaged CA: trust any cert in the chain
-      const ca = caCertMap.get(id);
-      if (!ca) continue;
       trustedCaCerts.push(pemToBase64Der(ca.certificatePem));
     }
   }
 
-  if (trustedCaCerts.length === 0 && trustedLeafCerts.length === 0) return null;
+  if (trustedCaCerts.length === 0) return null;
 
-  const result: Record<string, unknown> = { mode: "require_and_verify" };
-  if (trustedCaCerts.length > 0) result.trusted_ca_certs = trustedCaCerts;
+  const result: Record<string, unknown> = { mode: "require_and_verify", trusted_ca_certs: trustedCaCerts };
   if (trustedLeafCerts.length > 0) result.trusted_leaf_certs = trustedLeafCerts;
   return result;
 }
