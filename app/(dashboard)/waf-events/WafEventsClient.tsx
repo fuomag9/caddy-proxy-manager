@@ -29,6 +29,7 @@ import {
   suppressWafRuleGloballyAction,
   suppressWafRuleForHostAction,
   removeWafRuleGloballyAction,
+  lookupWafRuleMessageAction,
 } from "../settings/actions";
 
 type Props = {
@@ -231,17 +232,28 @@ function WafEventDrawer({
 
 function GlobalSuppressedRules({
   excluded,
-  messages,
+  messages: initialMessages,
   wafEnabled,
   onRemove,
+  onAdd,
 }: {
   excluded: number[];
   messages: Record<number, string | null>;
   wafEnabled: boolean;
   onRemove: (ruleId: number) => void;
+  onAdd: (ruleId: number, message: string | null) => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; success: boolean }>({ open: false, message: "", success: true });
+  const [messages, setMessages] = useState(initialMessages);
+
+  // Add-rule state
+  const [addInput, setAddInput] = useState("");
+  const [lookupPending, setLookupPending] = useState(false);
+  const [pendingRule, setPendingRule] = useState<{ id: number; message: string | null } | null>(null);
+
+  // Search
+  const [search, setSearch] = useState("");
 
   function handleRemove(ruleId: number) {
     startTransition(async () => {
@@ -250,6 +262,45 @@ function GlobalSuppressedRules({
       if (result.success) onRemove(ruleId);
     });
   }
+
+  async function handleLookup() {
+    const n = parseInt(addInput.trim(), 10);
+    if (!Number.isInteger(n) || n <= 0) return;
+    if (excluded.includes(n)) {
+      setSnackbar({ open: true, message: `Rule ${n} is already suppressed.`, success: false });
+      return;
+    }
+    setLookupPending(true);
+    try {
+      const result = await lookupWafRuleMessageAction(n);
+      setPendingRule({ id: n, message: result.message });
+    } finally {
+      setLookupPending(false);
+    }
+  }
+
+  function handleConfirmAdd() {
+    if (!pendingRule) return;
+    startTransition(async () => {
+      const result = await suppressWafRuleGloballyAction(pendingRule.id);
+      setSnackbar({ open: true, message: result.message ?? (result.success ? "Done" : "Failed"), success: result.success });
+      if (result.success) {
+        onAdd(pendingRule.id, pendingRule.message);
+        setMessages((prev) => ({ ...prev, [pendingRule.id]: pendingRule.message }));
+        setAddInput("");
+        setPendingRule(null);
+      }
+    });
+  }
+
+  const filtered = excluded.filter((id) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      String(id).includes(q) ||
+      (messages[id] ?? "").toLowerCase().includes(q)
+    );
+  });
 
   return (
     <>
@@ -264,6 +315,72 @@ function GlobalSuppressedRules({
           )}
         </Box>
 
+        {/* Add rule */}
+        <Box>
+          <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Add Rule by ID
+          </Typography>
+          <Stack direction="row" spacing={1} alignItems="center" mt={0.75} sx={{ maxWidth: 320 }}>
+            <TextField
+              size="small"
+              label="Rule ID"
+              value={addInput}
+              onChange={(e) => { setAddInput(e.target.value); setPendingRule(null); }}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLookup(); } }}
+              inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
+              sx={{ flex: 1 }}
+              disabled={lookupPending || pending}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleLookup}
+              disabled={!addInput.trim() || lookupPending || pending}
+            >
+              {lookupPending ? "Looking up…" : "Look up"}
+            </Button>
+          </Stack>
+
+          {pendingRule && (
+            <Box
+              sx={{
+                mt: 1.5, px: 2, py: 1.5, borderRadius: 1.5,
+                border: "1px solid", borderColor: "warning.main", bgcolor: "action.hover",
+                maxWidth: 480,
+              }}
+            >
+              <Typography variant="body2" fontFamily="monospace" fontWeight={700} color="error.light">
+                Rule {pendingRule.id}
+              </Typography>
+              <Typography variant="caption" color={pendingRule.message ? "text.secondary" : "text.disabled"} sx={{ display: "block", mt: 0.25 }}>
+                {pendingRule.message ?? "No description available — rule has not triggered yet"}
+              </Typography>
+              <Stack direction="row" spacing={1} mt={1.5}>
+                <Button size="small" variant="contained" color="error" onClick={handleConfirmAdd} disabled={pending}>
+                  {pending ? "Suppressing…" : "Suppress Globally"}
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => { setPendingRule(null); setAddInput(""); }} disabled={pending}>
+                  Cancel
+                </Button>
+              </Stack>
+            </Box>
+          )}
+        </Box>
+
+        {/* Search */}
+        {excluded.length > 0 && (
+          <TextField
+            placeholder="Search by rule ID or message…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            size="small"
+            sx={{ maxWidth: 400 }}
+            slotProps={{
+              input: { startAdornment: <SearchIcon sx={{ mr: 1, color: "text.disabled", fontSize: 18 }} /> },
+            }}
+          />
+        )}
+
         {excluded.length === 0 ? (
           <Box
             sx={{
@@ -273,11 +390,13 @@ function GlobalSuppressedRules({
           >
             <BlockIcon sx={{ fontSize: 36, opacity: 0.3, mb: 1, display: "block", mx: "auto" }} />
             <Typography variant="body2">No globally suppressed rules.</Typography>
-            <Typography variant="caption">Open a WAF event and click "Suppress Globally" to add one.</Typography>
+            <Typography variant="caption">Add a rule above or open a WAF event and click &quot;Suppress Globally&quot;.</Typography>
           </Box>
+        ) : filtered.length === 0 ? (
+          <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>No rules match your search.</Typography>
         ) : (
           <Stack spacing={1}>
-            {excluded.map((id) => (
+            {filtered.map((id) => (
               <Box
                 key={id}
                 sx={{
@@ -342,6 +461,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [selected, setSelected] = useState<WafEvent | null>(null);
   const [localGlobalExcluded, setLocalGlobalExcluded] = useState(globalExcluded);
+  const [localGlobalMessages, setLocalGlobalMessages] = useState(globalExcludedMessages);
   const [localHostWafMap, setLocalHostWafMap] = useState(hostWafMap);
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -487,9 +607,13 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
       {tab === 1 && (
         <GlobalSuppressedRules
           excluded={localGlobalExcluded}
-          messages={globalExcludedMessages}
+          messages={localGlobalMessages}
           wafEnabled={globalWafEnabled}
           onRemove={(ruleId) => setLocalGlobalExcluded((prev) => prev.filter((id) => id !== ruleId))}
+          onAdd={(ruleId, message) => {
+            setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])]);
+            setLocalGlobalMessages((prev) => ({ ...prev, [ruleId]: message }));
+          }}
         />
       )}
     </Stack>

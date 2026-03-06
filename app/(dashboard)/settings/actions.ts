@@ -7,6 +7,7 @@ import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterTo
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
 import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
+import { getWafRuleMessages } from "@/src/lib/models/waf-events";
 import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
 
 type ActionResult = {
@@ -627,6 +628,12 @@ export async function syncSlaveInstancesAction(_prevState: ActionResult | null, 
     console.error("Failed to sync slave instances:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to sync slave instances" };
   }
+}
+
+export async function lookupWafRuleMessageAction(ruleId: number): Promise<{ message: string | null }> {
+  await requireAdmin();
+  const map = await getWafRuleMessages([ruleId]);
+  return { message: map[ruleId] ?? null };
 }
 
 export async function removeWafRuleGloballyAction(ruleId: number): Promise<ActionResult> {
