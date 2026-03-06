@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { Alert, Box, Button, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, FormLabel, MenuItem, Radio, RadioGroup, Stack, Switch, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Checkbox, Collapse, FormControlLabel, MenuItem, Stack, Switch, TextField, Typography } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import type {
@@ -805,17 +805,8 @@ export default function SettingsClient({
             )}
             <FormControlLabel
               control={<Switch name="waf_enabled" defaultChecked={globalWaf?.enabled ?? false} />}
-              label="Enable WAF globally"
+              label="Enable WAF globally (blocking)"
             />
-            <FormControl>
-              <FormLabel sx={{ fontSize: "0.75rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Engine Mode
-              </FormLabel>
-              <RadioGroup row name="waf_mode" defaultValue={globalWaf?.mode === "Off" ? "Off" : "On"}>
-                <FormControlLabel value="Off" control={<Radio size="small" />} label="Off" />
-                <FormControlLabel value="On" control={<Radio size="small" />} label="On (Blocking)" />
-              </RadioGroup>
-            </FormControl>
             <FormControlLabel
               control={<Checkbox name="waf_load_owasp_crs" defaultChecked={globalWaf?.load_owasp_crs ?? true} />}
               label={
