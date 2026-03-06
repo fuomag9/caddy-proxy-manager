@@ -12,5 +12,7 @@ CREATE TABLE `issued_client_certificates` (
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL
 );
+--> statement-breakpoint
 CREATE INDEX `issued_client_certificates_ca_idx` ON `issued_client_certificates` (`ca_certificate_id`);
+--> statement-breakpoint
 CREATE INDEX `issued_client_certificates_revoked_at_idx` ON `issued_client_certificates` (`revoked_at`);
