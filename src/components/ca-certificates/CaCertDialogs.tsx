@@ -208,6 +208,7 @@ export function ManageIssuedClientCertsDialog({
   const [isPending, startTransition] = useTransition();
   const [items, setItems] = useState<IssuedClientCertificate[]>(issuedCerts);
   const [error, setError] = useState<string | null>(null);
+  const [showRevoked, setShowRevoked] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -234,6 +235,9 @@ export function ManageIssuedClientCertsDialog({
     });
   }
 
+  const visibleItems = showRevoked ? items : items.filter((i) => !i.revoked_at);
+  const revokedCount = items.filter((i) => i.revoked_at).length;
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>Issued Client Certificates</DialogTitle>
@@ -244,13 +248,20 @@ export function ManageIssuedClientCertsDialog({
             <strong>{cert.name}</strong>.
           </Alert>
           {error && <Typography color="error" variant="body2">{error}</Typography>}
-          {items.length === 0 ? (
+          {revokedCount > 0 && (
+            <FormControlLabel
+              control={<Switch checked={showRevoked} onChange={(e) => setShowRevoked(e.target.checked)} size="small" />}
+              label={`Show revoked (${revokedCount})`}
+            />
+          )}
+          {visibleItems.length === 0 ? (
             <Typography color="text.secondary" variant="body2">
-              No issued client certificates are currently tracked for this CA. Certificates issued from this UI will
-              appear here and can then be revoked individually.
+              {items.length === 0
+                ? "No issued client certificates are currently tracked for this CA. Certificates issued from this UI will appear here and can then be revoked individually."
+                : "No active client certificates. Enable \"Show revoked\" to view revoked certificates."}
             </Typography>
           ) : (
-            items.map((item) => {
+            visibleItems.map((item) => {
               const expired = new Date(item.valid_to).getTime() < Date.now();
               return (
                 <Card key={item.id} variant="outlined">

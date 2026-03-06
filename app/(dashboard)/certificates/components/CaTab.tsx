@@ -54,12 +54,14 @@ function IssuedCertsPanel({ ca }: { ca: CaCertificateView }) {
   const [issueCaOpen, setIssueCaOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
 
+  const active = ca.issuedCerts.filter((c) => !c.revoked_at);
+
   return (
     <Box sx={{ p: 2, bgcolor: "action.hover" }}>
       <Stack spacing={1.5}>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Typography variant="subtitle2" fontWeight={600}>
-            Issued Client Certificates ({ca.issuedCerts.length})
+            Issued Client Certificates ({active.length} active)
           </Typography>
           <Stack direction="row" spacing={1}>
             {ca.has_private_key && (
@@ -75,13 +77,13 @@ function IssuedCertsPanel({ ca }: { ca: CaCertificateView }) {
           </Stack>
         </Stack>
 
-        {ca.issuedCerts.length === 0 ? (
+        {active.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
-            No issued client certificates tracked for this CA.
+            No active client certificates for this CA.
           </Typography>
         ) : (
           <>
-            {ca.issuedCerts.slice(0, 5).map((issued) => {
+            {active.slice(0, 5).map((issued) => {
               const expired = new Date(issued.valid_to).getTime() < Date.now();
               return (
                 <Stack
@@ -95,16 +97,16 @@ function IssuedCertsPanel({ ca }: { ca: CaCertificateView }) {
                     {issued.common_name}
                   </Typography>
                   <Chip
-                    label={issued.revoked_at ? "Revoked" : expired ? "Expired" : "Active"}
-                    color={issued.revoked_at ? "default" : expired ? "error" : "success"}
+                    label={expired ? "Expired" : "Active"}
+                    color={expired ? "error" : "success"}
                     size="small"
                   />
                 </Stack>
               );
             })}
-            {ca.issuedCerts.length > 5 && (
+            {active.length > 5 && (
               <Typography variant="body2" color="text.secondary">
-                +{ca.issuedCerts.length - 5} more — click &quot;Manage&quot; to view all
+                +{active.length - 5} more — click &quot;Manage&quot; to view all
               </Typography>
             )}
           </>
