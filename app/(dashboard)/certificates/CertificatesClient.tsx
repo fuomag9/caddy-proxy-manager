@@ -1,35 +1,14 @@
 "use client";
 
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Alert,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
-  IconButton,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import { DataTable } from "@/src/components/ui/DataTable";
-import {
-  createCertificateAction,
-  deleteCertificateAction,
-  updateCertificateAction,
-} from "./actions";
-import type { AcmeHost, CaCertificateView, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
+import { Box, Stack, Tab, Tabs, TextField, Typography } from "@mui/material";
 import { useState } from "react";
-import { CreateCaCertDialog, EditCaCertDialog, DeleteCaCertDialog, IssueClientCertDialog, ManageIssuedClientCertsDialog } from "@/src/components/ca-certificates/CaCertDialogs";
+import type { AcmeHost, CaCertificateView, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
+import { StatusSummaryBar } from "./components/StatusSummaryBar";
+import { AcmeTab } from "./components/AcmeTab";
+import { ImportedTab } from "./components/ImportedTab";
+import { CaTab } from "./components/CaTab";
+
+type TabId = "acme" | "imported" | "ca";
 
 type Props = {
   acmeHosts: AcmeHost[];
@@ -39,80 +18,49 @@ type Props = {
   acmePagination: { total: number; page: number; perPage: number };
 };
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+function countExpiry(statuses: (CertExpiryStatus | null)[]) {
+  let expired = 0;
+  let expiringSoon = 0;
+  let healthy = 0;
+  for (const s of statuses) {
+    if (s === "expired") expired++;
+    else if (s === "expiring_soon") expiringSoon++;
+    else if (s === "ok") healthy++;
+  }
+  return { expired, expiringSoon, healthy };
 }
 
-function ExpiryChip({
-  validTo,
-  status,
-}: {
-  validTo: string | null;
-  status: CertExpiryStatus | null;
-}) {
-  if (status === null || validTo === null) {
-    return <Chip label="No PEM" size="small" />;
-  }
-  if (status === "expired") {
-    return <Chip label={`Expired ${formatDate(validTo)}`} color="error" size="small" />;
-  }
-  if (status === "expiring_soon") {
-    return <Chip label={`Expires ${formatDate(validTo)}`} color="warning" size="small" />;
-  }
-  return <Chip label={`Expires ${formatDate(validTo)}`} color="success" size="small" />;
-}
+export default function CertificatesClient({
+  acmeHosts,
+  importedCerts,
+  managedCerts,
+  caCertificates,
+  acmePagination,
+}: Props) {
+  const [activeTab, setActiveTab] = useState<TabId>("acme");
+  const [searchAcme, setSearchAcme] = useState("");
+  const [searchImported, setSearchImported] = useState("");
+  const [searchCa, setSearchCa] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
-export default function CertificatesClient({ acmeHosts, importedCerts, managedCerts, caCertificates, acmePagination }: Props) {
-  const [createCaOpen, setCreateCaOpen] = useState(false);
-  const [editCaCert, setEditCaCert] = useState<CaCertificateView | null>(null);
-  const [deleteCaCert, setDeleteCaCert] = useState<CaCertificateView | null>(null);
-  const [issueCaCert, setIssueCaCert] = useState<CaCertificateView | null>(null);
-  const [manageIssuedCaCert, setManageIssuedCaCert] = useState<CaCertificateView | null>(null);
-  const acmeColumns = [
-    {
-      id: 'name',
-      label: 'Proxy Host',
-      render: (r: AcmeHost) => <Typography fontWeight={600}>{r.name}</Typography>,
-    },
-    {
-      id: 'domains',
-      label: 'Domains',
-      render: (r: AcmeHost) => (
-        <Typography variant="body2" color="text.secondary">
-          {r.domains.join(', ')}
-        </Typography>
-      ),
-    },
-    {
-      id: 'issuer',
-      label: 'Issuer',
-      render: (r: AcmeHost) => (
-        <Typography variant="body2" color="text.secondary">
-          {r.certIssuer ?? '—'}
-        </Typography>
-      ),
-    },
-    {
-      id: 'expiry',
-      label: 'Expiry',
-      render: (r: AcmeHost) => <ExpiryChip validTo={r.certValidTo} status={r.certExpiryStatus} />,
-    },
-    {
-      id: 'status',
-      label: 'Status',
-      render: (r: AcmeHost) => (
-        <Chip
-          label={r.enabled ? 'Active' : 'Disabled'}
-          color={r.enabled ? 'success' : 'default'}
-          size="small"
-        />
-      ),
-    },
+  // Aggregate expiry counts across all cert types
+  const allStatuses: (CertExpiryStatus | null)[] = [
+    ...acmeHosts.map((h) => h.certExpiryStatus),
+    ...importedCerts.map((c) => c.expiryStatus),
   ];
+  const { expired, expiringSoon, healthy } = countExpiry(allStatuses);
+
+  const search = activeTab === "acme" ? searchAcme : activeTab === "imported" ? searchImported : searchCa;
+  const setSearch =
+    activeTab === "acme" ? setSearchAcme : activeTab === "imported" ? setSearchImported : setSearchCa;
+
+  function handleTabChange(_: React.SyntheticEvent, value: TabId) {
+    setActiveTab(value);
+    setStatusFilter(null);
+  }
 
   return (
-    <Stack spacing={4} sx={{ width: "100%" }}>
+    <Stack spacing={3} sx={{ width: "100%" }}>
       {/* Page header */}
       <Stack spacing={1}>
         <Typography variant="h4" fontWeight={600}>
@@ -124,456 +72,71 @@ export default function CertificatesClient({ acmeHosts, importedCerts, managedCe
         </Typography>
       </Stack>
 
-      {/* ACME Certificates */}
-      <Stack spacing={2}>
-        <Typography variant="h6" fontWeight={600}>
-          ACME Certificates
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          These proxy hosts use Caddy&apos;s automatic ACME certificate management (Let&apos;s Encrypt / ZeroSSL).
-          No manual configuration required.
-        </Typography>
-        <DataTable
-          columns={acmeColumns}
-          data={acmeHosts}
-          keyField="id"
-          emptyMessage="No proxy hosts using automatic ACME certificates"
-          pagination={acmePagination}
-        />
-      </Stack>
+      {/* Status summary bar */}
+      <StatusSummaryBar
+        expired={expired}
+        expiringSoon={expiringSoon}
+        healthy={healthy}
+        filter={statusFilter}
+        onFilter={setStatusFilter}
+      />
 
-      <Divider />
+      {/* Tabs */}
+      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Tabs value={activeTab} onChange={handleTabChange}>
+          <Tab
+            label={`ACME (${acmePagination.total})`}
+            value="acme"
+          />
+          <Tab
+            label={`Imported (${importedCerts.length})`}
+            value="imported"
+          />
+          <Tab
+            label={`CA / mTLS (${caCertificates.length})`}
+            value="ca"
+          />
+        </Tabs>
+      </Box>
 
-      {/* Imported Certificates */}
-      {importedCerts.length > 0 && (
-        <Stack spacing={2}>
-          <Typography variant="h6" fontWeight={600}>
-            Imported Certificates
-          </Typography>
+      {/* Per-tab search */}
+      <TextField
+        placeholder={
+          activeTab === "acme"
+            ? "Search by host name or domain…"
+            : activeTab === "imported"
+              ? "Search by name or domain…"
+              : "Search by name…"
+        }
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        size="small"
+        sx={{ maxWidth: 400 }}
+        inputProps={{ "aria-label": "search" }}
+      />
 
-          <Stack spacing={2}>
-            {importedCerts.map((cert) => (
-              <Card
-                key={cert.id}
-                elevation={0}
-                sx={{ border: "1px solid rgba(148, 163, 184, 0.14)" }}
-              >
-                <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {/* Header row */}
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      gap: 2,
-                    }}
-                  >
-                    <Box>
-                      <Typography variant="h6" fontWeight={600}>
-                        {cert.name}
-                      </Typography>
-                      {cert.issuer && (
-                        <Typography variant="body2" color="text.secondary">
-                          {cert.issuer}
-                        </Typography>
-                      )}
-                    </Box>
-                    <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-                      <ExpiryChip validTo={cert.validTo} status={cert.expiryStatus} />
-                      <Chip label="Custom" color="secondary" size="small" />
-                    </Stack>
-                  </Box>
-
-                  {/* Domains row */}
-                  <Typography variant="body2" color="text.secondary">
-                    {cert.domains.join(", ")}
-                  </Typography>
-
-                  {/* UsedBy row */}
-                  {cert.usedBy.length > 0 && (
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                      <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
-                        Used by:
-                      </Typography>
-                      {cert.usedBy.map((host) => (
-                        <Chip key={host.id} label={host.name} size="small" variant="outlined" />
-                      ))}
-                    </Stack>
-                  )}
-
-                  {/* Edit/Delete accordion */}
-                  <Accordion elevation={0} disableGutters sx={{ bgcolor: "transparent" }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0 }}>
-                      <Typography fontWeight={600}>Edit / Delete</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ px: 0 }}>
-                      <Stack
-                        component="form"
-                        action={(formData) => updateCertificateAction(cert.id, formData)}
-                        spacing={2}
-                      >
-                        <TextField name="name" label="Name" defaultValue={cert.name} fullWidth />
-                        <TextField
-                          name="domain_names"
-                          label="Domains (one per line)"
-                          defaultValue={cert.domains.join("\n")}
-                          multiline
-                          minRows={3}
-                          fullWidth
-                          helperText="Domains covered by this certificate"
-                        />
-                        <input type="hidden" name="type" value="imported" />
-
-                        <TextField
-                          name="certificate_pem"
-                          label="Certificate PEM"
-                          placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                          multiline
-                          minRows={6}
-                          fullWidth
-                          helperText="Full chain recommended (cert + intermediates)"
-                        />
-                        <TextField
-                          name="private_key_pem"
-                          label="Private Key PEM"
-                          placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
-                          multiline
-                          minRows={6}
-                          fullWidth
-                          helperText="Keep this secure! Never share your private key"
-                          type="password"
-                        />
-
-                        <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-                          <Button type="submit" variant="contained">
-                            Update Certificate
-                          </Button>
-                          <Button
-                            type="submit"
-                            formAction={deleteCertificateAction.bind(null, cert.id)}
-                            variant="outlined"
-                            color="error"
-                          >
-                            Delete
-                          </Button>
-                        </Box>
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
-                </CardContent>
-              </Card>
-            ))}
-          </Stack>
-        </Stack>
-      )}
-
-      {/* Import Custom Certificate */}
-      <Stack spacing={2} component="section">
-        <Typography variant="h6" fontWeight={600}>
-          Import Custom Certificate
-        </Typography>
-
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <Typography variant="body2">
-            <strong>When to import certificates:</strong>
-          </Typography>
-          <Typography variant="body2" component="ul" sx={{ mt: 1, mb: 0, pl: 2 }}>
-            <li>Using an internal Certificate Authority (CA)</li>
-            <li>Wildcard certificates from your DNS provider</li>
-            <li>Pre-existing certificates you want to reuse</li>
-            <li>Special compliance or security requirements</li>
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            <strong>Otherwise:</strong> Just create a proxy host with your domain - Caddy will handle everything automatically!
-          </Typography>
-        </Alert>
-
-        <Card>
-          <CardContent>
-            <Stack component="form" action={createCertificateAction} spacing={2}>
-              <TextField
-                name="name"
-                label="Certificate Name"
-                placeholder="Internal CA Certificate"
-                required
-                fullWidth
-                helperText="Descriptive name to identify this certificate"
-              />
-
-              <TextField
-                name="domain_names"
-                label="Domains (one per line)"
-                placeholder="*.example.com&#10;example.com"
-                multiline
-                minRows={3}
-                required
-                fullWidth
-                helperText="List all domains/subdomains covered by this certificate"
-              />
-
-              <input type="hidden" name="type" value="imported" />
-
-              <TextField
-                name="certificate_pem"
-                label="Certificate PEM"
-                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                multiline
-                minRows={8}
-                required
-                fullWidth
-                helperText="Paste the full certificate chain (certificate + intermediate certificates)"
-              />
-
-              <TextField
-                name="private_key_pem"
-                label="Private Key PEM"
-                placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
-                multiline
-                minRows={8}
-                required
-                fullWidth
-                helperText="Private key for this certificate. Stored securely."
-                type="password"
-              />
-
-              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                <Button type="submit" variant="contained" size="large">
-                  Import Certificate
-                </Button>
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
-      </Stack>
-
-      {/* Legacy Managed (conditional, collapsed) */}
-      {managedCerts.length > 0 && (
-        <Accordion elevation={0} disableGutters sx={{ border: "1px solid rgba(148, 163, 184, 0.14)", borderRadius: 1 }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Typography fontWeight={600}>Legacy Managed Certificates</Typography>
-              <Chip label="Legacy" color="warning" size="small" />
-            </Stack>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
-              <Alert severity="warning">
-                <Typography variant="body2">
-                  <strong>Legacy &quot;Managed&quot; certificates detected:</strong> These entries are redundant since Caddy automatically manages HTTPS.
-                  Consider deleting them unless you need to explicitly track certificate usage.
-                </Typography>
-              </Alert>
-
-              <Stack spacing={2}>
-                {managedCerts.map((cert) => (
-                  <Card key={cert.id} sx={{ bgcolor: "action.hover" }}>
-                    <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      <Box
-                        sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
-                      >
-                        <Box>
-                          <Typography variant="h6" fontWeight={600}>
-                            {cert.name}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {cert.domain_names.join(", ")}
-                          </Typography>
-                        </Box>
-                        <Stack direction="row" spacing={1}>
-                          <Chip label="Managed by Caddy" color="info" size="small" />
-                          <Chip label="Auto-Renew" color="success" size="small" variant="outlined" />
-                        </Stack>
-                      </Box>
-
-                      <Accordion elevation={0} disableGutters sx={{ bgcolor: "transparent" }}>
-                        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0 }}>
-                          <Typography fontWeight={600}>Edit / Delete</Typography>
-                        </AccordionSummary>
-                        <AccordionDetails sx={{ px: 0 }}>
-                          <Stack
-                            component="form"
-                            action={(formData) => updateCertificateAction(cert.id, formData)}
-                            spacing={2}
-                          >
-                            <TextField name="name" label="Name" defaultValue={cert.name} fullWidth />
-                            <TextField
-                              name="domain_names"
-                              label="Domains (one per line)"
-                              defaultValue={cert.domain_names.join("\n")}
-                              multiline
-                              minRows={3}
-                              fullWidth
-                              helperText="These domains will be automatically managed by Caddy's ACME"
-                            />
-                            <input type="hidden" name="type" value="managed" />
-                            <input type="hidden" name="auto_renew" value="on" />
-                            <input type="hidden" name="auto_renew_present" value="1" />
-
-                            <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-                              <Button type="submit" variant="contained">
-                                Save
-                              </Button>
-                              <Button
-                                type="submit"
-                                formAction={deleteCertificateAction.bind(null, cert.id)}
-                                variant="outlined"
-                                color="error"
-                              >
-                                Delete
-                              </Button>
-                            </Box>
-                          </Stack>
-                        </AccordionDetails>
-                      </Accordion>
-                    </CardContent>
-                  </Card>
-                ))}
-              </Stack>
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-      )}
-
-      {/* Client CA Certificates */}
-      <Accordion defaultExpanded={caCertificates.length > 0} disableGutters>
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <Typography fontWeight={700}>Client CA Certificates</Typography>
-            <Chip label={caCertificates.length} size="small" />
-          </Stack>
-        </AccordionSummary>
-        <AccordionDetails>
-          <Stack spacing={2}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-              <Typography variant="body2" color="text.secondary">
-                CA certificates used for mTLS. New client certificates issued from this UI are tracked here and can be
-                revoked individually; previously issued certificates are not backfilled.
-              </Typography>
-              <Button
-                startIcon={<AddIcon />}
-                variant="outlined"
-                size="small"
-                onClick={() => setCreateCaOpen(true)}
-              >
-                Add CA Certificate
-              </Button>
-            </Stack>
-
-            {caCertificates.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No client CA certificates configured.
-              </Typography>
-            ) : (
-              <DataTable
-                columns={[
-                  {
-                    id: "name",
-                    label: "Name",
-                    render: (ca: CaCertificateView) => <Typography fontWeight={600}>{ca.name}</Typography>,
-                  },
-                  {
-                    id: "created_at",
-                    label: "Added",
-                    render: (ca: CaCertificateView) => (
-                      <Typography variant="body2" color="text.secondary">
-                        {new Date(ca.created_at).toLocaleDateString()}
-                      </Typography>
-                    ),
-                  },
-                  {
-                    id: "issued",
-                    label: "Issued Client Certs",
-                    render: (ca: CaCertificateView) => {
-                      const activeCount = ca.issuedCerts.filter((issued) => !issued.revoked_at).length;
-                      if (ca.issuedCerts.length === 0) {
-                        return (
-                          <Typography variant="body2" color="text.secondary">
-                            None
-                          </Typography>
-                        );
-                      }
-                      return (
-                        <Chip
-                          label={`${activeCount}/${ca.issuedCerts.length} active`}
-                          size="small"
-                          color={activeCount > 0 ? "success" : "default"}
-                          variant="outlined"
-                        />
-                      );
-                    },
-                  },
-                  {
-                    id: "actions",
-                    label: "",
-                    render: (ca: CaCertificateView) => (
-                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                        {ca.has_private_key && (
-                          <Tooltip title="Issue Client Certificate">
-                            <Button size="small" variant="outlined" onClick={() => setIssueCaCert(ca)}>
-                              Issue Cert
-                            </Button>
-                          </Tooltip>
-                        )}
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => setManageIssuedCaCert(ca)}
-                          disabled={ca.issuedCerts.length === 0}
-                        >
-                          Issued
-                        </Button>
-                        <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => setEditCaCert(ca)}>
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
-                          <IconButton size="small" color="error" onClick={() => setDeleteCaCert(ca)}>
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Stack>
-                    ),
-                  },
-                ]}
-                data={caCertificates}
-                keyField="id"
-                emptyMessage="No CA certificates found"
-              />
-            )}
-          </Stack>
-        </AccordionDetails>
-      </Accordion>
-
-      {/* CA Cert Dialogs */}
-      <CreateCaCertDialog open={createCaOpen} onClose={() => setCreateCaOpen(false)} />
-      {editCaCert && (
-        <EditCaCertDialog
-          open={!!editCaCert}
-          cert={editCaCert}
-          onClose={() => setEditCaCert(null)}
+      {/* Tab panels */}
+      {activeTab === "acme" && (
+        <AcmeTab
+          acmeHosts={acmeHosts}
+          acmePagination={acmePagination}
+          search={searchAcme}
+          statusFilter={statusFilter}
         />
       )}
-      {deleteCaCert && (
-        <DeleteCaCertDialog
-          open={!!deleteCaCert}
-          cert={deleteCaCert}
-          onClose={() => setDeleteCaCert(null)}
+      {activeTab === "imported" && (
+        <ImportedTab
+          importedCerts={importedCerts}
+          managedCerts={managedCerts}
+          search={searchImported}
+          statusFilter={statusFilter}
         />
       )}
-      {issueCaCert && (
-        <IssueClientCertDialog
-          open={!!issueCaCert}
-          cert={issueCaCert}
-          onClose={() => setIssueCaCert(null)}
-        />
-      )}
-      {manageIssuedCaCert && (
-        <ManageIssuedClientCertsDialog
-          open={!!manageIssuedCaCert}
-          cert={manageIssuedCaCert}
-          issuedCerts={manageIssuedCaCert.issuedCerts}
-          onClose={() => setManageIssuedCaCert(null)}
+      {activeTab === "ca" && (
+        <CaTab
+          caCertificates={caCertificates}
+          search={searchCa}
+          statusFilter={statusFilter}
         />
       )}
     </Stack>
