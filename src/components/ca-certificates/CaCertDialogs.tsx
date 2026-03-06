@@ -9,8 +9,10 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControlLabel,
   InputAdornment,
   Stack,
+  Switch,
   Tab,
   Tabs,
   TextField,
@@ -27,14 +29,28 @@ import {
   updateCaCertificateAction,
 } from "@/app/(dashboard)/certificates/ca-actions";
 
-function downloadText(filename: string, content: string) {
-  const blob = new Blob([content], { type: "text/plain" });
+function downloadFile(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function decodeBase64(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(new ArrayBuffer(binary.length));
+
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return bytes.buffer;
+}
+
+function sanitizeFilenameSegment(value: string): string {
+  return value.trim().replace(/[^a-z0-9._-]+/gi, "_").replace(/^_+|_+$/g, "") || "client";
 }
 
 export function CreateCaCertDialog({
@@ -76,84 +92,82 @@ export function CreateCaCertDialog({
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>Add Client CA Certificate</DialogTitle>
       <DialogContent>
-        {true && (
-          <>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-              <Tab value="generate" label="Generate" />
-              <Tab value="import" label="Import PEM" />
-            </Tabs>
+        <>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+            <Tab value="generate" label="Generate" />
+            <Tab value="import" label="Import PEM" />
+          </Tabs>
 
-            {tab === "generate" && (
-              <form ref={generateFormRef} onSubmit={handleGenerate}>
-                <Stack spacing={2}>
-                  <TextField
-                    name="name"
-                    label="Name"
-                    required
-                    fullWidth
-                    autoFocus
-                    placeholder="My Client CA"
-                    helperText="Display name in this UI"
-                  />
-                  <TextField
-                    name="common_name"
-                    label="Common Name (CN)"
-                    fullWidth
-                    placeholder="My Client CA"
-                    helperText="CN field in the certificate. Defaults to the name above if left blank."
-                  />
-                  <TextField
-                    name="validity_days"
-                    label="Validity"
-                    type="number"
-                    fullWidth
-                    defaultValue={3650}
-                    inputProps={{ min: 1, max: 3650 }}
-                    InputProps={{ endAdornment: <InputAdornment position="end">days</InputAdornment> }}
-                  />
-                  <DialogActions sx={{ px: 0, pb: 0 }}>
-                    <Button onClick={handleClose} disabled={isPending}>Cancel</Button>
-                    <Button type="submit" variant="contained" disabled={isPending}>
-                      {isPending ? "Generating..." : "Generate CA Certificate"}
-                    </Button>
-                  </DialogActions>
-                </Stack>
-              </form>
-            )}
+          {tab === "generate" && (
+            <form ref={generateFormRef} onSubmit={handleGenerate}>
+              <Stack spacing={2}>
+                <TextField
+                  name="name"
+                  label="Name"
+                  required
+                  fullWidth
+                  autoFocus
+                  placeholder="My Client CA"
+                  helperText="Display name in this UI"
+                />
+                <TextField
+                  name="common_name"
+                  label="Common Name (CN)"
+                  fullWidth
+                  placeholder="My Client CA"
+                  helperText="CN field in the certificate. Defaults to the name above if left blank."
+                />
+                <TextField
+                  name="validity_days"
+                  label="Validity"
+                  type="number"
+                  fullWidth
+                  defaultValue={3650}
+                  inputProps={{ min: 1, max: 3650 }}
+                  InputProps={{ endAdornment: <InputAdornment position="end">days</InputAdornment> }}
+                />
+                <DialogActions sx={{ px: 0, pb: 0 }}>
+                  <Button onClick={handleClose} disabled={isPending}>Cancel</Button>
+                  <Button type="submit" variant="contained" disabled={isPending}>
+                    {isPending ? "Generating..." : "Generate CA Certificate"}
+                  </Button>
+                </DialogActions>
+              </Stack>
+            </form>
+          )}
 
-            {tab === "import" && (
-              <form ref={importFormRef} onSubmit={handleImport}>
-                <Stack spacing={2}>
-                  <TextField
-                    name="name"
-                    label="Name"
-                    required
-                    fullWidth
-                    autoFocus
-                    placeholder="My Client CA"
-                  />
-                  <TextField
-                    name="certificate_pem"
-                    label="Certificate PEM"
-                    required
-                    fullWidth
-                    multiline
-                    minRows={6}
-                    placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
-                    inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-                    helperText="PEM-encoded X.509 CA certificate (no private key needed)"
-                  />
-                  <DialogActions sx={{ px: 0, pb: 0 }}>
-                    <Button onClick={handleClose} disabled={isPending}>Cancel</Button>
-                    <Button type="submit" variant="contained" disabled={isPending}>
-                      {isPending ? "Adding..." : "Add CA Certificate"}
-                    </Button>
-                  </DialogActions>
-                </Stack>
-              </form>
-            )}
-          </>
-        )}
+          {tab === "import" && (
+            <form ref={importFormRef} onSubmit={handleImport}>
+              <Stack spacing={2}>
+                <TextField
+                  name="name"
+                  label="Name"
+                  required
+                  fullWidth
+                  autoFocus
+                  placeholder="My Client CA"
+                />
+                <TextField
+                  name="certificate_pem"
+                  label="Certificate PEM"
+                  required
+                  fullWidth
+                  multiline
+                  minRows={6}
+                  placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                  inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
+                  helperText="PEM-encoded X.509 CA certificate (no private key needed)"
+                />
+                <DialogActions sx={{ px: 0, pb: 0 }}>
+                  <Button onClick={handleClose} disabled={isPending}>Cancel</Button>
+                  <Button type="submit" variant="contained" disabled={isPending}>
+                    {isPending ? "Adding..." : "Add CA Certificate"}
+                  </Button>
+                </DialogActions>
+              </Stack>
+            </form>
+          )}
+        </>
       </DialogContent>
     </Dialog>
   );
@@ -227,7 +241,12 @@ export function IssueClientCertDialog({
   onClose: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
-  const [issued, setIssued] = useState<{ certificatePem: string; privateKeyPem: string; name: string } | null>(null);
+  const [issued, setIssued] = useState<{
+    pkcs12Base64: string;
+    name: string;
+    passwordProtected: boolean;
+    exportAlgorithm: "3des" | "aes256";
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -244,7 +263,10 @@ export function IssueClientCertDialog({
     startTransition(async () => {
       try {
         const result = await issueClientCertificateAction(cert.id, formData);
-        setIssued({ ...result, name: String(formData.get("common_name") ?? "client") });
+        setIssued({
+          ...result,
+          name: sanitizeFilenameSegment(String(formData.get("common_name") ?? "client")),
+        });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to issue certificate");
       }
@@ -258,22 +280,29 @@ export function IssueClientCertDialog({
         {issued ? (
           <Stack spacing={2} mt={1}>
             <Alert severity="success">
-              Client certificate issued. Download the certificate and key — the private key will not be stored.
+              Client certificate issued. Download the .p12 bundle now. It contains the client certificate,
+              private key, and CA chain, and the private key will not be stored.
             </Alert>
+            <Typography variant="body2" color="text.secondary">
+              Export format: {issued.exportAlgorithm === "3des" ? "Compatibility mode (3DES)" : "AES-256"}.
+            </Typography>
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
-              onClick={() => downloadText(`${issued.name}.crt`, issued.certificatePem)}
+              onClick={() =>
+                downloadFile(
+                  `${issued.name}.p12`,
+                  new Blob([decodeBase64(issued.pkcs12Base64)], { type: "application/x-pkcs12" })
+                )
+              }
             >
-              Download Certificate (.crt)
+              Download Client Certificate (.p12)
             </Button>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={() => downloadText(`${issued.name}.key`, issued.privateKeyPem)}
-            >
-              Download Private Key (.key)
-            </Button>
+            {issued.passwordProtected && (
+              <Typography variant="body2" color="text.secondary">
+                Import it using the export password you entered during issuance.
+              </Typography>
+            )}
           </Stack>
         ) : (
           <form ref={formRef} onSubmit={handleSubmit}>
@@ -296,6 +325,21 @@ export function IssueClientCertDialog({
                 inputProps={{ min: 1, max: 3650 }}
                 InputProps={{ endAdornment: <InputAdornment position="end">days</InputAdornment> }}
               />
+              <TextField
+                name="export_password"
+                label="Export Password"
+                type="password"
+                required
+                fullWidth
+                helperText="Used to protect the .p12 bundle when importing it into operating systems and browsers"
+              />
+              <FormControlLabel
+                control={<Switch name="compatibility_mode" defaultChecked />}
+                label="Compatibility mode"
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>
+                Enabled uses 3DES for broader OS/browser import compatibility. Disabled uses AES-256.
+              </Typography>
               {error && <Typography color="error" variant="body2">{error}</Typography>}
               <DialogActions sx={{ px: 0, pb: 0 }}>
                 <Button onClick={handleClose} disabled={isPending}>Cancel</Button>
@@ -363,4 +407,3 @@ export function DeleteCaCertDialog({
     </Dialog>
   );
 }
-

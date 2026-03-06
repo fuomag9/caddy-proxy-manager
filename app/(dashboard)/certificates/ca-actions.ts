@@ -92,8 +92,9 @@ export async function generateCaCertificateAction(formData: FormData): Promise<{
 }
 
 export type IssuedClientCert = {
-  certificatePem: string;
-  privateKeyPem: string;
+  pkcs12Base64: string;
+  passwordProtected: boolean;
+  exportAlgorithm: "3des" | "aes256";
 };
 
 export async function issueClientCertificateAction(
@@ -103,8 +104,12 @@ export async function issueClientCertificateAction(
   await requireAdmin();
   const commonName = String(formData.get("common_name") ?? "").trim();
   const validityDays = Math.min(3650, Math.max(1, parseInt(String(formData.get("validity_days") ?? "365"), 10) || 365));
+  const exportPassword = String(formData.get("export_password") ?? "");
+  const compatibilityMode = formData.get("compatibility_mode") === "on";
+  const exportAlgorithm: IssuedClientCert["exportAlgorithm"] = compatibilityMode ? "3des" : "aes256";
 
   if (!commonName) throw new Error("Common name is required");
+  if (!exportPassword) throw new Error("Export password is required");
 
   const caPrivateKeyPem = await getCaCertificatePrivateKey(caCertId);
   if (!caPrivateKeyPem) throw new Error("This CA has no stored private key — cannot issue client certificates");
@@ -133,8 +138,20 @@ export async function issueClientCertificateAction(
 
   cert.sign(caKey, forge.md.sha256.create());
 
+  const pkcs12Asn1 = forge.pkcs12.toPkcs12Asn1(
+    keypair.privateKey,
+    [cert, caCert],
+    exportPassword,
+    {
+      algorithm: exportAlgorithm,
+      friendlyName: commonName,
+    }
+  );
+  const pkcs12Der = forge.asn1.toDer(pkcs12Asn1).getBytes();
+
   return {
-    certificatePem: forge.pki.certificateToPem(cert),
-    privateKeyPem: forge.pki.privateKeyToPem(keypair.privateKey),
+    pkcs12Base64: forge.util.encode64(pkcs12Der),
+    passwordProtected: true,
+    exportAlgorithm,
   };
 }
