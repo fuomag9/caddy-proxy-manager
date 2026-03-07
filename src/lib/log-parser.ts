@@ -84,7 +84,7 @@ interface CaddyLogEntry {
 // Build a set of signatures from caddy-blocker's "request blocked" entries so we
 // can mark the corresponding "handled request" rows correctly instead of using
 // status === 403 (which would also catch legitimate upstream 403s).
-function collectBlockedSignatures(lines: string[]): Set<string> {
+export function collectBlockedSignatures(lines: string[]): Set<string> {
   const blocked = new Set<string>();
   for (const line of lines) {
     let entry: CaddyLogEntry;
@@ -97,7 +97,7 @@ function collectBlockedSignatures(lines: string[]): Set<string> {
   return blocked;
 }
 
-function parseLine(line: string, blocked: Set<string>): typeof trafficEvents.$inferInsert | null {
+export function parseLine(line: string, blocked: Set<string>): typeof trafficEvents.$inferInsert | null {
   let entry: CaddyLogEntry;
   try {
     entry = JSON.parse(line);

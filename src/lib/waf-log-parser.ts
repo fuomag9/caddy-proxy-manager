@@ -65,7 +65,7 @@ interface RuleInfo {
   severity: string | null;
 }
 
-function extractBracketField(msg: string, field: string): string | null {
+export function extractBracketField(msg: string, field: string): string | null {
   const m = msg.match(new RegExp(`\\[${field} "([^"]*)"\\]`));
   return m ? m[1] : null;
 }

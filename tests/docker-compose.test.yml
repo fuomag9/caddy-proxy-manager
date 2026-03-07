@@ -1,0 +1,23 @@
+services:
+  web:
+    environment:
+      SESSION_SECRET: "test-session-secret-32chars!xxx"
+      ADMIN_USERNAME: testadmin
+      ADMIN_PASSWORD: "TestPassword2026!"
+      BASE_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
+  caddy:
+    ports:
+      - "80:80"
+      - "443:443"
+volumes:
+  caddy-manager-data:
+    name: caddy-manager-data-test
+  caddy-data:
+    name: caddy-data-test
+  caddy-config:
+    name: caddy-config-test
+  caddy-logs:
+    name: caddy-logs-test
+  geoip-data:
+    name: geoip-data-test

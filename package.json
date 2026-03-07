@@ -10,7 +10,13 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "test": "vitest run --config tests/vitest.config.ts",
+    "test:watch": "vitest --config tests/vitest.config.ts",
+    "test:ui": "vitest --ui --config tests/vitest.config.ts",
+    "test:e2e": "playwright test --config tests/playwright.config.ts",
+    "test:e2e:ui": "playwright test --ui --config tests/playwright.config.ts",
+    "test:e2e:headed": "playwright test --headed --config tests/playwright.config.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -39,16 +45,20 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@next/eslint-plugin-next": "^16.1.6",
+    "@playwright/test": "^1.58.2",
     "@types/d3-geo": "^3.1.0",
     "@types/node": "^25.3.3",
     "@types/node-forge": "^1.3.14",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/topojson-client": "^3.1.5",
+    "@vitest/ui": "^4.0.18",
     "drizzle-kit": "^0.31.9",
     "eslint": "^10.0.2",
-    "typescript-eslint": "^8.56.1",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.0.18",
     "world-atlas": "^2.0.2"
   }
 }

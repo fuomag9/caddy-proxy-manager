@@ -17,3 +17,8 @@ docs/plans
 /.playwright-mcp
 /.worktrees
 docker-compose.override.yml
+
+# Playwright auth state
+tests/.auth/
+test-results/
+playwright-report/
