@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolve } from 'node:path';
 
 export default defineConfig({
   testDir: './e2e',
@@ -11,7 +12,7 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:3000',
-    storageState: './.auth/admin.json',
+    storageState: resolve(__dirname, '.auth/admin.json'),
     trace: 'on-first-retry',
   },
   projects: [

@@ -19,7 +19,7 @@ export default async function globalTeardown() {
     console.warn('[global-teardown] docker compose down failed:', err);
   }
 
-  const authDir = resolve(process.cwd(), 'tests/.auth');
+  const authDir = resolve(__dirname, '.auth');
   if (existsSync(authDir)) {
     rmSync(authDir, { recursive: true, force: true });
     console.log('[global-teardown] Removed', authDir);
