@@ -47,6 +47,7 @@ import {
   proxyHosts
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig } from "./models/proxy-hosts";
+import { pemToBase64Der, buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -465,14 +466,6 @@ async function resolveUpstreamDials(
     hasHttpsUpstream,
     httpsTlsServerName: canResolveHttps && httpsHostnames.length === 1 ? httpsHostnames[0] : null
   };
-}
-
-function pemToBase64Der(pem: string): string {
-  // Strip PEM headers/footers and whitespace — what remains is the base64-encoded DER
-  return pem
-    .replace(/-----BEGIN CERTIFICATE-----/, "")
-    .replace(/-----END CERTIFICATE-----/, "")
-    .replace(/\s+/g, "");
 }
 
 function collectCertificateUsage(rows: ProxyHostRow[], certificates: Map<number, CertificateRow>) {
@@ -1104,65 +1097,6 @@ async function buildProxyRoutes(
   return routes;
 }
 
-function buildClientAuthentication(
-  domains: string[],
-  mTlsDomainMap: Map<string, number[]>,
-  caCertMap: Map<number, { id: number; certificatePem: string }>,
-  issuedClientCertMap: Map<number, string[]>,
-  cAsWithAnyIssuedCerts: Set<number>
-): Record<string, unknown> | null {
-  // Collect all CA cert IDs for any domain in this policy that has mTLS.
-  const caCertIds = new Set<number>();
-  for (const domain of domains) {
-    const ids = mTlsDomainMap.get(domain.toLowerCase());
-    if (ids) {
-      for (const id of ids) caCertIds.add(id);
-    }
-  }
-  if (caCertIds.size === 0) return null;
-
-  // trusted_leaf_certs is an ADDITIONAL check on top of CA chain validation
-  // (Caddy rejects without trusted_ca_certs even when trusted_leaf_certs is set).
-  //
-  // Strategy:
-  //  - Unmanaged CA (no tracked issued certs): trust any cert signed by that CA
-  //    → CA cert in trusted_ca_certs only.
-  //  - Managed CA with active certs: trust only those specific leaf certs
-  //    → CA cert in trusted_ca_certs (for chain validation) +
-  //      active leaf certs in trusted_leaf_certs (revocation enforcement).
-  //  - Managed CA with ALL certs revoked: exclude it from trusted_ca_certs so
-  //    chain validation fails — no cert from it will be accepted.
-  const trustedCaCerts: string[] = [];
-  const trustedLeafCerts: string[] = [];
-
-  for (const id of caCertIds) {
-    const ca = caCertMap.get(id);
-    if (!ca) continue;
-
-    if (cAsWithAnyIssuedCerts.has(id)) {
-      // Managed CA: enforce revocation via leaf pinning
-      const activeLeafCerts = issuedClientCertMap.get(id) ?? [];
-      if (activeLeafCerts.length === 0) {
-        // All certs revoked: exclude CA so chain validation fails for its certs
-        continue;
-      }
-      trustedCaCerts.push(pemToBase64Der(ca.certificatePem));
-      for (const certPem of activeLeafCerts) {
-        trustedLeafCerts.push(pemToBase64Der(certPem));
-      }
-    } else {
-      // Unmanaged CA: trust any cert in the chain
-      trustedCaCerts.push(pemToBase64Der(ca.certificatePem));
-    }
-  }
-
-  if (trustedCaCerts.length === 0) return null;
-
-  const result: Record<string, unknown> = { mode: "require_and_verify", trusted_ca_certs: trustedCaCerts };
-  if (trustedLeafCerts.length > 0) result.trusted_leaf_certs = trustedLeafCerts;
-  return result;
-}
-
 function buildTlsConnectionPolicies(
   usage: Map<number, CertificateUsage>,
   managedCertificatesWithAutomation: Set<number>,
@@ -1179,6 +1113,25 @@ function buildTlsConnectionPolicies(
   const buildAuth = (domains: string[]) =>
     buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap, cAsWithAnyIssuedCerts);
 
+  /**
+   * Pushes one TLS policy per unique CA set found in `mTlsDomains`.
+   * Domains that share the same CA configuration are grouped into one policy;
+   * domains with different CAs get separate policies so a cert from CA_B cannot
+   * authenticate against a host that only trusts CA_A.
+   */
+  const pushMtlsPolicies = (mTlsDomains: string[]) => {
+    const groups = groupMtlsDomainsByCaSet(mTlsDomains, mTlsDomainMap);
+    for (const domainGroup of groups.values()) {
+      const mTlsAuth = buildAuth(domainGroup);
+      if (mTlsAuth) {
+        policies.push({ match: { sni: domainGroup }, client_authentication: mTlsAuth });
+      } else {
+        // All CAs have all certs revoked — drop connections rather than allow through without mTLS
+        policies.push({ match: { sni: domainGroup }, drop: true });
+      }
+    }
+  };
+
   // Add policy for auto-managed domains (certificate_id = null)
   if (autoManagedDomains.size > 0) {
     const domains = Array.from(autoManagedDomains);
@@ -1187,13 +1140,7 @@ function buildTlsConnectionPolicies(
     const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
     if (mTlsDomains.length > 0) {
-      const mTlsAuth = buildAuth(mTlsDomains);
-      if (mTlsAuth) {
-        policies.push({ match: { sni: mTlsDomains }, client_authentication: mTlsAuth });
-      } else {
-        // All CAs have all certs revoked — drop connections rather than allow through without mTLS
-        policies.push({ match: { sni: mTlsDomains }, drop: true });
-      }
+      pushMtlsPolicies(mTlsDomains);
     }
     if (nonMTlsDomains.length > 0) {
       policies.push({ match: { sni: nonMTlsDomains } });
@@ -1221,12 +1168,7 @@ function buildTlsConnectionPolicies(
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
       if (mTlsDomains.length > 0) {
-        const mTlsAuth = buildAuth(mTlsDomains);
-        if (mTlsAuth) {
-          policies.push({ match: { sni: mTlsDomains }, client_authentication: mTlsAuth });
-        } else {
-          policies.push({ match: { sni: mTlsDomains }, drop: true });
-        }
+        pushMtlsPolicies(mTlsDomains);
       }
       if (nonMTlsDomains.length > 0) {
         policies.push({ match: { sni: nonMTlsDomains } });
@@ -1245,12 +1187,7 @@ function buildTlsConnectionPolicies(
       const nonMTlsDomains = domains.filter(d => !mTlsDomainMap.has(d));
 
       if (mTlsDomains.length > 0) {
-        const mTlsAuth = buildAuth(mTlsDomains);
-        if (mTlsAuth) {
-          policies.push({ match: { sni: mTlsDomains }, client_authentication: mTlsAuth });
-        } else {
-          policies.push({ match: { sni: mTlsDomains }, drop: true });
-        }
+        pushMtlsPolicies(mTlsDomains);
       }
       if (nonMTlsDomains.length > 0) {
         policies.push({ match: { sni: nonMTlsDomains } });
