@@ -24,7 +24,7 @@ test.describe('Audit Log', () => {
 
     await page.getByLabel('Name').fill('Audit Test Host');
     await page.getByLabel(/domains/i).fill('audit-test.local');
-    await page.getByLabel(/target/i).fill('localhost:8888');
+    await page.getByPlaceholder('10.0.0.5:8080').fill('localhost:8888');
 
     await page.getByRole('button', { name: /^create$/i }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });

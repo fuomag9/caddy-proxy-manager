@@ -21,8 +21,8 @@ test.describe('Proxy Hosts', () => {
 
     await page.getByLabel('Name').fill('E2E Test Host');
     await page.getByLabel(/domains/i).fill('e2etest.local');
-    // Target is the upstream field
-    await page.getByLabel(/target/i).fill('localhost:9999');
+    // Upstream field uses placeholder text, not a label
+    await page.getByPlaceholder('10.0.0.5:8080').fill('localhost:9999');
 
     await page.getByRole('button', { name: /^create$/i }).click();
 
@@ -38,7 +38,7 @@ test.describe('Proxy Hosts', () => {
 
     await page.getByLabel('Name').fill('Host To Delete');
     await page.getByLabel(/domains/i).fill('delete-me.local');
-    await page.getByLabel(/target/i).fill('localhost:7777');
+    await page.getByPlaceholder('10.0.0.5:8080').fill('localhost:7777');
     await page.getByRole('button', { name: /^create$/i }).click();
 
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });

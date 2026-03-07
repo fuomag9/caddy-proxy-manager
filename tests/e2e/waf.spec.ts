@@ -15,6 +15,8 @@ test.describe('WAF', () => {
 
   test('WAF page has Save WAF settings button', async ({ page }) => {
     await page.goto('/waf');
+    // Save button is on the Settings tab
+    await page.getByRole('tab', { name: /settings/i }).click();
     await expect(page.getByRole('button', { name: /save waf settings/i })).toBeVisible();
   });
 

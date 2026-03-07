@@ -16,9 +16,9 @@ test.describe('Analytics', () => {
   test('analytics page shows summary stat cards', async ({ page }) => {
     await page.goto('/analytics');
     // These card headers are rendered by AnalyticsClient
-    await expect(page.getByText('Total Requests')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Unique IPs')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Blocked Requests')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Total Requests', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Unique IPs', { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Blocked Requests', { exact: true })).toBeVisible({ timeout: 10000 });
   });
 
   test('analytics page has time range toggle buttons', async ({ page }) => {
