@@ -3,6 +3,20 @@ import { Resolver } from "node:dns/promises";
 import { join } from "node:path";
 import { isIP } from "node:net";
 import crypto from "node:crypto";
+import {
+  PRIVATE_RANGES_CIDRS,
+  expandPrivateRanges,
+  isPlainObject,
+  mergeDeep,
+  parseJson,
+  parseOptionalJson,
+  parseCustomHandlers,
+  formatDialAddress,
+  parseHostPort,
+  parseUpstreamTarget,
+  toDurationMs,
+  type ParsedUpstreamTarget,
+} from "./caddy-utils";
 import http from "node:http";
 import https from "node:https";
 import db, { nowIso } from "./db";
@@ -54,21 +68,6 @@ const DEFAULT_AUTHENTIK_HEADERS = [
 
 const DEFAULT_AUTHENTIK_TRUSTED_PROXIES = ["private_ranges"];
 
-// The caddy-blocker-plugin accepts only literal IP/CIDR strings, not Caddy's
-// "private_ranges" shorthand. Expand it before building the blocker config.
-const PRIVATE_RANGES_CIDRS = [
-  "10.0.0.0/8",
-  "172.16.0.0/12",
-  "192.168.0.0/16",
-  "127.0.0.0/8",
-  "fd00::/8",
-  "::1/128"
-];
-
-function expandPrivateRanges(proxies: string[]): string[] {
-  if (!proxies.includes("private_ranges")) return proxies;
-  return proxies.flatMap((p) => (p === "private_ranges" ? PRIVATE_RANGES_CIDRS : [p]));
-}
 
 type ProxyHostRow = {
   id: number;
@@ -215,79 +214,7 @@ type CertificateUsage = {
   domains: Set<string>;
 };
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseJson<T>(value: string | null, fallback: T): T {
-  if (!value) {
-    return fallback;
-  }
-  try {
-    return JSON.parse(value) as T;
-  } catch (error) {
-    console.warn("Failed to parse JSON value", value, error);
-    return fallback;
-  }
-}
-
-function parseOptionalJson(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-  try {
-    return JSON.parse(value);
-  } catch (error) {
-    console.warn("Failed to parse custom JSON", error);
-    return null;
-  }
-}
-
-function mergeDeep(target: Record<string, unknown>, source: Record<string, unknown>) {
-  for (const [key, value] of Object.entries(source)) {
-    // Block prototype-polluting keys
-    if (
-      key === "__proto__" ||
-      key === "constructor" ||
-      key === "prototype"
-    ) {
-      continue;
-    }
-    const existing = target[key];
-    if (isPlainObject(existing) && isPlainObject(value)) {
-      mergeDeep(existing, value);
-    } else {
-      target[key] = value;
-    }
-  }
-}
-
-function parseCustomHandlers(value: string | null | undefined): Record<string, unknown>[] {
-  const parsed = parseOptionalJson(value);
-  if (!parsed) {
-    return [];
-  }
-  const list = Array.isArray(parsed) ? parsed : [parsed];
-  const handlers: Record<string, unknown>[] = [];
-  for (const item of list) {
-    if (isPlainObject(item)) {
-      handlers.push(item);
-    } else {
-      console.warn("Ignoring custom handler entry that is not an object", item);
-    }
-  }
-  return handlers;
-}
-
 const VALID_UPSTREAM_DNS_FAMILIES: UpstreamDnsAddressFamily[] = ["ipv6", "ipv4", "both"];
-
-type ParsedUpstreamTarget = {
-  original: string;
-  dial: string;
-  scheme: "http" | "https" | null;
-  host: string | null;
-  port: string | null;
-};
 
 type UpstreamDnsResolutionRouteConfig = {
   enabled: boolean | null;
@@ -298,145 +225,6 @@ type EffectiveUpstreamDnsResolution = {
   enabled: boolean;
   family: UpstreamDnsAddressFamily;
 };
-
-function formatDialAddress(host: string, port: string) {
-  return isIP(host) === 6 ? `[${host}]:${port}` : `${host}:${port}`;
-}
-
-function parseHostPort(value: string): { host: string; port: string } | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  if (trimmed.startsWith("[")) {
-    const closeIndex = trimmed.indexOf("]");
-    if (closeIndex <= 1) {
-      return null;
-    }
-    const host = trimmed.slice(1, closeIndex);
-    const remainder = trimmed.slice(closeIndex + 1);
-    if (!remainder.startsWith(":")) {
-      return null;
-    }
-    const port = remainder.slice(1).trim();
-    if (!port) {
-      return null;
-    }
-    return { host, port };
-  }
-
-  const firstColon = trimmed.indexOf(":");
-  const lastColon = trimmed.lastIndexOf(":");
-  if (firstColon === -1 || firstColon !== lastColon) {
-    return null;
-  }
-
-  const host = trimmed.slice(0, lastColon).trim();
-  const port = trimmed.slice(lastColon + 1).trim();
-  if (!host || !port) {
-    return null;
-  }
-
-  return { host, port };
-}
-
-function parseUpstreamTarget(upstream: string): ParsedUpstreamTarget {
-  const trimmed = upstream.trim();
-  if (!trimmed) {
-    return {
-      original: upstream,
-      dial: upstream,
-      scheme: null,
-      host: null,
-      port: null
-    };
-  }
-
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol === "http:" || url.protocol === "https:") {
-      const scheme = url.protocol === "https:" ? "https" : "http";
-      const port = url.port || (scheme === "https" ? "443" : "80");
-      const host = url.hostname;
-      return {
-        original: trimmed,
-        dial: formatDialAddress(host, port),
-        scheme,
-        host,
-        port
-      };
-    }
-  } catch {
-    // Ignore and parse as host:port below.
-  }
-
-  const parsed = parseHostPort(trimmed);
-  if (!parsed) {
-    return {
-      original: trimmed,
-      dial: trimmed,
-      scheme: null,
-      host: null,
-      port: null
-    };
-  }
-
-  return {
-    original: trimmed,
-    dial: formatDialAddress(parsed.host, parsed.port),
-    scheme: null,
-    host: parsed.host,
-    port: parsed.port
-  };
-}
-
-function toDurationMs(value: string | null | undefined): number | null {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const regex = /(\d+(?:\.\d+)?)(ms|s|m|h)/g;
-  let total = 0;
-  let matched = false;
-  let consumed = 0;
-
-  while (true) {
-    const match = regex.exec(trimmed);
-    if (!match) {
-      break;
-    }
-
-    matched = true;
-    consumed += match[0].length;
-    const valueNum = Number.parseFloat(match[1]);
-    if (!Number.isFinite(valueNum)) {
-      return null;
-    }
-    const unit = match[2];
-    if (unit === "ms") {
-      total += valueNum;
-    } else if (unit === "s") {
-      total += valueNum * 1000;
-    } else if (unit === "m") {
-      total += valueNum * 60_000;
-    } else if (unit === "h") {
-      total += valueNum * 3_600_000;
-    }
-  }
-
-  if (!matched || consumed !== trimmed.length) {
-    return null;
-  }
-
-  const rounded = Math.round(total);
-  return rounded > 0 ? rounded : null;
-}
 
 function parseUpstreamDnsResolutionConfig(
   meta: UpstreamDnsResolutionMeta | undefined | null

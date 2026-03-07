@@ -8,7 +8,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 2,
   retries: 0,
-  timeout: 30_000,
+  timeout: 60_000, // functional tests need time for Caddy reloads
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:3000',

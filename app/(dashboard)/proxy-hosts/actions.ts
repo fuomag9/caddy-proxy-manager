@@ -18,88 +18,15 @@ import {
 } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
-
-function parseCsv(value: FormDataEntryValue | null): string[] {
-  if (!value || typeof value !== "string") {
-    return [];
-  }
-  return value
-    .replace(/\n/g, ",")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-// Parse upstreams by newline only (URLs may contain commas in query strings)
-function parseUpstreams(value: FormDataEntryValue | null): string[] {
-  if (!value || typeof value !== "string") {
-    return [];
-  }
-  return value
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function parseCheckbox(value: FormDataEntryValue | null): boolean {
-  return value === "on" || value === "true" || value === "1";
-}
-
-function parseOptionalText(value: FormDataEntryValue | null): string | null {
-  if (!value || typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function parseCertificateId(value: FormDataEntryValue | null): number | null {
-  if (!value || value === "") {
-    return null;
-  }
-
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (trimmed === "" || trimmed === "null" || trimmed === "undefined") {
-    return null;
-  }
-
-  const num = Number(trimmed);
-
-  // Check for NaN, Infinity, or non-integer values
-  if (!Number.isFinite(num) || !Number.isInteger(num) || num <= 0) {
-    return null;
-  }
-
-  return num;
-}
-
-function parseAccessListId(value: FormDataEntryValue | null): number | null {
-  if (!value || value === "") {
-    return null;
-  }
-
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (trimmed === "" || trimmed === "null" || trimmed === "undefined") {
-    return null;
-  }
-
-  const num = Number(trimmed);
-
-  // Check for NaN, Infinity, or non-integer values
-  if (!Number.isFinite(num) || !Number.isInteger(num) || num <= 0) {
-    return null;
-  }
-
-  return num;
-}
+import {
+  parseCsv,
+  parseUpstreams,
+  parseCheckbox,
+  parseOptionalText,
+  parseCertificateId,
+  parseAccessListId,
+  parseOptionalNumber,
+} from "@/src/lib/form-parse";
 
 async function validateAndSanitizeCertificateId(
   certificateId: number | null,
@@ -192,20 +119,6 @@ function parseRedirectUrl(raw: FormDataEntryValue | null): string {
   }
 }
 
-function parseOptionalNumber(value: FormDataEntryValue | null): number | null {
-  if (!value || typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (trimmed === "") {
-    return null;
-  }
-  const num = Number(trimmed);
-  if (!Number.isFinite(num)) {
-    return null;
-  }
-  return num;
-}
 
 const VALID_LB_POLICIES: LoadBalancingPolicy[] = ["random", "round_robin", "least_conn", "ip_hash", "first", "header", "cookie", "uri_hash"];
 const VALID_UPSTREAM_DNS_FAMILIES = ["ipv6", "ipv4", "both"] as const;
@@ -539,6 +452,7 @@ export async function createProxyHostAction(
         upstreams: parseUpstreams(formData.get("upstreams")),
         certificate_id: certificateId,
         access_list_id: parseAccessListId(formData.get("access_list_id")),
+        ssl_forced: formData.has("ssl_forced_present") ? parseCheckbox(formData.get("ssl_forced")) : undefined,
         hsts_subdomains: parseCheckbox(formData.get("hsts_subdomains")),
         skip_https_hostname_validation: parseCheckbox(formData.get("skip_https_hostname_validation")),
         enabled: parseCheckbox(formData.get("enabled")),

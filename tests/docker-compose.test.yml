@@ -10,6 +10,20 @@ services:
     ports:
       - "80:80"
       - "443:443"
+  # Lightweight echo server reachable by Caddy as "echo-server:8080".
+  # Returns a fixed body so tests can assert the proxy routed the request.
+  echo-server:
+    image: hashicorp/http-echo
+    command: ["-text=echo-ok", "-listen=:8080"]
+    networks:
+      - caddy-network
+  # Second echo server for load-balancing tests.
+  # Returns a different body so tests can distinguish which upstream served the request.
+  echo-server-2:
+    image: hashicorp/http-echo
+    command: ["-text=echo-server-2", "-listen=:8080"]
+    networks:
+      - caddy-network
 volumes:
   caddy-manager-data:
     name: caddy-manager-data-test
