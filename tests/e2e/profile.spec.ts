@@ -9,44 +9,42 @@ test.describe('Profile', () => {
 
   test('profile page shows username or email', async ({ page }) => {
     await page.goto('/profile');
-    // Should show the user's email or username (testadmin)
-    await expect(page.locator('text=/testadmin|testadmin@/i')).toBeVisible({ timeout: 5000 });
+    // Use first() since username appears in sidebar + profile body
+    await expect(page.locator('text=/testadmin|testadmin@/i').first()).toBeVisible({ timeout: 5000 });
+  });
+
+  test('Change Password button is visible', async ({ page }) => {
+    await page.goto('/profile');
+    await expect(page.getByRole('button', { name: /change password|set password/i })).toBeVisible();
   });
 
   test('change password: wrong current password shows error', async ({ page }) => {
     await page.goto('/profile');
 
-    const currentPasswordInput = page.getByLabel(/current password/i).first();
-    if (await currentPasswordInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await currentPasswordInput.fill('WrongCurrentPassword!');
+    await page.getByRole('button', { name: /change password|set password/i }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
 
-      const newPasswordInput = page.getByLabel(/new password/i).first();
-      await newPasswordInput.fill('NewPassword2026!');
+    await page.getByLabel('Current Password').fill('WrongCurrentPassword!');
+    await page.getByLabel('New Password').fill('NewPassword2026!');
+    await page.getByLabel('Confirm New Password').fill('NewPassword2026!');
 
-      const confirmInput = page.getByLabel(/confirm/i).first();
-      if (await confirmInput.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await confirmInput.fill('NewPassword2026!');
-      }
+    await page.getByRole('button', { name: /change password|set password/i }).last().click();
 
-      await page.getByRole('button', { name: /change|update|save.*password/i }).click();
-      await expect(page.locator('text=/incorrect|wrong|invalid|error/i')).toBeVisible({ timeout: 5000 });
-    } else {
-      // UI may be different
-      test.skip();
-    }
+    // Should show an error alert
+    await expect(page.locator('[role="alert"]')).toBeVisible({ timeout: 10000 });
   });
 
   test('change password: new password too short shows validation error', async ({ page }) => {
     await page.goto('/profile');
 
-    const newPasswordInput = page.getByLabel(/new password/i).first();
-    if (await newPasswordInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await newPasswordInput.fill('short');
-      await newPasswordInput.blur();
-      // Should show validation error about length
-      await expect(page.locator('text=/least.*char|minimum|too short/i')).toBeVisible({ timeout: 3000 });
-    } else {
-      test.skip();
-    }
+    await page.getByRole('button', { name: /change password|set password/i }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    await page.getByLabel('New Password').fill('short');
+    await page.getByLabel('Confirm New Password').fill('short');
+
+    await page.getByRole('button', { name: /change password|set password/i }).last().click();
+
+    await expect(page.locator('text=/at least 12 characters/i')).toBeVisible({ timeout: 5000 });
   });
 });

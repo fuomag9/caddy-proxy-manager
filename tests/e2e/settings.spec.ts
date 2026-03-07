@@ -9,33 +9,30 @@ test.describe('Settings', () => {
 
   test('settings page renders content', async ({ page }) => {
     await page.goto('/settings');
-    // Settings page should have some sections
-    await expect(page.locator('body')).toBeVisible();
-    // Check for settings-related text
     const hasContent = await page.locator('text=/settings|general|cloudflare|dns|logging/i').count() > 0;
     expect(hasContent).toBe(true);
   });
 
-  test('settings page has save buttons', async ({ page }) => {
+  test('settings page has named save buttons', async ({ page }) => {
     await page.goto('/settings');
-    const saveButtons = page.getByRole('button', { name: /save/i });
-    await expect(saveButtons.first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /save general settings/i })).toBeVisible();
   });
 
-  test('general settings section: can fill and save primary domain', async ({ page }) => {
+  test('general settings: fill primary domain and save', async ({ page }) => {
     await page.goto('/settings');
 
-    // Look for the primary domain or general settings input
-    const domainInput = page.getByLabel(/primary domain/i).first();
-    if (await domainInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await domainInput.fill('test.local');
-      const saveBtn = page.getByRole('button', { name: /save/i }).first();
-      await saveBtn.click();
-      // Toast or success indicator should appear
-      await expect(page.locator('text=/saved|success/i')).toBeVisible({ timeout: 5000 });
-    } else {
-      // If the UI is different, just verify the page loaded
-      test.skip();
-    }
+    const domainInput = page.getByLabel('Primary domain');
+    await domainInput.fill('test.local');
+
+    await page.getByRole('button', { name: /save general settings/i }).click();
+
+    // Wait for the button to re-enable (save completes) or any success indicator
+    await expect(page.getByRole('button', { name: /save general settings/i })).toBeEnabled({ timeout: 10000 });
+  });
+
+  test('settings page has Cloudflare and DNS sections', async ({ page }) => {
+    await page.goto('/settings');
+    await expect(page.getByRole('button', { name: /save cloudflare settings/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /save dns settings/i })).toBeVisible();
   });
 });

@@ -5,60 +5,53 @@ test.describe('Proxy Hosts', () => {
     await page.goto('/proxy-hosts');
   });
 
-  test('page loads with Add button visible', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /add/i })).toBeVisible();
+  test('page loads with Create Host button visible', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /create host/i })).toBeVisible();
   });
 
-  test('clicking Add opens a dialog with form fields', async ({ page }) => {
-    await page.getByRole('button', { name: /add/i }).click();
-    // Dialog should open with domain and upstream fields
+  test('clicking Create Host opens a dialog with form fields', async ({ page }) => {
+    await page.getByRole('button', { name: /create host/i }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByLabel(/domain/i)).toBeVisible();
+    await expect(page.getByLabel(/domains/i)).toBeVisible();
   });
 
   test('create a proxy host — appears in the table', async ({ page }) => {
-    await page.getByRole('button', { name: /add/i }).click();
+    await page.getByRole('button', { name: /create host/i }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
-    // Fill in the domain field
-    const domainInput = page.getByLabel(/domain/i).first();
-    await domainInput.fill('e2etest.local');
+    await page.getByLabel('Name').fill('E2E Test Host');
+    await page.getByLabel(/domains/i).fill('e2etest.local');
+    // Target is the upstream field
+    await page.getByLabel(/target/i).fill('localhost:9999');
 
-    // Fill upstream
-    const upstreamInput = page.getByLabel(/upstream/i).first();
-    await upstreamInput.fill('localhost:9999');
+    await page.getByRole('button', { name: /^create$/i }).click();
 
-    // Submit
-    await page.getByRole('button', { name: /save|create|add/i }).last().click();
-
-    // Should appear in the table
-    await expect(page.getByText('e2etest.local')).toBeVisible({ timeout: 10000 });
+    // Dialog should close and host appear in table
+    await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('E2E Test Host')).toBeVisible({ timeout: 10000 });
   });
 
   test('delete proxy host removes it from table', async ({ page }) => {
-    // First create one
-    await page.getByRole('button', { name: /add/i }).click();
+    // Create one to delete
+    await page.getByRole('button', { name: /create host/i }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
-    const domainInput = page.getByLabel(/domain/i).first();
-    await domainInput.fill('delete-me.local');
+    await page.getByLabel('Name').fill('Host To Delete');
+    await page.getByLabel(/domains/i).fill('delete-me.local');
+    await page.getByLabel(/target/i).fill('localhost:7777');
+    await page.getByRole('button', { name: /^create$/i }).click();
 
-    const upstreamInput = page.getByLabel(/upstream/i).first();
-    await upstreamInput.fill('localhost:7777');
+    await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Host To Delete')).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('button', { name: /save|create|add/i }).last().click();
-    await expect(page.getByText('delete-me.local')).toBeVisible({ timeout: 10000 });
+    // Click the Delete icon button for that row
+    const row = page.locator('tr', { hasText: 'Host To Delete' });
+    await row.getByTitle('Delete').click();
 
-    // Find and click the delete button for this row
-    const row = page.locator('tr', { hasText: 'delete-me.local' });
-    await row.getByRole('button', { name: /delete/i }).click();
+    // Confirm dialog
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('button', { name: /^delete$/i }).click();
 
-    // Confirm dialog if present
-    const confirmBtn = page.getByRole('button', { name: /confirm|yes|delete/i });
-    if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await confirmBtn.click();
-    }
-
-    await expect(page.getByText('delete-me.local')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Host To Delete')).not.toBeVisible({ timeout: 10000 });
   });
 });

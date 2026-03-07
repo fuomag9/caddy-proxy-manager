@@ -19,17 +19,16 @@ test.describe('Audit Log', () => {
   test('creating a proxy host creates audit log entry', async ({ page }) => {
     // Create a proxy host
     await page.goto('/proxy-hosts');
-    await page.getByRole('button', { name: /add/i }).click();
+    await page.getByRole('button', { name: /create host/i }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
-    const domainInput = page.getByLabel(/domain/i).first();
-    await domainInput.fill('audit-test.local');
+    await page.getByLabel('Name').fill('Audit Test Host');
+    await page.getByLabel(/domains/i).fill('audit-test.local');
+    await page.getByLabel(/target/i).fill('localhost:8888');
 
-    const upstreamInput = page.getByLabel(/upstream/i).first();
-    await upstreamInput.fill('localhost:8888');
-
-    await page.getByRole('button', { name: /save|create|add/i }).last().click();
-    await expect(page.getByText('audit-test.local')).toBeVisible({ timeout: 10000 });
+    await page.getByRole('button', { name: /^create$/i }).click();
+    await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Audit Test Host')).toBeVisible({ timeout: 10000 });
 
     // Check audit log
     await page.goto('/audit-log');
