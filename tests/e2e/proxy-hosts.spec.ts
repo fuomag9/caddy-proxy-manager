@@ -44,14 +44,16 @@ test.describe('Proxy Hosts', () => {
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Host To Delete')).toBeVisible({ timeout: 10000 });
 
-    // Click the Delete icon button for that row
+    // Click the Delete icon button for that row (last button in actions column)
     const row = page.locator('tr', { hasText: 'Host To Delete' });
-    await row.getByTitle('Delete').click();
+    await row.getByRole('button').last().click();
 
     // Confirm dialog
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('button', { name: /^delete$/i }).click();
 
-    await expect(page.getByText('Host To Delete')).not.toBeVisible({ timeout: 10000 });
+    // Wait for dialog to close, then verify the row is gone from the table
+    await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.locator('tbody').getByText('Host To Delete')).not.toBeVisible({ timeout: 5000 });
   });
 });
