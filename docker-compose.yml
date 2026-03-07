@@ -86,7 +86,9 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "80:80/udp"
       - "443:443"
+      - "443:443/udp"
       # Admin API (port 2019) is only exposed on internal network for security
       # Web UI accesses via http://caddy:2019 internally
       # Uncomment the line below to expose metrics externally for Grafana/Prometheus
