@@ -1,7 +1,7 @@
 services:
   web:
     environment:
-      SESSION_SECRET: "test-session-secret-32chars!xxx"
+      SESSION_SECRET: "test-session-secret-32chars!xxxY"
       ADMIN_USERNAME: testadmin
       ADMIN_PASSWORD: "TestPassword2026!"
       BASE_URL: http://localhost:3000
