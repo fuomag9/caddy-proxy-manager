@@ -251,3 +251,68 @@ describe('resolveEffectiveWaf — override mode', () => {
     expect(result!.enabled).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// buildWafHandler — WebSocket bypass
+// ---------------------------------------------------------------------------
+
+describe('buildWafHandler — WebSocket bypass (regression: silent WAF block on WS upgrade)', () => {
+  it('includes WebSocket bypass rule when allowWebsocket=true', () => {
+    const handler = buildWafHandler(baseWaf, true);
+    expect(handler.directives).toContain('Upgrade');
+    expect(handler.directives).toContain('websocket');
+    expect(handler.directives).toContain('ctl:ruleEngine=off');
+  });
+
+  it('bypass rule uses case-insensitive regex match for the Upgrade header value', () => {
+    const handler = buildWafHandler(baseWaf, true);
+    // The regex must catch both "websocket" and "WebSocket"
+    expect(handler.directives).toContain('(?i)');
+  });
+
+  it('bypass rule is phase:1 so it fires before any OWASP CRS rules', () => {
+    const handler = buildWafHandler(baseWaf, true);
+    expect(handler.directives).toContain('phase:1');
+  });
+
+  it('bypass rule uses nolog,noauditlog to avoid false-positive audit entries', () => {
+    const handler = buildWafHandler(baseWaf, true);
+    expect(handler.directives).toContain('nolog');
+    expect(handler.directives).toContain('noauditlog');
+  });
+
+  it('bypass rule appears BEFORE OWASP CRS includes when both are enabled', () => {
+    const handler = buildWafHandler({ ...baseWaf, load_owasp_crs: true }, true);
+    const directives = handler.directives as string;
+    const wsPos = directives.indexOf('ctl:ruleEngine=off');
+    const crsPos = directives.indexOf('@owasp_crs');
+    expect(wsPos).toBeGreaterThanOrEqual(0);
+    expect(crsPos).toBeGreaterThanOrEqual(0);
+    expect(wsPos).toBeLessThan(crsPos);
+  });
+
+  it('does NOT include WebSocket bypass rule when allowWebsocket=false', () => {
+    const handler = buildWafHandler(baseWaf, false);
+    expect(handler.directives).not.toContain('ctl:ruleEngine=off');
+  });
+
+  it('does NOT include WebSocket bypass rule when allowWebsocket not provided (default false)', () => {
+    const handler = buildWafHandler(baseWaf);
+    expect(handler.directives).not.toContain('ctl:ruleEngine=off');
+  });
+
+  it('still includes all standard directives alongside the bypass rule', () => {
+    const handler = buildWafHandler(baseWaf, true);
+    expect(handler.directives).toContain('SecRuleEngine On');
+    expect(handler.directives).toContain('SecAuditEngine RelevantOnly');
+  });
+
+  it('bypass rule is compatible with custom directives (both present)', () => {
+    const handler = buildWafHandler({
+      ...baseWaf,
+      custom_directives: 'SecRule ARGS "@contains evil" "id:9001,deny"',
+    }, true);
+    expect(handler.directives).toContain('ctl:ruleEngine=off');
+    expect(handler.directives).toContain('SecRule ARGS "@contains evil"');
+  });
+});

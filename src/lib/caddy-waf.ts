@@ -74,9 +74,29 @@ export function resolveEffectiveWaf(
  * the embedded filesystem is unavailable causes a Caddy config load error:
  *   "failed to readfile: open @coraza.conf-recommended: no such file or directory"
  * Therefore all @-prefixed includes are gated behind load_owasp_crs.
+ *
+ * @param allowWebsocket - When true, a SecLang rule is prepended that bypasses
+ *   WAF inspection for the initial HTTP upgrade request (Upgrade: websocket).
+ *   After the protocol switch the connection becomes a WebSocket tunnel that the
+ *   WAF cannot inspect anyway, but without this bypass the WAF may silently drop
+ *   the upgrade handshake: the block happens before SecAuditEngine captures it,
+ *   producing no log entry and an unexplained connection failure.
  */
-export function buildWafHandler(waf: WafSettings): Record<string, unknown> {
+export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Record<string, unknown> {
   const parts: string[] = [];
+
+  if (allowWebsocket) {
+    // WebSocket upgrade is an HTTP GET with Upgrade: websocket.  The WAF sits
+    // first in the handler chain and would process this request.  After the
+    // 101 Switching Protocols response the connection becomes a raw WebSocket
+    // tunnel — the WAF never sees subsequent frames.  Turning the rule engine
+    // off for the upgrade request prevents silent drops while having zero
+    // impact on normal HTTP traffic through the same host.
+    parts.push(
+      'SecRule REQUEST_HEADERS:Upgrade "@rx (?i)^websocket$" ' +
+      '"id:9900,phase:1,pass,nolog,noauditlog,ctl:ruleEngine=off"'
+    );
+  }
 
   if (waf.load_owasp_crs) {
     // @-prefixed paths resolve from the embedded coraza-coreruleset filesystem,

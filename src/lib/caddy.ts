@@ -658,7 +658,7 @@ async function buildProxyRoutes(
       meta.waf
     );
     if (effectiveWaf?.enabled && effectiveWaf.mode !== 'Off') {
-      handlers.unshift(buildWafHandler(effectiveWaf));
+      handlers.unshift(buildWafHandler(effectiveWaf, Boolean(row.allow_websocket)));
     }
 
     if (row.hsts_enabled) {
