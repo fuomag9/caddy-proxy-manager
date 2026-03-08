@@ -48,7 +48,7 @@ import {
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig } from "./models/proxy-hosts";
 import { pemToBase64Der, buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
-import { buildWafHandler } from "./caddy-waf";
+import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -563,54 +563,6 @@ function resolveEffectiveGeoBlock(
   if (hostConfig?.enabled) return hostConfig;
   if (globalConfig?.enabled) return globalConfig;
 
-  return null;
-}
-
-function resolveEffectiveWaf(
-  global: WafSettings | null,
-  host: WafHostConfig | null | undefined
-): WafSettings | null {
-  const hostEnabled = host?.enabled;
-  const globalEnabled = global?.enabled;
-
-  if (!hostEnabled && !globalEnabled) return null;
-
-  // Override mode: use host config entirely
-  if (host && host.waf_mode === "override") {
-    if (!hostEnabled) return null;
-    return {
-      enabled: true,
-      mode: host.mode ?? 'On',
-      load_owasp_crs: host.load_owasp_crs ?? false,
-      custom_directives: host.custom_directives ?? '',
-      excluded_rule_ids: host.excluded_rule_ids,
-    };
-  }
-
-  // Merge mode: start with global, overlay host fields
-  if (host && global) {
-    return {
-      enabled: true,
-      mode: host.mode ?? global.mode,
-      load_owasp_crs: host.load_owasp_crs ?? global.load_owasp_crs,
-      custom_directives: [global.custom_directives, host.custom_directives].filter(Boolean).join('\n'),
-      excluded_rule_ids: [
-        ...(global.excluded_rule_ids ?? []),
-        ...(host.excluded_rule_ids ?? []),
-      ],
-    };
-  }
-
-  if (host?.enabled) {
-    return {
-      enabled: true,
-      mode: host.mode ?? 'On',
-      load_owasp_crs: host.load_owasp_crs ?? false,
-      custom_directives: host.custom_directives ?? '',
-      excluded_rule_ids: host.excluded_rule_ids,
-    };
-  }
-  if (global?.enabled) return global;
   return null;
 }
 

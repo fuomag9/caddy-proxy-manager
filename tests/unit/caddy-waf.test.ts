@@ -10,7 +10,7 @@
  *   "failed to readfile: open @coraza.conf-recommended: no such file or directory"
  */
 import { describe, it, expect } from 'vitest';
-import { buildWafHandler } from '../../src/lib/caddy-waf';
+import { buildWafHandler, resolveEffectiveWaf } from '../../src/lib/caddy-waf';
 
 const baseWaf = {
   enabled: true,
@@ -143,5 +143,111 @@ describe('buildWafHandler — handler structure', () => {
     expect(handler.directives).toContain('SecAuditEngine RelevantOnly');
     expect(handler.directives).toContain('SecAuditLog /logs/waf-audit.log');
     expect(handler.directives).toContain('SecAuditLogFormat JSON');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveEffectiveWaf
+// ---------------------------------------------------------------------------
+
+const globalWaf = {
+  enabled: true,
+  mode: 'On' as const,
+  load_owasp_crs: false,
+  custom_directives: 'SecRule REQUEST_HEADERS:User-Agent "@contains leakix.net" "id:9002,phase:1,deny,status:403,log"',
+};
+
+describe('resolveEffectiveWaf — no per-host config', () => {
+  it('returns null when both global and host are null', () => {
+    expect(resolveEffectiveWaf(null, null)).toBeNull();
+  });
+
+  it('returns null when global is disabled and host is null', () => {
+    expect(resolveEffectiveWaf({ ...globalWaf, enabled: false }, null)).toBeNull();
+  });
+
+  it('applies global WAF when host has no per-host config (null)', () => {
+    const result = resolveEffectiveWaf(globalWaf, null);
+    expect(result).not.toBeNull();
+    expect(result!.enabled).toBe(true);
+    expect(result!.custom_directives).toContain('9002');
+  });
+
+  it('applies global WAF when host config is undefined', () => {
+    const result = resolveEffectiveWaf(globalWaf, undefined);
+    expect(result).not.toBeNull();
+    expect(result!.custom_directives).toContain('9002');
+  });
+});
+
+describe('resolveEffectiveWaf — merge mode (regression: host.enabled=false must opt out)', () => {
+  it('returns null when host explicitly disables WAF in merge mode (the bug fix)', () => {
+    // This was the bug: host.enabled=false in merge mode was ignored and global WAF applied anyway
+    const result = resolveEffectiveWaf(globalWaf, { enabled: false, waf_mode: 'merge' });
+    expect(result).toBeNull();
+  });
+
+  it('returns null when host.enabled=false with no waf_mode set (defaults to merge)', () => {
+    const result = resolveEffectiveWaf(globalWaf, { enabled: false });
+    expect(result).toBeNull();
+  });
+
+  it('merges host settings on top of global when host is enabled', () => {
+    const result = resolveEffectiveWaf(globalWaf, {
+      enabled: true,
+      waf_mode: 'merge',
+      mode: 'On',
+      load_owasp_crs: true,
+      custom_directives: 'SecRule ARGS "@contains evil" "id:9003,deny"',
+    });
+    expect(result).not.toBeNull();
+    expect(result!.load_owasp_crs).toBe(true);
+    // Both global and host custom directives are present
+    expect(result!.custom_directives).toContain('9002');
+    expect(result!.custom_directives).toContain('9003');
+  });
+
+  it('merge result has enabled=true', () => {
+    const result = resolveEffectiveWaf(globalWaf, { enabled: true, waf_mode: 'merge' });
+    expect(result!.enabled).toBe(true);
+  });
+
+  it('merged excluded_rule_ids combines global and host lists', () => {
+    const global = { ...globalWaf, excluded_rule_ids: [941100] };
+    const result = resolveEffectiveWaf(global, {
+      enabled: true,
+      waf_mode: 'merge',
+      excluded_rule_ids: [942200],
+    });
+    expect(result!.excluded_rule_ids).toContain(941100);
+    expect(result!.excluded_rule_ids).toContain(942200);
+  });
+});
+
+describe('resolveEffectiveWaf — override mode', () => {
+  it('returns null when host.enabled=false in override mode', () => {
+    const result = resolveEffectiveWaf(globalWaf, { enabled: false, waf_mode: 'override' });
+    expect(result).toBeNull();
+  });
+
+  it('uses only host config in override mode, ignores global custom_directives', () => {
+    const result = resolveEffectiveWaf(globalWaf, {
+      enabled: true,
+      waf_mode: 'override',
+      mode: 'On',
+      load_owasp_crs: true,
+      custom_directives: 'SecRule ARGS "@contains evil" "id:9003,deny"',
+    });
+    expect(result).not.toBeNull();
+    expect(result!.custom_directives).toBe('SecRule ARGS "@contains evil" "id:9003,deny"');
+    // Global directives are NOT included
+    expect(result!.custom_directives).not.toContain('9002');
+    expect(result!.load_owasp_crs).toBe(true);
+  });
+
+  it('host-only WAF with no global applies correctly', () => {
+    const result = resolveEffectiveWaf(null, { enabled: true, waf_mode: 'override', mode: 'On' });
+    expect(result).not.toBeNull();
+    expect(result!.enabled).toBe(true);
   });
 });

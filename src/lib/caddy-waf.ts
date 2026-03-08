@@ -1,7 +1,69 @@
 /**
- * WAF handler builder for Caddy — extracted from caddy.ts so it can be unit tested.
+ * WAF handler builder and effective-config resolver for Caddy.
+ * Extracted from caddy.ts so these functions can be unit tested.
  */
 import { type WafSettings } from "./settings";
+import { type WafHostConfig } from "./models/proxy-hosts";
+
+/**
+ * Resolves the effective WAF settings for a proxy host by merging or overriding
+ * the global WAF settings with the per-host WAF config.
+ *
+ * Semantics:
+ *  - host = null/undefined          → global settings apply as-is
+ *  - host.enabled === false          → explicit opt-out; no WAF regardless of global
+ *  - host.waf_mode === "override"    → use host config entirely, ignore global
+ *  - host.waf_mode === "merge" (default) → merge host settings on top of global
+ */
+export function resolveEffectiveWaf(
+  global: WafSettings | null,
+  host: WafHostConfig | null | undefined
+): WafSettings | null {
+  const hostEnabled = host?.enabled;
+  const globalEnabled = global?.enabled;
+
+  if (!hostEnabled && !globalEnabled) return null;
+
+  // Override mode: use host config entirely
+  if (host && host.waf_mode === "override") {
+    if (!hostEnabled) return null;
+    return {
+      enabled: true,
+      mode: host.mode ?? 'On',
+      load_owasp_crs: host.load_owasp_crs ?? false,
+      custom_directives: host.custom_directives ?? '',
+      excluded_rule_ids: host.excluded_rule_ids,
+    };
+  }
+
+  // Merge mode: start with global, overlay host fields.
+  // host.enabled === false is an explicit opt-out — respect it even when global is on.
+  if (host && global) {
+    if (host.enabled === false) return null;
+    return {
+      enabled: true,
+      mode: host.mode ?? global.mode,
+      load_owasp_crs: host.load_owasp_crs ?? global.load_owasp_crs,
+      custom_directives: [global.custom_directives, host.custom_directives].filter(Boolean).join('\n'),
+      excluded_rule_ids: [
+        ...(global.excluded_rule_ids ?? []),
+        ...(host.excluded_rule_ids ?? []),
+      ],
+    };
+  }
+
+  if (host?.enabled) {
+    return {
+      enabled: true,
+      mode: host.mode ?? 'On',
+      load_owasp_crs: host.load_owasp_crs ?? false,
+      custom_directives: host.custom_directives ?? '',
+      excluded_rule_ids: host.excluded_rule_ids,
+    };
+  }
+  if (global?.enabled) return global;
+  return null;
+}
 
 /**
  * Builds the Caddy `waf` handler object for the given WAF settings.
