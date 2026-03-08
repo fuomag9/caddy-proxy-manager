@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # Zero out GITHUB_TOKEN permissions — tests have no external dependencies and
+    # need no credentials. No secrets: references in this workflow either, so no
+    # repo secrets are injected into the environment.
+    permissions: {}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit and integration tests
+        run: npm test
