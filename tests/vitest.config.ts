@@ -18,5 +18,11 @@ export default defineConfig({
       resolve(__dirname, 'unit/**/*.test.ts'),
       resolve(__dirname, 'integration/**/*.test.ts'),
     ],
+    // Suppress console output from production code during tests (e.g. expected
+    // warn/error calls when intentionally feeding bad input to parsers).
+    // Tests that need to assert on console calls can still use vi.spyOn(console, ...).
+    onConsoleLog() {
+      return false;
+    },
   },
 });
