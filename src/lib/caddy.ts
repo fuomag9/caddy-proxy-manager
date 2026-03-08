@@ -48,6 +48,7 @@ import {
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig } from "./models/proxy-hosts";
 import { pemToBase64Der, buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
+import { buildWafHandler } from "./caddy-waf";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -611,40 +612,6 @@ function resolveEffectiveWaf(
   }
   if (global?.enabled) return global;
   return null;
-}
-
-function buildWafHandler(waf: WafSettings): Record<string, unknown> {
-  // directives is a single string (Go struct type is string, not []string).
-  // load_owasp_crs: true merges the embedded CRS filesystem so that @-prefixed paths resolve.
-  // We then explicitly Include the CRS files in the correct order via SecLang directives.
-  // The @ prefix references files from the embedded coraza-coreruleset filesystem.
-  const parts = [
-    'Include @coraza.conf-recommended',
-    ...(waf.load_owasp_crs ? [
-      'Include @crs-setup.conf.example',
-      'Include @owasp_crs/*.conf',
-    ] : []),
-    ...(waf.excluded_rule_ids?.length ? [`SecRuleRemoveById ${waf.excluded_rule_ids.join(' ')}`] : []),
-    `SecRuleEngine ${waf.mode}`,
-    // RelevantOnly logs transactions where a rule fired with the auditlog action (which all OWASP
-    // CRS rules include via SecDefaultAction), covering both blocked and DetectionOnly hits.
-    // Clean requests with no rule matches are silently skipped, avoiding massive log growth.
-    'SecAuditEngine RelevantOnly',
-    'SecAuditLog /logs/waf-audit.log',
-    'SecAuditLogFormat JSON',
-    // Omit request/response bodies (parts I, J, E) and intermediate response headers (D)
-    // to prevent logging multi-MB payloads. Headers (B, F) and rule match trailer (H) are kept.
-    'SecAuditLogParts ABFHZ',
-    'SecResponseBodyAccess Off',
-  ];
-
-  if (waf.custom_directives?.trim()) {
-    parts.push(waf.custom_directives.trim());
-  }
-
-  const handler: Record<string, unknown> = { handler: 'waf', directives: parts.join('\n') };
-  if (waf.load_owasp_crs) handler.load_owasp_crs = true;
-  return handler;
 }
 
 function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> {
