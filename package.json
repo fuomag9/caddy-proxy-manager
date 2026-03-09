@@ -56,7 +56,7 @@
     "drizzle-kit": "^0.31.9",
     "eslint": "^10.0.3",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.56.1",
+    "typescript-eslint": "^8.57.0",
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.0.18",
     "world-atlas": "^2.0.2"
