@@ -25,7 +25,7 @@
     "@mui/material": "^7.3.9",
     "@mui/x-date-pickers": "^8.27.2",
     "@types/better-sqlite3": "^7.6.13",
-    "apexcharts": "^5.10.1",
+    "apexcharts": "^5.10.3",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
     "d3-geo": "^3.1.1",
