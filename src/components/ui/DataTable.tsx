@@ -4,6 +4,7 @@ import {
   Box,
   Card,
   Pagination,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -11,6 +12,8 @@ import {
   TableHead,
   TableRow,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -35,6 +38,8 @@ type DataTableProps<T> = {
     page: number;
     perPage: number;
   };
+  /** If provided, renders this instead of the table on xs/sm screens */
+  mobileCard?: (row: T) => ReactNode;
 };
 
 function PaginationBar({ page, perPage, total }: { page: number; perPage: number; total: number }) {
@@ -72,7 +77,34 @@ export function DataTable<T>({
   loading = false,
   onRowClick,
   pagination,
+  mobileCard,
 }: DataTableProps<T>) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+
+  const isEmpty = data.length === 0 && !loading;
+
+  if (isMobile && mobileCard) {
+    return (
+      <Box>
+        {isEmpty ? (
+          <Card variant="outlined" sx={{ py: 6, textAlign: "center" }}>
+            <Typography color="text.secondary">{emptyMessage}</Typography>
+          </Card>
+        ) : (
+          <Stack spacing={1.5}>
+            {data.map((row) => (
+              <Box key={String(row[keyField])} onClick={onRowClick ? () => onRowClick(row) : undefined} sx={onRowClick ? { cursor: "pointer" } : undefined}>
+                {mobileCard(row)}
+              </Box>
+            ))}
+          </Stack>
+        )}
+        {pagination && <PaginationBar {...pagination} />}
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <TableContainer component={Card} variant="outlined" sx={{ overflowX: "auto" }}>
@@ -91,7 +123,7 @@ export function DataTable<T>({
             </TableRow>
           </TableHead>
           <TableBody>
-            {data.length === 0 && !loading ? (
+            {isEmpty ? (
               <TableRow>
                 <TableCell colSpan={columns.length} align="center" sx={{ py: 8 }}>
                   <Typography color="text.secondary">{emptyMessage}</Typography>
