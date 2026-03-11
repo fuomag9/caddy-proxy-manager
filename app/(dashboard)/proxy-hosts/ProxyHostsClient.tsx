@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
+import { Card, IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -136,6 +136,44 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
     }
   ];
 
+  const mobileCard = (host: ProxyHost) => (
+    <Card variant="outlined" sx={{ p: 2 }}>
+      <Stack spacing={1}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="subtitle2" fontWeight={700}>
+            {host.name}
+          </Typography>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            <Switch
+              checked={host.enabled}
+              onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
+              size="small"
+              color="success"
+            />
+            <Tooltip title="Duplicate">
+              <IconButton size="small" onClick={() => { setDuplicateHost(host); setCreateOpen(true); }} color="info">
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Edit">
+              <IconButton size="small" aria-label="Edit" onClick={() => setEditHost(host)} color="primary">
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete">
+              <IconButton size="small" aria-label="Delete" onClick={() => setDeleteHost(host)} color="error">
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+          {host.domains[0]}{host.domains.length > 1 ? ` +${host.domains.length - 1}` : ""} → {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
+        </Typography>
+      </Stack>
+    </Card>
+  );
+
   return (
     <Stack spacing={4}>
       <PageHeader
@@ -159,6 +197,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
         keyField="id"
         emptyMessage={searchTerm ? "No hosts match your search" : "No proxy hosts found"}
         pagination={pagination}
+        mobileCard={mobileCard}
       />
 
       <CreateHostDialog
