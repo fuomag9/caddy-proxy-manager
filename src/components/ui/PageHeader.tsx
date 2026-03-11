@@ -15,7 +15,13 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, description, action }: PageHeaderProps) {
     return (
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2} sx={{ mb: 4 }}>
+        <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", sm: "flex-start" }}
+            spacing={2}
+            sx={{ mb: 4 }}
+        >
             <Stack spacing={1}>
                 <Typography variant="h4" color="text.primary">
                     {title}
