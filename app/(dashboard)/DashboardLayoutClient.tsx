@@ -1,9 +1,10 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  AppBar,
   Avatar,
   Box,
   Button,
@@ -14,6 +15,7 @@ import {
   ListItemIcon,
   ListItemText,
   Stack,
+  Toolbar,
   Typography,
   useTheme,
   useMediaQuery,
@@ -49,6 +51,7 @@ const NAV_ITEMS = [
 ] as const;
 
 const DRAWER_WIDTH = 260;
+const APP_BAR_HEIGHT = 48;
 
 export default function DashboardLayoutClient({ user, children }: { user: User; children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -60,6 +63,10 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
+
+  useEffect(() => {
+    if (isMobile) setMobileOpen(false);
+  }, [pathname, isMobile]);
 
   const drawerContent = (
     <Stack sx={{ height: "100%", p: 2 }}>
@@ -82,7 +89,6 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
               component={Link}
               href={item.href}
               selected={selected}
-              onClick={() => isMobile && setMobileOpen(false)}
               sx={{
                 mb: 0.5,
                 borderRadius: 3,
@@ -111,10 +117,7 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
       <Box sx={{ mt: 2 }}>
         <Divider sx={{ mb: 2, borderColor: "rgba(255,255,255,0.05)" }} />
         <ListItemButton
-          onClick={() => {
-            if (isMobile) setMobileOpen(false);
-            router.push("/profile");
-          }}
+          onClick={() => router.push("/profile")}
           sx={{
             gap: 2,
             px: 1,
@@ -168,15 +171,31 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
       {isMobile && (
-        <IconButton
-          color="inherit"
-          aria-label="open drawer"
-          edge="start"
-          onClick={handleDrawerToggle}
-          sx={{ position: "fixed", top: 16, left: 16, zIndex: 1200, bgcolor: "background.paper", boxShadow: 2 }}
+        <AppBar
+          position="fixed"
+          elevation={0}
+          sx={{
+            bgcolor: "background.paper",
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            zIndex: theme.zIndex.drawer + 1,
+          }}
         >
-          <MenuIcon />
-        </IconButton>
+          <Toolbar variant="dense" sx={{ gap: 1.5 }}>
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ color: "text.secondary" }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="subtitle1" color="primary.main" sx={{ fontWeight: 700, letterSpacing: "-0.02em" }}>
+              Caddy Proxy Manager
+            </Typography>
+          </Toolbar>
+        </AppBar>
       )}
 
       <Box
@@ -194,7 +213,9 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
               width: DRAWER_WIDTH,
               borderRight: "1px solid",
               borderColor: "divider",
-              bgcolor: "background.default"
+              bgcolor: "background.default",
+              top: { xs: `${APP_BAR_HEIGHT}px`, md: 0 },
+              height: { xs: `calc(100% - ${APP_BAR_HEIGHT}px)`, md: "100%" },
             }
           }}
         >
@@ -206,9 +227,9 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
         component="main"
         sx={{
           flexGrow: 1,
-          p: { xs: 3, md: 5 },
+          p: { xs: 2, md: 5 },
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-          mt: { xs: 6, md: 0 }
+          mt: { xs: `${APP_BAR_HEIGHT}px`, md: 0 }
         }}
       >
         <Box sx={{ maxWidth: 1200, mx: "auto" }}>
