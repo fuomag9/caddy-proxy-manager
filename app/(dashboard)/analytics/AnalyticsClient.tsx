@@ -489,12 +489,14 @@ export default function AnalyticsClient() {
               {timeline.length === 0 ? (
                 <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>No data for this period</Box>
               ) : (
-                <ReactApexChart
-                  type="area"
-                  series={timelineSeries}
-                  options={timelineOptions}
-                  height={220}
-                />
+                <Box sx={{ overflowX: "auto", width: "100%" }}>
+                  <ReactApexChart
+                    type="area"
+                    series={timelineSeries}
+                    options={timelineOptions}
+                    height={220}
+                  />
+                </Box>
               )}
             </CardContent>
           </Card>
@@ -508,7 +510,9 @@ export default function AnalyticsClient() {
                     Traffic by Country
                   </Typography>
                   <Box sx={{ flex: 1, minHeight: 0 }}>
-                    <WorldMap data={countries} selectedCountry={selectedCountry} />
+                    <Box sx={{ overflowX: "auto", width: "100%" }}>
+                      <WorldMap data={countries} selectedCountry={selectedCountry} />
+                    </Box>
                   </Box>
                 </CardContent>
               </Card>
@@ -586,7 +590,9 @@ export default function AnalyticsClient() {
                     <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>No data</Box>
                   ) : (
                     <>
+                      <Box sx={{ overflowX: "auto", width: "100%" }}>
                       <ReactApexChart type="donut" series={donutSeries} options={donutOptions} height={220} />
+                    </Box>
                       <Table size="small" sx={{ mt: 1 }}>
                         <TableBody>
                           {protocols.map(p => (
@@ -612,7 +618,9 @@ export default function AnalyticsClient() {
                   {userAgents.length === 0 ? (
                     <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>No data</Box>
                   ) : (
-                    <ReactApexChart type="bar" series={barSeries} options={barOptions} height={260} />
+                    <Box sx={{ overflowX: "auto", width: "100%" }}>
+                      <ReactApexChart type="bar" series={barSeries} options={barOptions} height={260} />
+                    </Box>
                   )}
                 </CardContent>
               </Card>
@@ -689,7 +697,9 @@ export default function AnalyticsClient() {
                 <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
                   Top WAF Rules Triggered
                 </Typography>
-                <ReactApexChart type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
+                <Box sx={{ overflowX: "auto", width: "100%" }}>
+                  <ReactApexChart type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
+                </Box>
                 <Table size="small" sx={{ mt: 2 }}>
                   <TableHead>
                     <TableRow>

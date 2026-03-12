@@ -289,6 +289,7 @@ export default function WorldMapInner({ data, selectedCountry }: { data: Country
         border: '1px solid rgba(148,163,184,0.08)',
         flex: 1,
         minHeight: 280,
+        minWidth: 400,
       }}>
         <MapGL
           mapStyle={MAP_STYLE}
