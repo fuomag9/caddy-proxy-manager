@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Card,
   Chip,
   IconButton,
   Menu,
@@ -88,8 +89,26 @@ function ActionsMenu({ cert, onEdit }: { cert: ImportedCertView; onEdit: () => v
   );
 }
 
+function importedMobileCard(c: ImportedCertView, onEdit: () => void) {
+  return (
+    <Card variant="outlined" sx={{ p: 2 }}>
+      <Stack spacing={0.5}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Typography variant="subtitle2" fontWeight={700}>{c.name}</Typography>
+          <ActionsMenu cert={c} onEdit={onEdit} />
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.75rem" }}>
+          {c.domains.slice(0, 2).join(", ")}{c.domains.length > 2 ? ` +${c.domains.length - 2} more` : ""}
+        </Typography>
+        <RelativeTime validTo={c.validTo} status={c.expiryStatus} />
+      </Stack>
+    </Card>
+  );
+}
+
 export function ImportedTab({ importedCerts, managedCerts, search, statusFilter }: Props) {
   const [drawerCert, setDrawerCert] = useState<ImportedCertView | null | false>(false);
+  const mobileCardRenderer = (c: ImportedCertView) => importedMobileCard(c, () => setDrawerCert(c));
 
   const filtered = importedCerts.filter((c) => {
     if (statusFilter && c.expiryStatus !== statusFilter) return false;
@@ -164,6 +183,7 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
         data={filtered}
         keyField="id"
         emptyMessage="No imported certificates match"
+        mobileCard={mobileCardRenderer}
       />
 
       {/* Legacy managed certs */}

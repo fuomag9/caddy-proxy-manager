@@ -18,6 +18,8 @@ import {
   TableHead,
   TableRow,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -171,6 +173,8 @@ export function CaTab({ caCertificates, search, statusFilter }: Props) {
   const [drawerCert, setDrawerCert] = useState<CaCertificateView | null | false>(false);
   const [deleteCert, setDeleteCert] = useState<CaCertificateView | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const filtered = caCertificates.filter((ca) => {
     // CA certs have no expiry status so if filtering by expiry, hide them
@@ -178,6 +182,50 @@ export function CaTab({ caCertificates, search, statusFilter }: Props) {
     if (search) return ca.name.toLowerCase().includes(search.toLowerCase());
     return true;
   });
+
+  if (isMobile) {
+    return (
+      <Stack spacing={2}>
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button startIcon={<AddIcon />} variant="outlined" size="small" onClick={() => setDrawerCert(null)}>
+            Add CA Certificate
+          </Button>
+        </Box>
+        {filtered.length === 0 ? (
+          <Card variant="outlined" sx={{ py: 6, textAlign: "center" }}>
+            <Typography color="text.secondary">
+              {search || statusFilter ? "No CA certificates match" : "No CA certificates configured."}
+            </Typography>
+          </Card>
+        ) : (
+          <Stack spacing={1.5}>
+            {filtered.map((ca) => {
+              const activeCount = ca.issuedCerts.filter((c) => !c.revoked_at).length;
+              return (
+                <Card key={ca.id} variant="outlined" sx={{ p: 2 }}>
+                  <Stack spacing={0.5}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center">
+                      <Typography variant="subtitle2" fontWeight={700}>{ca.name}</Typography>
+                      <CaActionsMenu ca={ca} onEdit={() => setDrawerCert(ca)} onDelete={() => setDeleteCert(ca)} />
+                    </Stack>
+                    <Stack direction="row" spacing={1} flexWrap="wrap">
+                      {ca.has_private_key && <Chip label="Key stored" size="small" color="success" variant="outlined" />}
+                      {ca.issuedCerts.length > 0 && (
+                        <Chip label={`${activeCount}/${ca.issuedCerts.length} active`} size="small" color={activeCount > 0 ? "success" : "default"} variant="outlined" />
+                      )}
+                      <Typography variant="caption" color="text.secondary">{formatRelativeDate(ca.created_at)}</Typography>
+                    </Stack>
+                  </Stack>
+                </Card>
+              );
+            })}
+          </Stack>
+        )}
+        <CaCertDrawer open={drawerCert !== false} cert={drawerCert || null} onClose={() => setDrawerCert(false)} />
+        {deleteCert && <DeleteCaCertDialog open={!!deleteCert} cert={deleteCert} onClose={() => setDeleteCert(null)} />}
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2}>
