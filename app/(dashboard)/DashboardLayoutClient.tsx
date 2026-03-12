@@ -230,7 +230,7 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
           p: { xs: 2, md: 5 },
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
           mt: { xs: `${APP_BAR_HEIGHT}px`, md: 0 },
-          overflowX: 'hidden',
+          overflowX: { xs: 'hidden', md: 'visible' },
         }}
       >
         <Box sx={{ maxWidth: 1200, mx: "auto" }}>

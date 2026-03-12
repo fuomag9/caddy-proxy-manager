@@ -94,7 +94,7 @@ export function DataTable<T>({
         ) : (
           <Stack spacing={1.5}>
             {data.map((row) => (
-              <Box key={String(row[keyField])} onClick={onRowClick ? () => onRowClick(row) : undefined} sx={onRowClick ? { cursor: "pointer" } : undefined}>
+              <Box key={String(row[keyField])}>
                 {mobileCard(row)}
               </Box>
             ))}

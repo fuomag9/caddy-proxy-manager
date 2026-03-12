@@ -591,8 +591,8 @@ export default function AnalyticsClient() {
                   ) : (
                     <>
                       <Box sx={{ overflowX: "auto", width: "100%" }}>
-                      <ReactApexChart type="donut" series={donutSeries} options={donutOptions} height={220} />
-                    </Box>
+                        <ReactApexChart type="donut" series={donutSeries} options={donutOptions} height={220} />
+                      </Box>
                       <Table size="small" sx={{ mt: 1 }}>
                         <TableBody>
                           {protocols.map(p => (
