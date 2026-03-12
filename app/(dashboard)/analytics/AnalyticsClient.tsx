@@ -282,7 +282,7 @@ export default function AnalyticsClient() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <Stack spacing={4}>
+    <Stack spacing={4} sx={{ maxWidth: '100%', overflow: 'hidden' }}>
       {/* Header */}
       <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} justifyContent="space-between" spacing={2}>
         <Box>
@@ -356,7 +356,7 @@ export default function AnalyticsClient() {
               onChange={(_e, v) => setSelectedHosts(v)}
               disableCloseOnSelect
               limitTags={2}
-              sx={{ width: 260, flexShrink: 0 }}
+              sx={{ width: { xs: '100%', sm: 260 }, flexShrink: 0 }}
               ListboxProps={{
                 // Prevent scroll from the dropdown list leaking to the page
                 style: { overscrollBehavior: 'contain' },
