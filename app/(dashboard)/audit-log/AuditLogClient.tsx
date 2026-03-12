@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Chip, Stack, TextField, Typography } from "@mui/material";
+import { Card, Chip, Stack, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import { DataTable } from "@/src/components/ui/DataTable";
 
@@ -80,6 +80,20 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
     },
   ];
 
+  const mobileCard = (r: EventRow) => (
+    <Card variant="outlined" sx={{ p: 2 }}>
+      <Stack spacing={0.5}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Chip label={r.user} size="small" variant="outlined" />
+          <Typography variant="caption" color="text.secondary">
+            {new Date(r.created_at).toLocaleString()}
+          </Typography>
+        </Stack>
+        <Typography variant="body2">{r.summary}</Typography>
+      </Stack>
+    </Card>
+  );
+
   return (
     <Stack spacing={2} sx={{ width: "100%" }}>
       <Typography variant="h4" fontWeight={600}>
@@ -109,6 +123,7 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
         keyField="id"
         emptyMessage="No audit events found"
         pagination={pagination}
+        mobileCard={mobileCard}
       />
     </Stack>
   );
