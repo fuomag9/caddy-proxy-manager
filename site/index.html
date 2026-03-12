@@ -13,7 +13,7 @@
   <meta property="og:url" content="https://caddyproxymanager.com/" />
   <meta property="og:title" content="Caddy Proxy Manager - Control Every Edge" />
   <meta property="og:description"
-    content="Caddy Proxy Manager – Modern Web UI for Caddy with automatic HTTPS management and reverse proxy configuration." />
+    content="Caddy Proxy Manager – Modern Web UI for Caddy with WAF, automatic HTTPS, geo blocking, instance sync, and reverse proxy management." />
   <meta property="og:image" content="https://caddyproxymanager.com/assets/images/preview.png" />
 
   <!-- Fonts -->
@@ -52,7 +52,7 @@
     <section class="hero container">
       <div class="hero-eyebrow">Open Source &middot; Docker &middot; Next.js</div>
       <h1>Control Every Edge.</h1>
-      <p>The modern web interface for Caddy Server. Automatic HTTPS, geo blocking, traffic analytics, and a full audit trail. All in one place.</p>
+      <p>The modern web interface for Caddy Server. WAF protection, automatic HTTPS, geo blocking, traffic analytics, instance sync, and a full audit trail. All in one place.</p>
 
       <div class="btn-group">
         <a href="#deployment" class="btn btn-primary">Get Started</a>
@@ -84,9 +84,14 @@
           <p>Configure multiple upstreams, load balancing, custom headers, and per-host enable/disable with a clean editor.</p>
         </div>
         <div class="card">
+          <div class="card-icon">🛡️</div>
+          <h3>WAF</h3>
+          <p>Web Application Firewall powered by Coraza with OWASP CRS. Block SQLi, XSS, LFI, and RCE with per-host control and rule suppression.</p>
+        </div>
+        <div class="card">
           <div class="card-icon">🔒</div>
-          <h3>Auto HTTPS</h3>
-          <p>Automatic TLS for every proxy host via Caddy ACME. Let&apos;s Encrypt, ZeroSSL, and Cloudflare DNS-01 out of the box.</p>
+          <h3>Auto HTTPS &amp; CA</h3>
+          <p>Automatic TLS via Caddy ACME with Let&apos;s Encrypt and Cloudflare DNS-01. Built-in CA for issuing internal client certificates.</p>
         </div>
         <div class="card">
           <div class="card-icon">📈</div>
@@ -104,14 +109,19 @@
           <p>HTTP basic auth lists or full OAuth2/OIDC SSO via Authentik, Keycloak, Auth0, and any OIDC provider.</p>
         </div>
         <div class="card">
+          <div class="card-icon">🔄</div>
+          <h3>Instance Sync</h3>
+          <p>Master/slave configuration sync for multi-instance deployments. Push proxy hosts, certs, and settings to replicas on every change.</p>
+        </div>
+        <div class="card">
           <div class="card-icon">📋</div>
           <h3>Audit Log</h3>
           <p>Every configuration change is tracked and full-text searchable. See who did what and when.</p>
         </div>
         <div class="card">
-          <div class="card-icon">🛡️</div>
-          <h3>Certificate Visibility</h3>
-          <p>Issuer, expiry status, and health for every ACME-managed cert. No more guessing what Caddy obtained.</p>
+          <div class="card-icon">📱</div>
+          <h3>Mobile Responsive</h3>
+          <p>Fully responsive UI with card views, mobile app bar, and touch-friendly controls. Manage your infrastructure from any device.</p>
         </div>
         <div class="card">
           <div class="card-icon">🐳</div>
@@ -155,7 +165,7 @@
           <div class="spotlight-text">
             <div class="eyebrow">TLS Certificates</div>
             <h2>HTTPS by default.<br>Visibility built in.</h2>
-            <p>Caddy handles certificate issuance automatically. The Certificates page shows issuer, expiry, and status for every managed cert and lets you import custom ones when needed.</p>
+            <p>Caddy handles certificate issuance automatically. The Certificates page shows issuer, expiry, and status for every managed cert. Import custom certs or use the built-in CA to issue internal client certificates.</p>
           </div>
           <div class="spotlight-image">
             <img src="assets/screenshots/certificates.png" alt="Certificates" loading="lazy" />
@@ -172,6 +182,19 @@
           </div>
           <div class="spotlight-image">
             <img src="assets/screenshots/proxy-editor.png" alt="Proxy Editor" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <section class="spotlight-section">
+        <div class="spotlight container">
+          <div class="spotlight-text">
+            <div class="eyebrow">Security</div>
+            <h2>WAF protection,<br>zero config.</h2>
+            <p>Enable the Coraza-powered WAF with OWASP Core Rule Set in one click. View blocked and detected events, suppress noisy rules globally or per host, and add custom SecLang directives.</p>
+          </div>
+          <div class="spotlight-image">
+            <img src="assets/screenshots/waf.png" alt="WAF Events" loading="lazy" />
           </div>
         </div>
       </section>
