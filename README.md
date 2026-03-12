@@ -16,15 +16,19 @@ This project provides a web UI for Caddy Server, eliminating the need to manuall
 
 **Key features:**
 - Reverse proxy configuration with multiple upstreams, load balancing, and custom headers
+- WAF (Web Application Firewall) powered by Coraza with OWASP Core Rule Set, per-host config, and event log
 - Server-side search and pagination across all data tables
 - HTTP basic auth access lists with multi-account support
 - OAuth2/OIDC authentication support
 - Automatic HTTPS via Caddy's ACME (Let's Encrypt) with Cloudflare DNS-01 support
 - ACME certificate visibility with real issuer, expiry status, and per-host tracking
+- Built-in CA for issuing internal client certificates
 - Optional upstream DNS pinning (resolve upstream hostnames on config apply)
 - Geo blocking per proxy host — block/allow by country, continent, ASN, CIDR, or IP
 - Custom certificate import (internal CA, wildcards, etc.)
+- Instance sync — push configuration from a master to one or more slave instances
 - Audit logging of all configuration changes with full-text search
+- Mobile-responsive UI (iPhone and narrow viewports)
 - Built with Next.js 16, React 19, Drizzle ORM, and TypeScript
 
 ---
@@ -48,13 +52,16 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 ## Features
 
 - **Proxy Hosts** - Reverse proxies with custom headers, multiple upstreams, load balancing, and enable/disable toggle
+- **WAF** - Web Application Firewall powered by Coraza with optional OWASP Core Rule Set (SQLi, XSS, LFI, RCE). Per-host enable/disable, global and per-host rule suppression, custom SecLang directives, and a searchable event log with severity and blocked/detected classification
 - **Analytics** - Live traffic charts, country map, top user agents, and blocked request log with configurable time ranges
 - **Search & Pagination** - Server-side search and pagination on all data tables (proxy hosts, access lists, audit log, certificates)
 - **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host
 - **Access Lists** - Multi-account HTTP basic auth protection assignable per proxy host
-- **Certificates** - Automatic HTTPS for every proxy host via Caddy ACME (Let's Encrypt / ZeroSSL), with issuer and expiry visibility + manual SSL/TLS import
-- **Settings** - ACME email, Cloudflare DNS-01, and upstream DNS pinning defaults
+- **Certificates** - Automatic HTTPS for every proxy host via Caddy ACME (Let's Encrypt / ZeroSSL), with issuer and expiry visibility + manual SSL/TLS import. Built-in CA for issuing internal client certificates
+- **Instance Sync** - Master/slave configuration sync for multi-instance deployments. The master pushes proxy hosts, certificates, access lists, and settings to slaves on every change
+- **Settings** - ACME email, Cloudflare DNS-01, upstream DNS pinning defaults, Authentik outpost, Prometheus metrics
 - **Audit Log** - Searchable configuration change history with user attribution
+- **Mobile UI** - Fully responsive interface optimised for iPhone and other narrow viewports
 
 ---
 
@@ -84,6 +91,11 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `OAUTH_TOKEN_URL` | Optional OAuth token endpoint override | Auto-discovered from `OAUTH_ISSUER` | No |
 | `OAUTH_USERINFO_URL` | Optional OAuth userinfo endpoint override | Auto-discovered from `OAUTH_ISSUER` | No |
 | `OAUTH_ALLOW_AUTO_LINKING` | Allow auto-linking OAuth identities to existing users | `false` | No |
+| `INSTANCE_MODE` | Instance role: `standalone`, `master`, or `slave` | `standalone` | No |
+| `INSTANCE_SYNC_TOKEN` | Bearer token slaves use to authenticate sync requests | None | No (required if `slave`) |
+| `INSTANCE_SLAVES` | JSON array of slave instances for the master to push to | None | No |
+| `INSTANCE_SYNC_INTERVAL` | Periodic sync interval in seconds (`0` = disabled) | `0` | No |
+| `INSTANCE_SYNC_ALLOW_HTTP` | Allow sync over HTTP (for internal Docker networks) | `false` | No |
 
 **Production Requirements:**
 - `SESSION_SECRET`: 32+ characters (`openssl rand -base64 32`)
@@ -159,6 +171,47 @@ Geo blocking requires MaxMind GeoLite2 Country and/or ASN databases. Use the bun
    ```
 
 The databases are stored in the `geoip-data` Docker volume and shared between the web and Caddy containers.
+
+---
+
+## WAF (Web Application Firewall)
+
+The WAF is powered by [Coraza](https://coraza.io/) and integrates the OWASP Core Rule Set.
+
+Enable globally in **WAF → Settings**, then optionally override per proxy host. Two modes:
+- **Block** — requests matching rules are rejected with 403
+- **Detect** — requests are logged but not blocked
+
+**OWASP CRS** covers SQLi, XSS, LFI, RCE, and more (enabled by default when WAF is on).
+
+**Rule suppression** — suppress noisy rules globally or per host from the event detail drawer or the Suppressed Rules tab.
+
+**Custom directives** — any ModSecurity SecLang syntax is accepted, e.g.:
+```
+SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"
+```
+
+---
+
+## Instance Sync
+
+Run a master instance that pushes configuration to one or more slaves on every change.
+
+```bash
+# Master
+INSTANCE_MODE=master
+INSTANCE_SLAVES='[{"name":"replica","url":"https://replica.example.com","token":"<32-char-token>"}]'
+
+# Slave
+INSTANCE_MODE=slave
+INSTANCE_SYNC_TOKEN=<32-char-token>
+```
+
+Synced data: proxy hosts, certificates, access lists, and settings. User accounts are **not** synced.
+
+Use HTTPS slave URLs in production. Set `INSTANCE_SYNC_ALLOW_HTTP=true` only for internal Docker networks.
+
+See the [Environment Variables Reference](https://github.com/fuomag9/caddy-proxy-manager/wiki/Environment-Variables-Reference) for all `INSTANCE_*` options.
 
 ---
 
