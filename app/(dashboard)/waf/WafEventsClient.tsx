@@ -7,6 +7,7 @@ import {
   Alert,
   Box,
   Button,
+  Card,
   Checkbox,
   Chip,
   Collapse,
@@ -498,6 +499,34 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
 
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
+  const mobileCard = (event: WafEvent) => (
+    <Card
+      variant="outlined"
+      sx={{ p: 2, cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}
+      onClick={() => setSelected(event)}
+    >
+      <Stack spacing={1}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack direction="row" spacing={0.5}>
+            <BlockedChip blocked={event.blocked} />
+            <SeverityChip severity={event.severity} />
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            {new Date(event.ts * 1000).toLocaleString()}
+          </Typography>
+        </Stack>
+        <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all" }} color="text.secondary">
+          {event.host || "—"}
+        </Typography>
+        {event.ruleId && (
+          <Typography variant="caption" color="text.disabled">
+            Rule #{event.ruleId}
+          </Typography>
+        )}
+      </Stack>
+    </Card>
+  );
+
   const columns = [
     {
       id: "ts", label: "Time", width: 150,
@@ -606,6 +635,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
             emptyMessage="No WAF events found. Enable the WAF in Settings and send some traffic to see events here."
             pagination={pagination}
             onRowClick={setSelected}
+            mobileCard={mobileCard}
           />
           <WafEventDrawer
             event={selected}
