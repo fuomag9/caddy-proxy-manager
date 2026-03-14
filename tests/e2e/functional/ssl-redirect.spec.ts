@@ -8,7 +8,6 @@
  * Domain: func-ssl.test
  */
 import { test, expect } from '@playwright/test';
-import { createProxyHost } from '../../helpers/proxy-api';
 import { httpGet, waitForRoute } from '../../helpers/http';
 import { injectFormFields } from '../../helpers/http';
 

@@ -1,13 +1,14 @@
 
 import { Box, Stack, Switch, Typography } from "@mui/material";
+import type { SwitchProps } from "@mui/material";
 import { useState } from "react";
 
 type ToggleSetting = {
-    name: string;
+    name: "hsts_subdomains" | "skip_https_hostname_validation";
     label: string;
     description: string;
     defaultChecked: boolean;
-    color?: "success" | "warning" | "default";
+    color?: SwitchProps["color"];
 };
 
 type SettingsTogglesProps = {
@@ -123,10 +124,10 @@ export function SettingsToggles({
                                 </Box>
                                 <Switch
                                     name={setting.name}
-                                    checked={values[setting.name as keyof typeof values] as boolean}
-                                    onChange={handleChange(setting.name as keyof typeof values)}
+                                    checked={values[setting.name]}
+                                    onChange={handleChange(setting.name)}
                                     size="small"
-                                    color={setting.color as any}
+                                    color={setting.color}
                                 />
                             </Stack>
                         </Box>

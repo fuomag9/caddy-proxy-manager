@@ -1,5 +1,4 @@
-
-import { Box, Button, IconButton, Stack, TextField, Tooltip, Typography, Autocomplete, InputAdornment } from "@mui/material";
+import { Box, Button, IconButton, Stack, TextField, Tooltip, Typography, Autocomplete } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveCircleIcon from "@mui/icons-material/RemoveCircle";
 import { useState } from "react";

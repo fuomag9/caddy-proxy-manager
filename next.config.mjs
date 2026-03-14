@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url';
+/* global process */
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

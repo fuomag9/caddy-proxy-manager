@@ -33,7 +33,7 @@ vi.mock('../../src/lib/db', async () => {
 });
 
 // These imports must come AFTER vi.mock to pick up the mocked module.
-import { buildSyncPayload, applySyncPayload } from '../../src/lib/instance-sync';
+import { buildSyncPayload, applySyncPayload, type SyncPayload } from '../../src/lib/instance-sync';
 import * as schema from '../../src/lib/db/schema';
 
 // ---------------------------------------------------------------------------
@@ -197,7 +197,7 @@ describe('buildSyncPayload', () => {
 
 describe('applySyncPayload', () => {
   /** Build a minimal valid payload (all data empty, all settings null). */
-  function emptyPayload() {
+  function emptyPayload(): SyncPayload {
     return {
       generated_at: nowIso(),
       settings: {
@@ -212,18 +212,18 @@ describe('applySyncPayload', () => {
         geoblock: null,
       },
       data: {
-        certificates: [] as any[],
-        caCertificates: [] as any[],
-        issuedClientCertificates: [] as any[],
-        accessLists: [] as any[],
-        accessListEntries: [] as any[],
-        proxyHosts: [] as any[],
+        certificates: [],
+        caCertificates: [],
+        issuedClientCertificates: [],
+        accessLists: [],
+        accessListEntries: [],
+        proxyHosts: [],
       },
     };
   }
 
   it('runs without error on an empty payload', async () => {
-    await expect(applySyncPayload(emptyPayload() as any)).resolves.toBeUndefined();
+    await expect(applySyncPayload(emptyPayload())).resolves.toBeUndefined();
   });
 
   it('clears existing proxy hosts when payload has empty array', async () => {
@@ -231,7 +231,7 @@ describe('applySyncPayload', () => {
     const before = await ctx.db.select().from(schema.proxyHosts);
     expect(before).toHaveLength(1);
 
-    await applySyncPayload(emptyPayload() as any);
+    await applySyncPayload(emptyPayload());
 
     const after = await ctx.db.select().from(schema.proxyHosts);
     expect(after).toHaveLength(0);
@@ -262,7 +262,7 @@ describe('applySyncPayload', () => {
       },
     ];
 
-    await applySyncPayload(payload as any);
+    await applySyncPayload(payload);
 
     const rows = await ctx.db.select().from(schema.proxyHosts);
     expect(rows).toHaveLength(1);
@@ -297,7 +297,7 @@ describe('applySyncPayload', () => {
       },
     ];
 
-    await applySyncPayload(payload as any);
+    await applySyncPayload(payload);
 
     const rows = await ctx.db.select().from(schema.proxyHosts);
     expect(rows).toHaveLength(1);
@@ -329,8 +329,8 @@ describe('applySyncPayload', () => {
       },
     ];
 
-    await applySyncPayload(payload as any);
-    await applySyncPayload(payload as any);
+    await applySyncPayload(payload);
+    await applySyncPayload(payload);
 
     const rows = await ctx.db.select().from(schema.proxyHosts);
     expect(rows).toHaveLength(1);
@@ -341,7 +341,7 @@ describe('applySyncPayload', () => {
     const payload = emptyPayload();
     payload.settings.general = { primaryDomain: 'example.com' };
 
-    await applySyncPayload(payload as any);
+    await applySyncPayload(payload);
 
     const row = await ctx.db.query.settings.findFirst({
       where: (t, { eq }) => eq(t.key, 'synced:general'),
@@ -354,7 +354,7 @@ describe('applySyncPayload', () => {
     const payload = emptyPayload();
     payload.settings.cloudflare = null;
 
-    await applySyncPayload(payload as any);
+    await applySyncPayload(payload);
 
     const row = await ctx.db.query.settings.findFirst({
       where: (t, { eq }) => eq(t.key, 'synced:cloudflare'),
@@ -373,7 +373,7 @@ describe('applySyncPayload', () => {
       { id: 1, accessListId: 1, username: 'synceduser', passwordHash: '$2b$10$fakehash', createdAt: now, updatedAt: now },
     ];
 
-    await applySyncPayload(payload as any);
+    await applySyncPayload(payload);
 
     const lists = await ctx.db.select().from(schema.accessLists);
     expect(lists).toHaveLength(1);

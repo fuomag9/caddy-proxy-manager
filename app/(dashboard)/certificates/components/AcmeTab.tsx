@@ -2,7 +2,7 @@
 
 import { Card, Chip, Stack, Typography } from "@mui/material";
 import { DataTable } from "@/src/components/ui/DataTable";
-import type { AcmeHost, CertExpiryStatus } from "../page";
+import type { AcmeHost } from "../page";
 import { RelativeTime } from "./RelativeTime";
 
 type Props = {

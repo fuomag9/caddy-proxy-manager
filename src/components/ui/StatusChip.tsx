@@ -1,12 +1,12 @@
-
-import { Box, Typography, ChipProps } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import type { SxProps, Theme } from "@mui/material";
 
 type StatusType = "active" | "inactive" | "error" | "warning";
 
 type StatusChipProps = {
     status: StatusType;
     label?: string;
-    sx?: any;
+    sx?: SxProps<Theme>;
 };
 
 const STATUS_CONFIG: Record<StatusType, { color: string; label: string }> = {

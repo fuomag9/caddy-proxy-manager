@@ -600,6 +600,8 @@ export async function updateGeoBlockSettingsAction(_prevState: ActionResult | nu
 }
 
 export async function syncSlaveInstancesAction(_prevState: ActionResult | null, _formData: FormData): Promise<ActionResult> {
+  void _prevState;
+  void _formData;
   try {
     await requireAdmin();
     const mode = await getInstanceMode();
@@ -661,7 +663,7 @@ export async function suppressWafRuleGloballyAction(ruleId: number): Promise<Act
     await saveWafSettings({ ...base, excluded_rule_ids: ids });
     try {
       await applyCaddyConfig();
-    } catch (err) {
+    } catch {
       revalidatePath("/settings");
       return { success: true, message: `Rule ${ruleId} added to exclusions. Warning: could not reload Caddy.` };
     }

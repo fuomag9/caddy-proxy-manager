@@ -1,18 +1,10 @@
 import { test, expect } from '@playwright/test';
 
-// All tests in this file are intended for the mobile-iphone project.
-// They rely on the iPhone 15 viewport (393x852) set in playwright.config.ts.
+// Force a mobile viewport even under the desktop Chromium project so these
+// checks validate responsive behavior instead of self-skipping.
+test.use({ viewport: { width: 393, height: 852 } });
 
-// Skip this entire describe block when running on non-mobile projects (e.g. chromium desktop).
-// The mobile-iphone project uses WebKit (iPhone 15) so we detect by viewport width.
 test.describe('Mobile layout', () => {
-  test.beforeEach(async ({ page }) => {
-    // Skip on desktop viewports — these tests are mobile-only
-    const viewport = page.viewportSize();
-    if (!viewport || viewport.width > 600) {
-      test.skip();
-    }
-  });
   test('app bar is visible with hamburger and title', async ({ page }) => {
     await page.goto('/');
     // The MUI AppBar should be present on mobile

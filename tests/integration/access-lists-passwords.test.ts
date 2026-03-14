@@ -4,7 +4,7 @@
  * Verifies that the model layer hashes passwords before storage and that
  * bcrypt.compare() succeeds with the correct password.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '../helpers/db';
 import { accessLists, accessListEntries } from '@/src/lib/db/schema';
 import { eq } from 'drizzle-orm';

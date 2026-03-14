@@ -85,7 +85,7 @@ export function CreateHostDialog({
                     label="Domains"
                     placeholder="app.example.com"
                     defaultValue={initialData?.domains.join("\n") ?? ""}
-                    helperText="One per line or comma-separated"
+                    helperText="One per line or comma-separated. Wildcards like *.example.com are supported."
                     multiline
                     minRows={2}
                     required
@@ -190,7 +190,7 @@ export function EditHostDialog({
                     name="domains"
                     label="Domains"
                     defaultValue={host.domains.join("\n")}
-                    helperText="One per line or comma-separated"
+                    helperText="One per line or comma-separated. Wildcards like *.example.com are supported."
                     multiline
                     minRows={2}
                     fullWidth

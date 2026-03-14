@@ -4,7 +4,6 @@ import { join } from "node:path";
 import { isIP } from "node:net";
 import crypto from "node:crypto";
 import {
-  PRIVATE_RANGES_CIDRS,
   expandPrivateRanges,
   isPlainObject,
   mergeDeep,
@@ -12,15 +11,19 @@ import {
   parseOptionalJson,
   parseCustomHandlers,
   formatDialAddress,
-  parseHostPort,
   parseUpstreamTarget,
   toDurationMs,
-  type ParsedUpstreamTarget,
 } from "./caddy-utils";
+import {
+  groupHostPatternsByPriority,
+  sortAutomationPoliciesBySubjectPriority,
+  sortRoutesByHostPriority,
+  sortTlsPoliciesBySniPriority,
+} from "./host-pattern-priority";
 import http from "node:http";
 import https from "node:https";
 import db, { nowIso } from "./db";
-import { isNull, isNotNull } from "drizzle-orm";
+import { isNull } from "drizzle-orm";
 import { config } from "./config";
 import {
   getCloudflareSettings,
@@ -47,7 +50,7 @@ import {
   proxyHosts
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig } from "./models/proxy-hosts";
-import { pemToBase64Der, buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
+import { buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
@@ -633,6 +636,7 @@ async function buildProxyRoutes(
     if (domains.length === 0) {
       continue;
     }
+    const domainGroups = groupHostPatternsByPriority(domains);
 
     // Require upstreams
     const upstreams = parseJson<string[]>(row.upstreams, []);
@@ -674,24 +678,26 @@ async function buildProxyRoutes(
     }
 
     if (row.ssl_forced) {
-      hostRoutes.push({
-        match: [
-          {
-            host: domains,
-            expression: '{http.request.scheme} == "http"'
-          }
-        ],
-        handle: [
-          {
-            handler: "static_response",
-            status_code: 308,
-            headers: {
-              Location: ["https://{http.request.host}{http.request.uri}"]
+      for (const domainGroup of domainGroups) {
+        hostRoutes.push({
+          match: [
+            {
+              host: domainGroup,
+              expression: '{http.request.scheme} == "http"'
             }
-          }
-        ],
-        terminal: true
-      });
+          ],
+          handle: [
+            {
+              handler: "static_response",
+              status_code: 308,
+              headers: {
+                Location: ["https://{http.request.host}{http.request.uri}"]
+              }
+            }
+          ],
+          terminal: true
+        });
+      }
     }
 
     if (row.access_list_id) {
@@ -767,7 +773,6 @@ async function buildProxyRoutes(
       outpostRoute = {
         match: [
           {
-            host: domains,
             path: [`/${authentik.outpostDomain}/*`]
           }
         ],
@@ -932,88 +937,97 @@ async function buildProxyRoutes(
 
       // Path-based authentication support
       if (authentik.protectedPaths && authentik.protectedPaths.length > 0) {
-        // Create separate routes for each protected path
-        for (const protectedPath of authentik.protectedPaths) {
-          const protectedHandlers: Record<string, unknown>[] = [...handlers];
-          const protectedReverseProxy = JSON.parse(JSON.stringify(reverseProxyHandler));
+        for (const domainGroup of domainGroups) {
+          // Create separate routes for each protected path
+          for (const protectedPath of authentik.protectedPaths) {
+            const protectedHandlers: Record<string, unknown>[] = [...handlers];
+            const protectedReverseProxy = JSON.parse(JSON.stringify(reverseProxyHandler));
 
-          protectedHandlers.push(forwardAuthHandler);
-          protectedHandlers.push(protectedReverseProxy);
+            protectedHandlers.push(forwardAuthHandler);
+            protectedHandlers.push(protectedReverseProxy);
+
+            hostRoutes.push({
+              match: [
+                {
+                  host: domainGroup,
+                  path: [protectedPath]
+                }
+              ],
+              handle: protectedHandlers,
+              terminal: true
+            });
+          }
+
+          if (outpostRoute) {
+            const outpostMatches = (outpostRoute.match as Array<Record<string, unknown>> | undefined) ?? [];
+            hostRoutes.push({
+              ...outpostRoute,
+              match: outpostMatches.map((match) => ({
+                ...match,
+                host: domainGroup
+              }))
+            });
+          }
+
+          const unprotectedHandlers: Record<string, unknown>[] = [...handlers, reverseProxyHandler];
 
           hostRoutes.push({
             match: [
               {
-                host: domains,
-                path: [protectedPath]
+                host: domainGroup
               }
             ],
-            handle: protectedHandlers,
+            handle: unprotectedHandlers,
             terminal: true
           });
         }
-
-        // Add the outpost route AFTER protected paths but BEFORE the catch-all
-        // This ensures the outpost callback route is properly handled
-        if (outpostRoute) {
-          hostRoutes.push(outpostRoute);
-        }
-
-        // Create a catch-all route for non-protected paths (without forward auth)
-        const unprotectedHandlers: Record<string, unknown>[] = [...handlers];
-        unprotectedHandlers.push(reverseProxyHandler);
-
-        hostRoutes.push({
-          match: [
-            {
-              host: domains
-            }
-          ],
-          handle: unprotectedHandlers,
-          terminal: true
-        });
       } else {
-        // No path-based protection: protect entire domain (backward compatibility)
-        // Add outpost route first to handle callbacks
-        if (outpostRoute) {
-          hostRoutes.push(outpostRoute);
+        for (const domainGroup of domainGroups) {
+          if (outpostRoute) {
+            const outpostMatches = (outpostRoute.match as Array<Record<string, unknown>> | undefined) ?? [];
+            hostRoutes.push({
+              ...outpostRoute,
+              match: outpostMatches.map((match) => ({
+                ...match,
+                host: domainGroup
+              }))
+            });
+          }
+
+          const routeHandlers: Record<string, unknown>[] = [...handlers, forwardAuthHandler, reverseProxyHandler];
+          const route: CaddyHttpRoute = {
+            match: [
+              {
+                host: domainGroup
+              }
+            ],
+            handle: routeHandlers,
+            terminal: true
+          };
+
+          hostRoutes.push(route);
         }
-
-        handlers.push(forwardAuthHandler);
-        handlers.push(reverseProxyHandler);
-
+      }
+    } else {
+      for (const domainGroup of domainGroups) {
         const route: CaddyHttpRoute = {
           match: [
             {
-              host: domains
+              host: domainGroup
             }
           ],
-          handle: handlers,
+          handle: [...handlers, reverseProxyHandler],
           terminal: true
         };
 
         hostRoutes.push(route);
       }
-    } else {
-      // No Authentik: standard reverse proxy
-      handlers.push(reverseProxyHandler);
-
-      const route: CaddyHttpRoute = {
-        match: [
-          {
-            host: domains
-          }
-        ],
-        handle: handlers,
-        terminal: true
-      };
-
-      hostRoutes.push(route);
     }
 
     routes.push(...hostRoutes);
   }
 
-  return routes;
+  return sortRoutesByHostPriority(routes);
 }
 
 function buildTlsConnectionPolicies(
@@ -1041,12 +1055,14 @@ function buildTlsConnectionPolicies(
   const pushMtlsPolicies = (mTlsDomains: string[]) => {
     const groups = groupMtlsDomainsByCaSet(mTlsDomains, mTlsDomainMap);
     for (const domainGroup of groups.values()) {
-      const mTlsAuth = buildAuth(domainGroup);
-      if (mTlsAuth) {
-        policies.push({ match: { sni: domainGroup }, client_authentication: mTlsAuth });
-      } else {
-        // All CAs have all certs revoked — drop connections rather than allow through without mTLS
-        policies.push({ match: { sni: domainGroup }, drop: true });
+      for (const priorityGroup of groupHostPatternsByPriority(domainGroup)) {
+        const mTlsAuth = buildAuth(priorityGroup);
+        if (mTlsAuth) {
+          policies.push({ match: { sni: priorityGroup }, client_authentication: mTlsAuth });
+        } else {
+          // All CAs have all certs revoked — drop connections rather than allow through without mTLS
+          policies.push({ match: { sni: priorityGroup }, drop: true });
+        }
       }
     }
   };
@@ -1061,8 +1077,8 @@ function buildTlsConnectionPolicies(
     if (mTlsDomains.length > 0) {
       pushMtlsPolicies(mTlsDomains);
     }
-    if (nonMTlsDomains.length > 0) {
-      policies.push({ match: { sni: nonMTlsDomains } });
+    for (const priorityGroup of groupHostPatternsByPriority(nonMTlsDomains)) {
+      policies.push({ match: { sni: priorityGroup } });
     }
   }
 
@@ -1089,8 +1105,8 @@ function buildTlsConnectionPolicies(
       if (mTlsDomains.length > 0) {
         pushMtlsPolicies(mTlsDomains);
       }
-      if (nonMTlsDomains.length > 0) {
-        policies.push({ match: { sni: nonMTlsDomains } });
+      for (const priorityGroup of groupHostPatternsByPriority(nonMTlsDomains)) {
+        policies.push({ match: { sni: priorityGroup } });
       }
 
       readyCertificates.add(id);
@@ -1108,8 +1124,8 @@ function buildTlsConnectionPolicies(
       if (mTlsDomains.length > 0) {
         pushMtlsPolicies(mTlsDomains);
       }
-      if (nonMTlsDomains.length > 0) {
-        policies.push({ match: { sni: nonMTlsDomains } });
+      for (const priorityGroup of groupHostPatternsByPriority(nonMTlsDomains)) {
+        policies.push({ match: { sni: priorityGroup } });
       }
 
       readyCertificates.add(id);
@@ -1117,7 +1133,7 @@ function buildTlsConnectionPolicies(
   }
 
   return {
-    policies,
+    policies: sortTlsPoliciesBySniPriority(policies),
     readyCertificates,
     importedCertPems
   };
@@ -1160,42 +1176,39 @@ async function buildTlsAutomation(
 
   // Add policy for auto-managed domains (certificate_id = null)
   if (hasAutoManagedDomains) {
-    const subjects = Array.from(autoManagedDomains);
-
-    // Build issuer configuration
-    const issuer: Record<string, unknown> = {
-      module: "acme"
-    };
-
-    if (options.acmeEmail) {
-      issuer.email = options.acmeEmail;
-    }
-
-    // Use DNS-01 challenge if Cloudflare is configured, otherwise use HTTP-01
-    if (hasCloudflare) {
-      const providerConfig: Record<string, string> = {
-        name: "cloudflare",
-        api_token: cloudflare.apiToken
+    for (const subjects of groupHostPatternsByPriority(Array.from(autoManagedDomains))) {
+      const issuer: Record<string, unknown> = {
+        module: "acme"
       };
 
-      const dnsChallenge: Record<string, unknown> = {
-        provider: providerConfig
-      };
-
-      // Add custom DNS resolvers if configured
-      if (dnsResolvers.length > 0) {
-        dnsChallenge.resolvers = dnsResolvers;
+      if (options.acmeEmail) {
+        issuer.email = options.acmeEmail;
       }
 
-      issuer.challenges = {
-        dns: dnsChallenge
-      };
-    }
+      if (hasCloudflare) {
+        const providerConfig: Record<string, string> = {
+          name: "cloudflare",
+          api_token: cloudflare.apiToken
+        };
 
-    policies.push({
-      subjects,
-      issuers: [issuer]
-    });
+        const dnsChallenge: Record<string, unknown> = {
+          provider: providerConfig
+        };
+
+        if (dnsResolvers.length > 0) {
+          dnsChallenge.resolvers = dnsResolvers;
+        }
+
+        issuer.challenges = {
+          dns: dnsChallenge
+        };
+      }
+
+      policies.push({
+        subjects,
+        issuers: [issuer]
+      });
+    }
   }
 
   // Add policies for explicitly managed certificates
@@ -1207,40 +1220,39 @@ async function buildTlsAutomation(
 
     managedCertificateIds.add(entry.certificate.id);
 
-    // Build issuer configuration
-    const issuer: Record<string, unknown> = {
-      module: "acme"
-    };
-
-    if (options.acmeEmail) {
-      issuer.email = options.acmeEmail;
-    }
-
-    // Use DNS-01 challenge if Cloudflare is configured, otherwise use HTTP-01
-    if (hasCloudflare) {
-      const providerConfig: Record<string, string> = {
-        name: "cloudflare",
-        api_token: cloudflare.apiToken
+    for (const subjectGroup of groupHostPatternsByPriority(subjects)) {
+      const issuer: Record<string, unknown> = {
+        module: "acme"
       };
 
-      const dnsChallenge: Record<string, unknown> = {
-        provider: providerConfig
-      };
-
-      // Add custom DNS resolvers if configured
-      if (dnsResolvers.length > 0) {
-        dnsChallenge.resolvers = dnsResolvers;
+      if (options.acmeEmail) {
+        issuer.email = options.acmeEmail;
       }
 
-      issuer.challenges = {
-        dns: dnsChallenge
-      };
-    }
+      if (hasCloudflare) {
+        const providerConfig: Record<string, string> = {
+          name: "cloudflare",
+          api_token: cloudflare.apiToken
+        };
 
-    policies.push({
-      subjects,
-      issuers: [issuer]
-    });
+        const dnsChallenge: Record<string, unknown> = {
+          provider: providerConfig
+        };
+
+        if (dnsResolvers.length > 0) {
+          dnsChallenge.resolvers = dnsResolvers;
+        }
+
+        issuer.challenges = {
+          dns: dnsChallenge
+        };
+      }
+
+      policies.push({
+        subjects: subjectGroup,
+        issuers: [issuer]
+      });
+    }
   }
 
   if (policies.length === 0) {
@@ -1252,7 +1264,7 @@ async function buildTlsAutomation(
   return {
     tlsApp: {
       automation: {
-        policies
+        policies: sortAutomationPoliciesBySubjectPriority(policies)
       }
     },
     managedCertificateIds

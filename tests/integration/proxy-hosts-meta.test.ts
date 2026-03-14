@@ -8,7 +8,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '../helpers/db';
 import { proxyHosts } from '@/src/lib/db/schema';
-import { eq } from 'drizzle-orm';
 
 let db: TestDb;
 
@@ -28,14 +27,14 @@ async function insertHost(overrides: Partial<typeof proxyHosts.$inferInsert> = {
     upstreams: JSON.stringify(['backend:8080']),
     certificateId: null,
     accessListId: null,
-    sslForced: 0,
-    hstsEnabled: 0,
-    hstsSubdomains: 0,
-    allowWebsocket: 0,
-    preserveHostHeader: 0,
-    skipHttpsHostnameValidation: 0,
+    sslForced: false,
+    hstsEnabled: false,
+    hstsSubdomains: false,
+    allowWebsocket: false,
+    preserveHostHeader: false,
+    skipHttpsHostnameValidation: false,
     meta: null,
-    enabled: 1,
+    enabled: true,
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -192,14 +191,14 @@ describe('proxy-hosts load balancer meta', () => {
 
 describe('proxy-hosts boolean fields', () => {
   it('sslForced is stored and retrieved truthy', async () => {
-    const host = await insertHost({ sslForced: 1 });
+    const host = await insertHost({ sslForced: true });
     const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
     // Drizzle may return SQLite 0/1 as number or as boolean depending on schema mode
     expect(Boolean(row!.sslForced)).toBe(true);
   });
 
   it('hstsEnabled and hstsSubdomains round-trip correctly', async () => {
-    const host = await insertHost({ hstsEnabled: 1, hstsSubdomains: 1 });
+    const host = await insertHost({ hstsEnabled: true, hstsSubdomains: true });
     const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
     expect(Boolean(row!.hstsEnabled)).toBe(true);
     expect(Boolean(row!.hstsSubdomains)).toBe(true);
@@ -212,7 +211,7 @@ describe('proxy-hosts boolean fields', () => {
   });
 
   it('enabled can be set to disabled (falsy)', async () => {
-    const host = await insertHost({ enabled: 0 });
+    const host = await insertHost({ enabled: false });
     const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
     expect(Boolean(row!.enabled)).toBe(false);
   });

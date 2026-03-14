@@ -427,6 +427,7 @@ export async function createProxyHostAction(
   _prevState: ActionState = INITIAL_ACTION_STATE,
   formData: FormData
 ): Promise<ActionState> {
+  void _prevState;
   try {
     const session = await requireAdmin();
     const userId = Number(session.user.id);
@@ -486,6 +487,7 @@ export async function updateProxyHostAction(
   _prevState: ActionState = INITIAL_ACTION_STATE,
   formData: FormData
 ): Promise<ActionState> {
+  void _prevState;
   try {
     const session = await requireAdmin();
     const userId = Number(session.user.id);
@@ -558,6 +560,7 @@ export async function deleteProxyHostAction(
   id: number,
   _prevState: ActionState = INITIAL_ACTION_STATE
 ): Promise<ActionState> {
+  void _prevState;
   try {
     const session = await requireAdmin();
     const userId = Number(session.user.id);

@@ -66,7 +66,7 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
       await signIn(providerId, {
         callbackUrl: "/"
       });
-    } catch (error) {
+    } catch {
       setLoginError(`Failed to sign in with OAuth`);
       setOauthPending(null);
     }

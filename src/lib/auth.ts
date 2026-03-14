@@ -3,11 +3,9 @@ import { type NextRequest, NextResponse } from "next/server";
 import Credentials from "next-auth/providers/credentials";
 import type { OAuthConfig } from "next-auth/providers";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
 import db from "./db";
 import { config } from "./config";
-import { users } from "./db/schema";
-import { findUserByProviderSubject, findUserByEmail, createUser, getUserById } from "./models/user";
+import { findUserByProviderSubject, createUser, getUserById } from "./models/user";
 import { createAuditEvent } from "./models/audit";
 import { decideLinkingStrategy, createLinkingToken, storeLinkingToken, autoLinkOAuth, linkOAuthAuthenticated } from "./services/account-linking";
 
@@ -72,15 +70,15 @@ function createCredentialsProvider() {
 const credentialsProvider = createCredentialsProvider();
 
 // Create OAuth providers based on configuration
-function createOAuthProviders(): OAuthConfig<any>[] {
-  const providers: OAuthConfig<any>[] = [];
+function createOAuthProviders(): OAuthConfig<Record<string, unknown>>[] {
+  const providers: OAuthConfig<Record<string, unknown>>[] = [];
 
   if (
     config.oauth.enabled &&
     config.oauth.clientId &&
     config.oauth.clientSecret
   ) {
-    const oauthProvider: OAuthConfig<any> = {
+    const oauthProvider: OAuthConfig<Record<string, unknown>> = {
       id: "oauth2",
       name: config.oauth.providerName,
       type: "oidc",
@@ -93,11 +91,20 @@ function createOAuthProviders(): OAuthConfig<any>[] {
       // PKCE is the default for OIDC; state is added as defence-in-depth
       checks: ["pkce", "state"],
       profile(profile) {
+        const sub = typeof profile.sub === "string" ? profile.sub : undefined;
+        const id = typeof profile.id === "string" ? profile.id : undefined;
+        const name = typeof profile.name === "string" ? profile.name : undefined;
+        const preferredUsername =
+          typeof profile.preferred_username === "string" ? profile.preferred_username : undefined;
+        const email = typeof profile.email === "string" ? profile.email : undefined;
+        const picture = typeof profile.picture === "string" ? profile.picture : null;
+        const avatarUrl = typeof profile.avatar_url === "string" ? profile.avatar_url : null;
+
         return {
-          id: profile.sub ?? profile.id,
-          name: profile.name ?? profile.preferred_username ?? profile.email,
-          email: profile.email,
-          image: profile.picture ?? profile.avatar_url ?? null,
+          id: sub ?? id,
+          name: name ?? preferredUsername ?? email,
+          email,
+          image: picture ?? avatarUrl,
         };
       },
     };
@@ -117,7 +124,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    async signIn({ user, account, profile }) {
+    async signIn({ user, account }) {
       // Credentials provider - handled by authorize function
       if (account?.provider === "credentials") {
         return true;
@@ -131,7 +138,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       try {
         // Check if this is an OAuth linking attempt by checking the database
         const { pendingOAuthLinks } = await import("./db/schema");
-        const { eq, and, gt } = await import("drizzle-orm");
+        const { eq } = await import("drizzle-orm");
         const { nowIso } = await import("./db");
 
         // Find ALL non-expired pending links for this provider

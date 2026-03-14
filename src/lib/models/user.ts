@@ -1,6 +1,6 @@
 import db, { nowIso, toIso } from "../db";
 import { users } from "../db/schema";
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 
 export type User = {
   id: number;

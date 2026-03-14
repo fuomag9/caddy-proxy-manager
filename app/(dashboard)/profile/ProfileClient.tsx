@@ -20,6 +20,7 @@ import {
   TextField,
   Typography
 } from "@mui/material";
+import type { ChipProps } from "@mui/material";
 import { signIn } from "next-auth/react";
 import PersonIcon from "@mui/icons-material/Person";
 import LockIcon from "@mui/icons-material/Lock";
@@ -58,7 +59,6 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
 
   const hasPassword = !!user.password_hash;
   const hasOAuth = user.provider !== "credentials";
-  const isCredentialsOnly = user.provider === "credentials";
 
   const handlePasswordChange = async () => {
     setError(null);
@@ -100,7 +100,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
       setNewPassword("");
       setConfirmPassword("");
       setLoading(false);
-    } catch (err) {
+    } catch {
       setError("An error occurred while changing password");
       setLoading(false);
     }
@@ -136,7 +136,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
 
       // Reload page to reflect changes
       setTimeout(() => window.location.reload(), 1500);
-    } catch (err) {
+    } catch {
       setError("An error occurred while unlinking OAuth");
       setLoading(false);
     }
@@ -166,7 +166,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
       await signIn(providerId, {
         callbackUrl: "/profile"
       });
-    } catch (err) {
+    } catch {
       setError("An error occurred while linking OAuth");
       setLoading(false);
     }
@@ -219,7 +219,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
       };
 
       reader.readAsDataURL(file);
-    } catch (err) {
+    } catch {
       setError("An error occurred while uploading avatar");
       setLoading(false);
     }
@@ -249,7 +249,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
       setLoading(false);
 
       setTimeout(() => window.location.reload(), 1000);
-    } catch (err) {
+    } catch {
       setError("An error occurred while deleting avatar");
       setLoading(false);
     }
@@ -262,7 +262,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
     return provider;
   };
 
-  const getProviderColor = (provider: string) => {
+  const getProviderColor = (provider: string): ChipProps["color"] => {
     if (provider === "credentials") return "default";
     return "primary";
   };
@@ -371,7 +371,7 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
                 <Chip
                   label={getProviderName(user.provider)}
                   size="small"
-                  color={getProviderColor(user.provider) as any}
+                  color={getProviderColor(user.provider)}
                 />
               </Box>
 

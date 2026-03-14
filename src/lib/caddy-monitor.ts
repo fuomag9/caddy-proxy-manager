@@ -7,7 +7,6 @@ import http from "node:http";
 import https from "node:https";
 import { config } from "./config";
 import { applyCaddyConfig } from "./caddy";
-import { getSetting, setSetting } from "./settings";
 
 type CaddyMonitorState = {
   isHealthy: boolean;
@@ -20,7 +19,7 @@ const HEALTH_CHECK_INTERVAL = 10000; // Check every 10 seconds
 const MAX_CONSECUTIVE_FAILURES = 3; // Consider unhealthy after 3 failures
 const REAPPLY_DELAY = 5000; // Wait 5 seconds after detecting restart before reapplying
 
-let monitorState: CaddyMonitorState = {
+const monitorState: CaddyMonitorState = {
   isHealthy: false,
   lastConfigId: null,
   lastCheckTime: 0,
@@ -67,7 +66,7 @@ async function getCaddyConfigId(): Promise<string | null> {
     // Check if config is essentially empty (default state after restart)
     const isEmpty = !configData.apps || Object.keys(configData.apps).length === 0;
     return isEmpty ? "empty" : "configured";
-  } catch (error) {
+  } catch {
     // Network error or timeout
     return null;
   }

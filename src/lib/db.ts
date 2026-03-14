@@ -88,10 +88,18 @@ function runMigrations() {
   try {
     migrate(db, { migrationsFolder });
     globalForDrizzle.__MIGRATIONS_RAN__ = true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // During build, pages may be pre-rendered in parallel, causing race conditions
     // with migrations. If tables already exist, just continue.
-    if (error?.code === 'SQLITE_ERROR' && error?.message?.includes('already exists')) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      "message" in error &&
+      error.code === "SQLITE_ERROR" &&
+      typeof error.message === "string" &&
+      error.message.includes("already exists")
+    ) {
       console.log('Database tables already exist, skipping migrations');
       globalForDrizzle.__MIGRATIONS_RAN__ = true;
       return;

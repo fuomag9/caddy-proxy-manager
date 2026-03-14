@@ -3,7 +3,8 @@ import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { proxyHosts } from "../db/schema";
 import { desc, eq, count, like, or } from "drizzle-orm";
-import { getAuthentikSettings, getGeoBlockSettings, GeoBlockSettings } from "../settings";
+import { type GeoBlockSettings } from "../settings";
+import { normalizeProxyHostDomains } from "../proxy-host-domains";
 
 const DEFAULT_AUTHENTIK_HEADERS = [
   "X-Authentik-Username",
@@ -1410,9 +1411,7 @@ export async function listProxyHostsPaginated(limit: number, offset: number, sea
 }
 
 export async function createProxyHost(input: ProxyHostInput, actorUserId: number) {
-  if (!input.domains || input.domains.length === 0) {
-    throw new Error("At least one domain must be specified");
-  }
+  const domains = normalizeProxyHostDomains(input.domains ?? []);
 
   if (!input.upstreams || input.upstreams.length === 0) {
     throw new Error("At least one upstream must be specified");
@@ -1424,7 +1423,7 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
     .insert(proxyHosts)
     .values({
       name: input.name.trim(),
-      domains: JSON.stringify(Array.from(new Set(input.domains.map((d) => d.trim().toLowerCase())))),
+      domains: JSON.stringify(domains),
       upstreams: JSON.stringify(Array.from(new Set(input.upstreams.map((u) => u.trim())))),
       certificateId: input.certificate_id ?? null,
       accessListId: input.access_list_id ?? null,
@@ -1472,7 +1471,9 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     throw new Error("Proxy host not found");
   }
 
-  const domains = input.domains ? JSON.stringify(Array.from(new Set(input.domains))) : JSON.stringify(existing.domains);
+  const domains = JSON.stringify(
+    input.domains ? normalizeProxyHostDomains(input.domains) : existing.domains
+  );
   const upstreams = input.upstreams ? JSON.stringify(Array.from(new Set(input.upstreams))) : JSON.stringify(existing.upstreams);
   const existingMeta: ProxyHostMeta = {
     custom_reverse_proxy_json: existing.custom_reverse_proxy_json ?? undefined,

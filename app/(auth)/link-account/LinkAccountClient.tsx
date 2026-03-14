@@ -59,7 +59,7 @@ export default function LinkAccountClient({
       await signIn(provider, {
         callbackUrl: "/"
       });
-    } catch (err) {
+    } catch {
       setError("An error occurred while linking your account");
       setLoading(false);
     }

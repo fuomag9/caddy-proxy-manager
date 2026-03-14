@@ -180,9 +180,9 @@ export function validateProductionConfig() {
   if (isRuntimeProduction) {
     // Force validation by accessing the config values
     // This will throw if defaults are being used in production
-    const _ = config.sessionSecret;
-    const __ = config.adminUsername;
-    const ___ = config.adminPassword;
+    void config.sessionSecret;
+    void config.adminUsername;
+    void config.adminPassword;
   }
 }
 

@@ -7,7 +7,7 @@ import {
   certificates,
   proxyHosts
 } from "@/src/lib/db/schema";
-import { count, desc, isNull, isNotNull, eq, sql } from "drizzle-orm";
+import { count, desc, isNull, sql } from "drizzle-orm";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SecurityIcon from "@mui/icons-material/Security";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
