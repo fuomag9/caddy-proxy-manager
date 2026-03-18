@@ -18,7 +18,7 @@ type SettingsTogglesProps = {
 };
 
 export function SettingsToggles({
-    hstsSubdomains = false,
+    hstsSubdomains = true,
     skipHttpsValidation = false,
     enabled = true
 }: SettingsTogglesProps) {
@@ -42,14 +42,14 @@ export function SettingsToggles({
             label: "HSTS Subdomains",
             description: "Include subdomains in the Strict-Transport-Security header",
             defaultChecked: values.hsts_subdomains,
-            color: "default"
+            color: "primary"
         },
         {
             name: "skip_https_hostname_validation",
             label: "Skip HTTPS Validation",
             description: "Skip SSL certificate hostname verification for backend connections",
             defaultChecked: values.skip_https_hostname_validation,
-            color: "warning"
+            color: "primary"
         }
     ];
 
