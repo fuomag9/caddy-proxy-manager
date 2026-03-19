@@ -49,7 +49,7 @@ import {
   issuedClientCertificates,
   proxyHosts
 } from "./db/schema";
-import { type GeoBlockMode, type WafHostConfig, type MtlsConfig } from "./models/proxy-hosts";
+import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
 
@@ -113,6 +113,8 @@ type ProxyHostMeta = {
   geoblock?: GeoBlockSettings;
   geoblock_mode?: GeoBlockMode;
   waf?: WafHostConfig;
+  redirects?: RedirectRule[];
+  rewrite?: RewriteConfig;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -700,6 +702,22 @@ async function buildProxyRoutes(
       }
     }
 
+    // Structured redirects — emitted before auth so .well-known paths work without login
+    if (meta.redirects && meta.redirects.length > 0) {
+      const redirectRoutes = meta.redirects.map((rule) => ({
+        match: [{ path: [rule.from] }],
+        handle: [{
+          handler: "static_response",
+          status_code: rule.status,
+          headers: { Location: [rule.to] },
+        }],
+      }));
+      handlers.push({
+        handler: "subroute",
+        routes: redirectRoutes,
+      });
+    }
+
     if (row.access_list_id) {
       const accounts = accessAccounts.get(row.access_list_id) ?? [];
       if (accounts.length > 0) {
@@ -848,6 +866,14 @@ async function buildProxyRoutes(
       } else {
         console.warn("Ignoring custom reverse proxy JSON because it is not an object", customReverseProxy);
       }
+    }
+
+    // Structured path prefix rewrite
+    if (meta.rewrite?.path_prefix) {
+      handlers.push({
+        handler: "rewrite",
+        uri: `${meta.rewrite.path_prefix}{http.request.uri}`,
+      });
     }
 
     const customHandlers = parseCustomHandlers(meta.custom_pre_handlers_json);

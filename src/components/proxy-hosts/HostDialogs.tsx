@@ -22,6 +22,8 @@ import { UpstreamInput } from "./UpstreamInput";
 import { GeoBlockFields } from "./GeoBlockFields";
 import { WafFields } from "./WafFields";
 import { MtlsFields } from "./MtlsConfig";
+import { RedirectsFields } from "./RedirectsFields";
+import { RewriteFields } from "./RewriteFields";
 import type { CaCertificate } from "@/src/lib/models/ca-certificates";
 
 export function CreateHostDialog({
@@ -108,6 +110,8 @@ export function CreateHostDialog({
                         </MenuItem>
                     ))}
                 </TextField>
+                <RedirectsFields initialData={initialData?.redirects} />
+                <RewriteFields initialData={initialData?.rewrite} />
                 <TextField
                     name="custom_pre_handlers_json"
                     label="Custom Pre-Handlers (JSON)"
@@ -212,6 +216,8 @@ export function EditHostDialog({
                         </MenuItem>
                     ))}
                 </TextField>
+                <RedirectsFields initialData={host.redirects} />
+                <RewriteFields initialData={host.rewrite} />
                 <TextField
                     name="custom_pre_handlers_json"
                     label="Custom Pre-Handlers (JSON)"

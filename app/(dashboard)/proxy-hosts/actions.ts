@@ -14,7 +14,9 @@ import {
   type UpstreamDnsResolutionInput,
   type GeoBlockMode,
   type WafHostConfig,
-  type MtlsConfig
+  type MtlsConfig,
+  type RedirectRule,
+  type RewriteConfig
 } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
@@ -396,6 +398,30 @@ function parseMtlsConfig(formData: FormData): MtlsConfig | null {
   return { enabled, ca_certificate_ids: ids };
 }
 
+function parseRedirectsConfig(formData: FormData): RedirectRule[] | null {
+  const raw = formData.get("redirects_json");
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter(
+      (r) =>
+        r &&
+        typeof r.from === "string" &&
+        typeof r.to === "string" &&
+        [301, 302, 307, 308].includes(r.status)
+    ) as RedirectRule[];
+  } catch {
+    return null;
+  }
+}
+
+function parseRewriteConfig(formData: FormData): RewriteConfig | null {
+  const prefix = formData.get("rewrite_path_prefix");
+  if (!prefix || typeof prefix !== "string" || !prefix.trim()) return null;
+  return { path_prefix: prefix.trim() };
+}
+
 function parseUpstreamDnsResolutionConfig(formData: FormData): UpstreamDnsResolutionInput | undefined {
   if (!formData.has("upstream_dns_resolution_present")) {
     return undefined;
@@ -465,7 +491,9 @@ export async function createProxyHostAction(
         upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
         ...parseGeoBlockConfig(formData),
         ...parseWafConfig(formData),
-        mtls: parseMtlsConfig(formData)
+        mtls: parseMtlsConfig(formData),
+        redirects: parseRedirectsConfig(formData),
+        rewrite: parseRewriteConfig(formData),
       },
       userId
     );
@@ -539,7 +567,9 @@ export async function updateProxyHostAction(
         upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
         ...parseGeoBlockConfig(formData),
         ...parseWafConfig(formData),
-        mtls: formData.has("mtls_present") ? parseMtlsConfig(formData) : undefined
+        mtls: formData.has("mtls_present") ? parseMtlsConfig(formData) : undefined,
+        redirects: formData.has("redirects_json") ? parseRedirectsConfig(formData) : undefined,
+        rewrite: formData.has("rewrite_path_prefix") ? parseRewriteConfig(formData) : undefined,
       },
       userId
     );

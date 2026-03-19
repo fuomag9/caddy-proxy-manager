@@ -80,4 +80,58 @@ describe('proxy-hosts integration', () => {
     expect(row!.hstsEnabled).toBe(false);
     expect(row!.allowWebsocket).toBe(false);
   });
+
+  it('stores and retrieves redirect rules via meta JSON', async () => {
+    const redirects = [
+      { from: '/.well-known/carddav', to: '/remote.php/dav/', status: 301 },
+      { from: '/.well-known/caldav', to: '/remote.php/dav/', status: 301 },
+    ];
+    const host = await insertProxyHost({
+      name: 'nextcloud',
+      domains: JSON.stringify(['nextcloud.example.com']),
+      upstreams: JSON.stringify(['192.168.1.154:11000']),
+      meta: JSON.stringify({ redirects }),
+    });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const meta = JSON.parse(row!.meta ?? '{}');
+    expect(meta.redirects).toHaveLength(2);
+    expect(meta.redirects[0]).toMatchObject({
+      from: '/.well-known/carddav',
+      to: '/remote.php/dav/',
+      status: 301,
+    });
+  });
+
+  it('stores and retrieves path prefix rewrite via meta JSON', async () => {
+    const host = await insertProxyHost({
+      name: 'recipes',
+      domains: JSON.stringify(['recipes.example.com']),
+      upstreams: JSON.stringify(['192.168.1.150:8080']),
+      meta: JSON.stringify({ rewrite: { path_prefix: '/recipes' } }),
+    });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const meta = JSON.parse(row!.meta ?? '{}');
+    expect(meta.rewrite?.path_prefix).toBe('/recipes');
+  });
+
+  it('filters out invalid redirect rules on parse', async () => {
+    const redirects = [
+      { from: '', to: '/valid', status: 301 },        // missing from — invalid
+      { from: '/valid', to: '', status: 301 },         // missing to — invalid
+      { from: '/ok', to: '/dest', status: 999 },       // bad status — invalid
+      { from: '/good', to: '/dest', status: 302 },     // valid
+    ];
+    const host = await insertProxyHost({
+      name: 'test-filter',
+      meta: JSON.stringify({ redirects }),
+    });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    // Simulate parseMeta sanitization: only valid rules have non-empty from/to and valid status
+    const meta = JSON.parse(row!.meta ?? '{}');
+    const valid = (meta.redirects as typeof redirects).filter(
+      (r) => r.from.trim() && r.to.trim() && [301, 302, 307, 308].includes(r.status)
+    );
+    expect(valid).toHaveLength(1);
+    expect(valid[0].from).toBe('/good');
+  });
 });

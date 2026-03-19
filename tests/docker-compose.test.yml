@@ -24,6 +24,12 @@ services:
     command: ["-text=echo-server-2", "-listen=:8080"]
     networks:
       - caddy-network
+  # Request-echo server: reflects the full HTTP request (method + path + headers) in the response body.
+  # Used by path-prefix-rewrite tests to assert that Caddy rewrote the path before forwarding.
+  whoami-server:
+    image: traefik/whoami
+    networks:
+      - caddy-network
 volumes:
   caddy-manager-data:
     name: caddy-manager-data-test

@@ -28,6 +28,16 @@ export type GeoBlockMode = "merge" | "override";
 
 export type WafMode = "merge" | "override";
 
+export type RedirectRule = {
+  from: string;   // path pattern e.g. "/.well-known/carddav"
+  to: string;     // destination e.g. "/remote.php/dav/"
+  status: 301 | 302 | 307 | 308;
+};
+
+export type RewriteConfig = {
+  path_prefix: string; // e.g. "/recipes"
+};
+
 export type WafHostConfig = {
   enabled?: boolean;
   mode?: 'Off' | 'On';
@@ -217,6 +227,8 @@ type ProxyHostMeta = {
   geoblock_mode?: GeoBlockMode;
   waf?: WafHostConfig;
   mtls?: MtlsConfig;
+  redirects?: RedirectRule[];
+  rewrite?: RewriteConfig;
 };
 
 export type ProxyHost = {
@@ -245,6 +257,8 @@ export type ProxyHost = {
   geoblock_mode: GeoBlockMode;
   waf: WafHostConfig | null;
   mtls: MtlsConfig | null;
+  redirects: RedirectRule[];
+  rewrite: RewriteConfig | null;
 };
 
 export type ProxyHostInput = {
@@ -270,6 +284,8 @@ export type ProxyHostInput = {
   geoblock_mode?: GeoBlockMode;
   waf?: WafHostConfig | null;
   mtls?: MtlsConfig | null;
+  redirects?: RedirectRule[] | null;
+  rewrite?: RewriteConfig | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -551,7 +567,39 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.mtls = meta.mtls;
   }
 
+  if (meta.redirects && meta.redirects.length > 0) {
+    normalized.redirects = meta.redirects;
+  }
+  if (meta.rewrite?.path_prefix) {
+    normalized.rewrite = meta.rewrite;
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
+}
+
+function sanitizeRedirectRules(value: unknown): RedirectRule[] {
+  if (!Array.isArray(value)) return [];
+  const valid: RedirectRule[] = [];
+  for (const item of value) {
+    if (
+      item &&
+      typeof item === "object" &&
+      typeof item.from === "string" && item.from.trim() &&
+      typeof item.to === "string" && item.to.trim() &&
+      [301, 302, 307, 308].includes(item.status)
+    ) {
+      valid.push({ from: item.from.trim(), to: item.to.trim(), status: item.status });
+    }
+  }
+  return valid;
+}
+
+function sanitizeRewriteConfig(value: unknown): RewriteConfig | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const prefix = typeof v.path_prefix === "string" ? v.path_prefix.trim() : null;
+  if (!prefix) return null;
+  return { path_prefix: prefix };
 }
 
 function parseMeta(value: string | null): ProxyHostMeta {
@@ -571,6 +619,8 @@ function parseMeta(value: string | null): ProxyHostMeta {
       geoblock_mode: parsed.geoblock_mode,
       waf: parsed.waf,
       mtls: parsed.mtls,
+      redirects: sanitizeRedirectRules(parsed.redirects),
+      rewrite: sanitizeRewriteConfig(parsed.rewrite) ?? undefined,
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -1045,6 +1095,24 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
+  if (input.redirects !== undefined) {
+    const rules = sanitizeRedirectRules(input.redirects ?? []);
+    if (rules.length > 0) {
+      next.redirects = rules;
+    } else {
+      delete next.redirects;
+    }
+  }
+
+  if (input.rewrite !== undefined) {
+    const rw = sanitizeRewriteConfig(input.rewrite);
+    if (rw) {
+      next.rewrite = rw;
+    } else {
+      delete next.rewrite;
+    }
+  }
+
   return serializeMeta(next);
 }
 
@@ -1372,6 +1440,8 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     geoblock_mode: meta.geoblock_mode ?? "merge",
     waf: meta.waf ?? null,
     mtls: meta.mtls ?? null,
+    redirects: meta.redirects ?? [],
+    rewrite: meta.rewrite ?? null,
   };
 }
 
