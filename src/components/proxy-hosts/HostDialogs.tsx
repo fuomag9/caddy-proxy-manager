@@ -6,7 +6,7 @@ import {
     deleteProxyHostAction,
     updateProxyHostAction
 } from "@/app/(dashboard)/proxy-hosts/actions";
-import { INITIAL_ACTION_STATE } from "@/src/lib/actions";
+import { INITIAL_ACTION_STATE, type ActionState } from "@/src/lib/actions";
 import { AccessList } from "@/src/lib/models/access-lists";
 import { Certificate } from "@/src/lib/models/certificates";
 import { ProxyHost } from "@/src/lib/models/proxy-hosts";
@@ -158,7 +158,7 @@ export function EditHostDialog({
     accessLists: AccessList[];
     caCertificates?: CaCertificate[];
 }) {
-    const [state, formAction] = useActionState(async (_prevState, formData) => updateProxyHostAction(host.id, _prevState, formData), INITIAL_ACTION_STATE);
+    const [state, formAction] = useActionState(async (_prevState: ActionState, formData: FormData) => updateProxyHostAction(host.id, _prevState, formData), INITIAL_ACTION_STATE);
 
     useEffect(() => {
         if (state.status === "success") {

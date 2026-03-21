@@ -49,3 +49,6 @@ caddy-config/
 # Docker files
 docker-compose.yml
 docker-compose.*.yml
+
+# Local test stream junction (Windows) can break Next standalone copy in image builds
+docker/test-stream

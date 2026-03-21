@@ -38,7 +38,7 @@ export async function createL4RouteAction(
   formData: FormData
 ): Promise<ActionState> {
   try {
-    const user = await requireAdmin();
+    const session = await requireAdmin();
 
     const name = formData.get("name");
     if (!name || typeof name !== "string" || !name.trim()) {
@@ -85,7 +85,7 @@ export async function createL4RouteAction(
       meta: metaJson,
     };
 
-    await createL4Route(input, user.id);
+    await createL4Route(input, Number(session.user.id));
     revalidatePath("/l4-routes");
     return actionSuccess("L4 route created");
   } catch (error) {
@@ -98,7 +98,7 @@ export async function updateL4RouteAction(
   formData: FormData
 ): Promise<ActionState> {
   try {
-    const user = await requireAdmin();
+    const session = await requireAdmin();
 
     const idRaw = formData.get("id");
     if (!idRaw) return actionError(new Error("ID is required"), "ID is required");
@@ -147,7 +147,7 @@ export async function updateL4RouteAction(
       meta: metaJson,
     };
 
-    await updateL4Route(id, input, user.id);
+    await updateL4Route(id, input, Number(session.user.id));
     revalidatePath("/l4-routes");
     return actionSuccess("L4 route updated");
   } catch (error) {
@@ -157,8 +157,8 @@ export async function updateL4RouteAction(
 
 export async function deleteL4RouteAction(id: number): Promise<ActionState> {
   try {
-    const user = await requireAdmin();
-    await deleteL4Route(id, user.id);
+    const session = await requireAdmin();
+    await deleteL4Route(id, Number(session.user.id));
     revalidatePath("/l4-routes");
     return actionSuccess("L4 route deleted");
   } catch (error) {
@@ -168,8 +168,8 @@ export async function deleteL4RouteAction(id: number): Promise<ActionState> {
 
 export async function toggleL4RouteAction(id: number, enabled: boolean): Promise<ActionState> {
   try {
-    const user = await requireAdmin();
-    await toggleL4Route(id, enabled, user.id);
+    const session = await requireAdmin();
+    await toggleL4Route(id, enabled, Number(session.user.id));
     revalidatePath("/l4-routes");
     return actionSuccess(enabled ? "L4 route enabled" : "L4 route disabled");
   } catch (error) {
