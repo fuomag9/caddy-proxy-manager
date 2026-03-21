@@ -218,8 +218,10 @@ function L4RouteForm({
       // Inject computed JSON fields
       const matchers = matcherEntriesToJson(matcherEntries);
       if (matchers) fd.set("matchers", JSON.stringify(matchers));
-      const upstreams = upstreamEntriesToJson(upstreamEntries);
-      if (upstreams) fd.set("upstreams_json", JSON.stringify(upstreams));
+      if (handlerType === "proxy") {
+        const upstreams = upstreamEntriesToJson(upstreamEntries);
+        if (upstreams) fd.set("upstreams_json", JSON.stringify(upstreams));
+      }
       if (tlsTermination && certificateId) fd.set("certificate_id", certificateId);
 
       // Build meta JSON

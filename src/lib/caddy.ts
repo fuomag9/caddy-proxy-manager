@@ -23,7 +23,7 @@ import {
 import http from "node:http";
 import https from "node:https";
 import db, { nowIso } from "./db";
-import { isNull } from "drizzle-orm";
+import { isNull, desc } from "drizzle-orm";
 import { config } from "./config";
 import {
   getCloudflareSettings,
@@ -52,7 +52,7 @@ import {
   proxyHosts,
   l4Routes
 } from "./db/schema";
-import { type L4Route, type L4Matcher, type L4Upstream, type L4RouteMeta, type L4IpBlockOverride } from "./models/l4-routes";
+import { type L4Route, type L4Matcher, type L4Upstream, type L4RouteMeta, type L4IpBlockOverride, parseL4Route } from "./models/l4-routes";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
@@ -1301,30 +1301,6 @@ async function buildTlsAutomation(
   };
 }
 
-function parseL4RouteRow(row: typeof l4Routes.$inferSelect): L4Route {
-  const parseJson = <T>(v: string | null, fb: T): T => {
-    if (!v) return fb;
-    try { return JSON.parse(v) as T; } catch { return fb; }
-  };
-  return {
-    id: row.id,
-    name: row.name,
-    listen_addresses: parseJson<string[]>(row.listenAddresses, []),
-    matchers: parseJson<L4Matcher[] | null>(row.matchers, null),
-    handler_type: (row.handlerType ?? "proxy") as L4Route["handler_type"],
-    upstreams: parseJson<L4Upstream[] | null>(row.upstreams, null),
-    tls_termination: !!row.tlsTermination,
-    certificate_id: row.certificateId ?? null,
-    proxy_protocol: row.proxyProtocol ?? null,
-    matching_timeout: row.matchingTimeout ?? null,
-    enabled: !!row.enabled,
-    meta: parseJson<L4RouteMeta | null>(row.meta, null),
-    owner_user_id: row.ownerUserId ?? null,
-    created_at: row.createdAt,
-    updated_at: row.updatedAt,
-  };
-}
-
 function buildL4Servers(
   routes: L4Route[],
   options: {
@@ -1435,14 +1411,23 @@ function buildL4Servers(
 
         // Filter out allowed CIDRs from block list is handled by nesting:
         // We add a NOT remote_ip matcher for blocked CIDRs, unless the connection also matches allow CIDRs.
-        // Simple approach: if block CIDRs exist, add a NOT(remote_ip) matcher
+        // Simple approach: if block CIDRs exist, AND a NOT(remote_ip) matcher into each matcher set
         if (blockCidrs.length > 0) {
           // If allow list exists, we need the effective block = block - allow
           const effectiveBlock = allowCidrs.length > 0
             ? blockCidrs.filter((c) => !allowCidrs.includes(c))
             : blockCidrs;
           if (effectiveBlock.length > 0) {
-            routeMatchers.push({ not: [{ remote_ip: { ranges: effectiveBlock } }] });
+            const ipBlockMatcher = { not: [{ remote_ip: { ranges: effectiveBlock } }] };
+            if (routeMatchers.length === 0) {
+              // No existing matchers: single matcher set with IP block constraint
+              routeMatchers.push(ipBlockMatcher);
+            } else {
+              // AND the IP block constraint into each existing matcher set
+              for (let i = 0; i < routeMatchers.length; i++) {
+                routeMatchers[i] = { ...(routeMatchers[i] as Record<string, unknown>), ...ipBlockMatcher };
+              }
+            }
           }
         }
       }
@@ -1490,9 +1475,7 @@ function buildL4Servers(
             }
           } else if (cert.type === "imported" && cert.certificate_pem) {
             // Imported cert — reference the loaded PEM by tag
-            const policy: Record<string, unknown> = {
-              certificate_selection: { any_tag: [`cert_${cert.id}`] },
-            };
+            const policy: Record<string, unknown> = {};
             if (sniDomains.length > 0) {
               policy.match = { sni: sniDomains };
             }
@@ -1640,8 +1623,8 @@ async function buildCaddyDocument() {
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
 
   // Collect L4 route certificate usage into the shared TLS automation pool
-  const l4RouteRows = await db.select().from(l4Routes);
-  const l4RouteParsed = l4RouteRows.map(parseL4RouteRow);
+  const l4RouteRows = await db.select().from(l4Routes).orderBy(desc(l4Routes.createdAt));
+  const l4RouteParsed = l4RouteRows.map(parseL4Route);
   for (const route of l4RouteParsed) {
     if (!route.enabled || !route.tls_termination) continue;
     if (route.certificate_id && certificateMap.has(route.certificate_id)) {

@@ -28,8 +28,8 @@ function parseJsonField<T>(formData: FormData, key: string): T | null {
   if (!trimmed) return null;
   try {
     return JSON.parse(trimmed) as T;
-  } catch {
-    return null;
+  } catch (e) {
+    throw new Error(`Invalid JSON in field "${key}": ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 

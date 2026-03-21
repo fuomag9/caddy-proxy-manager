@@ -455,5 +455,9 @@ export async function applySyncPayload(payload: SyncPayload) {
     if (payload.data.proxyHosts.length > 0) {
       tx.insert(proxyHosts).values(payload.data.proxyHosts).run();
     }
+    tx.delete(l4Routes).run();
+    if (payload.data.l4Routes && payload.data.l4Routes.length > 0) {
+      tx.insert(l4Routes).values(payload.data.l4Routes).run();
+    }
   });
 }

@@ -116,7 +116,7 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
 
 type L4RouteRow = typeof l4Routes.$inferSelect;
 
-function parseL4Route(row: L4RouteRow): L4Route {
+export function parseL4Route(row: L4RouteRow): L4Route {
   return {
     id: row.id,
     name: row.name,
@@ -358,14 +358,13 @@ export async function validateL4ListenAddresses(
     const existingAddresses = normalizeListenAddresses(parseJson<string[]>(row.listenAddresses, []));
     const existingPorts = existingAddresses.map(extractPort).filter((p): p is number => p !== null);
     const existingMatchers = parseJson<L4Matcher[] | null>(row.matchers, null);
-    const newMatchers = addresses.length > 0; // We're checking the new route's addresses
 
     const overlappingPorts = ports.filter((p) => existingPorts.includes(p));
     if (overlappingPorts.length > 0) {
-      // Both routes on the same port with no matchers = guaranteed conflict
-      const bothCatchAll = !existingMatchers || existingMatchers.length === 0;
-      if (bothCatchAll) {
-        return `Port ${overlappingPorts[0]} conflicts with L4 route "${row.name}" (both catch-all without matchers)`;
+      // Existing route on the same port with no matchers = guaranteed conflict
+      const existingIsCatchAll = !existingMatchers || existingMatchers.length === 0;
+      if (existingIsCatchAll) {
+        return `Port ${overlappingPorts[0]} conflicts with catch-all L4 route "${row.name}" (existing route has no matchers)`;
       }
     }
   }
@@ -497,6 +496,13 @@ export async function updateL4Route(id: number, input: Partial<L4RouteInput>, ac
   const upstreamError = validateL4Upstreams(normalizedUpstreams);
   if (upstreamError) {
     throw new Error(upstreamError);
+  }
+
+  // Proxy handler requires at least one upstream
+  const effectiveHandlerType = input.handler_type ?? existing.handler_type;
+  const hasEffectiveUpstreams = Array.isArray(normalizedUpstreams) && normalizedUpstreams.length > 0;
+  if (effectiveHandlerType === "proxy" && !hasEffectiveUpstreams) {
+    throw new Error("Proxy routes require at least one upstream");
   }
 
   // Port conflict validation
