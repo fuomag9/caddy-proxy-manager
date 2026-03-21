@@ -208,6 +208,107 @@ export function validateL4ListenAddressFormat(address: string): string | null {
   return null;
 }
 
+function normalizeL4UpstreamDialAddress(address: string): string {
+  return address.trim();
+}
+
+const VALID_DIAL_PROTOCOLS = ["tcp", "udp", "unix", "unixgram"];
+
+function parseL4UpstreamDialAddress(address: string): { protocol?: string; host: string; port: number } | null {
+  const normalized = normalizeL4UpstreamDialAddress(address);
+  if (!normalized) return null;
+
+  let protocol: string | undefined;
+  let endpoint = normalized;
+
+  // Extract optional protocol prefix (tcp/, udp/, etc.)
+  const slashIdx = normalized.indexOf("/");
+  if (slashIdx > 0) {
+    const prefix = normalized.slice(0, slashIdx).toLowerCase();
+    if (VALID_DIAL_PROTOCOLS.includes(prefix)) {
+      protocol = prefix;
+      endpoint = normalized.slice(slashIdx + 1);
+    } else {
+      return null; // unknown protocol prefix
+    }
+  }
+
+  // Unix sockets don't have host:port
+  if (protocol === "unix" || protocol === "unixgram") {
+    return endpoint ? { protocol, host: endpoint, port: 0 } : null;
+  }
+
+  let host = "";
+  let portText = "";
+
+  if (endpoint.startsWith("[")) {
+    const closingBracket = endpoint.indexOf("]");
+    if (closingBracket <= 0 || endpoint.slice(closingBracket + 1, closingBracket + 2) !== ":") {
+      return null;
+    }
+    host = endpoint.slice(0, closingBracket + 1);
+    portText = endpoint.slice(closingBracket + 2);
+  } else {
+    const lastColon = endpoint.lastIndexOf(":");
+    if (lastColon <= 0) {
+      return null;
+    }
+    host = endpoint.slice(0, lastColon);
+    portText = endpoint.slice(lastColon + 1);
+  }
+
+  if (!host.trim() || !/^\d+$/.test(portText)) {
+    return null;
+  }
+
+  const port = Number(portText);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return null;
+  }
+
+  return { protocol, host: host.trim(), port };
+}
+
+export function validateL4UpstreamDialAddressFormat(address: string): string | null {
+  if (!address.trim()) {
+    return "Upstream dial address cannot be empty";
+  }
+
+  if (!parseL4UpstreamDialAddress(address)) {
+    return `Invalid upstream dial address "${address}". Expected [protocol/]host:port, for example host.docker.internal:11111, tcp/backend:5432, or udp/dns:53`;
+  }
+
+  return null;
+}
+
+function normalizeL4Upstreams(upstreams: L4Upstream[] | null | undefined): L4Upstream[] | null | undefined {
+  if (!upstreams) return upstreams;
+
+  return upstreams.map((upstream) => ({
+    ...upstream,
+    dial: upstream.dial.map((address) => normalizeL4UpstreamDialAddress(address)),
+  }));
+}
+
+function validateL4Upstreams(upstreams: L4Upstream[] | null | undefined): string | null {
+  if (!upstreams) return null;
+
+  for (const upstream of upstreams) {
+    if (!upstream.dial || upstream.dial.length === 0) {
+      return "Each upstream must include at least one dial address";
+    }
+
+    for (const address of upstream.dial) {
+      const error = validateL4UpstreamDialAddressFormat(address);
+      if (error) {
+        return error;
+      }
+    }
+  }
+
+  return null;
+}
+
 // ── Port conflict validation ──
 
 /** Extract numeric port from a listen address like ":25", "tcp/:587", "udp/0.0.0.0:5060" */
@@ -327,6 +428,12 @@ export async function createL4Route(input: L4RouteInput, actorUserId: number) {
   }
 
   const normalizedListenAddresses = normalizeListenAddresses(input.listen_addresses);
+  const normalizedUpstreams = normalizeL4Upstreams(input.upstreams);
+
+  const upstreamError = validateL4Upstreams(normalizedUpstreams);
+  if (upstreamError) {
+    throw new Error(upstreamError);
+  }
 
   // Proxy protocol is not compatible with UDP
   if (input.proxy_protocol && normalizedListenAddresses.some((a) => a.startsWith("udp/"))) {
@@ -347,7 +454,7 @@ export async function createL4Route(input: L4RouteInput, actorUserId: number) {
       listenAddresses: JSON.stringify(normalizedListenAddresses),
       matchers: input.matchers ? JSON.stringify(input.matchers) : null,
       handlerType: handlerType,
-      upstreams: input.upstreams ? JSON.stringify(input.upstreams) : null,
+      upstreams: normalizedUpstreams ? JSON.stringify(normalizedUpstreams) : null,
       tlsTermination: input.tls_termination ?? false,
       certificateId: input.certificate_id ?? null,
       proxyProtocol: input.proxy_protocol ?? null,
@@ -383,6 +490,15 @@ export async function updateL4Route(id: number, input: Partial<L4RouteInput>, ac
     throw new Error("L4 route not found");
   }
 
+  const normalizedUpstreams = input.upstreams !== undefined
+    ? normalizeL4Upstreams(input.upstreams)
+    : existing.upstreams;
+
+  const upstreamError = validateL4Upstreams(normalizedUpstreams);
+  if (upstreamError) {
+    throw new Error(upstreamError);
+  }
+
   // Port conflict validation
   const addressesToCheck = normalizeListenAddresses(input.listen_addresses ?? existing.listen_addresses);
   const portError = await validateL4ListenAddresses(addressesToCheck, id);
@@ -409,7 +525,7 @@ export async function updateL4Route(id: number, input: Partial<L4RouteInput>, ac
         : (existing.matchers ? JSON.stringify(existing.matchers) : null),
       handlerType: input.handler_type ?? existing.handler_type,
       upstreams: input.upstreams !== undefined
-        ? (input.upstreams ? JSON.stringify(input.upstreams) : null)
+        ? (normalizedUpstreams ? JSON.stringify(normalizedUpstreams) : null)
         : (existing.upstreams ? JSON.stringify(existing.upstreams) : null),
       tlsTermination: input.tls_termination ?? existing.tls_termination,
       certificateId: input.certificate_id !== undefined ? input.certificate_id : existing.certificate_id,

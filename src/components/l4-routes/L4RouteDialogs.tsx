@@ -397,7 +397,7 @@ function L4RouteForm({
                   <Stack direction="row" spacing={1} alignItems="center">
                     <TextField
                       label="Dial Address"
-                      placeholder="tcp/backend:25"
+                      placeholder="host.docker.internal:11111"
                       value={entry.dial}
                       onChange={(e) => updateUpstream(index, { dial: e.target.value })}
                       size="small"
