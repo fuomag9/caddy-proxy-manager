@@ -1,8 +1,9 @@
 import db, { nowIso } from "./db";
-import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, proxyHosts } from "./db/schema";
+import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, l4ProxyHosts, proxyHosts } from "./db/schema";
 import { getSetting, setSetting } from "./settings";
 import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
+import { applyL4Ports, getL4PortsDiff } from "./l4-ports";
 
 export type InstanceMode = "standalone" | "master" | "slave";
 
@@ -28,6 +29,8 @@ export type SyncPayload = {
     accessLists: Array<typeof accessLists.$inferSelect>;
     accessListEntries: Array<typeof accessListEntries.$inferSelect>;
     proxyHosts: Array<typeof proxyHosts.$inferSelect>;
+    /** Optional — not present in payloads from older master instances */
+    l4ProxyHosts?: Array<typeof l4ProxyHosts.$inferSelect>;
   };
 };
 
@@ -233,13 +236,14 @@ export async function clearSyncedSetting(key: string): Promise<void> {
 }
 
 export async function buildSyncPayload(): Promise<SyncPayload> {
-  const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows] = await Promise.all([
+  const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows, l4Rows] = await Promise.all([
     db.select().from(certificates),
     db.select().from(caCertificates),
     db.select().from(issuedClientCertificates),
     db.select().from(accessLists),
     db.select().from(accessListEntries),
-    db.select().from(proxyHosts)
+    db.select().from(proxyHosts),
+    db.select().from(l4ProxyHosts),
   ]);
 
   const settings = {
@@ -279,6 +283,11 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     ownerUserId: null
   }));
 
+  const sanitizedL4ProxyHosts = l4Rows.map((row) => ({
+    ...row,
+    ownerUserId: null
+  }));
+
   return {
     generated_at: nowIso(),
     settings,
@@ -288,7 +297,8 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
       issuedClientCertificates: sanitizedIssuedClientCertificates,
       accessLists: sanitizedAccessLists,
       accessListEntries: accessEntryRows,
-      proxyHosts: sanitizedProxyHosts
+      proxyHosts: sanitizedProxyHosts,
+      l4ProxyHosts: sanitizedL4ProxyHosts,
     }
   };
 }
@@ -422,6 +432,7 @@ export async function applySyncPayload(payload: SyncPayload) {
 
   // better-sqlite3 is synchronous, so transaction callback must be synchronous
   db.transaction((tx) => {
+    tx.delete(l4ProxyHosts).run();
     tx.delete(proxyHosts).run();
     tx.delete(accessListEntries).run();
     tx.delete(accessLists).run();
@@ -447,5 +458,15 @@ export async function applySyncPayload(payload: SyncPayload) {
     if (payload.data.proxyHosts.length > 0) {
       tx.insert(proxyHosts).values(payload.data.proxyHosts).run();
     }
+    if (payload.data.l4ProxyHosts && payload.data.l4ProxyHosts.length > 0) {
+      tx.insert(l4ProxyHosts).values(payload.data.l4ProxyHosts).run();
+    }
   });
+
+  // If the synced L4 proxy hosts require different ports than currently applied,
+  // write the override file and trigger the sidecar to recreate the caddy container.
+  const diff = await getL4PortsDiff();
+  if (diff.needsApply) {
+    await applyL4Ports();
+  }
 }

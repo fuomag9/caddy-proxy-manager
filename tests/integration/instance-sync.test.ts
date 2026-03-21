@@ -7,6 +7,8 @@
  * any real db file.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { TestDb } from '../helpers/db';
 
 // ---------------------------------------------------------------------------
@@ -15,7 +17,15 @@ import type { TestDb } from '../helpers/db';
 // factory (which also runs during hoisting) can populate it safely.
 // ---------------------------------------------------------------------------
 
-const ctx = vi.hoisted(() => ({ db: null as unknown as TestDb }));
+const ctx = vi.hoisted(() => {
+  const { mkdirSync } = require('node:fs');
+  const { join } = require('node:path');
+  const { tmpdir } = require('node:os');
+  const dir = join(tmpdir(), `instance-sync-test-${Date.now()}`);
+  mkdirSync(dir, { recursive: true });
+  process.env.L4_PORTS_DIR = dir;
+  return { db: null as unknown as TestDb, tmpDir: dir };
+});
 
 vi.mock('../../src/lib/db', async () => {
   const { createTestDb } = await import('../helpers/db');
@@ -70,6 +80,7 @@ function makeProxyHost(overrides: Partial<typeof schema.proxyHosts.$inferInsert>
 
 /** Clean all relevant tables between tests to avoid cross-test contamination. */
 async function clearTables() {
+  await ctx.db.delete(schema.l4ProxyHosts);
   await ctx.db.delete(schema.proxyHosts);
   await ctx.db.delete(schema.accessListEntries);
   await ctx.db.delete(schema.accessLists);
@@ -79,8 +90,37 @@ async function clearTables() {
   await ctx.db.delete(schema.settings);
 }
 
+function cleanTmpDir() {
+  for (const file of ['docker-compose.l4-ports.yml', 'l4-ports.trigger', 'l4-ports.status']) {
+    const path = join(ctx.tmpDir, file);
+    if (existsSync(path)) rmSync(path);
+  }
+}
+
+function makeL4Host(overrides: Partial<typeof schema.l4ProxyHosts.$inferInsert> = {}) {
+  const now = nowIso();
+  return {
+    name: 'Test L4 Host',
+    protocol: 'tcp',
+    listenAddress: ':5432',
+    upstreams: JSON.stringify(['10.0.0.1:5432']),
+    matcherType: 'none',
+    matcherValue: null,
+    tlsTermination: false,
+    proxyProtocolVersion: null,
+    proxyProtocolReceive: false,
+    ownerUserId: null,
+    meta: null,
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  } satisfies typeof schema.l4ProxyHosts.$inferInsert;
+}
+
 beforeEach(async () => {
   await clearTables();
+  cleanTmpDir();
 });
 
 // ---------------------------------------------------------------------------
@@ -96,6 +136,29 @@ describe('buildSyncPayload', () => {
     expect(payload.data.issuedClientCertificates).toEqual([]);
     expect(payload.data.accessLists).toEqual([]);
     expect(payload.data.accessListEntries).toEqual([]);
+    expect(payload.data.l4ProxyHosts).toEqual([]);
+  });
+
+  it('includes L4 proxy hosts in payload', async () => {
+    await ctx.db.insert(schema.l4ProxyHosts).values(makeL4Host({ listenAddress: ':5432' }));
+    const payload = await buildSyncPayload();
+    expect(payload.data.l4ProxyHosts).toHaveLength(1);
+    expect(payload.data.l4ProxyHosts![0].listenAddress).toBe(':5432');
+  });
+
+  it('sanitizes L4 proxy host ownerUserId to null', async () => {
+    await ctx.db.insert(schema.l4ProxyHosts).values(makeL4Host({ ownerUserId: null }));
+    const payload = await buildSyncPayload();
+    expect(payload.data.l4ProxyHosts![0].ownerUserId).toBeNull();
+  });
+
+  it('includes multiple L4 proxy hosts', async () => {
+    await ctx.db.insert(schema.l4ProxyHosts).values(makeL4Host({ name: 'PG', listenAddress: ':5432' }));
+    await ctx.db.insert(schema.l4ProxyHosts).values(makeL4Host({ name: 'MySQL', listenAddress: ':3306' }));
+    const payload = await buildSyncPayload();
+    expect(payload.data.l4ProxyHosts).toHaveLength(2);
+    const addresses = payload.data.l4ProxyHosts!.map(h => h.listenAddress).sort();
+    expect(addresses).toEqual([':3306', ':5432']);
   });
 
   it('returns null settings when no settings are stored', async () => {
@@ -382,5 +445,164 @@ describe('applySyncPayload', () => {
     const entries = await ctx.db.select().from(schema.accessListEntries);
     expect(entries).toHaveLength(1);
     expect(entries[0].username).toBe('synceduser');
+  });
+
+  // ---------------------------------------------------------------------------
+  // L4 proxy host replication
+  // ---------------------------------------------------------------------------
+
+  it('clears existing L4 proxy hosts when payload has empty array', async () => {
+    await ctx.db.insert(schema.l4ProxyHosts).values(makeL4Host({ name: 'Old L4 Host' }));
+    const before = await ctx.db.select().from(schema.l4ProxyHosts);
+    expect(before).toHaveLength(1);
+
+    await applySyncPayload(emptyPayload());
+
+    const after = await ctx.db.select().from(schema.l4ProxyHosts);
+    expect(after).toHaveLength(0);
+  });
+
+  it('inserts L4 proxy hosts from payload', async () => {
+    const now = nowIso();
+    const payload = emptyPayload();
+    payload.data.l4ProxyHosts = [
+      {
+        id: 1,
+        name: 'Synced PG',
+        protocol: 'tcp',
+        listenAddress: ':5432',
+        upstreams: JSON.stringify(['db:5432']),
+        matcherType: 'none',
+        matcherValue: null,
+        tlsTermination: false,
+        proxyProtocolVersion: null,
+        proxyProtocolReceive: false,
+        ownerUserId: null,
+        meta: null,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    await applySyncPayload(payload);
+
+    const rows = await ctx.db.select().from(schema.l4ProxyHosts);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Synced PG');
+    expect(rows[0].listenAddress).toBe(':5432');
+  });
+
+  it('replaces existing L4 proxy hosts with payload contents', async () => {
+    await ctx.db.insert(schema.l4ProxyHosts).values(makeL4Host({ name: 'Old L4', listenAddress: ':9999' }));
+
+    const now = nowIso();
+    const payload = emptyPayload();
+    payload.data.l4ProxyHosts = [
+      {
+        id: 99,
+        name: 'New L4',
+        protocol: 'tcp',
+        listenAddress: ':5432',
+        upstreams: JSON.stringify(['db:5432']),
+        matcherType: 'none',
+        matcherValue: null,
+        tlsTermination: false,
+        proxyProtocolVersion: null,
+        proxyProtocolReceive: false,
+        ownerUserId: null,
+        meta: null,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    await applySyncPayload(payload);
+
+    const rows = await ctx.db.select().from(schema.l4ProxyHosts);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('New L4');
+    expect(rows[0].listenAddress).toBe(':5432');
+  });
+
+  it('works with payload missing l4ProxyHosts (backward compat with old master)', async () => {
+    // Old master instances don't include l4ProxyHosts in their payload.
+    // The slave should still sync successfully and not crash.
+    await ctx.db.insert(schema.l4ProxyHosts).values(makeL4Host({ name: 'Existing L4' }));
+
+    const payload = emptyPayload();
+    // Explicitly remove l4ProxyHosts to simulate old master payload
+    delete (payload.data as Record<string, unknown>).l4ProxyHosts;
+
+    await expect(applySyncPayload(payload)).resolves.toBeUndefined();
+
+    // Existing L4 hosts are cleared (the DELETE always runs)
+    const rows = await ctx.db.select().from(schema.l4ProxyHosts);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('writes trigger file when L4 port diff requires apply after sync', async () => {
+    const now = nowIso();
+    const payload = emptyPayload();
+    payload.data.l4ProxyHosts = [
+      {
+        id: 1,
+        name: 'PG Sync',
+        protocol: 'tcp',
+        listenAddress: ':5432',
+        upstreams: JSON.stringify(['db:5432']),
+        matcherType: 'none',
+        matcherValue: null,
+        tlsTermination: false,
+        proxyProtocolVersion: null,
+        proxyProtocolReceive: false,
+        ownerUserId: null,
+        meta: null,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    // No override file exists yet → diff will show needsApply=true
+    await applySyncPayload(payload);
+
+    const triggerPath = join(ctx.tmpDir, 'l4-ports.trigger');
+    expect(existsSync(triggerPath)).toBe(true);
+  });
+
+  it('does not write trigger file when L4 ports already match after sync', async () => {
+    const { writeFileSync } = await import('node:fs');
+    // Pre-write override file matching the incoming payload port
+    writeFileSync(join(ctx.tmpDir, 'docker-compose.l4-ports.yml'), `services:\n  caddy:\n    ports:\n      - "5432:5432"\n`);
+
+    const now = nowIso();
+    const payload = emptyPayload();
+    payload.data.l4ProxyHosts = [
+      {
+        id: 1,
+        name: 'PG Sync',
+        protocol: 'tcp',
+        listenAddress: ':5432',
+        upstreams: JSON.stringify(['db:5432']),
+        matcherType: 'none',
+        matcherValue: null,
+        tlsTermination: false,
+        proxyProtocolVersion: null,
+        proxyProtocolReceive: false,
+        ownerUserId: null,
+        meta: null,
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+
+    await applySyncPayload(payload);
+
+    // Ports already match → no trigger needed
+    const triggerPath = join(ctx.tmpDir, 'l4-ports.trigger');
+    expect(existsSync(triggerPath)).toBe(false);
   });
 });

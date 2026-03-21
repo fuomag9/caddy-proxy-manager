@@ -180,6 +180,27 @@ function isProxyHost(value: unknown): value is SyncPayload["data"]["proxyHosts"]
   );
 }
 
+function isL4ProxyHost(value: unknown): value is SyncPayload["data"]["l4ProxyHosts"][number] {
+  if (!isRecord(value)) return false;
+  return (
+    isNumber(value.id) &&
+    isString(value.name) &&
+    isString(value.protocol) &&
+    isString(value.listenAddress) &&
+    isString(value.upstreams) &&
+    isString(value.matcherType) &&
+    isNullableString(value.matcherValue) &&
+    isBoolean(value.tlsTermination) &&
+    isNullableString(value.proxyProtocolVersion) &&
+    isBoolean(value.proxyProtocolReceive) &&
+    isNullableNumber(value.ownerUserId) &&
+    isNullableString(value.meta) &&
+    isBoolean(value.enabled) &&
+    isString(value.createdAt) &&
+    isString(value.updatedAt)
+  );
+}
+
 /**
  * Validates that the payload has the expected structure for syncing
  */
@@ -211,6 +232,11 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
   }
 
   const d = data as Record<string, unknown>;
+
+  // l4ProxyHosts is optional for backward compatibility with older master instances
+  if (d.l4ProxyHosts !== undefined && !validateArray(d.l4ProxyHosts, isL4ProxyHost)) {
+    return false;
+  }
 
   return (
     validateArray(d.certificates, isCertificate) &&
@@ -265,7 +291,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await applySyncPayload(payload);
+    // Backfill l4ProxyHosts for payloads from older master instances that don't include it
+    const normalizedPayload: SyncPayload = {
+      ...payload,
+      data: {
+        ...payload.data,
+        l4ProxyHosts: payload.data.l4ProxyHosts ?? [],
+      },
+    };
+    await applySyncPayload(normalizedPayload);
     await applyCaddyConfig();
     await setSlaveLastSync({ ok: true });
     return NextResponse.json({ ok: true });

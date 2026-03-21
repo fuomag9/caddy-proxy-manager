@@ -25,7 +25,7 @@ type PortsResponse = {
   error?: string;
 };
 
-export function L4PortsApplyBanner() {
+export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }) {
   const [data, setData] = useState<PortsResponse | null>(null);
   const [applying, setApplying] = useState(false);
   const [polling, setPolling] = useState(false);
@@ -41,10 +41,16 @@ export function L4PortsApplyBanner() {
     }
   }, []);
 
-  // Initial fetch and poll when pending/applying
+  // Initial fetch on mount
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  // Re-fetch when the parent signals a mutation (create/edit/delete/toggle)
+  useEffect(() => {
+    if (!refreshSignal) return;
+    fetchStatus();
+  }, [refreshSignal, fetchStatus]);
 
   useEffect(() => {
     if (!data) return;

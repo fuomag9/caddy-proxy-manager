@@ -39,11 +39,14 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
   const [editHost, setEditHost] = useState<L4ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<L4ProxyHost | null>(null);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
+  const [bannerRefresh, setBannerRefresh] = useState(0);
 
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const signalBannerRefresh = () => setBannerRefresh(n => n + 1);
 
   useEffect(() => {
     setSearchTerm(initialSearch);
@@ -66,6 +69,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
 
   const handleToggleEnabled = async (id: number, enabled: boolean) => {
     await toggleL4ProxyHostAction(id, enabled);
+    signalBannerRefresh();
   };
 
   const columns = [
@@ -215,7 +219,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
 
   return (
     <Stack spacing={4}>
-      <L4PortsApplyBanner />
+      <L4PortsApplyBanner refreshSignal={bannerRefresh} />
       <PageHeader
         title="L4 Proxy Hosts"
         description="Define TCP/UDP stream proxies powered by caddy-l4. Port mappings are applied automatically by the L4 port manager."
@@ -245,6 +249,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
         onClose={() => {
           setCreateOpen(false);
           setTimeout(() => setDuplicateHost(null), 200);
+          signalBannerRefresh();
         }}
         initialData={duplicateHost}
       />
@@ -253,7 +258,10 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
         <EditL4HostDialog
           open={!!editHost}
           host={editHost}
-          onClose={() => setEditHost(null)}
+          onClose={() => {
+            setEditHost(null);
+            signalBannerRefresh();
+          }}
         />
       )}
 
@@ -261,7 +269,10 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
         <DeleteL4HostDialog
           open={!!deleteHost}
           host={deleteHost}
-          onClose={() => setDeleteHost(null)}
+          onClose={() => {
+            setDeleteHost(null);
+            signalBannerRefresh();
+          }}
         />
       )}
     </Stack>
