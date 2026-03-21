@@ -8,4 +8,4 @@ echo "Ensuring database directory exists..."
 mkdir -p "$DB_DIR"
 
 echo "Starting application..."
-exec env HOSTNAME=0.0.0.0 node server.js
+exec env HOSTNAME=0.0.0.0 bun server.js

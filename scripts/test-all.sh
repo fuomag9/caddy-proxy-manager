@@ -20,16 +20,16 @@ typecheck_status=0
 vitest_status=0
 e2e_status=0
 
-run_step "Lint" npm run lint
+run_step "Lint" bun run lint
 lint_status=$?
 
-run_step "Typecheck" npm run typecheck
+run_step "Typecheck" bun run typecheck
 typecheck_status=$?
 
-run_step "Vitest" npm run test
+run_step "Vitest" bun run test
 vitest_status=$?
 
-run_step "Playwright" npm run test:e2e
+run_step "Playwright" bun run test:e2e
 e2e_status=$?
 
 printf '\n==> Summary\n'

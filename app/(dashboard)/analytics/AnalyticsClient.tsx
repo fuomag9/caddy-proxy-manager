@@ -509,10 +509,8 @@ export default function AnalyticsClient() {
                   <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
                     Traffic by Country
                   </Typography>
-                  <Box sx={{ flex: 1, minHeight: 0 }}>
-                    <Box sx={{ overflowX: "auto", width: "100%" }}>
-                      <WorldMap data={countries} selectedCountry={selectedCountry} />
-                    </Box>
+                  <Box sx={{ flex: 1, minHeight: 280 }}>
+                    <WorldMap data={countries} selectedCountry={selectedCountry} />
                   </Box>
                 </CardContent>
               </Card>

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-FROM node:25-slim AS base
+FROM oven/bun:1-slim AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -12,9 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json* ./
-# Install dependencies
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 FROM base AS builder
 ENV NODE_ENV=production
@@ -25,7 +24,7 @@ ENV DATABASE_URL=file:/tmp/build.db
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Build the Next.js application
-RUN npm run build && rm -f /tmp/build.db
+RUN bun run build && rm -f /tmp/build.db
 
 FROM base AS runner
 # Accept build args for user/group IDs to support rootless operation
