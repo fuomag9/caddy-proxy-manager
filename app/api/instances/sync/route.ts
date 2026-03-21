@@ -180,7 +180,7 @@ function isProxyHost(value: unknown): value is SyncPayload["data"]["proxyHosts"]
   );
 }
 
-function isL4ProxyHost(value: unknown): value is SyncPayload["data"]["l4ProxyHosts"][number] {
+function isL4ProxyHost(value: unknown): value is NonNullable<SyncPayload["data"]["l4ProxyHosts"]>[number] {
   if (!isRecord(value)) return false;
   return (
     isNumber(value.id) &&
