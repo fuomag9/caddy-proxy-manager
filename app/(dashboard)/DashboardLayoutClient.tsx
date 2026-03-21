@@ -31,6 +31,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import HistoryIcon from "@mui/icons-material/History";
 import GppBadIcon from "@mui/icons-material/GppBad";
 import LogoutIcon from "@mui/icons-material/Logout";
+import CableIcon from "@mui/icons-material/Cable";
 
 type User = {
   id: string;
@@ -42,6 +43,7 @@ type User = {
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: DashboardIcon },
   { href: "/proxy-hosts", label: "Proxy Hosts", icon: SwapHorizIcon },
+  { href: "/l4-routes", label: "L4 Routes", icon: CableIcon },
   { href: "/access-lists", label: "Access Lists", icon: VpnKeyIcon },
   { href: "/certificates", label: "Certificates", icon: SecurityIcon },
   { href: "/waf", label: "WAF", icon: GppBadIcon },

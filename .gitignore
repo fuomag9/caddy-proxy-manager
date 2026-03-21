@@ -17,6 +17,18 @@ docs/plans
 /.playwright-mcp
 /.worktrees
 docker-compose.override.yml
+/.vscode/
+.turbo/
+.turbopack/
+.eslintcache
+coverage/
+npm-debug.log*
+npm-error.log*
+pnpm-debug.log*
+yarn-error.log*
+*.swp
+*.swo
+*.tmp
 
 # Playwright auth state
 tests/.auth/
@@ -24,3 +36,7 @@ test-results/
 playwright-report/
 /.superpowers
 /docs/superpowers
+
+# Local-only test artifacts
+/docker/test-stream/
+/fix-db.js

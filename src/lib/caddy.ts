@@ -34,12 +34,14 @@ import {
   getUpstreamDnsResolutionSettings,
   getGeoBlockSettings,
   getWafSettings,
+  getL4IpBlockSettings,
   setSetting,
   type DnsSettings,
   type UpstreamDnsAddressFamily,
   type UpstreamDnsResolutionSettings,
   type GeoBlockSettings,
-  type WafSettings
+  type WafSettings,
+  type L4IpBlockSettings
 } from "./settings";
 import { syncInstances } from "./instance-sync";
 import {
@@ -47,8 +49,10 @@ import {
   certificates,
   caCertificates,
   issuedClientCertificates,
-  proxyHosts
+  proxyHosts,
+  l4Routes
 } from "./db/schema";
+import { type L4Route, type L4Matcher, type L4Upstream, type L4RouteMeta, type L4IpBlockOverride } from "./models/l4-routes";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
@@ -1297,6 +1301,219 @@ async function buildTlsAutomation(
   };
 }
 
+function parseL4RouteRow(row: typeof l4Routes.$inferSelect): L4Route {
+  const parseJson = <T>(v: string | null, fb: T): T => {
+    if (!v) return fb;
+    try { return JSON.parse(v) as T; } catch { return fb; }
+  };
+  return {
+    id: row.id,
+    name: row.name,
+    listen_addresses: parseJson<string[]>(row.listenAddresses, []),
+    matchers: parseJson<L4Matcher[] | null>(row.matchers, null),
+    handler_type: (row.handlerType ?? "proxy") as L4Route["handler_type"],
+    upstreams: parseJson<L4Upstream[] | null>(row.upstreams, null),
+    tls_termination: !!row.tlsTermination,
+    certificate_id: row.certificateId ?? null,
+    proxy_protocol: row.proxyProtocol ?? null,
+    matching_timeout: row.matchingTimeout ?? null,
+    enabled: !!row.enabled,
+    meta: parseJson<L4RouteMeta | null>(row.meta, null),
+    owner_user_id: row.ownerUserId ?? null,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+  };
+}
+
+function buildL4Servers(
+  routes: L4Route[],
+  options: {
+    l4IpBlock?: L4IpBlockSettings | null;
+    certificateMap?: Map<number, CertificateRow>;
+    managedCertificateIds?: Set<number>;
+  } = {}
+): Record<string, unknown> | null {
+  const enabled = routes.filter((r) => r.enabled);
+  if (enabled.length === 0) return null;
+
+  const { l4IpBlock, certificateMap, managedCertificateIds } = options;
+
+  // Build global IP block matchers
+  const globalBlockCidrs = l4IpBlock?.enabled ? (l4IpBlock.block_cidrs ?? []) : [];
+  const globalAllowCidrs = l4IpBlock?.enabled ? (l4IpBlock.allow_cidrs ?? []) : [];
+
+  // Group routes by their listen addresses (serialised as a sorted key)
+  const groups = new Map<string, L4Route[]>();
+  for (const route of enabled) {
+    const key = [...route.listen_addresses].sort().join(",");
+    const existing = groups.get(key) ?? [];
+    existing.push(route);
+    groups.set(key, existing);
+  }
+
+  const servers: Record<string, unknown> = {};
+  let idx = 0;
+  for (const [, groupRoutes] of groups) {
+    const listen = groupRoutes[0].listen_addresses;
+    const caddyRoutes: unknown[] = [];
+    let serverNeedsTls = false;
+
+    for (const route of groupRoutes) {
+      const handlers: unknown[] = [];
+
+      // Intermediary: TLS termination
+      if (route.tls_termination) {
+        handlers.push({ handler: "tls" });
+        serverNeedsTls = true;
+      }
+
+      // Intermediary: throttle
+      if (route.meta?.throttle) {
+        const t = route.meta.throttle;
+        if (t.read_bytes_per_second || t.write_bytes_per_second) {
+          handlers.push({
+            handler: "throttle",
+            ...(t.read_bytes_per_second ? { read: { rate: t.read_bytes_per_second } } : {}),
+            ...(t.write_bytes_per_second ? { write: { rate: t.write_bytes_per_second } } : {}),
+          });
+        }
+      }
+
+      // Terminal handler
+      if (route.handler_type === "proxy" && route.upstreams && route.upstreams.length > 0) {
+        const proxyHandler: Record<string, unknown> = {
+          handler: "proxy",
+          upstreams: route.upstreams.map((u) => {
+            const upstream: Record<string, unknown> = { dial: u.dial };
+            if (u.tls) {
+              upstream.tls = u.tls;
+            }
+            return upstream;
+          }),
+        };
+        if (route.proxy_protocol) {
+          proxyHandler.proxy_protocol = route.proxy_protocol;
+        }
+        if (route.meta?.load_balancing?.policy) {
+          proxyHandler.load_balancing = { selection: { policy: route.meta.load_balancing.policy } };
+        }
+        if (route.meta?.health_check) {
+          const hc = route.meta.health_check;
+          proxyHandler.health_checks = {
+            active: {
+              ...(hc.interval ? { interval: hc.interval } : {}),
+              ...(hc.timeout ? { timeout: hc.timeout } : {}),
+              ...(hc.port ? { port: hc.port } : {}),
+            },
+          };
+        }
+        handlers.push(proxyHandler);
+      } else if (route.handler_type === "echo") {
+        handlers.push({ handler: "echo" });
+      } else if (route.handler_type === "close") {
+        handlers.push({ handler: "close" });
+      } else if (route.handler_type === "socks5") {
+        handlers.push({ handler: "socks5" });
+      }
+
+      // Build matchers, merging global IP block if applicable
+      const routeMatchers: unknown[] = route.matchers ? [...route.matchers] : [];
+
+      // Apply IP block: check per-route override
+      const ipBlockOverride = route.meta?.ip_block;
+      if (ipBlockOverride?.mode !== "disabled") {
+        let blockCidrs: string[];
+        let allowCidrs: string[];
+        if (ipBlockOverride?.mode === "override") {
+          blockCidrs = ipBlockOverride.block_cidrs ?? [];
+          allowCidrs = ipBlockOverride.allow_cidrs ?? [];
+        } else {
+          // inherit: merge global + per-route
+          blockCidrs = [...globalBlockCidrs, ...(ipBlockOverride?.block_cidrs ?? [])];
+          allowCidrs = [...globalAllowCidrs, ...(ipBlockOverride?.allow_cidrs ?? [])];
+        }
+
+        // Filter out allowed CIDRs from block list is handled by nesting:
+        // We add a NOT remote_ip matcher for blocked CIDRs, unless the connection also matches allow CIDRs.
+        // Simple approach: if block CIDRs exist, add a NOT(remote_ip) matcher
+        if (blockCidrs.length > 0) {
+          // If allow list exists, we need the effective block = block - allow
+          const effectiveBlock = allowCidrs.length > 0
+            ? blockCidrs.filter((c) => !allowCidrs.includes(c))
+            : blockCidrs;
+          if (effectiveBlock.length > 0) {
+            routeMatchers.push({ not: [{ remote_ip: { ranges: effectiveBlock } }] });
+          }
+        }
+      }
+
+      const caddyRoute: Record<string, unknown> = { handle: handlers };
+      if (routeMatchers.length > 0) {
+        caddyRoute.match = routeMatchers;
+      }
+      caddyRoutes.push(caddyRoute);
+    }
+
+    const server: Record<string, unknown> = {
+      listen: listen,
+      routes: caddyRoutes,
+    };
+    // Use the first route's matching_timeout if set
+    const timeout = groupRoutes.find((r) => r.matching_timeout)?.matching_timeout;
+    if (timeout) {
+      server.matching_timeout = timeout;
+    }
+
+    // Build TLS connection policies for L4 server if any route terminates TLS with a specific certificate
+    if (serverNeedsTls && certificateMap) {
+      const tlsPolicies: Record<string, unknown>[] = [];
+      for (const route of groupRoutes) {
+        if (!route.tls_termination) continue;
+        if (route.certificate_id && certificateMap.has(route.certificate_id)) {
+          const cert = certificateMap.get(route.certificate_id)!;
+          // Extract SNI domains from matchers for this certificate
+          const sniDomains: string[] = [];
+          if (route.matchers) {
+            for (const m of route.matchers) {
+              const obj = m as Record<string, unknown>;
+              if (obj.tls) {
+                const tls = obj.tls as { sni?: string[] };
+                if (tls.sni) sniDomains.push(...tls.sni);
+              }
+            }
+          }
+          // If certificate is imported, reference it by loaded name; if managed, by tag
+          if (cert.type === "managed" && managedCertificateIds?.has(cert.id)) {
+            // Managed cert — Caddy auto-provisions via apps.tls automation; rely on SNI matching
+            if (sniDomains.length > 0) {
+              tlsPolicies.push({ match: { sni: sniDomains } });
+            }
+          } else if (cert.type === "imported" && cert.certificate_pem) {
+            // Imported cert — reference the loaded PEM by tag
+            const policy: Record<string, unknown> = {
+              certificate_selection: { any_tag: [`cert_${cert.id}`] },
+            };
+            if (sniDomains.length > 0) {
+              policy.match = { sni: sniDomains };
+            }
+            tlsPolicies.push(policy);
+          }
+        }
+      }
+      // Add a default catch-all policy if there are specific policies
+      if (tlsPolicies.length > 0) {
+        tlsPolicies.push({});  // Default/fallback policy
+        server.tls_connection_policies = tlsPolicies;
+      }
+    }
+
+    servers[`l4_srv${idx}`] = server;
+    idx++;
+  }
+
+  return servers;
+}
+
 async function buildCaddyDocument() {
   const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows, allIssuedCaCertIds] = await Promise.all([
     db
@@ -1421,6 +1638,51 @@ async function buildCaddyDocument() {
   }
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
+
+  // Collect L4 route certificate usage into the shared TLS automation pool
+  const l4RouteRows = await db.select().from(l4Routes);
+  const l4RouteParsed = l4RouteRows.map(parseL4RouteRow);
+  for (const route of l4RouteParsed) {
+    if (!route.enabled || !route.tls_termination) continue;
+    if (route.certificate_id && certificateMap.has(route.certificate_id)) {
+      const cert = certificateMap.get(route.certificate_id)!;
+      if (!certificateUsage.has(cert.id)) {
+        certificateUsage.set(cert.id, { certificate: cert, domains: new Set() });
+      }
+      // Add SNI domains from matchers for this certificate
+      if (route.matchers) {
+        for (const m of route.matchers) {
+          const obj = m as Record<string, unknown>;
+          if (obj.tls) {
+            const tls = obj.tls as { sni?: string[] };
+            if (tls.sni) {
+              for (const sni of tls.sni) {
+                certificateUsage.get(cert.id)!.domains.add(sni.toLowerCase());
+              }
+            }
+          }
+        }
+      }
+    } else if (!route.certificate_id) {
+      // Auto-managed TLS: extract SNI domains for ACME provisioning
+      if (route.matchers) {
+        for (const m of route.matchers) {
+          const obj = m as Record<string, unknown>;
+          if (obj.tls) {
+            const tls = obj.tls as { sni?: string[] };
+            if (tls.sni) {
+              for (const sni of tls.sni) {
+                if (!sni.includes("*")) { // ACME can't auto-provision wildcards without DNS
+                  autoManagedDomains.add(sni.toLowerCase());
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf] = await Promise.all([
     getGeneralSettings(),
     getDnsSettings(),
@@ -1525,6 +1787,15 @@ async function buildCaddyDocument() {
   }
   const loggingApp = { logging: { logs: loggingLogs } };
 
+  // Build Layer 4 servers from l4_routes table
+  const l4IpBlock = await getL4IpBlockSettings();
+  const l4Servers = buildL4Servers(l4RouteParsed, {
+    l4IpBlock,
+    certificateMap,
+    managedCertificateIds,
+  });
+  const l4App = l4Servers ? { layer4: { servers: l4Servers } } : {};
+
   return {
     admin: {
       listen: "0.0.0.0:2019",
@@ -1538,7 +1809,8 @@ async function buildCaddyDocument() {
           ...(tlsApp ?? {}),
           ...(importedCertPems.length > 0 ? { certificates: { load_pem: importedCertPems } } : {})
         }
-      } : {})
+      } : {}),
+      ...l4App
     }
   };
 }

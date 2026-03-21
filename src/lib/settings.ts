@@ -226,3 +226,31 @@ export async function getWafSettings(): Promise<WafSettings | null> {
 export async function saveWafSettings(s: WafSettings): Promise<void> {
   await setSetting("waf", s);
 }
+
+// ── Layer 4 Settings ──
+
+export type L4GeneralSettings = {
+  defaultMatchingTimeout: string;  // default: "3s"
+};
+
+export type L4IpBlockSettings = {
+  enabled: boolean;
+  block_cidrs: string[];   // CIDRs to block
+  allow_cidrs: string[];   // CIDRs to allow (overrides block)
+};
+
+export async function getL4GeneralSettings(): Promise<L4GeneralSettings | null> {
+  return await getEffectiveSetting<L4GeneralSettings>("l4_general");
+}
+
+export async function saveL4GeneralSettings(s: L4GeneralSettings): Promise<void> {
+  await setSetting("l4_general", s);
+}
+
+export async function getL4IpBlockSettings(): Promise<L4IpBlockSettings | null> {
+  return await getEffectiveSetting<L4IpBlockSettings>("l4_ip_block");
+}
+
+export async function saveL4IpBlockSettings(s: L4IpBlockSettings): Promise<void> {
+  await setSetting("l4_ip_block", s);
+}

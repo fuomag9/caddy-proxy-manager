@@ -5,12 +5,14 @@ import {
   accessLists,
   auditEvents,
   certificates,
-  proxyHosts
+  proxyHosts,
+  l4Routes
 } from "@/src/lib/db/schema";
 import { count, desc, isNull, sql } from "drizzle-orm";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SecurityIcon from "@mui/icons-material/Security";
 import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import LayersIcon from "@mui/icons-material/Layers";
 import { ReactNode } from "react";
 import { getAnalyticsSummary } from "@/src/lib/analytics-db";
 
@@ -22,7 +24,7 @@ type StatCard = {
 };
 
 async function loadStats(): Promise<StatCard[]> {
-  const [proxyHostCountResult, acmeCertCountResult, importedCertCountResult, accessListCountResult] =
+  const [proxyHostCountResult, acmeCertCountResult, importedCertCountResult, accessListCountResult, l4RouteCountResult] =
     await Promise.all([
       db.select({ value: count() }).from(proxyHosts),
       // Proxy hosts with no explicit cert → Caddy auto-issues one ACME cert per host
@@ -31,16 +33,19 @@ async function loadStats(): Promise<StatCard[]> {
       db.select({ value: count() }).from(certificates).where(
         sql`${certificates.type} = 'imported' AND ${certificates.certificatePem} IS NOT NULL`
       ),
-      db.select({ value: count() }).from(accessLists)
+      db.select({ value: count() }).from(accessLists),
+      db.select({ value: count() }).from(l4Routes)
     ]);
   const proxyHostsCount = proxyHostCountResult[0]?.value ?? 0;
   const certificatesCount = (acmeCertCountResult[0]?.value ?? 0) + (importedCertCountResult[0]?.value ?? 0);
   const accessListsCount = accessListCountResult[0]?.value ?? 0;
+  const l4RoutesCount = l4RouteCountResult[0]?.value ?? 0;
 
   return [
     { label: "Proxy Hosts", icon: <SwapHorizIcon fontSize="large" />, count: proxyHostsCount, href: "/proxy-hosts" },
     { label: "Certificates", icon: <SecurityIcon fontSize="large" />, count: certificatesCount, href: "/certificates" },
-    { label: "Access Lists", icon: <VpnKeyIcon fontSize="large" />, count: accessListsCount, href: "/access-lists" }
+    { label: "Access Lists", icon: <VpnKeyIcon fontSize="large" />, count: accessListsCount, href: "/access-lists" },
+    { label: "L4 Routes", icon: <LayersIcon fontSize="large" />, count: l4RoutesCount, href: "/l4-routes" }
   ];
 }
 

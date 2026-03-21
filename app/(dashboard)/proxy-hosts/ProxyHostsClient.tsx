@@ -186,6 +186,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       />
 
       <SearchField
+        id="proxy-hosts-search"
         value={searchTerm}
         onChange={(e) => handleSearchChange(e.target.value)}
         placeholder="Search hosts..."

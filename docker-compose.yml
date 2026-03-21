@@ -89,8 +89,19 @@ services:
       - "80:80/udp"
       - "443:443"
       - "443:443/udp"
-      # Admin API (port 2019) is only exposed on internal network for security
-      # Web UI accesses via http://caddy:2019 internally
+      - "33333:33333"
+      - "33333:33333/udp"
+      - "44444:44444"
+      - "44444:44444/udp"
+      - "2019:2019"
+      # Layer 4 routes: map additional TCP/UDP ports as needed for your L4 routes
+      # Examples:
+      # - "25:25"      # SMTP
+      # - "587:587"    # SMTP submission
+      # - "5432:5432"  # PostgreSQL
+      # - "3306:3306"  # MySQL
+      # Admin API exposure is needed for local host-based development.
+      # In a Dockerized deployment, prefer keeping it internal-only.
       # Uncomment the line below to expose metrics externally for Grafana/Prometheus
       # - "9090:9090"  # Metrics available at http://localhost:9090/metrics (configure in Settings first)
     environment:

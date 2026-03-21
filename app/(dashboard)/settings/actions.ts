@@ -5,10 +5,10 @@ import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveL4IpBlockSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
 import { getWafRuleMessages } from "@/src/lib/models/waf-events";
-import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
+import type { CloudflareSettings, GeoBlockSettings, WafSettings, L4IpBlockSettings } from "@/src/lib/settings";
 
 type ActionResult = {
   success: boolean;
@@ -636,6 +636,42 @@ export async function lookupWafRuleMessageAction(ruleId: number): Promise<{ mess
   await requireAdmin();
   const map = await getWafRuleMessages([ruleId]);
   return { message: map[ruleId] ?? null };
+}
+
+function parseCidrList(formData: FormData, key: string): string[] {
+  const raw = formData.get(key);
+  if (!raw || typeof raw !== "string") return [];
+  return raw.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+}
+
+export async function updateL4IpBlockSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+
+    const enabled = formData.get("l4_ip_block_enabled") === "on";
+    const config: L4IpBlockSettings = {
+      enabled,
+      block_cidrs: parseCidrList(formData, "l4_ip_block_block_cidrs"),
+      allow_cidrs: parseCidrList(formData, "l4_ip_block_allow_cidrs"),
+    };
+
+    await saveL4IpBlockSettings(config);
+
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      return { success: true, message: "L4 IP block settings saved and applied" };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await syncInstances();
+      return { success: true, message: `Settings saved, but could not apply to Caddy: ${errorMsg}` };
+    }
+  } catch (error) {
+    console.error("Failed to save L4 IP block settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save L4 IP block settings" };
+  }
 }
 
 export async function removeWafRuleGloballyAction(ruleId: number): Promise<ActionResult> {

@@ -1,7 +1,6 @@
 
 import { Alert, Box, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import { useFormState } from "react-dom";
-import { useEffect } from "react";
+import { useActionState, useEffect } from "react";
 import {
     createProxyHostAction,
     deleteProxyHostAction,
@@ -43,7 +42,7 @@ export function CreateHostDialog({
     initialData?: ProxyHost | null;
     caCertificates?: CaCertificate[];
 }) {
-    const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
+    const [state, formAction] = useActionState(createProxyHostAction, INITIAL_ACTION_STATE);
 
     useEffect(() => {
         if (state.status === "success") {
@@ -159,7 +158,7 @@ export function EditHostDialog({
     accessLists: AccessList[];
     caCertificates?: CaCertificate[];
 }) {
-    const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
+    const [state, formAction] = useActionState(async (_prevState, formData) => updateProxyHostAction(host.id, _prevState, formData), INITIAL_ACTION_STATE);
 
     useEffect(() => {
         if (state.status === "success") {
@@ -262,7 +261,7 @@ export function DeleteHostDialog({
     host: ProxyHost;
     onClose: () => void;
 }) {
-    const [state, formAction] = useFormState(deleteProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
+    const [state, formAction] = useActionState(async () => deleteProxyHostAction(host.id), INITIAL_ACTION_STATE);
 
     useEffect(() => {
         if (state.status === "success") {

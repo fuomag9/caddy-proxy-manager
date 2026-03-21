@@ -6,6 +6,7 @@ const root = resolve(__dirname, '..');
 
 export default defineConfig({
   plugins: [tsconfigPaths({ root })],
+  root,
   resolve: {
     alias: {
       // bun:sqlite is a Bun built-in unavailable in Node.js/Vitest. Redirect both
@@ -19,15 +20,15 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    setupFiles: [resolve(__dirname, 'setup.vitest.ts')],
+    setupFiles: ['tests/setup.vitest.ts'],
     env: {
       DATABASE_URL: ':memory:',
       SESSION_SECRET: 'test-session-secret-for-vitest-unit-tests-12345',
       NODE_ENV: 'test',
     },
     include: [
-      resolve(__dirname, 'unit/**/*.test.ts'),
-      resolve(__dirname, 'integration/**/*.test.ts'),
+      'tests/unit/**/*.test.ts',
+      'tests/integration/**/*.test.ts',
     ],
     // Suppress console output from production code during tests (e.g. expected
     // warn/error calls when intentionally feeding bad input to parsers).

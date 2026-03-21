@@ -9,7 +9,7 @@ RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 # GOPROXY=direct bypasses the module proxy cache so the latest commit is always fetched
 RUN GOPROXY=direct xcaddy build \
     --with github.com/caddy-dns/cloudflare \
-    --with github.com/mholt/caddy-l4 \
+    --with github.com/mholt/caddy-l4@v0.1.0 \
     --with github.com/fuomag9/caddy-blocker-plugin \
     --with github.com/corazawaf/coraza-caddy/v2 \
     --output /usr/bin/caddy

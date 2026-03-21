@@ -46,7 +46,7 @@ export function AppDialog({
             }}
         >
             <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <Typography variant="h6">{title}</Typography>
+                <span style={{ fontSize: "1.25rem", fontWeight: 500 }}>{title}</span>
                 <IconButton onClick={onClose} size="small" sx={{ color: "text.secondary" }}>
                     <CloseIcon fontSize="small" />
                 </IconButton>

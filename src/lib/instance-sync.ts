@@ -1,5 +1,5 @@
 import db, { nowIso } from "./db";
-import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, proxyHosts } from "./db/schema";
+import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, proxyHosts, l4Routes } from "./db/schema";
 import { getSetting, setSetting } from "./settings";
 import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
@@ -28,6 +28,7 @@ export type SyncPayload = {
     accessLists: Array<typeof accessLists.$inferSelect>;
     accessListEntries: Array<typeof accessListEntries.$inferSelect>;
     proxyHosts: Array<typeof proxyHosts.$inferSelect>;
+    l4Routes: Array<typeof l4Routes.$inferSelect>;
   };
 };
 
@@ -233,13 +234,14 @@ export async function clearSyncedSetting(key: string): Promise<void> {
 }
 
 export async function buildSyncPayload(): Promise<SyncPayload> {
-  const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows] = await Promise.all([
+  const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows, l4RouteRows] = await Promise.all([
     db.select().from(certificates),
     db.select().from(caCertificates),
     db.select().from(issuedClientCertificates),
     db.select().from(accessLists),
     db.select().from(accessListEntries),
-    db.select().from(proxyHosts)
+    db.select().from(proxyHosts),
+    db.select().from(l4Routes)
   ]);
 
   const settings = {
@@ -279,6 +281,11 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     ownerUserId: null
   }));
 
+  const sanitizedL4Routes = l4RouteRows.map((row) => ({
+    ...row,
+    ownerUserId: null
+  }));
+
   return {
     generated_at: nowIso(),
     settings,
@@ -288,7 +295,8 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
       issuedClientCertificates: sanitizedIssuedClientCertificates,
       accessLists: sanitizedAccessLists,
       accessListEntries: accessEntryRows,
-      proxyHosts: sanitizedProxyHosts
+      proxyHosts: sanitizedProxyHosts,
+      l4Routes: sanitizedL4Routes
     }
   };
 }

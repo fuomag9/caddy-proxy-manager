@@ -273,3 +273,27 @@ export const wafLogParseState = sqliteTable('waf_log_parse_state', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 });
+
+export const l4Routes = sqliteTable(
+  'l4_routes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    listenAddresses: text('listen_addresses').notNull(), // JSON array of listen addresses
+    matchers: text('matchers'), // JSON matcher config
+    handlerType: text('handler_type').notNull().default('proxy'), // proxy | echo | close | socks5
+    upstreams: text('upstreams'), // JSON array of upstream objects
+    tlsTermination: integer('tls_termination', { mode: 'boolean' }).notNull().default(false),
+    certificateId: integer('certificate_id').references(() => certificates.id, { onDelete: 'set null' }),
+    proxyProtocol: text('proxy_protocol'), // v1 | v2 | null
+    matchingTimeout: text('matching_timeout'), // duration string e.g. "3s"
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    meta: text('meta'), // JSON blob for extensions (load_balancing, health_checks, throttle, etc.)
+    ownerUserId: integer('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => ({
+    enabledIdx: index('idx_l4_routes_enabled').on(table.enabled),
+  })
+);

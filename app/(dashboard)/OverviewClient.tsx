@@ -56,9 +56,9 @@ export default function OverviewClient({
         </Typography>
       </Stack>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={3} columns={{ xs: 12, sm: 12, md: 12, lg: 10, xl: 10 }}>
         {stats.map((stat) => (
-          <Grid key={stat.label} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+          <Grid key={stat.label} size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
             <Card
               elevation={0}
               sx={{
@@ -100,7 +100,7 @@ export default function OverviewClient({
         ))}
 
         {/* Traffic (24h) card */}
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
           <Card elevation={0} sx={{ height: "100%", border: "1px solid rgba(148, 163, 184, 0.14)" }}>
             <CardActionArea
               component={Link}

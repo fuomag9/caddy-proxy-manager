@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import { Alert, Box, Button, Card, CardContent, Checkbox, FormControlLabel, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import type {
   GeneralSettings,
@@ -11,6 +11,7 @@ import type {
   DnsSettings,
   UpstreamDnsResolutionSettings,
   GeoBlockSettings,
+  L4IpBlockSettings,
 } from "@/src/lib/settings";
 import { GeoBlockFields } from "@/src/components/proxy-hosts/GeoBlockFields";
 import {
@@ -28,6 +29,7 @@ import {
   toggleSlaveInstanceAction,
   syncSlaveInstancesAction,
   updateGeoBlockSettingsAction,
+  updateL4IpBlockSettingsAction,
 } from "./actions";
 
 type Props = {
@@ -43,6 +45,7 @@ type Props = {
   dns: DnsSettings | null;
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
+  l4IpBlock?: L4IpBlockSettings | null;
   instanceSync: {
     mode: "standalone" | "master" | "slave";
     modeFromEnv: boolean;
@@ -87,23 +90,25 @@ export default function SettingsClient({
   dns,
   upstreamDnsResolution,
   globalGeoBlock,
+  l4IpBlock,
   instanceSync
 }: Props) {
-  const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
-  const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
-  const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
-  const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
-  const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
-  const [dnsState, dnsFormAction] = useFormState(updateDnsSettingsAction, null);
-  const [upstreamDnsResolutionState, upstreamDnsResolutionFormAction] = useFormState(
+  const [generalState, generalFormAction] = useActionState(updateGeneralSettingsAction, null);
+  const [cloudflareState, cloudflareFormAction] = useActionState(updateCloudflareSettingsAction, null);
+  const [authentikState, authentikFormAction] = useActionState(updateAuthentikSettingsAction, null);
+  const [metricsState, metricsFormAction] = useActionState(updateMetricsSettingsAction, null);
+  const [loggingState, loggingFormAction] = useActionState(updateLoggingSettingsAction, null);
+  const [dnsState, dnsFormAction] = useActionState(updateDnsSettingsAction, null);
+  const [upstreamDnsResolutionState, upstreamDnsResolutionFormAction] = useActionState(
     updateUpstreamDnsResolutionSettingsAction,
     null
   );
-  const [instanceModeState, instanceModeFormAction] = useFormState(updateInstanceModeAction, null);
-  const [slaveTokenState, slaveTokenFormAction] = useFormState(updateSlaveMasterTokenAction, null);
-  const [slaveInstanceState, slaveInstanceFormAction] = useFormState(createSlaveInstanceAction, null);
-  const [syncState, syncFormAction] = useFormState(syncSlaveInstancesAction, null);
-  const [geoBlockState, geoBlockFormAction] = useFormState(updateGeoBlockSettingsAction, null);
+  const [instanceModeState, instanceModeFormAction] = useActionState(updateInstanceModeAction, null);
+  const [slaveTokenState, slaveTokenFormAction] = useActionState(updateSlaveMasterTokenAction, null);
+  const [slaveInstanceState, slaveInstanceFormAction] = useActionState(createSlaveInstanceAction, null);
+  const [syncState, syncFormAction] = useActionState(syncSlaveInstancesAction, null);
+  const [geoBlockState, geoBlockFormAction] = useActionState(updateGeoBlockSettingsAction, null);
+  const [l4IpBlockState, l4IpBlockFormAction] = useActionState(updateL4IpBlockSettingsAction, null);
 
   const isSlave = instanceSync.mode === "slave";
   const isMaster = instanceSync.mode === "master";
@@ -772,6 +777,61 @@ export default function SettingsClient({
             <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
               <Button type="submit" variant="contained">
                 Save geoblocking settings
+              </Button>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} gutterBottom>
+            L4 IP Blocking
+          </Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            Block or allow connections to L4 (TCP/UDP) routes by IP address or CIDR range. Individual L4 routes can inherit, override, or disable these global rules.
+          </Typography>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            WAF and Authentik forward-auth do not apply to L4 routes — they operate at the HTTP layer. Use IP blocking here for L4-level access control.
+          </Alert>
+          <Stack component="form" action={l4IpBlockFormAction} spacing={2}>
+            {l4IpBlockState?.message && (
+              <Alert severity={l4IpBlockState.success ? "success" : "error"}>
+                {l4IpBlockState.message}
+              </Alert>
+            )}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  name="l4_ip_block_enabled"
+                  defaultChecked={l4IpBlock?.enabled ?? false}
+                />
+              }
+              label="Enable L4 IP blocking"
+            />
+            <TextField
+              name="l4_ip_block_block_cidrs"
+              label="Blocked CIDRs"
+              placeholder={"10.0.0.0/8\n192.168.1.100"}
+              defaultValue={l4IpBlock?.block_cidrs?.join("\n") ?? ""}
+              helperText="One IP address or CIDR range per line. Connections from these ranges will be dropped."
+              multiline
+              minRows={3}
+              fullWidth
+            />
+            <TextField
+              name="l4_ip_block_allow_cidrs"
+              label="Allowed CIDRs (Exceptions)"
+              placeholder={"10.0.0.1/32"}
+              defaultValue={l4IpBlock?.allow_cidrs?.join("\n") ?? ""}
+              helperText="One IP or CIDR per line. These ranges are excluded from the block list."
+              multiline
+              minRows={2}
+              fullWidth
+            />
+            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+              <Button type="submit" variant="contained">
+                Save L4 IP block settings
               </Button>
             </Box>
           </Stack>
