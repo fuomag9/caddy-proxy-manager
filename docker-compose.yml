@@ -89,19 +89,18 @@ services:
       - "80:80/udp"
       - "443:443"
       - "443:443/udp"
-      - "33333:33333"
-      - "33333:33333/udp"
-      - "44444:44444"
-      - "44444:44444/udp"
-      - "2019:2019"
       # Layer 4 routes: map additional TCP/UDP ports as needed for your L4 routes
       # Examples:
-      # - "25:25"      # SMTP
-      # - "587:587"    # SMTP submission
-      # - "5432:5432"  # PostgreSQL
-      # - "3306:3306"  # MySQL
+      # - "25:25"        # SMTP
+      # - "25:25/udp"    # SMTP over UDP
+      # - "587:587"      # SMTP submission
+      # - "5432:5432"    # PostgreSQL
+      # - "3306:3306"    # MySQL
+      # - "1935:1935"    # RTMP streaming
+      # - "1935:1935/udp"
       # Admin API exposure is needed for local host-based development.
       # In a Dockerized deployment, prefer keeping it internal-only.
+      # - "2019:2019"
       # Uncomment the line below to expose metrics externally for Grafana/Prometheus
       # - "9090:9090"  # Metrics available at http://localhost:9090/metrics (configure in Settings first)
     environment:
