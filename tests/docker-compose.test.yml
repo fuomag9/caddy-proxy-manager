@@ -39,6 +39,7 @@ services:
   # Listens on port 9000 and echoes back anything sent to it with a prefix.
   tcp-echo:
     image: cjimti/go-echo
+    platform: linux/amd64
     environment:
       TCP_PORT: "9000"
       NODE_NAME: "tcp-echo-ok"
