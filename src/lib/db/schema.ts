@@ -273,3 +273,21 @@ export const wafLogParseState = sqliteTable('waf_log_parse_state', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 });
+
+export const l4ProxyHosts = sqliteTable("l4_proxy_hosts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  protocol: text("protocol").notNull(),
+  listenAddress: text("listen_address").notNull(),
+  upstreams: text("upstreams").notNull(),
+  matcherType: text("matcher_type").notNull().default("none"),
+  matcherValue: text("matcher_value"),
+  tlsTermination: integer("tls_termination", { mode: "boolean" }).notNull().default(false),
+  proxyProtocolVersion: text("proxy_protocol_version"),
+  proxyProtocolReceive: integer("proxy_protocol_receive", { mode: "boolean" }).notNull().default(false),
+  ownerUserId: integer("owner_user_id").references(() => users.id, { onDelete: "set null" }),
+  meta: text("meta"),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

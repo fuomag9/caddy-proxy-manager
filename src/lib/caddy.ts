@@ -23,7 +23,7 @@ import {
 import http from "node:http";
 import https from "node:https";
 import db, { nowIso } from "./db";
-import { isNull } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { config } from "./config";
 import {
   getCloudflareSettings,
@@ -47,7 +47,8 @@ import {
   certificates,
   caCertificates,
   issuedClientCertificates,
-  proxyHosts
+  proxyHosts,
+  l4ProxyHosts
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
@@ -115,6 +116,14 @@ type ProxyHostMeta = {
   waf?: WafHostConfig;
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
+};
+
+type L4Meta = {
+  load_balancer?: LoadBalancerMeta;
+  dns_resolver?: DnsResolverMeta;
+  upstream_dns_resolution?: UpstreamDnsResolutionMeta;
+  geoblock?: GeoBlockSettings;
+  geoblock_mode?: GeoBlockMode;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -1297,6 +1306,204 @@ async function buildTlsAutomation(
   };
 }
 
+async function buildL4Servers(): Promise<Record<string, unknown> | null> {
+  const l4Hosts = await db
+    .select()
+    .from(l4ProxyHosts)
+    .where(eq(l4ProxyHosts.enabled, true));
+
+  if (l4Hosts.length === 0) return null;
+
+  const [globalDnsSettings, globalUpstreamDnsResolutionSettings, globalGeoBlock] = await Promise.all([
+    getDnsSettings(),
+    getUpstreamDnsResolutionSettings(),
+    getGeoBlockSettings(),
+  ]);
+
+  // Group hosts by listen address — multiple hosts on the same port share routes in one server
+  const serverMap = new Map<string, typeof l4Hosts>();
+  for (const host of l4Hosts) {
+    const key = host.listenAddress;
+    if (!serverMap.has(key)) serverMap.set(key, []);
+    serverMap.get(key)!.push(host);
+  }
+
+  const servers: Record<string, unknown> = {};
+  let serverIdx = 0;
+  for (const [listenAddr, hosts] of serverMap) {
+    const routes: Record<string, unknown>[] = [];
+
+    for (const host of hosts) {
+      const route: Record<string, unknown> = {};
+
+      // Build matchers
+      const matcherType = host.matcherType as string;
+      const matcherValues = host.matcherValue ? parseJson<string[]>(host.matcherValue, []) : [];
+
+      if (matcherType === "tls_sni" && matcherValues.length > 0) {
+        route.match = [{ tls: { sni: matcherValues } }];
+      } else if (matcherType === "http_host" && matcherValues.length > 0) {
+        route.match = [{ http: [{ host: matcherValues }] }];
+      } else if (matcherType === "proxy_protocol") {
+        route.match = [{ proxy_protocol: {} }];
+      }
+      // "none" = no match block (catch-all)
+
+      // Parse per-host meta for load balancing, DNS resolver, and upstream DNS resolution
+      const meta = parseJson<L4Meta>(host.meta, {});
+
+      // Load balancer config
+      const lbMeta = meta.load_balancer;
+      let lbConfig: LoadBalancerRouteConfig | null = null;
+      if (lbMeta?.enabled) {
+        lbConfig = {
+          enabled: true,
+          policy: lbMeta.policy ?? "random",
+          policyHeaderField: null,
+          policyCookieName: null,
+          policyCookieSecret: null,
+          tryDuration: lbMeta.try_duration ?? null,
+          tryInterval: lbMeta.try_interval ?? null,
+          retries: lbMeta.retries ?? null,
+          activeHealthCheck: lbMeta.active_health_check?.enabled ? {
+            enabled: true,
+            uri: null,
+            port: lbMeta.active_health_check.port ?? null,
+            interval: lbMeta.active_health_check.interval ?? null,
+            timeout: lbMeta.active_health_check.timeout ?? null,
+            status: null,
+            body: null,
+          } : null,
+          passiveHealthCheck: lbMeta.passive_health_check?.enabled ? {
+            enabled: true,
+            failDuration: lbMeta.passive_health_check.fail_duration ?? null,
+            maxFails: lbMeta.passive_health_check.max_fails ?? null,
+            unhealthyStatus: null,
+            unhealthyLatency: lbMeta.passive_health_check.unhealthy_latency ?? null,
+          } : null,
+        };
+      }
+
+      // DNS resolver config
+      const dnsConfig = parseDnsResolverConfig(meta.dns_resolver);
+
+      // Upstream DNS resolution (pinning)
+      const hostDnsResolution = parseUpstreamDnsResolutionConfig(meta.upstream_dns_resolution);
+      const effectiveDnsResolution = resolveEffectiveUpstreamDnsResolution(
+        globalUpstreamDnsResolutionSettings,
+        hostDnsResolution
+      );
+
+      // Build handler chain
+      const handlers: Record<string, unknown>[] = [];
+
+      // 1. Receive inbound proxy protocol
+      if (host.proxyProtocolReceive) {
+        handlers.push({ handler: "proxy_protocol" });
+      }
+
+      // 2. TLS termination
+      if (host.tlsTermination) {
+        handlers.push({ handler: "tls" });
+      }
+
+      // 3. Proxy handler
+      const upstreams = parseJson<string[]>(host.upstreams, []);
+
+      // Resolve upstream hostnames to IPs if DNS pinning is enabled
+      let resolvedDials = upstreams;
+      if (effectiveDnsResolution.enabled) {
+        const resolver = new Resolver();
+        const lookupServers = getLookupServers(dnsConfig, globalDnsSettings);
+        if (lookupServers.length > 0) {
+          try { resolver.setServers(lookupServers); } catch { /* ignore invalid servers */ }
+        }
+        const timeoutMs = getLookupTimeoutMs(dnsConfig, globalDnsSettings);
+
+        const pinned: string[] = [];
+        for (const upstream of upstreams) {
+          const colonIdx = upstream.lastIndexOf(":");
+          if (colonIdx <= 0) { pinned.push(upstream); continue; }
+          const hostPart = upstream.substring(0, colonIdx);
+          const portPart = upstream.substring(colonIdx + 1);
+          if (isIP(hostPart) !== 0) { pinned.push(upstream); continue; }
+          try {
+            const addresses = await resolveHostnameAddresses(resolver, hostPart, effectiveDnsResolution.family, timeoutMs);
+            for (const addr of addresses) {
+              pinned.push(addr.includes(":") ? `[${addr}]:${portPart}` : `${addr}:${portPart}`);
+            }
+          } catch {
+            pinned.push(upstream);
+          }
+        }
+        resolvedDials = pinned;
+      }
+
+      const proxyHandler: Record<string, unknown> = {
+        handler: "proxy",
+        upstreams: resolvedDials.map((u) => ({ dial: [u] })),
+      };
+      if (host.proxyProtocolVersion) {
+        proxyHandler.proxy_protocol = host.proxyProtocolVersion;
+      }
+      if (lbConfig) {
+        const loadBalancing = buildLoadBalancingConfig(lbConfig);
+        if (loadBalancing) proxyHandler.load_balancing = loadBalancing;
+        const healthChecks = buildHealthChecksConfig(lbConfig);
+        if (healthChecks) proxyHandler.health_checks = healthChecks;
+      }
+      handlers.push(proxyHandler);
+
+      route.handle = handlers;
+
+      // Geo blocking: add a blocking route BEFORE the proxy route.
+      // At L4, the blocker is a matcher (layer4.matchers.blocker) — blocked connections
+      // match this route and are closed. Non-blocked connections fall through to the proxy route.
+      const effectiveGeoBlock = resolveEffectiveGeoBlock(globalGeoBlock, {
+        geoblock: meta.geoblock ?? null,
+        geoblock_mode: meta.geoblock_mode ?? "merge",
+      });
+      if (effectiveGeoBlock) {
+        const blockerMatcher: Record<string, unknown> = {
+          geoip_db: "/usr/share/GeoIP/GeoLite2-Country.mmdb",
+          asn_db: "/usr/share/GeoIP/GeoLite2-ASN.mmdb",
+        };
+        if (effectiveGeoBlock.block_countries?.length) blockerMatcher.block_countries = effectiveGeoBlock.block_countries;
+        if (effectiveGeoBlock.block_continents?.length) blockerMatcher.block_continents = effectiveGeoBlock.block_continents;
+        if (effectiveGeoBlock.block_asns?.length) blockerMatcher.block_asns = effectiveGeoBlock.block_asns;
+        if (effectiveGeoBlock.block_cidrs?.length) blockerMatcher.block_cidrs = effectiveGeoBlock.block_cidrs;
+        if (effectiveGeoBlock.block_ips?.length) blockerMatcher.block_ips = effectiveGeoBlock.block_ips;
+        if (effectiveGeoBlock.allow_countries?.length) blockerMatcher.allow_countries = effectiveGeoBlock.allow_countries;
+        if (effectiveGeoBlock.allow_continents?.length) blockerMatcher.allow_continents = effectiveGeoBlock.allow_continents;
+        if (effectiveGeoBlock.allow_asns?.length) blockerMatcher.allow_asns = effectiveGeoBlock.allow_asns;
+        if (effectiveGeoBlock.allow_cidrs?.length) blockerMatcher.allow_cidrs = effectiveGeoBlock.allow_cidrs;
+        if (effectiveGeoBlock.allow_ips?.length) blockerMatcher.allow_ips = effectiveGeoBlock.allow_ips;
+
+        // Build the same route matcher as the proxy route (if any)
+        const blockRoute: Record<string, unknown> = {
+          match: [
+            {
+              blocker: blockerMatcher,
+              ...(route.match ? (route.match as Record<string, unknown>[])[0] : {}),
+            },
+          ],
+          handle: [{ handler: "close" }],
+        };
+        routes.push(blockRoute);
+      }
+
+      routes.push(route);
+    }
+
+    servers[`l4_server_${serverIdx++}`] = {
+      listen: [listenAddr],
+      routes,
+    };
+  }
+
+  return servers;
+}
+
 async function buildCaddyDocument() {
   const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows, allIssuedCaCertIds] = await Promise.all([
     db
@@ -1525,6 +1732,10 @@ async function buildCaddyDocument() {
   }
   const loggingApp = { logging: { logs: loggingLogs } };
 
+  // Build L4 (TCP/UDP) proxy servers
+  const l4Servers = await buildL4Servers();
+  const l4App = l4Servers ? { layer4: { servers: l4Servers } } : {};
+
   return {
     admin: {
       listen: "0.0.0.0:2019",
@@ -1538,7 +1749,8 @@ async function buildCaddyDocument() {
           ...(tlsApp ?? {}),
           ...(importedCertPems.length > 0 ? { certificates: { load_pem: importedCertPems } } : {})
         }
-      } : {})
+      } : {}),
+      ...l4App
     }
   };
 }

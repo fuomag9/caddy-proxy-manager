@@ -10,6 +10,11 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # L4 test ports (TCP)
+      - "15432:15432"
+      - "15433:15433"
+      # L4 test ports (UDP)
+      - "15353:15353/udp"
   # Lightweight echo server reachable by Caddy as "echo-server:8080".
   # Returns a fixed body so tests can assert the proxy routed the request.
   echo-server:
@@ -30,6 +35,23 @@ services:
     image: traefik/whoami
     networks:
       - caddy-network
+  # TCP echo server for L4 proxy tests.
+  # Listens on port 9000 and echoes back anything sent to it with a prefix.
+  tcp-echo:
+    image: cjimti/go-echo
+    environment:
+      TCP_PORT: "9000"
+      NODE_NAME: "tcp-echo-ok"
+    networks:
+      - caddy-network
+  # UDP echo server for L4 proxy tests.
+  # Simple socat-based UDP echo: reflects any datagram back to sender.
+  udp-echo:
+    image: alpine/socat
+    command: ["UDP4-RECVFROM:9001,fork", "EXEC:cat"]
+    networks:
+      - caddy-network
+
 volumes:
   caddy-manager-data:
     name: caddy-manager-data-test

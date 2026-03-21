@@ -89,6 +89,10 @@ services:
       - "80:80/udp"
       - "443:443"
       - "443:443/udp"
+      # L4 (TCP/UDP) proxy ports — expose as needed for L4 proxy hosts, e.g.:
+      # - "5432:5432"     # PostgreSQL
+      # - "3306:3306"     # MySQL
+      # - "6379:6379"     # Redis
       # Admin API (port 2019) is only exposed on internal network for security
       # Web UI accesses via http://caddy:2019 internally
       # Uncomment the line below to expose metrics externally for Grafana/Prometheus
@@ -109,6 +113,27 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # L4 Port Manager sidecar — automatically recreates the caddy container
+  # when L4 proxy host ports change.
+  # Requires Docker socket access (read-only) to recreate the caddy container.
+  l4-port-manager:
+    container_name: caddy-proxy-manager-l4-ports
+    build:
+      context: .
+      dockerfile: docker/l4-port-manager/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      COMPOSE_DIR: /compose
+      POLL_INTERVAL: "${L4_PORT_MANAGER_POLL_INTERVAL:-2}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - caddy-manager-data:/data
+      - .:/compose:ro
+    depends_on:
+      caddy:
+        condition: service_healthy
 
   geoipupdate:
     container_name: geoipupdate-${HOSTNAME}
