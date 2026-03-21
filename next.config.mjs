@@ -2,6 +2,7 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['bun:sqlite'],
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb'

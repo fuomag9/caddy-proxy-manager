@@ -6,6 +6,17 @@ const root = resolve(__dirname, '..');
 
 export default defineConfig({
   plugins: [tsconfigPaths({ root })],
+  resolve: {
+    alias: {
+      // bun:sqlite is a Bun built-in unavailable in Node.js/Vitest. Redirect both
+      // the protocol import and the drizzle bun-sqlite adapter to their better-sqlite3
+      // equivalents so tests that transitively import src/lib/db.ts don't crash.
+      // Tests that need a real database use tests/helpers/db.ts (better-sqlite3 directly).
+      'bun:sqlite': resolve(__dirname, 'helpers/bun-sqlite-compat.ts'),
+      'drizzle-orm/bun-sqlite/migrator': 'drizzle-orm/better-sqlite3/migrator',
+      'drizzle-orm/bun-sqlite': 'drizzle-orm/better-sqlite3',
+    },
+  },
   test: {
     environment: 'node',
     setupFiles: [resolve(__dirname, 'setup.vitest.ts')],

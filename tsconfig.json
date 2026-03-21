@@ -19,6 +19,7 @@
     "incremental": true,
     "baseUrl": ".",
     "types": [
+      "bun-types",
       "node"
     ],
     "paths": {

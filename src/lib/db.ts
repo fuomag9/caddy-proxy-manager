@@ -1,6 +1,6 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { Database } from "bun:sqlite";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import * as schema from "./db/schema";
@@ -9,7 +9,7 @@ const DEFAULT_SQLITE_URL = "file:./data/caddy-proxy-manager.db";
 
 type GlobalForDrizzle = typeof globalThis & {
   __DRIZZLE_DB__?: ReturnType<typeof drizzle<typeof schema>>;
-  __SQLITE_CLIENT__?: Database.Database;
+  __SQLITE_CLIENT__?: InstanceType<typeof Database>;
   __MIGRATIONS_RAN__?: boolean;
 };
 

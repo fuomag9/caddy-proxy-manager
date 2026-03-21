@@ -25,10 +25,8 @@
     "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.9",
     "@mui/x-date-pickers": "^8.27.2",
-    "@types/better-sqlite3": "^7.6.13",
     "apexcharts": "^5.10.4",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.8.0",
     "d3-geo": "^3.1.1",
     "dayjs": "^1.11.20",
     "drizzle-orm": "^0.45.1",
@@ -44,8 +42,10 @@
     "topojson-client": "^3.1.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest",
     "@eslint/js": "^10.0.1",
+    "better-sqlite3": "^12.8.0",
     "@next/eslint-plugin-next": "^16.1.7",
     "@playwright/test": "^1.58.2",
     "@types/d3-geo": "^3.1.0",
