@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Unit tests for L4 proxy host input validation.
  *
@@ -35,7 +36,6 @@ vi.mock('../../src/lib/audit', () => ({
 
 import {
   createL4ProxyHost,
-  updateL4ProxyHost,
   type L4ProxyHostInput,
 } from '../../src/lib/models/l4-proxy-hosts';
 import * as schema from '../../src/lib/db/schema';

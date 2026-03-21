@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Integration tests for L4 Caddy config generation.
  *
@@ -8,7 +9,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createTestDb, type TestDb } from '../helpers/db';
 import { l4ProxyHosts } from '../../src/lib/db/schema';
-import { eq } from 'drizzle-orm';
 
 let db: TestDb;
 

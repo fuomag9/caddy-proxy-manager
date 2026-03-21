@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Chip, CircularProgress, Collapse, Stack, Typography } from "@mui/material";
+import { Alert, Button, Chip, CircularProgress, Stack, Typography } from "@mui/material";
 import SyncIcon from "@mui/icons-material/Sync";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ErrorIcon from "@mui/icons-material/Error";
