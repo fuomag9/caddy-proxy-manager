@@ -5,7 +5,7 @@ import MapGL, { Layer, Popup, Source, type MapLayerMouseEvent } from 'react-map-
 import { feature } from 'topojson-client';
 import type { Topology, GeometryCollection } from 'topojson-specification';
 import type { ExpressionSpecification, FillLayerSpecification, LineLayerSpecification } from 'maplibre-gl';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Skeleton } from '@/components/ui/skeleton';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const A2N: Record<string, string> = {
@@ -261,14 +261,14 @@ export default function WorldMapInner({ data, selectedCountry }: { data: Country
 
   if (!geojson) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
-        <CircularProgress size={24} />
-      </Box>
+      <div className="flex justify-center items-center h-[300px]">
+        <Skeleton className="w-full h-[400px] rounded-lg" />
+      </div>
     );
   }
 
   return (
-    <Box sx={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="relative h-full flex flex-col">
       {/* Override MapLibre popup chrome to match dark theme */}
       <style>{`
         .wm-popup .maplibregl-popup-content {
@@ -283,15 +283,7 @@ export default function WorldMapInner({ data, selectedCountry }: { data: Country
         .wm-popup .maplibregl-popup-tip { display: none !important; }
       `}</style>
 
-      <Box sx={{
-        borderRadius: 2,
-        overflow: 'hidden',
-        border: '1px solid rgba(148,163,184,0.08)',
-        flex: 1,
-        minHeight: 280,
-        minWidth: 400,
-        width: '100%',
-      }}>
+      <div className="rounded-lg overflow-hidden border border-white/[0.08] flex-1 min-h-[280px] min-w-[400px] w-full">
         <MapGL
           mapStyle={MAP_STYLE}
           initialViewState={{
@@ -357,18 +349,15 @@ export default function WorldMapInner({ data, selectedCountry }: { data: Country
             );
           })()}
         </MapGL>
-      </Box>
+      </div>
 
       {max > 0 && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5, px: 0.5 }}>
-          <Typography variant="caption" color="text.disabled">Low</Typography>
-          <Box sx={{
-            flex: 1, height: 5, borderRadius: 3,
-            background: 'linear-gradient(to right, #1e3a8a, #3b82f6, #93c5fd)',
-          }} />
-          <Typography variant="caption" color="text.disabled">High</Typography>
-        </Box>
+        <div className="flex items-center gap-2 mt-1.5 px-0.5">
+          <p className="text-xs text-muted-foreground">Low</p>
+          <div className="flex-1 h-[5px] rounded-full" style={{ background: 'linear-gradient(to right, #1e3a8a, #3b82f6, #93c5fd)' }} />
+          <p className="text-xs text-muted-foreground">High</p>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }

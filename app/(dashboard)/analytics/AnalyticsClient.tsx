@@ -3,37 +3,27 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import dayjs, { type Dayjs } from 'dayjs';
+import { toast } from 'sonner';
+import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, X } from 'lucide-react';
+import type { ApexOptions } from 'apexcharts';
+
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
-  Alert,
-  Autocomplete,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Checkbox,
-  Chip,
-  CircularProgress,
-  Divider,
-  Grid,
-  ListItemText,
-  Pagination,
-  Paper,
-  Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
+  TableHeader,
   TableRow,
-  TextField,
-  ToggleButton,
-  ToggleButtonGroup,
-  Tooltip,
-  Typography,
-} from '@mui/material';
-import { LocalizationProvider, DateTimePicker } from '@mui/x-date-pickers';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import dayjs, { type Dayjs } from 'dayjs';
-import type { ApexOptions } from 'apexcharts';
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 // ── Dynamic imports (browser-only) ────────────────────────────────────────────
 
@@ -42,9 +32,9 @@ const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false })
 const WorldMap = dynamic(() => import('./WorldMapInner'), {
   ssr: false,
   loading: () => (
-    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 240 }}>
-      <CircularProgress size={24} />
-    </Box>
+    <div className="flex justify-center items-center h-[240px]">
+      <span className="inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60" />
+    </div>
   ),
 }) as React.ComponentType<{ data: import('./WorldMapInner').CountryStats[]; selectedCountry?: string | null }>;
 
@@ -127,21 +117,184 @@ const DARK_CHART: ApexOptions = {
   tooltip: { theme: 'dark' },
 };
 
+// ── Local DateTimePicker ───────────────────────────────────────────────────────
+
+function DateTimePicker({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: Dayjs | null;
+  onChange: (v: Dayjs | null) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [timeStr, setTimeStr] = useState(value ? value.format('HH:mm') : '00:00');
+
+  // Keep timeStr in sync when value changes externally
+  useEffect(() => {
+    if (value) setTimeStr(value.format('HH:mm'));
+  }, [value]);
+
+  const selectedDate = value ? value.toDate() : undefined;
+
+  function handleDaySelect(day: Date | undefined) {
+    if (!day) return;
+    const [hh, mm] = timeStr.split(':').map(Number);
+    const next = dayjs(day).hour(hh || 0).minute(mm || 0).second(0);
+    onChange(next);
+  }
+
+  function handleTimeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setTimeStr(e.target.value);
+    if (value) {
+      const [hh, mm] = e.target.value.split(':').map(Number);
+      onChange(value.hour(hh || 0).minute(mm || 0).second(0));
+    }
+  }
+
+  const label = value ? value.format('DD/MM/YYYY HH:mm') : (placeholder ?? 'Pick date & time');
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="w-[180px] justify-start text-left font-normal text-xs">
+          {label}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selectedDate}
+          onSelect={handleDaySelect}
+          initialFocus
+        />
+        <div className="flex items-center gap-2 px-3 pb-3">
+          <span className="text-xs text-muted-foreground">Time:</span>
+          <input
+            type="time"
+            value={timeStr}
+            onChange={handleTimeChange}
+            className="flex h-8 rounded-md border border-input bg-background px-2 py-1 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ── Stat card ─────────────────────────────────────────────────────────────────
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <Card elevation={0} sx={{ height: '100%', border: '1px solid rgba(148,163,184,0.12)' }}>
-      <CardContent>
-        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 1 }}>
-          {label}
-        </Typography>
-        <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: '-0.03em', mt: 0.5, color: color ?? 'text.primary' }}>
-          {value}
-        </Typography>
-        {sub && <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{sub}</Typography>}
-      </CardContent>
-    </Card>
+    <div className="h-full rounded-lg border border-white/[0.12] p-5">
+      <p className="text-xs uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="mt-1 text-3xl font-bold tracking-tight" style={color ? { color } : undefined}>
+        {value}
+      </p>
+      {sub && <p className="mt-1 text-sm text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+// ── Hosts multi-select combobox ───────────────────────────────────────────────
+
+function HostsCombobox({
+  allHosts,
+  selectedHosts,
+  onChange,
+}: {
+  allHosts: string[];
+  selectedHosts: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  function toggle(host: string) {
+    if (selectedHosts.includes(host)) {
+      onChange(selectedHosts.filter(h => h !== host));
+    } else {
+      onChange([...selectedHosts, host]);
+    }
+  }
+
+  const label =
+    selectedHosts.length === 0
+      ? 'All hosts'
+      : selectedHosts.length <= 2
+        ? selectedHosts.join(', ')
+        : `${selectedHosts.length} hosts`;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          className="w-[220px] justify-between text-xs font-normal"
+        >
+          <span className="truncate">{label}</span>
+          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[240px] p-0">
+        <Command>
+          <CommandInput placeholder="Search hosts..." className="text-xs" />
+          <div className="flex items-center gap-1 border-b px-2 py-1">
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground px-1"
+              onMouseDown={e => { e.preventDefault(); onChange(allHosts); }}
+            >
+              Select all
+            </button>
+            <span className="text-muted-foreground">·</span>
+            <button
+              className="text-xs text-muted-foreground hover:text-foreground px-1"
+              onMouseDown={e => { e.preventDefault(); onChange([]); }}
+            >
+              Clear
+            </button>
+          </div>
+          <CommandList>
+            <CommandEmpty>No hosts found.</CommandEmpty>
+            <CommandGroup>
+              {allHosts.map(host => (
+                <CommandItem key={host} value={host} onSelect={() => toggle(host)} className="text-xs">
+                  <Check
+                    className={cn('mr-2 h-3 w-3', selectedHosts.includes(host) ? 'opacity-100' : 'opacity-0')}
+                  />
+                  <span className="truncate">{host}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+        {selectedHosts.length > 0 && (
+          <div className="flex flex-wrap gap-1 border-t px-2 py-2 max-h-24 overflow-y-auto">
+            {selectedHosts.length <= 2
+              ? selectedHosts.map(h => (
+                  <Badge key={h} variant="secondary" className="text-xs gap-1">
+                    <span className="max-w-[80px] truncate">{h}</span>
+                    <button onMouseDown={e => { e.preventDefault(); toggle(h); }}>
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </Badge>
+                ))
+              : (
+                  <Badge variant="secondary" className="text-xs gap-1">
+                    {selectedHosts.length} hosts
+                    <button onMouseDown={e => { e.preventDefault(); onChange([]); }}>
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </Badge>
+                )
+            }
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -215,7 +368,9 @@ export default function AnalyticsClient() {
       setUserAgents(u);
       setBlocked(b);
       setWafStats(w);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch(() => {
+      toast.error('Failed to load analytics data');
+    }).finally(() => setLoading(false));
   }, [buildParams, interval, customFrom, customTo]);
 
   const fetchBlockedPage = useCallback((page: number) => {
@@ -279,467 +434,322 @@ export default function AnalyticsClient() {
 
   const wafByCountry = new Map((wafStats?.byCountry ?? []).map(r => [r.countryCode, r.count]));
 
+  const INTERVALS: DisplayInterval[] = ['1h', '12h', '24h', '7d', '30d', 'custom'];
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <Stack spacing={4} sx={{ maxWidth: '100%', overflow: 'hidden' }}>
+    <div className="flex flex-col gap-8 max-w-full overflow-hidden">
       {/* Header */}
-      <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ sm: 'center' }} justifyContent="space-between" spacing={2}>
-        <Box>
-          <Typography variant="overline" sx={{ color: 'rgba(148,163,184,0.6)', letterSpacing: 4 }}>
-            Traffic Intelligence
-          </Typography>
-          <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
-            Analytics
-          </Typography>
-        </Box>
-        <LocalizationProvider dateAdapter={AdapterDayjs}>
-          <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-            <ToggleButtonGroup
-              value={interval}
-              exclusive
-              size="small"
-              onChange={(_e, v) => {
-                if (!v) return;
-                if (v === 'custom' && !customFrom) {
-                  setCustomFrom(dayjs().subtract(24, 'hour'));
-                  setCustomTo(dayjs());
-                }
-                setIntervalVal(v);
-              }}
-            >
-              <ToggleButton value="1h">1h</ToggleButton>
-              <ToggleButton value="12h">12h</ToggleButton>
-              <ToggleButton value="24h">24h</ToggleButton>
-              <ToggleButton value="7d">7d</ToggleButton>
-              <ToggleButton value="30d">30d</ToggleButton>
-              <ToggleButton value="custom">Custom</ToggleButton>
-            </ToggleButtonGroup>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground/60">Traffic Intelligence</p>
+          <h1 className="text-xl font-bold tracking-tight">Analytics</h1>
+        </div>
+        <div className="flex flex-row items-center gap-3 flex-wrap">
+          {/* Interval toggle group */}
+          <div className="flex items-center rounded-md border border-input p-0.5 gap-0.5">
+            {INTERVALS.map(iv => (
+              <Button
+                key={iv}
+                size="sm"
+                variant={interval === iv ? 'default' : 'ghost'}
+                className="h-7 px-2.5 text-xs"
+                onClick={() => {
+                  if (iv === 'custom' && !customFrom) {
+                    setCustomFrom(dayjs().subtract(24, 'hour'));
+                    setCustomTo(dayjs());
+                  }
+                  setIntervalVal(iv);
+                }}
+              >
+                {iv === 'custom' ? 'Custom' : iv}
+              </Button>
+            ))}
+          </div>
 
-            {interval === 'custom' && (
-              <Stack direction="row" spacing={1} alignItems="center">
-                <DateTimePicker
-                  value={customFrom}
-                  maxDateTime={customTo ?? undefined}
-                  onChange={setCustomFrom}
-                  slotProps={{
-                    textField: {
-                      size: 'small',
-                      sx: { width: 200 },
-                    },
-                  }}
-                  format="DD/MM/YYYY HH:mm"
-                  ampm={false}
-                />
-                <Typography variant="caption" color="text.disabled" sx={{ flexShrink: 0 }}>–</Typography>
-                <DateTimePicker
-                  value={customTo}
-                  minDateTime={customFrom ?? undefined}
-                  onChange={setCustomTo}
-                  slotProps={{
-                    textField: {
-                      size: 'small',
-                      sx: { width: 200 },
-                    },
-                  }}
-                  format="DD/MM/YYYY HH:mm"
-                  ampm={false}
-                />
-              </Stack>
-            )}
+          {interval === 'custom' && (
+            <div className="flex items-center gap-1.5">
+              <DateTimePicker value={customFrom} onChange={setCustomFrom} placeholder="From" />
+              <span className="text-xs text-muted-foreground">–</span>
+              <DateTimePicker value={customTo} onChange={setCustomTo} placeholder="To" />
+            </div>
+          )}
 
-            <Autocomplete
-              multiple
-              size="small"
-              options={allHosts}
-              value={selectedHosts}
-              onChange={(_e, v) => setSelectedHosts(v)}
-              disableCloseOnSelect
-              limitTags={2}
-              sx={{ width: { xs: '100%', sm: 260 }, flexShrink: 0 }}
-              ListboxProps={{
-                // Prevent scroll from the dropdown list leaking to the page
-                style: { overscrollBehavior: 'contain' },
-              }}
-              PaperComponent={({ children, ...paperProps }) => (
-                <Paper {...paperProps}>
-                  {/* Select all / none — onMouseDown preventDefault keeps the popup open */}
-                  <Box
-                    onMouseDown={e => e.preventDefault()}
-                    sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 1, py: 0.5 }}
-                  >
-                    <Button
-                      size="small"
-                      variant="text"
-                      sx={{ fontSize: 12, py: 0.25, minWidth: 0 }}
-                      onClick={() => setSelectedHosts(allHosts)}
-                    >
-                      Select all
-                    </Button>
-                    <Typography variant="caption" color="text.disabled">·</Typography>
-                    <Button
-                      size="small"
-                      variant="text"
-                      sx={{ fontSize: 12, py: 0.25, minWidth: 0 }}
-                      onClick={() => setSelectedHosts([])}
-                    >
-                      Clear
-                    </Button>
-                  </Box>
-                  <Divider />
-                  {children}
-                </Paper>
-              )}
-              renderOption={(props, option, { selected }) => (
-                <li {...props} key={option}>
-                  <Checkbox size="small" checked={selected} sx={{ mr: 0.5, p: 0.5 }} />
-                  <ListItemText primary={option} primaryTypographyProps={{ variant: 'body2', noWrap: true }} />
-                </li>
-              )}
-              renderTags={(value, getTagProps) => {
-                if (value.length <= 2) {
-                  return value.map((option, index) => (
-                    <Chip
-                      {...getTagProps({ index })}
-                      key={option}
-                      label={option}
-                      size="small"
-                      sx={{ maxWidth: 100, '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }}
-                    />
-                  ));
-                }
-                // Collapse to a single count chip so the input never grows tall
-                return [
-                  <Chip
-                    key="count"
-                    label={`${value.length} hosts`}
-                    size="small"
-                    onDelete={() => setSelectedHosts([])}
-                  />,
-                ];
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  placeholder={selectedHosts.length === 0 ? 'All hosts' : undefined}
-                />
-              )}
-            />
-          </Stack>
-        </LocalizationProvider>
-      </Stack>
+          <HostsCombobox
+            allHosts={allHosts}
+            selectedHosts={selectedHosts}
+            onChange={setSelectedHosts}
+          />
+        </div>
+      </div>
 
       {/* Logging disabled alert */}
       {summary?.loggingDisabled && (
-        <Alert severity="warning">
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
           Caddy access logging is not enabled — no traffic data is being collected.{' '}
-          <Link href="/settings" style={{ color: 'inherit' }}>Enable logging in Settings</Link>.
-        </Alert>
+          <Link href="/settings" className="underline underline-offset-2">Enable logging in Settings</Link>.
+        </div>
       )}
 
       {/* Loading overlay */}
       {loading && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
+        <div className="flex justify-center py-12">
+          <span className="inline-block w-8 h-8 border-2 border-current border-t-transparent rounded-full animate-spin opacity-60" />
+        </div>
       )}
 
       {!loading && summary && (
         <>
           {/* Stats row */}
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-              <StatCard label="Total Requests" value={summary.totalRequests.toLocaleString()} />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-              <StatCard label="Unique IPs" value={summary.uniqueIps.toLocaleString()} />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-              <StatCard
-                label="Blocked Requests"
-                value={summary.blockedRequests.toLocaleString()}
-                sub={(wafStats?.total ?? 0) > 0 ? `${wafStats!.total.toLocaleString()} from WAF` : undefined}
-                color={summary.blockedRequests > 0 ? '#ef4444' : undefined}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-              <StatCard
-                label="Block Rate"
-                value={`${summary.blockedPercent}%`}
-                sub={`${formatBytes(summary.bytesServed)} served`}
-                color={summary.blockedPercent > 10 ? '#f59e0b' : undefined}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
-              <StatCard
-                label="WAF Events"
-                value={(wafStats?.total ?? 0).toLocaleString()}
-                sub={wafStats && wafStats.topRules.length > 0 ? `${wafStats.topRules.length} rules triggered` : 'No WAF events'}
-                color={(wafStats?.total ?? 0) > 0 ? '#f59e0b' : undefined}
-              />
-            </Grid>
-          </Grid>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            <StatCard label="Total Requests" value={summary.totalRequests.toLocaleString()} />
+            <StatCard label="Unique IPs" value={summary.uniqueIps.toLocaleString()} />
+            <StatCard
+              label="Blocked Requests"
+              value={summary.blockedRequests.toLocaleString()}
+              sub={(wafStats?.total ?? 0) > 0 ? `${wafStats!.total.toLocaleString()} from WAF` : undefined}
+              color={summary.blockedRequests > 0 ? '#ef4444' : undefined}
+            />
+            <StatCard
+              label="Block Rate"
+              value={`${summary.blockedPercent}%`}
+              sub={`${formatBytes(summary.bytesServed)} served`}
+              color={summary.blockedPercent > 10 ? '#f59e0b' : undefined}
+            />
+            <StatCard
+              label="WAF Events"
+              value={(wafStats?.total ?? 0).toLocaleString()}
+              sub={wafStats && wafStats.topRules.length > 0 ? `${wafStats.topRules.length} rules triggered` : 'No WAF events'}
+              color={(wafStats?.total ?? 0) > 0 ? '#f59e0b' : undefined}
+            />
+          </div>
 
           {/* Timeline */}
-          <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)' }}>
-            <CardContent>
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                Requests Over Time
-              </Typography>
-              {timeline.length === 0 ? (
-                <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>No data for this period</Box>
-              ) : (
-                <Box sx={{ overflowX: "auto", width: "100%" }}>
-                  <ReactApexChart
-                    type="area"
-                    series={timelineSeries}
-                    options={timelineOptions}
-                    height={220}
-                  />
-                </Box>
-              )}
-            </CardContent>
-          </Card>
+          <div className="rounded-lg border border-white/[0.12] p-5">
+            <p className="text-sm font-semibold mb-4">Requests Over Time</p>
+            {timeline.length === 0 ? (
+              <div className="py-10 text-center text-muted-foreground text-sm">No data for this period</div>
+            ) : (
+              <div className="overflow-x-auto w-full">
+                <ReactApexChart
+                  type="area"
+                  series={timelineSeries}
+                  options={timelineOptions}
+                  height={220}
+                />
+              </div>
+            )}
+          </div>
 
           {/* World map + Countries */}
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 7 }}>
-              <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardContent sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-                    Traffic by Country
-                  </Typography>
-                  <Box sx={{ flex: 1, minHeight: 280 }}>
-                    <WorldMap data={countries} selectedCountry={selectedCountry} />
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)', height: '100%' }}>
-                <CardContent sx={{ p: '16px !important' }}>
-                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
-                    Top Countries
-                  </Typography>
-                  {countries.length === 0 ? (
-                    <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>No geo data available</Box>
-                  ) : (
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)' }}>Country</TableCell>
-                          <TableCell align="right" sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)' }}>Requests</TableCell>
-                          <TableCell align="right" sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)' }}>WAF</TableCell>
-                          <TableCell align="right" sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)' }}>Blocked</TableCell>
+          <div className="grid grid-cols-1 md:grid-cols-[7fr_5fr] gap-3">
+            <div className="rounded-lg border border-white/[0.12] flex flex-col p-5">
+              <p className="text-sm font-semibold mb-2">Traffic by Country</p>
+              <div className="flex-1 min-h-[280px]">
+                <WorldMap data={countries} selectedCountry={selectedCountry} />
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/[0.12] p-4">
+              <p className="text-sm font-semibold mb-3">Top Countries</p>
+              {countries.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">No geo data available</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-muted-foreground">Country</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Requests</TableHead>
+                      <TableHead className="text-muted-foreground text-right">WAF</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Blocked</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {countries.slice(0, 10).map(c => {
+                      const wafCount = wafByCountry.get(c.countryCode) ?? 0;
+                      return (
+                        <TableRow
+                          key={c.countryCode}
+                          onClick={() => setSelectedCountry(s => s === c.countryCode ? null : c.countryCode)}
+                          className={cn(
+                            'cursor-pointer',
+                            selectedCountry === c.countryCode ? 'bg-sky-300/[0.08]' : 'hover:bg-sky-300/[0.05]',
+                          )}
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span>{countryFlag(c.countryCode)}</span>
+                              <span className="text-sm">{c.countryCode}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-sm">{c.total.toLocaleString()}</TableCell>
+                          <TableCell className={cn('text-right text-sm', wafCount > 0 ? 'text-yellow-400' : 'text-muted-foreground')}>
+                            {wafCount > 0 ? wafCount.toLocaleString() : '—'}
+                          </TableCell>
+                          <TableCell className={cn('text-right text-sm', c.blocked > 0 ? 'text-red-400' : 'text-muted-foreground')}>
+                            {c.blocked.toLocaleString()}
+                          </TableCell>
                         </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {countries.slice(0, 10).map(c => (
-                          <TableRow
-                            key={c.countryCode}
-                            onClick={() => setSelectedCountry(s => s === c.countryCode ? null : c.countryCode)}
-                            sx={{
-                              cursor: 'pointer',
-                              '& td': { borderColor: 'rgba(255,255,255,0.04)' },
-                              bgcolor: selectedCountry === c.countryCode ? 'rgba(125,211,252,0.08)' : 'transparent',
-                              '&:hover': { bgcolor: 'rgba(125,211,252,0.05)' },
-                            }}
-                          >
-                            <TableCell>
-                              <Stack direction="row" alignItems="center" spacing={1}>
-                                <span>{countryFlag(c.countryCode)}</span>
-                                <Typography variant="body2">{c.countryCode}</Typography>
-                              </Stack>
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body2">{c.total.toLocaleString()}</Typography>
-                            </TableCell>
-                            <TableCell align="right">
-                              {(() => { const wafCount = wafByCountry.get(c.countryCode) ?? 0; return (
-                                <Typography variant="body2" color={wafCount > 0 ? 'warning.light' : 'text.disabled'}>
-                                  {wafCount > 0 ? wafCount.toLocaleString() : '—'}
-                                </Typography>
-                              ); })()}
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body2" color={c.blocked > 0 ? 'error.light' : 'text.secondary'}>
-                                {c.blocked.toLocaleString()}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </div>
 
           {/* Protocols + User Agents */}
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)', height: '100%' }}>
-                <CardContent>
-                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                    HTTP Protocols
-                  </Typography>
-                  {protocols.length === 0 ? (
-                    <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>No data</Box>
-                  ) : (
-                    <>
-                      <Box sx={{ overflowX: "auto", width: "100%" }}>
-                        <ReactApexChart type="donut" series={donutSeries} options={donutOptions} height={220} />
-                      </Box>
-                      <Table size="small" sx={{ mt: 1 }}>
-                        <TableBody>
-                          {protocols.map(p => (
-                            <TableRow key={p.proto} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.04)' } }}>
-                              <TableCell><Typography variant="body2">{p.proto}</Typography></TableCell>
-                              <TableCell align="right"><Typography variant="body2">{p.count.toLocaleString()}</Typography></TableCell>
-                              <TableCell align="right"><Typography variant="body2" color="text.secondary">{p.percent}%</Typography></TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, md: 7 }}>
-              <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)', height: '100%' }}>
-                <CardContent>
-                  <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                    Top User Agents
-                  </Typography>
-                  {userAgents.length === 0 ? (
-                    <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>No data</Box>
-                  ) : (
-                    <Box sx={{ overflowX: "auto", width: "100%" }}>
-                      <ReactApexChart type="bar" series={barSeries} options={barOptions} height={260} />
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-
-          {/* Recent Blocked Requests */}
-          <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)' }}>
-            <CardContent>
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                Recent Blocked Requests
-              </Typography>
-              {!blocked || blocked.events.length === 0 ? (
-                <Paper elevation={0} sx={{ py: 5, textAlign: 'center', color: 'text.secondary', bgcolor: 'rgba(12,18,30,0.5)' }}>
-                  No blocked requests in this period
-                </Paper>
+          <div className="grid grid-cols-1 md:grid-cols-[5fr_7fr] gap-3">
+            <div className="rounded-lg border border-white/[0.12] p-5">
+              <p className="text-sm font-semibold mb-4">HTTP Protocols</p>
+              {protocols.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground text-sm">No data</div>
               ) : (
                 <>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        {['Time', 'IP', 'Country', 'Host', 'Method', 'URI', 'Status'].map(h => (
-                          <TableCell key={h} sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>{h}</TableCell>
-                        ))}
-                      </TableRow>
-                    </TableHead>
+                  <div className="overflow-x-auto w-full">
+                    <ReactApexChart type="donut" series={donutSeries} options={donutOptions} height={220} />
+                  </div>
+                  <Table className="mt-2">
                     <TableBody>
-                      {blocked.events.map(ev => (
-                        <TableRow key={ev.id} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.04)' } }}>
-                          <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                            <Typography variant="body2" color="text.secondary">
-                              {new Date(ev.ts * 1000).toLocaleString()}
-                            </Typography>
-                          </TableCell>
-                          <TableCell><Typography variant="body2" fontFamily="monospace">{ev.clientIp}</Typography></TableCell>
-                          <TableCell>
-                            <Typography variant="body2">
-                              {ev.countryCode ? `${countryFlag(ev.countryCode)} ${ev.countryCode}` : '—'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <Typography variant="body2">{ev.host || '—'}</Typography>
-                          </TableCell>
-                          <TableCell><Typography variant="body2" fontFamily="monospace">{ev.method}</Typography></TableCell>
-                          <TableCell sx={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <Typography variant="body2" fontFamily="monospace" title={ev.uri}>{ev.uri}</Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="error.light" fontFamily="monospace">{ev.status}</Typography>
-                          </TableCell>
+                      {protocols.map(p => (
+                        <TableRow key={p.proto}>
+                          <TableCell className="text-sm">{p.proto}</TableCell>
+                          <TableCell className="text-right text-sm">{p.count.toLocaleString()}</TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">{p.percent}%</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                  {blocked.pages > 1 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                      <Pagination
-                        count={blocked.pages}
-                        page={blocked.page}
-                        onChange={(_e, p) => fetchBlockedPage(p)}
-                        color="primary"
-                        size="small"
-                      />
-                    </Box>
-                  )}
                 </>
               )}
-            </CardContent>
-          </Card>
+            </div>
+            <div className="rounded-lg border border-white/[0.12] p-5">
+              <p className="text-sm font-semibold mb-4">Top User Agents</p>
+              {userAgents.length === 0 ? (
+                <div className="py-10 text-center text-muted-foreground text-sm">No data</div>
+              ) : (
+                <div className="overflow-x-auto w-full">
+                  <ReactApexChart type="bar" series={barSeries} options={barOptions} height={260} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Blocked Requests */}
+          <div className="rounded-lg border border-white/[0.12] p-5">
+            <p className="text-sm font-semibold mb-4">Recent Blocked Requests</p>
+            {!blocked || blocked.events.length === 0 ? (
+              <div className="rounded-lg bg-black/30 py-10 text-center text-sm text-muted-foreground">
+                No blocked requests in this period
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        {['Time', 'IP', 'Country', 'Host', 'Method', 'URI', 'Status'].map(h => (
+                          <TableHead key={h} className="text-muted-foreground whitespace-nowrap">{h}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {blocked.events.map(ev => (
+                        <TableRow key={ev.id}>
+                          <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                            {new Date(ev.ts * 1000).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{ev.clientIp}</TableCell>
+                          <TableCell className="text-sm">
+                            {ev.countryCode ? `${countryFlag(ev.countryCode)} ${ev.countryCode}` : '—'}
+                          </TableCell>
+                          <TableCell className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap text-sm">
+                            {ev.host || '—'}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">{ev.method}</TableCell>
+                          <TableCell className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap">
+                            <span className="font-mono text-sm" title={ev.uri}>{ev.uri}</span>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm text-red-400">{ev.status}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {blocked.pages > 1 && (
+                  <div className="flex justify-center items-center gap-2 mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={blocked.page <= 1}
+                      onClick={() => fetchBlockedPage(blocked.page - 1)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground">
+                      Page {blocked.page} of {blocked.pages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={blocked.page >= blocked.pages}
+                      onClick={() => fetchBlockedPage(blocked.page + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
           {/* WAF Top Rules */}
           {wafStats && wafStats.total > 0 && (
-            <Card elevation={0} sx={{ border: '1px solid rgba(148,163,184,0.12)' }}>
-              <CardContent>
-                <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 2 }}>
-                  Top WAF Rules Triggered
-                </Typography>
-                <Box sx={{ overflowX: "auto", width: "100%" }}>
-                  <ReactApexChart type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
-                </Box>
-                <Table size="small" sx={{ mt: 2 }}>
-                  <TableHead>
-                    <TableRow>
-                      {['Rule', 'Description', 'Hits', 'Triggered by'].map(h => (
-                        <TableCell key={h} sx={{ color: 'text.secondary', borderColor: 'rgba(255,255,255,0.06)', whiteSpace: 'nowrap' }}>{h}</TableCell>
-                      ))}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {wafStats.topRules.map(rule => (
-                      <TableRow key={rule.ruleId} sx={{ '& td': { borderColor: 'rgba(255,255,255,0.04)' } }}>
-                        <TableCell>
-                          <Typography variant="body2" fontFamily="monospace" color="warning.light">#{rule.ruleId}</Typography>
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 320 }}>
-                          {rule.message ? (
-                            <Tooltip title={rule.message} placement="top">
-                              <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 300 }}>{rule.message}</Typography>
-                            </Tooltip>
-                          ) : (
-                            <Typography variant="body2" color="text.disabled">—</Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={600}>{rule.count.toLocaleString()}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Stack direction="row" flexWrap="wrap" gap={0.5}>
-                            {rule.hosts.map(h => (
-                              <Chip key={h.host} label={`${h.host} ×${h.count}`} size="small" />
-                            ))}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
+            <div className="rounded-lg border border-white/[0.12] p-5">
+              <p className="text-sm font-semibold mb-4">Top WAF Rules Triggered</p>
+              <div className="overflow-x-auto w-full">
+                <ReactApexChart type="bar" series={wafBarSeries} options={wafBarOptions} height={Math.max(120, wafStats.topRules.length * 32)} />
+              </div>
+              <Table className="mt-4">
+                <TableHeader>
+                  <TableRow>
+                    {['Rule', 'Description', 'Hits', 'Triggered by'].map(h => (
+                      <TableHead key={h} className="text-muted-foreground whitespace-nowrap">{h}</TableHead>
                     ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {wafStats.topRules.map(rule => (
+                    <TableRow key={rule.ruleId}>
+                      <TableCell className="font-mono text-sm text-yellow-400">#{rule.ruleId}</TableCell>
+                      <TableCell className="max-w-[320px]">
+                        {rule.message ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-sm text-muted-foreground truncate max-w-[300px]">{rule.message}</p>
+                            </TooltipTrigger>
+                            <TooltipContent>{rule.message}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-sm text-muted-foreground/40">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm font-semibold">{rule.count.toLocaleString()}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {rule.hosts.map(h => (
+                            <Badge key={h.host} variant="secondary" className="text-xs">{h.host} ×{h.count}</Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </>
       )}
-    </Stack>
+    </div>
   );
 }
