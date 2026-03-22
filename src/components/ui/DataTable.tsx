@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -77,7 +78,7 @@ function PaginationBar({ page, perPage, total }: { page: number; perPage: number
 }
 
 function DesktopTable<T>({
-  columns, data, keyField, emptyMessage, onRowClick, isEmpty,
+  columns, data, keyField, emptyMessage, onRowClick, isEmpty, loading,
 }: {
   columns: Column<T>[];
   data: T[];
@@ -85,6 +86,7 @@ function DesktopTable<T>({
   emptyMessage: string;
   onRowClick?: (row: T) => void;
   isEmpty: boolean;
+  loading?: boolean;
 }) {
   return (
     <div className="rounded-md border overflow-x-auto">
@@ -103,7 +105,17 @@ function DesktopTable<T>({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {isEmpty ? (
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <TableRow key={i}>
+                {columns.map((col) => (
+                  <TableCell key={col.id}>
+                    <Skeleton className="h-4 w-full" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : isEmpty ? (
             <TableRow>
               <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
                 {emptyMessage}
@@ -149,7 +161,13 @@ export function DataTable<T>({
     return (
       <div>
         <div className="block md:hidden">
-          {isEmpty ? (
+          {loading ? (
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i}><CardContent className="py-4"><Skeleton className="h-20 w-full" /></CardContent></Card>
+              ))}
+            </div>
+          ) : isEmpty ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
                 {emptyMessage}
@@ -168,7 +186,7 @@ export function DataTable<T>({
           <DesktopTable
             columns={columns} data={data} keyField={keyField}
             emptyMessage={emptyMessage} onRowClick={onRowClick}
-            isEmpty={isEmpty}
+            isEmpty={isEmpty} loading={loading}
           />
           {pagination && <PaginationBar {...pagination} />}
         </div>
@@ -181,7 +199,7 @@ export function DataTable<T>({
       <DesktopTable
         columns={columns} data={data} keyField={keyField}
         emptyMessage={emptyMessage} onRowClick={onRowClick}
-        isEmpty={isEmpty}
+        isEmpty={isEmpty} loading={loading}
       />
       {pagination && <PaginationBar {...pagination} />}
     </div>

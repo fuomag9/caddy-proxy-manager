@@ -6,7 +6,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
 import { ReactNode } from "react";
 
 type AppDialogProps = {
@@ -43,16 +42,8 @@ export function AppDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className={MAX_WIDTH_CLASS[maxWidth]}>
-        <DialogHeader className="flex flex-row items-center justify-between pr-6">
+        <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-4 top-4 h-6 w-6"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </Button>
         </DialogHeader>
 
         <div className="overflow-y-auto py-4 px-1">{children}</div>
