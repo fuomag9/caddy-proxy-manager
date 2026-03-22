@@ -1,6 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,10 +36,10 @@ export default function AccessListsClient({ lists, pagination }: Props) {
 
   return (
     <div className="flex flex-col gap-6 w-full">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight">Access Lists</h1>
-        <p className="text-sm text-muted-foreground">Protect proxy hosts with HTTP basic authentication credentials.</p>
-      </div>
+      <PageHeader
+        title="Access Lists"
+        description="Protect proxy hosts with HTTP basic authentication credentials."
+      />
 
       <div className="flex flex-col gap-4">
         {lists.map((list) => (

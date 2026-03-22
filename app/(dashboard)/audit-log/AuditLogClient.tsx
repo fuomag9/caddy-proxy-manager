@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/DataTable";
 import { SearchField } from "@/components/ui/SearchField";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 type EventRow = {
   id: number;
@@ -96,10 +97,13 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
   );
 
   return (
-    <div className="flex flex-col gap-4 w-full">
-      <h1 className="text-2xl font-bold tracking-tight">Audit Log</h1>
-      <p className="text-sm text-muted-foreground">Review configuration changes and user activity.</p>
+    <div className="flex flex-col gap-6 w-full">
+      <PageHeader
+        title="Audit Log"
+        description="Review configuration changes and user activity."
+      />
 
+      <div className="flex items-center gap-2">
       <SearchField
         value={searchTerm}
         onChange={(e) => {
@@ -108,6 +112,7 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
         }}
         placeholder="Search audit log..."
       />
+      </div>
 
       <DataTable
         columns={columns}

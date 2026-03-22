@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageHeader } from "@/components/ui/PageHeader";
 import type { AcmeHost, CaCertificateView, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
 import { StatusSummaryBar } from "./components/StatusSummaryBar";
 import { AcmeTab } from "./components/AcmeTab";
@@ -61,15 +62,11 @@ export default function CertificatesClient({
   }
 
   return (
-    <div className="flex flex-col gap-4 w-full">
-      {/* Page header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight">SSL/TLS Certificates</h1>
-        <p className="text-sm text-muted-foreground">
-          Caddy automatically handles HTTPS certificates for all proxy hosts using Let&apos;s Encrypt.
-          Import custom certificates only when needed (internal CA, special requirements, etc.).
-        </p>
-      </div>
+    <div className="flex flex-col gap-6 w-full">
+      <PageHeader
+        title="SSL/TLS Certificates"
+        description="Caddy automatically handles HTTPS certificates via Let's Encrypt. Import custom certificates only when needed."
+      />
 
       {/* Status summary bar */}
       <StatusSummaryBar

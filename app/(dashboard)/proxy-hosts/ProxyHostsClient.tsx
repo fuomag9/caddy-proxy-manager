@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Copy, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import type { AccessList } from "@/lib/models/access-lists";
 import type { Certificate } from "@/lib/models/certificates";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
@@ -14,9 +14,16 @@ import { SearchField } from "@/components/ui/SearchField";
 import { DataTable } from "@/components/ui/DataTable";
 import { CreateHostDialog, EditHostDialog, DeleteHostDialog } from "@/components/proxy-hosts/HostDialogs";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type Props = {
   hosts: ProxyHost[];
@@ -68,144 +75,102 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       id: "name",
       label: "Name",
       render: (host: ProxyHost) => (
-        <p className="text-sm font-semibold">{host.name}</p>
-      )
+        <div>
+          <p className="text-sm font-medium">{host.name}</p>
+          <p className="text-xs text-muted-foreground font-mono">
+            {host.domains[0]}{host.domains.length > 1 && ` +${host.domains.length - 1}`}
+          </p>
+        </div>
+      ),
     },
     {
-      id: "domains",
-      label: "Domains",
-      render: (host: ProxyHost) => (
-        <p className="text-sm text-muted-foreground">
-          {host.domains[0]}
-          {host.domains.length > 1 && ` +${host.domains.length - 1} more`}
-        </p>
-      )
-    },
-    {
-      id: "upstreams",
+      id: "target",
       label: "Target",
       render: (host: ProxyHost) => (
         <p className="text-sm text-muted-foreground font-mono">
-          {host.upstreams[0]}
-          {host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
+          {host.upstreams[0]}{host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
         </p>
-      )
+      ),
+    },
+    {
+      id: "status",
+      label: "Status",
+      width: 100,
+      render: (host: ProxyHost) => (
+        <Badge variant={host.enabled ? "default" : "secondary"}>
+          {host.enabled ? "Active" : "Paused"}
+        </Badge>
+      ),
     },
     {
       id: "actions",
-      label: "Actions",
+      label: "",
       align: "right" as const,
-      width: 150,
+      width: 80,
       render: (host: ProxyHost) => (
-        <div className="flex items-center gap-1 justify-end">
+        <div className="flex items-center gap-2 justify-end">
           <Switch
             checked={host.enabled}
             onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
           />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-blue-400"
-                onClick={() => {
-                  setDuplicateHost(host);
-                  setCreateOpen(true);
-                }}
-              >
-                <Copy className="h-4 w-4" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open menu</span>
               </Button>
-            </TooltipTrigger>
-            <TooltipContent>Duplicate</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setEditHost(host)}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Edit</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive"
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setEditHost(host)}>Edit</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setDuplicateHost(host); setCreateOpen(true); }}>Duplicate</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
                 onClick={() => setDeleteHost(host)}
               >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Delete</TooltipContent>
-          </Tooltip>
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      )
-    }
+      ),
+    },
   ];
 
   const mobileCard = (host: ProxyHost) => (
-    <Card className="p-4">
-      <div className="flex flex-col gap-1">
-        <div className="flex justify-between items-center">
-          <p className="text-sm font-bold">{host.name}</p>
-          <div className="flex items-center gap-0.5">
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col gap-1 min-w-0">
+            <p className="text-sm font-medium truncate">{host.name}</p>
+            <p className="text-xs text-muted-foreground font-mono truncate">
+              {host.domains[0]}{host.domains.length > 1 ? ` +${host.domains.length - 1}` : ""} → {host.upstreams[0]}
+            </p>
+            <Badge variant={host.enabled ? "default" : "secondary"} className="w-fit mt-1">
+              {host.enabled ? "Active" : "Paused"}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
             <Switch
               checked={host.enabled}
               onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
             />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-blue-400"
-                  onClick={() => { setDuplicateHost(host); setCreateOpen(true); }}
-                >
-                  <Copy className="h-3.5 w-3.5" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>Duplicate</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  aria-label="Edit"
-                  onClick={() => setEditHost(host)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-destructive"
-                  aria-label="Delete"
-                  onClick={() => setDeleteHost(host)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete</TooltipContent>
-            </Tooltip>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setEditHost(host)}>Edit</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setDuplicateHost(host); setCreateOpen(true); }}>Duplicate</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteHost(host)}>Delete</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground font-mono">
-          {host.domains[0]}{host.domains.length > 1 ? ` +${host.domains.length - 1}` : ""} → {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
-        </p>
-      </div>
+      </CardContent>
     </Card>
   );
 
@@ -214,17 +179,16 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       <PageHeader
         title="Proxy Hosts"
         description="Define HTTP(S) reverse proxies orchestrated by Caddy with automated certificates."
-        action={{
-          label: "Create Host",
-          onClick: () => setCreateOpen(true)
-        }}
+        action={{ label: "Create Host", onClick: () => setCreateOpen(true) }}
       />
 
-      <SearchField
-        value={searchTerm}
-        onChange={(e) => handleSearchChange(e.target.value)}
-        placeholder="Search hosts..."
-      />
+      <div className="flex items-center gap-2">
+        <SearchField
+          value={searchTerm}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Search hosts..."
+        />
+      </div>
 
       <DataTable
         columns={columns}
@@ -237,11 +201,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
 
       <CreateHostDialog
         open={createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-          // Clear duplicate host after dialog transition
-          setTimeout(() => setDuplicateHost(null), 200);
-        }}
+        onClose={() => { setCreateOpen(false); setTimeout(() => setDuplicateHost(null), 200); }}
         initialData={duplicateHost}
         certificates={certificates}
         accessLists={accessLists}
