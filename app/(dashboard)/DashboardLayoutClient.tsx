@@ -35,12 +35,12 @@ const NAV_ITEMS = [
 ] as const;
 
 function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   return (
     <Button
       variant="ghost"
       size="icon"
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       aria-label="Toggle theme"
     >
       <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -72,7 +72,7 @@ function NavContent({ pathname, user, onNavigate }: {
             return (
               <Button
                 key={href}
-                variant={active ? "secondary" : "ghost"}
+                variant="ghost"
                 className={cn(
                   "w-full justify-start gap-3 font-medium",
                   active
@@ -138,13 +138,13 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
 
       {/* Mobile top bar */}
       <header className="md:hidden fixed top-0 inset-x-0 h-12 flex items-center justify-between px-4 border-b border-border bg-card z-40">
-        <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
+        <Button variant="ghost" size="icon" aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
           <Menu className="h-5 w-5" />
         </Button>
         <span className="text-primary font-bold text-sm">Caddy Proxy Manager</span>
         <div className="flex items-center gap-1">
           <ThemeToggle />
-          <Button variant="ghost" size="icon" onClick={() => router.push("/profile")}>
+          <Button variant="ghost" size="icon" aria-label="Go to profile" onClick={() => router.push("/profile")}>
             <Avatar className="h-6 w-6">
               <AvatarImage src={user.image ?? undefined} />
               <AvatarFallback className="text-[10px]">{(user.name?.[0] ?? "U").toUpperCase()}</AvatarFallback>
@@ -155,7 +155,7 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
 
       {/* Mobile Sheet drawer */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-64 p-0">
+        <SheetContent side="left" className="w-64 sm:max-w-[256px] p-0">
           <NavContent pathname={pathname} user={user} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
