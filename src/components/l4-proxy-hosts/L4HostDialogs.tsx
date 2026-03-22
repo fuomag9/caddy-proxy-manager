@@ -226,13 +226,13 @@ function L4HostForm({
         </Label>
         <Select
           name="proxy_protocol_version"
-          defaultValue={initialData?.proxy_protocol_version ?? ""}
+          defaultValue={initialData?.proxy_protocol_version ?? "__none__"}
         >
           <SelectTrigger id="proxy_protocol_version">
             <SelectValue placeholder="None" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">None</SelectItem>
+            <SelectItem value="__none__">None</SelectItem>
             <SelectItem value="v1">v1</SelectItem>
             <SelectItem value="v2">v2</SelectItem>
           </SelectContent>

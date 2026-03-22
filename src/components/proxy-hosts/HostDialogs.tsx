@@ -100,12 +100,12 @@ export function CreateHostDialog({
                 <UpstreamInput defaultUpstreams={initialData?.upstreams} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Certificate</label>
-                    <Select name="certificate_id" defaultValue={String(initialData?.certificate_id ?? "")}>
+                    <Select name="certificate_id" defaultValue={String(initialData?.certificate_id ?? "__none__")}>
                         <SelectTrigger>
                             <SelectValue placeholder="Managed by Caddy (Auto)" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Managed by Caddy (Auto)</SelectItem>
+                            <SelectItem value="__none__">Managed by Caddy (Auto)</SelectItem>
                             {certificates.map((cert) => (
                                 <SelectItem key={cert.id} value={String(cert.id)}>
                                     {cert.name}
@@ -116,12 +116,12 @@ export function CreateHostDialog({
                 </div>
                 <div>
                     <label className="text-sm font-medium mb-1 block">Access List</label>
-                    <Select name="access_list_id" defaultValue={String(initialData?.access_list_id ?? "")}>
+                    <Select name="access_list_id" defaultValue={String(initialData?.access_list_id ?? "__none__")}>
                         <SelectTrigger>
                             <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="__none__">None</SelectItem>
                             {accessLists.map((list) => (
                                 <SelectItem key={list.id} value={String(list.id)}>
                                     {list.name}
@@ -229,12 +229,12 @@ export function EditHostDialog({
                 <UpstreamInput defaultUpstreams={host.upstreams} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Certificate</label>
-                    <Select name="certificate_id" defaultValue={String(host.certificate_id ?? "")}>
+                    <Select name="certificate_id" defaultValue={String(host.certificate_id ?? "__none__")}>
                         <SelectTrigger>
                             <SelectValue placeholder="Managed by Caddy (Auto)" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">Managed by Caddy (Auto)</SelectItem>
+                            <SelectItem value="__none__">Managed by Caddy (Auto)</SelectItem>
                             {certificates.map((cert) => (
                                 <SelectItem key={cert.id} value={String(cert.id)}>
                                     {cert.name}
@@ -245,12 +245,12 @@ export function EditHostDialog({
                 </div>
                 <div>
                     <label className="text-sm font-medium mb-1 block">Access List</label>
-                    <Select name="access_list_id" defaultValue={String(host.access_list_id ?? "")}>
+                    <Select name="access_list_id" defaultValue={String(host.access_list_id ?? "__none__")}>
                         <SelectTrigger>
                             <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="">None</SelectItem>
+                            <SelectItem value="__none__">None</SelectItem>
                             {accessLists.map((list) => (
                                 <SelectItem key={list.id} value={String(list.id)}>
                                     {list.name}
