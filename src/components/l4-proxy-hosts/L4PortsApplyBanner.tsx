@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Chip, CircularProgress, Stack, Typography } from "@mui/material";
-import SyncIcon from "@mui/icons-material/Sync";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ErrorIcon from "@mui/icons-material/Error";
+import { RefreshCw, CheckCircle, XCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 type PortsDiff = {
   currentPorts: string[];
@@ -54,11 +55,15 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
 
   useEffect(() => {
     if (!data) return;
-    const shouldPoll = data.status.state === "pending" || data.status.state === "applying";
+    const shouldPoll =
+      data.status.state === "pending" || data.status.state === "applying";
     if (shouldPoll && !polling) {
       setPolling(true);
       const interval = setInterval(fetchStatus, 2000);
-      return () => { clearInterval(interval); setPolling(false); };
+      return () => {
+        clearInterval(interval);
+        setPolling(false);
+      };
     }
     if (!shouldPoll && polling) {
       setPolling(false);
@@ -88,54 +93,80 @@ export function L4PortsApplyBanner({ refreshSignal }: { refreshSignal?: number }
     return null;
   }
 
-  const stateIcon = {
-    idle: null,
-    pending: <CircularProgress size={16} />,
-    applying: <CircularProgress size={16} />,
-    applied: <CheckCircleIcon color="success" fontSize="small" />,
-    failed: <ErrorIcon color="error" fontSize="small" />,
-  }[status.state];
+  const isSpinning =
+    status.state === "pending" || status.state === "applying";
 
-  const severity = status.state === "failed" ? "error"
-    : status.state === "applied" ? "success"
-    : diff.needsApply ? "warning"
-    : "info";
+  const alertVariant: "default" | "destructive" =
+    status.state === "failed" ? "destructive" : "default";
+
+  const stateIcon =
+    status.state === "applied" ? (
+      <CheckCircle className="h-4 w-4 text-green-500" />
+    ) : status.state === "failed" ? (
+      <XCircle className="h-4 w-4 text-destructive" />
+    ) : isSpinning ? (
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+    ) : null;
 
   return (
     <Alert
-      severity={severity}
-      icon={stateIcon || undefined}
-      action={
-        diff.needsApply ? (
-          <Button
-            color="inherit"
-            size="small"
-            onClick={handleApply}
-            disabled={applying || status.state === "pending" || status.state === "applying"}
-            startIcon={applying ? <CircularProgress size={14} /> : <SyncIcon />}
-          >
-            Apply Ports
-          </Button>
-        ) : undefined
-      }
+      variant={alertVariant}
+      className={cn(
+        "flex items-start gap-3",
+        status.state === "applied" && "border-green-500/50 text-green-700 dark:text-green-400",
+        diff.needsApply && status.state !== "failed" && status.state !== "applied" && "border-yellow-500/50 text-yellow-800 dark:text-yellow-400"
+      )}
     >
-      <Stack spacing={0.5}>
-        {diff.needsApply ? (
-          <Typography variant="body2">
-            <strong>Docker port changes pending.</strong> The caddy container needs to be recreated to expose L4 ports.
-            {diff.requiredPorts.length > 0 && (
-              <> Required: {diff.requiredPorts.map(p => (
-                <Chip key={p} label={p} size="small" variant="outlined" sx={{ ml: 0.5, height: 20, fontSize: "0.7rem" }} />
-              ))}</>
-            )}
-          </Typography>
-        ) : (
-          <Typography variant="body2">{status.message}</Typography>
-        )}
-        {status.state === "failed" && status.error && (
-          <Typography variant="caption" color="error.main">{status.error}</Typography>
-        )}
-      </Stack>
+      {stateIcon && <div className="mt-0.5 shrink-0">{stateIcon}</div>}
+      <AlertDescription className="flex-1">
+        <div className="flex flex-col gap-1">
+          {diff.needsApply ? (
+            <p className="text-sm">
+              <strong>Docker port changes pending.</strong> The caddy container
+              needs to be recreated to expose L4 ports.
+              {diff.requiredPorts.length > 0 && (
+                <span className="inline-flex items-center gap-1 ml-1 flex-wrap">
+                  Required:{" "}
+                  {diff.requiredPorts.map((p) => (
+                    <Badge
+                      key={p}
+                      variant="outline"
+                      className="text-[0.7rem] h-5 px-1.5"
+                    >
+                      {p}
+                    </Badge>
+                  ))}
+                </span>
+              )}
+            </p>
+          ) : (
+            <p className="text-sm">{status.message}</p>
+          )}
+          {status.state === "failed" && status.error && (
+            <p className="text-xs text-destructive">{status.error}</p>
+          )}
+        </div>
+      </AlertDescription>
+      {diff.needsApply && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleApply}
+          disabled={
+            applying ||
+            status.state === "pending" ||
+            status.state === "applying"
+          }
+          className="shrink-0 ml-auto"
+        >
+          {applying ? (
+            <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent mr-1.5" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          Apply Ports
+        </Button>
+      )}
     </Alert>
   );
 }
