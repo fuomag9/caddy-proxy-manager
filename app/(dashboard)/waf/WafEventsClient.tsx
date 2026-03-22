@@ -3,37 +3,27 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useFormState } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  Checkbox,
-  Chip,
-  Collapse,
-  Divider,
-  Drawer,
-  FormControlLabel,
-  IconButton,
-  Snackbar,
-  Stack,
-  Switch,
-  Tab,
-  Tabs,
-  TextField,
-  Tooltip,
-  Typography,
-} from "@mui/material";
+import { toast } from "sonner";
+import { Search, X, ShieldOff, Trash2, Copy, ChevronDown } from "lucide-react";
 
-import SearchIcon from "@mui/icons-material/Search";
-import CloseIcon from "@mui/icons-material/Close";
-import BlockIcon from "@mui/icons-material/Block";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { DataTable } from "@/src/components/ui/DataTable";
-import type { WafEvent } from "@/src/lib/models/waf-events";
-import type { WafSettings } from "@/src/lib/settings";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+
+import { DataTable } from "@/components/ui/DataTable";
+import type { WafEvent } from "@/lib/models/waf-events";
+import type { WafSettings } from "@/lib/settings";
 import {
   suppressWafRuleGloballyAction,
   suppressWafRuleForHostAction,
@@ -53,36 +43,42 @@ type Props = {
   globalWaf: WafSettings | null;
 };
 
-const SEVERITY_COLOR: Record<string, "error" | "warning" | "info" | "default"> = {
-  CRITICAL: "error",
-  ERROR: "error",
-  HIGH: "error",
-  WARNING: "warning",
-  NOTICE: "info",
-  INFO: "info",
+const SEVERITY_CLASSES: Record<string, string> = {
+  CRITICAL: "border-red-500 text-red-500",
+  ERROR: "border-red-500 text-red-500",
+  HIGH: "border-red-500 text-red-500",
+  WARNING: "border-yellow-500 text-yellow-500",
+  NOTICE: "border-blue-500 text-blue-500",
+  INFO: "border-blue-500 text-blue-500",
 };
 
 function SeverityChip({ severity }: { severity: string | null }) {
-  if (!severity) return <Typography variant="body2" color="text.disabled">—</Typography>;
+  if (!severity) return <span className="text-muted-foreground text-sm">—</span>;
   const upper = severity.toUpperCase();
-  const color = SEVERITY_COLOR[upper] ?? "default";
-  return <Chip label={upper} size="small" color={color} variant="outlined" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />;
+  const classes = SEVERITY_CLASSES[upper] ?? "border-muted text-muted-foreground";
+  return (
+    <Badge variant="outline" className={cn("text-[0.7rem] font-semibold px-1.5 py-0", classes)}>
+      {upper}
+    </Badge>
+  );
 }
 
 function BlockedChip({ blocked }: { blocked: boolean }) {
-  return blocked
-    ? <Chip label="Blocked" size="small" color="error" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />
-    : <Chip label="Detected" size="small" color="warning" variant="outlined" sx={{ fontWeight: 600, fontSize: "0.7rem" }} />;
+  return blocked ? (
+    <Badge className="text-[0.7rem] font-semibold bg-red-500 hover:bg-red-600 px-1.5 py-0">Blocked</Badge>
+  ) : (
+    <Badge variant="outline" className="text-[0.7rem] font-semibold border-yellow-500 text-yellow-500 px-1.5 py-0">
+      Detected
+    </Badge>
+  );
 }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
-        {label}
-      </Typography>
-      <Box mt={0.25}>{children}</Box>
-    </Box>
+    <div>
+      <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="mt-0.5">{children}</div>
+    </div>
   );
 }
 
@@ -102,7 +98,6 @@ function WafEventDrawer({
   onSuppressHost: (ruleId: number, host: string) => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; success: boolean }>({ open: false, message: "", success: true });
 
   let parsedRaw: unknown = null;
   if (event?.rawData) {
@@ -117,8 +112,12 @@ function WafEventDrawer({
     if (!event?.ruleId) return;
     startTransition(async () => {
       const result = await suppressWafRuleGloballyAction(event.ruleId!);
-      setSnackbar({ open: true, message: result.message ?? (result.success ? "Done" : "Failed"), success: result.success });
-      if (result.success) onSuppressGlobal(event.ruleId!);
+      if (result.success) {
+        toast.success(result.message ?? "Done");
+        onSuppressGlobal(event.ruleId!);
+      } else {
+        toast.error(result.message ?? "Failed");
+      }
     });
   }
 
@@ -126,118 +125,108 @@ function WafEventDrawer({
     if (!event?.ruleId || !event?.host) return;
     startTransition(async () => {
       const result = await suppressWafRuleForHostAction(event.ruleId!, event.host!);
-      setSnackbar({ open: true, message: result.message ?? (result.success ? "Done" : "Failed"), success: result.success });
-      if (result.success) onSuppressHost(event.ruleId!, event.host!);
+      if (result.success) {
+        toast.success(result.message ?? "Done");
+        onSuppressHost(event.ruleId!, event.host!);
+      } else {
+        toast.error(result.message ?? "Failed");
+      }
     });
   }
 
   return (
-    <>
-      <Drawer anchor="right" open={!!event} onClose={onClose} PaperProps={{ sx: { width: { xs: "100%", sm: 520 }, p: 3 } }}>
+    <Sheet open={!!event} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-[520px] overflow-y-auto">
+        <SheetTitle className="sr-only">WAF Event Details</SheetTitle>
         {event && (
-          <Stack spacing={2.5} sx={{ height: "100%", overflow: "auto" }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-              <Stack direction="row" alignItems="center" spacing={1}>
+          <div className="flex flex-col gap-5 h-full pt-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <BlockedChip blocked={event.blocked} />
                 <SeverityChip severity={event.severity} />
-                <Typography variant="h6" fontWeight={600}>WAF Event</Typography>
-              </Stack>
-              <IconButton onClick={onClose} size="small"><CloseIcon /></IconButton>
-            </Stack>
+                <h2 className="text-lg font-semibold">WAF Event</h2>
+              </div>
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
 
-            <Divider />
+            <Separator />
 
             <DetailRow label="Time">
-              <Typography variant="body2">{new Date(event.ts * 1000).toLocaleString()}</Typography>
+              <p className="text-sm">{new Date(event.ts * 1000).toLocaleString()}</p>
             </DetailRow>
 
             <DetailRow label="Host">
-              <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>{event.host || "—"}</Typography>
+              <p className="text-sm font-mono break-all">{event.host || "—"}</p>
             </DetailRow>
 
             <DetailRow label="Client IP">
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="body2" sx={{ fontFamily: "monospace" }}>{event.clientIp}</Typography>
-                {event.countryCode && <Chip label={event.countryCode} size="small" variant="outlined" sx={{ height: 18, fontSize: "0.65rem" }} />}
-              </Stack>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-mono">{event.clientIp}</p>
+                {event.countryCode && (
+                  <Badge variant="outline" className="text-[0.65rem] h-[18px] px-1">
+                    {event.countryCode}
+                  </Badge>
+                )}
+              </div>
             </DetailRow>
 
             <DetailRow label="Request">
-              <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
-                {event.method} {event.uri}
-              </Typography>
+              <p className="text-sm font-mono break-all">{event.method} {event.uri}</p>
             </DetailRow>
 
             <DetailRow label="Rule ID">
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                <Typography variant="body2" sx={{ fontFamily: "monospace" }}>{event.ruleId ?? "—"}</Typography>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-mono">{event.ruleId ?? "—"}</p>
                 {event.ruleId != null && (
                   <>
                     <Button
-                      size="small"
-                      variant="outlined"
-                      color="error"
-                      startIcon={<BlockIcon fontSize="small" />}
+                      size="sm"
+                      variant="outline"
+                      className="text-[0.72rem] text-red-500 border-red-500 hover:bg-red-500/10 h-7"
                       onClick={handleSuppressGlobally}
                       disabled={pending || isGloballySuppressed}
-                      sx={{ fontSize: "0.72rem", textTransform: "none" }}
                     >
+                      <ShieldOff className="h-3 w-3 mr-1" />
                       {isGloballySuppressed ? "Suppressed Globally" : "Suppress Globally"}
                     </Button>
                     {event.host && (
                       <Button
-                        size="small"
-                        variant="outlined"
-                        color="warning"
-                        startIcon={<BlockIcon fontSize="small" />}
+                        size="sm"
+                        variant="outline"
+                        className="text-[0.72rem] text-yellow-500 border-yellow-500 hover:bg-yellow-500/10 h-7"
                         onClick={handleSuppressForHost}
                         disabled={pending || isHostSuppressed}
-                        sx={{ fontSize: "0.72rem", textTransform: "none" }}
                       >
+                        <ShieldOff className="h-3 w-3 mr-1" />
                         {isHostSuppressed ? `Suppressed for ${event.host}` : `Suppress for ${event.host}`}
                       </Button>
                     )}
                   </>
                 )}
-              </Stack>
+              </div>
             </DetailRow>
 
             <DetailRow label="Rule Message">
-              <Typography variant="body2" sx={{ wordBreak: "break-word" }}>{event.ruleMessage ?? "—"}</Typography>
+              <p className="text-sm break-words">{event.ruleMessage ?? "—"}</p>
             </DetailRow>
 
-            <Divider />
+            <Separator />
 
             <DetailRow label="Raw Audit Data">
               {parsedRaw !== null ? (
-                <Box
-                  component="pre"
-                  sx={{
-                    m: 0, p: 1.5, borderRadius: 1, bgcolor: "action.hover",
-                    fontSize: "0.7rem", fontFamily: "monospace", overflowX: "auto",
-                    whiteSpace: "pre-wrap", wordBreak: "break-all", userSelect: "text",
-                  }}
-                >
+                <pre className="m-0 p-3 rounded bg-muted text-[0.7rem] font-mono overflow-x-auto whitespace-pre-wrap break-all select-text">
                   {JSON.stringify(parsedRaw, null, 2)}
-                </Box>
+                </pre>
               ) : (
-                <Typography variant="body2" color="text.disabled">—</Typography>
+                <span className="text-sm text-muted-foreground">—</span>
               )}
             </DetailRow>
-          </Stack>
+          </div>
         )}
-      </Drawer>
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity={snackbar.success ? "success" : "error"} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -255,7 +244,6 @@ function GlobalSuppressedRules({
   onAdd: (ruleId: number, message: string | null) => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; success: boolean }>({ open: false, message: "", success: true });
   const [messages, setMessages] = useState(initialMessages);
 
   // Add-rule state
@@ -269,8 +257,12 @@ function GlobalSuppressedRules({
   function handleRemove(ruleId: number) {
     startTransition(async () => {
       const result = await removeWafRuleGloballyAction(ruleId);
-      setSnackbar({ open: true, message: result.message ?? (result.success ? "Done" : "Failed"), success: result.success });
-      if (result.success) onRemove(ruleId);
+      if (result.success) {
+        toast.success(result.message ?? "Done");
+        onRemove(ruleId);
+      } else {
+        toast.error(result.message ?? "Failed");
+      }
     });
   }
 
@@ -278,7 +270,7 @@ function GlobalSuppressedRules({
     const n = parseInt(addInput.trim(), 10);
     if (!Number.isInteger(n) || n <= 0) return;
     if (excluded.includes(n)) {
-      setSnackbar({ open: true, message: `Rule ${n} is already suppressed.`, success: false });
+      toast.error(`Rule ${n} is already suppressed.`);
       return;
     }
     setLookupPending(true);
@@ -294,12 +286,14 @@ function GlobalSuppressedRules({
     if (!pendingRule) return;
     startTransition(async () => {
       const result = await suppressWafRuleGloballyAction(pendingRule.id);
-      setSnackbar({ open: true, message: result.message ?? (result.success ? "Done" : "Failed"), success: result.success });
       if (result.success) {
+        toast.success(result.message ?? "Done");
         onAdd(pendingRule.id, pendingRule.message);
         setMessages((prev) => ({ ...prev, [pendingRule.id]: pendingRule.message }));
         setAddInput("");
         setPendingRule(null);
+      } else {
+        toast.error(result.message ?? "Failed");
       }
     });
   }
@@ -314,153 +308,116 @@ function GlobalSuppressedRules({
   });
 
   return (
-    <>
-      <Stack spacing={2}>
-        <Box>
-          <Typography variant="h6" fontWeight={600}>Global WAF Rule Exclusions</Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
-            Rules listed here are suppressed globally via <code>SecRuleRemoveById</code> for all proxy hosts using global WAF settings.
-          </Typography>
-          {!wafEnabled && (
-            <Alert severity="warning" sx={{ mt: 1.5 }}>Global WAF is currently disabled. Exclusions are saved but have no effect until WAF is enabled.</Alert>
-          )}
-        </Box>
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-lg font-semibold">Global WAF Rule Exclusions</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Rules listed here are suppressed globally via <code>SecRuleRemoveById</code> for all proxy hosts using global WAF settings.
+        </p>
+        {!wafEnabled && (
+          <Alert className="mt-3">
+            <AlertDescription>Global WAF is currently disabled. Exclusions are saved but have no effect until WAF is enabled.</AlertDescription>
+          </Alert>
+        )}
+      </div>
 
-        {/* Add rule */}
-        <Box>
-          <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Add Rule by ID
-          </Typography>
-          <Stack direction="row" spacing={1} alignItems="center" mt={0.75} sx={{ maxWidth: 320 }}>
-            <TextField
-              size="small"
-              label="Rule ID"
-              value={addInput}
-              onChange={(e) => { setAddInput(e.target.value); setPendingRule(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLookup(); } }}
-              inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
-              sx={{ flex: 1 }}
-              disabled={lookupPending || pending}
-            />
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={handleLookup}
-              disabled={!addInput.trim() || lookupPending || pending}
-            >
-              {lookupPending ? "Looking up…" : "Look up"}
-            </Button>
-          </Stack>
+      {/* Add rule */}
+      <div>
+        <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">Add Rule by ID</p>
+        <div className="flex items-center gap-2 mt-1.5 max-w-xs">
+          <Input
+            placeholder="Rule ID"
+            value={addInput}
+            onChange={(e) => { setAddInput(e.target.value); setPendingRule(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleLookup(); } }}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            className="flex-1"
+            disabled={lookupPending || pending}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLookup}
+            disabled={!addInput.trim() || lookupPending || pending}
+          >
+            {lookupPending ? "Looking up…" : "Look up"}
+          </Button>
+        </div>
 
-          {pendingRule && (
-            <Box
-              sx={{
-                mt: 1.5, px: 2, py: 1.5, borderRadius: 1.5,
-                border: "1px solid", borderColor: "warning.main", bgcolor: "action.hover",
-                maxWidth: 480,
-              }}
-            >
-              <Typography variant="body2" fontFamily="monospace" fontWeight={700} color="error.light">
-                Rule {pendingRule.id}
-              </Typography>
-              <Typography variant="caption" color={pendingRule.message ? "text.secondary" : "text.disabled"} sx={{ display: "block", mt: 0.25 }}>
-                {pendingRule.message ?? "No description available — rule has not triggered yet"}
-              </Typography>
-              <Stack direction="row" spacing={1} mt={1.5}>
-                <Button size="small" variant="contained" color="error" onClick={handleConfirmAdd} disabled={pending}>
-                  {pending ? "Suppressing…" : "Suppress Globally"}
-                </Button>
-                <Button size="small" variant="outlined" onClick={() => { setPendingRule(null); setAddInput(""); }} disabled={pending}>
-                  Cancel
-                </Button>
-              </Stack>
-            </Box>
-          )}
-        </Box>
+        {pendingRule && (
+          <div className="mt-3 px-4 py-3 rounded-lg border border-yellow-500 bg-muted max-w-[480px]">
+            <p className="text-sm font-mono font-bold text-red-400">Rule {pendingRule.id}</p>
+            <p className={cn("text-xs block mt-0.5", pendingRule.message ? "text-muted-foreground" : "text-muted-foreground/60")}>
+              {pendingRule.message ?? "No description available — rule has not triggered yet"}
+            </p>
+            <div className="flex items-center gap-2 mt-3">
+              <Button size="sm" variant="destructive" onClick={handleConfirmAdd} disabled={pending}>
+                {pending ? "Suppressing…" : "Suppress Globally"}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => { setPendingRule(null); setAddInput(""); }} disabled={pending}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
 
-        {/* Search */}
-        {excluded.length > 0 && (
-          <TextField
+      {/* Search */}
+      {excluded.length > 0 && (
+        <div className="relative max-w-[400px]">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
             placeholder="Search by rule ID or message…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            size="small"
-            sx={{ maxWidth: 400 }}
-            slotProps={{
-              input: { startAdornment: <SearchIcon sx={{ mr: 1, color: "text.disabled", fontSize: 18 }} /> },
-            }}
+            className="pl-8"
           />
-        )}
+        </div>
+      )}
 
-        {excluded.length === 0 ? (
-          <Box
-            sx={{
-              py: 6, textAlign: "center", color: "text.secondary",
-              border: "1px dashed", borderColor: "divider", borderRadius: 2,
-            }}
-          >
-            <BlockIcon sx={{ fontSize: 36, opacity: 0.3, mb: 1, display: "block", mx: "auto" }} />
-            <Typography variant="body2">No globally suppressed rules.</Typography>
-            <Typography variant="caption">Add a rule above or open a WAF event and click &quot;Suppress Globally&quot;.</Typography>
-          </Box>
-        ) : filtered.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>No rules match your search.</Typography>
-        ) : (
-          <Stack spacing={1}>
-            {filtered.map((id) => (
-              <Box
-                key={id}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  px: 2,
-                  py: 1.5,
-                  borderRadius: 1.5,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  bgcolor: "action.hover",
-                }}
-              >
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" fontFamily="monospace" fontWeight={700} color="error.light">
-                    Rule {id}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color={messages[id] ? "text.secondary" : "text.disabled"}
-                    sx={{ display: "block", mt: 0.25 }}
-                  >
-                    {messages[id] ?? "No description available — rule has not triggered yet"}
-                  </Typography>
-                </Box>
-                <Tooltip title="Remove suppression">
-                  <IconButton
-                    size="small"
-                    onClick={() => handleRemove(id)}
-                    disabled={pending}
-                    color="error"
-                    sx={{ flexShrink: 0 }}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
+      {excluded.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground border border-dashed rounded-lg">
+          <ShieldOff className="h-9 w-9 opacity-30 mb-2 mx-auto" />
+          <p className="text-sm">No globally suppressed rules.</p>
+          <p className="text-xs">Add a rule above or open a WAF event and click &quot;Suppress Globally&quot;.</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2">No rules match your search.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {filtered.map((id) => (
+            <div
+              key={id}
+              className="flex items-center gap-4 px-4 py-3 rounded-lg border bg-muted/50"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-mono font-bold text-red-400">Rule {id}</p>
+                <p className={cn("text-xs block mt-0.5", messages[id] ? "text-muted-foreground" : "text-muted-foreground/60")}>
+                  {messages[id] ?? "No description available — rule has not triggered yet"}
+                </p>
+              </div>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemove(id)}
+                      disabled={pending}
+                      className="shrink-0 text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Remove suppression</TooltipContent>
                 </Tooltip>
-              </Box>
-            ))}
-          </Stack>
-        )}
-      </Stack>
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity={snackbar.success ? "success" : "error"} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </>
+              </TooltipProvider>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -468,7 +425,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState("events");
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [selected, setSelected] = useState<WafEvent | null>(null);
   const [localGlobalExcluded, setLocalGlobalExcluded] = useState(globalExcluded);
@@ -501,29 +458,24 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
 
   const mobileCard = (event: WafEvent) => (
     <Card
-      variant="outlined"
-      sx={{ p: 2, cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}
+      className="cursor-pointer hover:bg-muted/50 transition-colors"
       onClick={() => setSelected(event)}
     >
-      <Stack spacing={1}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Stack direction="row" spacing={0.5}>
+      <CardContent className="p-3 flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
             <BlockedChip blocked={event.blocked} />
             <SeverityChip severity={event.severity} />
-          </Stack>
-          <Typography variant="caption" color="text.secondary">
+          </div>
+          <span className="text-xs text-muted-foreground">
             {new Date(event.ts * 1000).toLocaleString()}
-          </Typography>
-        </Stack>
-        <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem", wordBreak: "break-all" }} color="text.secondary">
-          {event.host || "—"}
-        </Typography>
+          </span>
+        </div>
+        <p className="text-xs font-mono text-muted-foreground break-all">{event.host || "—"}</p>
         {event.ruleId && (
-          <Typography variant="caption" color="text.disabled">
-            Rule #{event.ruleId}
-          </Typography>
+          <span className="text-xs text-muted-foreground/60">Rule #{event.ruleId}</span>
         )}
-      </Stack>
+      </CardContent>
     </Card>
   );
 
@@ -531,9 +483,9 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
     {
       id: "ts", label: "Time", width: 150,
       render: (r: WafEvent) => (
-        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap", fontSize: "0.8rem" }}>
+        <span className="text-muted-foreground text-[0.8rem] whitespace-nowrap">
           {new Date(r.ts * 1000).toLocaleString()}
-        </Typography>
+        </span>
       ),
     },
     {
@@ -547,87 +499,97 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
     {
       id: "host", label: "Host", width: 150,
       render: (r: WafEvent) => (
-        <Tooltip title={r.host ?? ""} placement="top">
-          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8rem", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {r.host || <span style={{ opacity: 0.4 }}>—</span>}
-          </Typography>
-        </Tooltip>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-mono text-[0.8rem] max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap block">
+                {r.host || <span className="opacity-40">—</span>}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{r.host ?? ""}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ),
     },
     {
       id: "clientIp", label: "Client IP", width: 140,
       render: (r: WafEvent) => (
-        <Stack direction="row" spacing={0.5} alignItems="center">
-          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
-            {r.clientIp}
-          </Typography>
+        <div className="flex items-center gap-1">
+          <span className="font-mono text-[0.8rem] whitespace-nowrap">{r.clientIp}</span>
           {r.countryCode && (
-            <Chip label={r.countryCode} size="small" variant="outlined" sx={{ height: 18, fontSize: "0.65rem" }} />
+            <Badge variant="outline" className="text-[0.65rem] h-[18px] px-1">
+              {r.countryCode}
+            </Badge>
           )}
-        </Stack>
+        </div>
       ),
     },
     {
       id: "method", label: "M", width: 60,
       render: (r: WafEvent) => (
-        <Chip label={r.method || "—"} size="small" variant="outlined" sx={{ fontFamily: "monospace", fontSize: "0.7rem" }} />
+        <Badge variant="outline" className="font-mono text-[0.7rem]">{r.method || "—"}</Badge>
       ),
     },
     {
       id: "uri", label: "URI", width: 200,
       render: (r: WafEvent) => (
-        <Tooltip title={r.uri} placement="top">
-          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8rem", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {r.uri || <span style={{ opacity: 0.4 }}>—</span>}
-          </Typography>
-        </Tooltip>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="font-mono text-[0.8rem] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap block">
+                {r.uri || <span className="opacity-40">—</span>}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{r.uri}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ),
     },
     {
       id: "ruleId", label: "Rule ID", width: 80,
       render: (r: WafEvent) => (
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: "0.8rem" }}>
-          {r.ruleId ?? "—"}
-        </Typography>
+        <span className="text-muted-foreground font-mono text-[0.8rem]">{r.ruleId ?? "—"}</span>
       ),
     },
     {
       id: "ruleMessage", label: "Rule Message",
       render: (r: WafEvent) => (
-        <Tooltip title={r.ruleMessage ?? ""} placement="top">
-          <Typography variant="body2" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {r.ruleMessage ?? <span style={{ opacity: 0.4 }}>—</span>}
-          </Typography>
-        </Tooltip>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap block text-sm">
+                {r.ruleMessage ?? <span className="opacity-40">—</span>}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{r.ruleMessage ?? ""}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ),
     },
   ];
 
   return (
-    <Stack spacing={2} sx={{ width: "100%" }}>
-      <Typography variant="h4" fontWeight={600}>WAF</Typography>
-      <Typography color="text.secondary">
-        Web Application Firewall events and rule management.
-      </Typography>
+    <div className="flex flex-col gap-4 w-full">
+      <h1 className="text-3xl font-semibold">WAF</h1>
+      <p className="text-muted-foreground">Web Application Firewall events and rule management.</p>
 
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tab label="Events" />
-        <Tab label="Suppressed Rules" />
-        <Tab label="Settings" />
-      </Tabs>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="events">Events</TabsTrigger>
+          <TabsTrigger value="suppressed">Suppressed Rules</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
+        </TabsList>
 
-      {tab === 0 && (
-        <>
-          <TextField
-            placeholder="Search by host, IP, URI, or rule message..."
-            value={searchTerm}
-            onChange={(e) => { setSearchTerm(e.target.value); updateSearch(e.target.value); }}
-            slotProps={{
-              input: { startAdornment: <SearchIcon sx={{ mr: 1, color: "rgba(255,255,255,0.5)" }} /> },
-            }}
-            size="small"
-            sx={{ maxWidth: 480 }}
-          />
+        <TabsContent value="events" className="flex flex-col gap-4">
+          <div className="relative max-w-[480px]">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by host, IP, URI, or rule message..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); updateSearch(e.target.value); }}
+              className="pl-8"
+            />
+          </div>
           <DataTable
             columns={columns}
             data={events}
@@ -645,98 +607,112 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
             onSuppressGlobal={(ruleId) => setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])])}
             onSuppressHost={(ruleId, host) => setLocalHostWafMap((prev) => ({ ...prev, [host]: [...new Set([...(prev[host] ?? []), ruleId])] }))}
           />
-        </>
-      )}
+        </TabsContent>
 
-      {tab === 1 && (
-        <GlobalSuppressedRules
-          excluded={localGlobalExcluded}
-          messages={localGlobalMessages}
-          wafEnabled={globalWafEnabled}
-          onRemove={(ruleId) => setLocalGlobalExcluded((prev) => prev.filter((id) => id !== ruleId))}
-          onAdd={(ruleId, message) => {
-            setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])]);
-            setLocalGlobalMessages((prev) => ({ ...prev, [ruleId]: message }));
-          }}
-        />
-      )}
+        <TabsContent value="suppressed">
+          <GlobalSuppressedRules
+            excluded={localGlobalExcluded}
+            messages={localGlobalMessages}
+            wafEnabled={globalWafEnabled}
+            onRemove={(ruleId) => setLocalGlobalExcluded((prev) => prev.filter((id) => id !== ruleId))}
+            onAdd={(ruleId, message) => {
+              setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])]);
+              setLocalGlobalMessages((prev) => ({ ...prev, [ruleId]: message }));
+            }}
+          />
+        </TabsContent>
 
-      {tab === 2 && (
-        <Stack spacing={3} sx={{ maxWidth: 720 }}>
-          <Box>
-            <Typography variant="h6" fontWeight={600}>WAF Settings</Typography>
-            <Typography variant="body2" color="text.secondary" mt={0.5}>
-              Configure the global Web Application Firewall. Per-host settings can merge with or override these defaults.
-              Powered by <strong>Coraza</strong> with optional OWASP Core Rule Set.
-            </Typography>
-          </Box>
-          <Stack component="form" action={wafFormAction} spacing={2}>
-            {wafState?.message && (
-              <Alert severity={wafState.success ? "success" : "error"}>{wafState.message}</Alert>
-            )}
-            <FormControlLabel
-              control={<Switch name="waf_enabled" defaultChecked={globalWaf?.enabled ?? false} />}
-              label="Enable WAF globally (blocking)"
-            />
-            <FormControlLabel
-              control={<Checkbox name="waf_load_owasp_crs" defaultChecked={globalWaf?.load_owasp_crs ?? true} />}
-              label={
-                <span>Load OWASP Core Rule Set{" "}
-                  <Typography component="span" variant="caption" color="text.secondary">
-                    (covers SQLi, XSS, LFI, RCE — recommended)
-                  </Typography>
-                </span>
-              }
-            />
-            {/* WafRuleExclusions intentionally omitted — managed in Suppressed Rules tab */}
-            <TextField
-              name="waf_custom_directives"
-              label="Custom SecLang Directives"
-              multiline minRows={3} maxRows={12}
-              value={wafCustomDirectives}
-              onChange={(e) => setWafCustomDirectives(e.target.value)}
-              placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
-              inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-              helperText="ModSecurity SecLang syntax. Applied after OWASP CRS if enabled."
-              fullWidth
-            />
-            <Box>
-              <Button
-                size="small"
-                endIcon={<ExpandMoreIcon sx={{ transform: wafShowTemplates ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />}
-                onClick={() => setWafShowTemplates((v) => !v)}
-                sx={{ color: "text.secondary", textTransform: "none", px: 0 }}
-              >
-                Quick Templates
-              </Button>
-              <Collapse in={wafShowTemplates}>
-                <Stack spacing={0.75} mt={0.75}>
-                  {[
-                    { label: "Allow IP", snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
-                    { label: "Disable WAF for path", snippet: `SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"` },
-                    { label: "Remove XSS rules", snippet: `SecRuleRemoveByTag "attack-xss"` },
-                    { label: "Block User-Agent", snippet: `SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9002,phase:1,deny,status:403,log"` },
-                  ].map((t) => (
-                    <Button key={t.label} size="small" variant="outlined"
-                      startIcon={<ContentCopyIcon fontSize="inherit" />}
-                      onClick={() => setWafCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
-                      sx={{ justifyContent: "flex-start", textTransform: "none", fontFamily: "monospace", fontSize: "0.72rem" }}
-                    >
-                      {t.label}
-                    </Button>
-                  ))}
-                </Stack>
-              </Collapse>
-            </Box>
-            <Alert severity="info" sx={{ fontSize: "0.8rem" }}>
-              Rule exclusions are managed on the <strong>Suppressed Rules</strong> tab.
-            </Alert>
-            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-              <Button type="submit" variant="contained">Save WAF settings</Button>
-            </Box>
-          </Stack>
-        </Stack>
-      )}
-    </Stack>
+        <TabsContent value="settings">
+          <div className="flex flex-col gap-6 max-w-[720px]">
+            <div>
+              <h2 className="text-lg font-semibold">WAF Settings</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Configure the global Web Application Firewall. Per-host settings can merge with or override these defaults.
+                Powered by <strong>Coraza</strong> with optional OWASP Core Rule Set.
+              </p>
+            </div>
+            <form action={wafFormAction} className="flex flex-col gap-4">
+              {wafState?.message && (
+                <Alert variant={wafState.success ? "default" : "destructive"}>
+                  <AlertDescription>{wafState.message}</AlertDescription>
+                </Alert>
+              )}
+              <div className="flex items-center gap-3">
+                <Switch name="waf_enabled" defaultChecked={globalWaf?.enabled ?? false} id="waf_enabled" />
+                <Label htmlFor="waf_enabled">Enable WAF globally (blocking)</Label>
+              </div>
+              <div className="flex items-center gap-3">
+                <Checkbox name="waf_load_owasp_crs" defaultChecked={globalWaf?.load_owasp_crs ?? true} id="waf_load_owasp_crs" />
+                <Label htmlFor="waf_load_owasp_crs">
+                  Load OWASP Core Rule Set{" "}
+                  <span className="text-xs text-muted-foreground">(covers SQLi, XSS, LFI, RCE — recommended)</span>
+                </Label>
+              </div>
+              {/* WafRuleExclusions intentionally omitted — managed in Suppressed Rules tab */}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="waf_custom_directives">Custom SecLang Directives</Label>
+                <Textarea
+                  id="waf_custom_directives"
+                  name="waf_custom_directives"
+                  rows={3}
+                  value={wafCustomDirectives}
+                  onChange={(e) => setWafCustomDirectives(e.target.value)}
+                  placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
+                  className="font-mono text-[0.8rem] resize-y"
+                />
+                <p className="text-xs text-muted-foreground">ModSecurity SecLang syntax. Applied after OWASP CRS if enabled.</p>
+              </div>
+              <div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground px-0"
+                  onClick={() => setWafShowTemplates((v) => !v)}
+                >
+                  Quick Templates
+                  <ChevronDown className={cn("ml-1 h-4 w-4 transition-transform duration-200", wafShowTemplates && "rotate-180")} />
+                </Button>
+                <div
+                  className={cn(
+                    "overflow-hidden transition-all duration-200",
+                    wafShowTemplates ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+                  )}
+                >
+                  <div className="flex flex-col gap-1.5 mt-2">
+                    {[
+                      { label: "Allow IP", snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
+                      { label: "Disable WAF for path", snippet: `SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"` },
+                      { label: "Remove XSS rules", snippet: `SecRuleRemoveByTag "attack-xss"` },
+                      { label: "Block User-Agent", snippet: `SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9002,phase:1,deny,status:403,log"` },
+                    ].map((t) => (
+                      <Button
+                        key={t.label}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="justify-start font-mono text-[0.72rem]"
+                        onClick={() => setWafCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
+                      >
+                        <Copy className="h-3 w-3 mr-1.5 shrink-0" />
+                        {t.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <Alert>
+                <AlertDescription className="text-[0.8rem]">
+                  Rule exclusions are managed on the <strong>Suppressed Rules</strong> tab.
+                </AlertDescription>
+              </Alert>
+              <div className="flex justify-end">
+                <Button type="submit">Save WAF settings</Button>
+              </div>
+            </form>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
