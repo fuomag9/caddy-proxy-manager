@@ -48,16 +48,24 @@ function buildExpectedL4Config(rows: (typeof l4ProxyHosts.$inferSelect)[]) {
   const enabledRows = rows.filter(r => r.enabled);
   if (enabledRows.length === 0) return null;
 
+  const formatListenAddress = (protocol: string, address: string) => {
+    if (protocol === 'udp') {
+      return address.startsWith('udp/') ? address : `udp/${address}`;
+    }
+    return address;
+  };
+
   const serverMap = new Map<string, typeof enabledRows>();
   for (const host of enabledRows) {
-    const key = host.listenAddress;
+    const key = `${host.protocol}:${host.listenAddress}`;
     if (!serverMap.has(key)) serverMap.set(key, []);
     serverMap.get(key)!.push(host);
   }
 
   const servers: Record<string, unknown> = {};
   let serverIdx = 0;
-  for (const [listenAddr, hosts] of serverMap) {
+  for (const [, hosts] of serverMap) {
+    const listenAddr = formatListenAddress(hosts[0].protocol, hosts[0].listenAddress);
     const routes = hosts.map(host => {
       const route: Record<string, unknown> = {};
       const matcherValues = host.matcherValue ? JSON.parse(host.matcherValue) as string[] : [];
@@ -77,7 +85,7 @@ function buildExpectedL4Config(rows: (typeof l4ProxyHosts.$inferSelect)[]) {
       const upstreams = JSON.parse(host.upstreams) as string[];
       const proxyHandler: Record<string, unknown> = {
         handler: 'proxy',
-        upstreams: upstreams.map(u => ({ dial: [u] })),
+        upstreams: upstreams.map(u => ({ dial: [formatListenAddress(host.protocol, u)] })),
       };
       if (host.proxyProtocolVersion) proxyHandler.proxy_protocol = host.proxyProtocolVersion;
 
@@ -351,8 +359,58 @@ describe('L4 Caddy config generation', () => {
     const rows = await db.select().from(l4ProxyHosts);
     const config = buildExpectedL4Config(rows)!;
     const server = config.l4_server_0 as any;
-    expect(server.listen).toEqual([':5353']);
-    expect(server.routes[0].handle[0].upstreams).toHaveLength(2);
+    expect(server.listen).toEqual(['udp/:5353']);
+    expect(server.routes[0].handle[0].upstreams).toEqual([
+      { dial: ['udp/8.8.8.8:53'] },
+      { dial: ['udp/8.8.4.4:53'] },
+    ]);
+  });
+
+  it('same port with different protocols creates separate servers', async () => {
+    // DNS (port 5353) is a real-world case where both TCP and UDP share a port —
+    // this test ensures the grouping key includes protocol so they get separate servers.
+    await insertL4Host({
+      name: 'DNS TCP',
+      protocol: 'tcp',
+      listenAddress: ':5353',
+      upstreams: JSON.stringify(['10.0.0.1:5353']),
+    });
+    await insertL4Host({
+      name: 'DNS UDP',
+      protocol: 'udp',
+      listenAddress: ':5353',
+      upstreams: JSON.stringify(['10.0.0.2:5353']),
+    });
+
+    const rows = await db.select().from(l4ProxyHosts);
+    const config = buildExpectedL4Config(rows)!;
+
+    const servers = Object.values(config) as any[];
+    expect(servers).toHaveLength(2);
+
+    const tcpServer = servers.find(s => s.listen?.[0] === ':5353');
+    const udpServer = servers.find(s => s.listen?.[0] === 'udp/:5353');
+
+    expect(tcpServer).toEqual({
+      listen: [':5353'],
+      routes: [
+        {
+          handle: [
+            { handler: 'proxy', upstreams: [{ dial: ['10.0.0.1:5353'] }] },
+          ],
+        },
+      ],
+    });
+    expect(udpServer).toEqual({
+      listen: ['udp/:5353'],
+      routes: [
+        {
+          handle: [
+            { handler: 'proxy', upstreams: [{ dial: ['udp/10.0.0.2:5353'] }] },
+          ],
+        },
+      ],
+    });
   });
 
   it('TLS SNI with multiple hostnames', async () => {

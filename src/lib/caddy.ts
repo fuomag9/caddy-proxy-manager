@@ -1320,17 +1320,25 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
     getGeoBlockSettings(),
   ]);
 
-  // Group hosts by listen address — multiple hosts on the same port share routes in one server
+  const formatListenAddress = (protocol: string, listenAddress: string) => {
+    if (protocol === "udp") {
+      return listenAddress.startsWith("udp/") ? listenAddress : `udp/${listenAddress}`;
+    }
+    return listenAddress;
+  };
+
+  // Group hosts by protocol + listen address — TCP and UDP on the same port get separate servers
   const serverMap = new Map<string, typeof l4Hosts>();
   for (const host of l4Hosts) {
-    const key = host.listenAddress;
+    const key = `${host.protocol}:${host.listenAddress}`;
     if (!serverMap.has(key)) serverMap.set(key, []);
     serverMap.get(key)!.push(host);
   }
 
   const servers: Record<string, unknown> = {};
   let serverIdx = 0;
-  for (const [listenAddr, hosts] of serverMap) {
+  for (const [, hosts] of serverMap) {
+    const listenAddr = formatListenAddress(hosts[0].protocol, hosts[0].listenAddress);
     const routes: Record<string, unknown>[] = [];
 
     for (const host of hosts) {
@@ -1441,7 +1449,7 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
 
       const proxyHandler: Record<string, unknown> = {
         handler: "proxy",
-        upstreams: resolvedDials.map((u) => ({ dial: [u] })),
+        upstreams: resolvedDials.map((u) => ({ dial: [formatListenAddress(host.protocol, u)] })),
       };
       if (host.proxyProtocolVersion) {
         proxyHandler.proxy_protocol = host.proxyProtocolVersion;
