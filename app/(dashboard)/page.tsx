@@ -36,9 +36,9 @@ async function loadStats(): Promise<StatCard[]> {
   const accessListsCount = accessListCountResult[0]?.value ?? 0;
 
   return [
-    { label: "Proxy Hosts", icon: <ArrowLeftRight className="h-8 w-8" />, count: proxyHostsCount, href: "/proxy-hosts" },
-    { label: "Certificates", icon: <ShieldCheck className="h-8 w-8" />, count: certificatesCount, href: "/certificates" },
-    { label: "Access Lists", icon: <KeyRound className="h-8 w-8" />, count: accessListsCount, href: "/access-lists" }
+    { label: "Proxy Hosts", icon: <ArrowLeftRight className="h-4 w-4" />, count: proxyHostsCount, href: "/proxy-hosts" },
+    { label: "Certificates", icon: <ShieldCheck className="h-4 w-4" />, count: certificatesCount, href: "/certificates" },
+    { label: "Access Lists", icon: <KeyRound className="h-4 w-4" />, count: accessListsCount, href: "/access-lists" }
   ];
 }
 

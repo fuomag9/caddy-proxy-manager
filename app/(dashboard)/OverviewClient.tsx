@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart2 } from "lucide-react";
 import { ReactNode } from "react";
+import { Separator } from "@/components/ui/separator";
 
 type StatCard = {
   label: string;
@@ -34,111 +35,90 @@ export default function OverviewClient({
   recentEvents: RecentEvent[];
 }) {
   return (
-    <div className="flex flex-col gap-10">
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400/60">
-          Control Center
-        </span>
-        <h1
-          className="text-3xl font-bold"
-          style={{
-            background: "linear-gradient(120deg, rgba(127, 91, 255, 1) 0%, rgba(34, 211, 238, 0.9) 80%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent"
-          }}
-        >
+    <div className="flex flex-col gap-8">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">
           Welcome back, {userName}
         </h1>
-        <p className="text-sm text-muted-foreground max-w-[560px]">
-          Everything you need to orchestrate Caddy proxies, certificates, and secure edge services lives here.
+        <p className="text-sm text-muted-foreground mt-1">
+          Everything you need to orchestrate Caddy proxies, certificates, and secure edge services.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <Card
-            key={stat.label}
-            className="border border-slate-400/10 bg-transparent shadow-none h-full"
-          >
-            <Link
-              href={stat.href}
-              className="block h-full transition-colors hover:bg-gradient-to-br hover:from-violet-500/10 hover:to-cyan-400/[0.06] rounded-[inherit]"
-            >
-              <CardContent className="flex flex-col gap-1 pt-6">
-                <div className="text-violet-400/80 flex items-center">
+          <Link key={stat.label} href={stat.href} className="block">
+            <Card className="hover:bg-muted/50 transition-colors">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {stat.label}
+                </CardTitle>
+                <div className="text-muted-foreground">
                   {stat.icon}
                 </div>
-                <span className="text-3xl font-bold tracking-tight">
-                  {stat.count}
-                </span>
-                <span className="text-sm text-muted-foreground font-medium">
-                  {stat.label}
-                </span>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{stat.count}</div>
               </CardContent>
-            </Link>
-          </Card>
+            </Card>
+          </Link>
         ))}
 
         {/* Traffic (24h) card */}
-        <Card className="border border-slate-400/10 bg-transparent shadow-none h-full">
-          <Link
-            href="/analytics"
-            className="block h-full transition-colors hover:bg-gradient-to-br hover:from-violet-500/10 hover:to-cyan-400/[0.06] rounded-[inherit]"
-          >
-            <CardContent className="flex flex-col gap-1 pt-6">
-              <div className="text-violet-400/80 flex items-center">
-                <BarChart2 className="h-8 w-8" />
+        <Link href="/analytics" className="block">
+          <Card className="hover:bg-muted/50 transition-colors">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Traffic (24h)
+              </CardTitle>
+              <div className="text-muted-foreground">
+                <BarChart2 className="h-4 w-4" />
               </div>
+            </CardHeader>
+            <CardContent>
               {trafficSummary ? (
                 <>
-                  <span className="text-3xl font-bold tracking-tight">
+                  <div className="text-3xl font-bold">
                     {trafficSummary.totalRequests.toLocaleString()}
-                  </span>
-                  <span className="text-sm text-muted-foreground font-medium">
-                    Traffic (24h)
-                    {trafficSummary.totalRequests > 0 && (
-                      <span
-                        className={`ml-1 text-[0.8em] ${trafficSummary.blockedPercent > 0 ? "text-red-400" : "text-muted-foreground"}`}
-                      >
-                        · {trafficSummary.blockedPercent}% blocked
-                      </span>
-                    )}
-                  </span>
+                  </div>
+                  {trafficSummary.totalRequests > 0 && (
+                    <p className={`text-xs mt-1 ${trafficSummary.blockedPercent > 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                      {trafficSummary.blockedPercent}% blocked
+                    </p>
+                  )}
                 </>
               ) : (
-                <>
-                  <span className="text-3xl font-bold tracking-tight">—</span>
-                  <span className="text-sm text-muted-foreground font-medium">Traffic (24h)</span>
-                </>
+                <div className="text-3xl font-bold">—</div>
               )}
             </CardContent>
-          </Link>
-        </Card>
+          </Card>
+        </Link>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-semibold tracking-tight">Recent Activity</h2>
-        {recentEvents.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground rounded-md bg-[rgba(12,18,30,0.7)]">
-            No activity recorded yet.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            {recentEvents.map((event, index) => (
-              <div
-                key={`${event.created_at}-${index}`}
-                className="flex justify-between items-center gap-2 rounded-md p-4 border border-slate-400/[0.08]"
-                style={{ background: "linear-gradient(120deg, rgba(17, 25, 40, 0.9), rgba(15, 23, 42, 0.7))" }}
-              >
-                <span className="text-sm font-medium">{event.summary}</span>
-                <span className="text-sm text-muted-foreground whitespace-nowrap">
-                  {new Date(event.created_at).toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {recentEvents.length === 0 ? (
+            <p className="px-6 pb-6 text-sm text-muted-foreground">No activity recorded yet.</p>
+          ) : (
+            <div>
+              {recentEvents.map((event, index) => (
+                <div key={`${event.created_at}-${index}`}>
+                  {index > 0 && <Separator />}
+                  <div className="flex justify-between items-center gap-4 px-6 py-3">
+                    <span className="text-sm">{event.summary}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(event.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

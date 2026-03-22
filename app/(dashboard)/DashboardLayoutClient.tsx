@@ -59,13 +59,16 @@ function NavContent({ pathname, user, onNavigate }: {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-4 py-6">
-        <p className="text-primary font-bold text-base tracking-tight">Caddy Proxy</p>
-        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Manager</p>
+      <div className="px-4 py-5 flex items-center gap-2">
+        <div className="h-7 w-7 rounded-md bg-primary flex items-center justify-center shrink-0">
+          <span className="text-primary-foreground font-bold text-xs">C</span>
+        </div>
+        <p className="font-semibold text-sm tracking-tight">Caddy Proxy Manager</p>
       </div>
+      <Separator />
 
       {/* Nav items */}
-      <ScrollArea className="flex-1 px-2">
+      <ScrollArea className="flex-1 px-2 py-2">
         <nav className="flex flex-col gap-0.5">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
@@ -74,10 +77,10 @@ function NavContent({ pathname, user, onNavigate }: {
                 key={href}
                 variant="ghost"
                 className={cn(
-                  "w-full justify-start gap-3 font-medium",
+                  "w-full justify-start gap-3 h-9 px-3",
                   active
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60 font-normal"
                 )}
                 asChild
                 onClick={onNavigate}
@@ -93,32 +96,40 @@ function NavContent({ pathname, user, onNavigate }: {
       </ScrollArea>
 
       {/* Footer */}
-      <div className="p-3 space-y-2">
-        <Separator />
-        <Button
-          variant="ghost"
-          className="w-full justify-start gap-3 px-2 h-auto py-2"
-          onClick={() => { router.push("/profile"); onNavigate?.(); }}
-        >
-          <Avatar className="h-8 w-8 shrink-0">
-            <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
-            <AvatarFallback>{(user.name?.[0] ?? "U").toUpperCase()}</AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col items-start overflow-hidden">
-            <span className="text-sm font-medium truncate w-full">{user.name ?? "Administrator"}</span>
-            <span className="text-xs text-muted-foreground truncate w-full">{user.email}</span>
-          </div>
-        </Button>
-        <form action="/api/auth/logout" method="POST">
+      <div className="p-3 space-y-1">
+        <Separator className="mb-2" />
+        <div className="flex items-center justify-between px-1">
           <Button
-            type="submit"
-            variant="outline"
-            className="w-full justify-start gap-2 text-muted-foreground"
+            variant="ghost"
+            className="flex-1 justify-start gap-3 px-2 h-auto py-2 min-w-0"
+            onClick={() => { router.push("/profile"); onNavigate?.(); }}
           >
-            <LogOut className="h-4 w-4" />
-            Sign Out
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
+              <AvatarFallback className="text-xs bg-primary text-primary-foreground">
+                {(user.name?.[0] ?? "U").toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col items-start overflow-hidden min-w-0">
+              <span className="text-sm font-medium truncate w-full">{user.name ?? "Administrator"}</span>
+              <span className="text-xs text-muted-foreground truncate w-full">{user.email}</span>
+            </div>
           </Button>
-        </form>
+          <div className="flex items-center shrink-0">
+            <ThemeToggle />
+            <form action="/api/auth/logout" method="POST">
+              <Button
+                type="submit"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                title="Sign Out"
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -141,13 +152,15 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
         <Button variant="ghost" size="icon" aria-label="Open navigation" onClick={() => setMobileOpen(true)}>
           <Menu className="h-5 w-5" />
         </Button>
-        <span className="text-primary font-bold text-sm">Caddy Proxy Manager</span>
+        <span className="font-semibold text-sm">Caddy Proxy Manager</span>
         <div className="flex items-center gap-1">
           <ThemeToggle />
           <Button variant="ghost" size="icon" aria-label="Go to profile" onClick={() => router.push("/profile")}>
             <Avatar className="h-6 w-6">
               <AvatarImage src={user.image ?? undefined} />
-              <AvatarFallback className="text-[10px]">{(user.name?.[0] ?? "U").toUpperCase()}</AvatarFallback>
+              <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">
+                {(user.name?.[0] ?? "U").toUpperCase()}
+              </AvatarFallback>
             </Avatar>
           </Button>
         </div>
@@ -163,10 +176,6 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
       {/* Main content */}
       <main className="flex-1 md:ml-64 mt-12 md:mt-0">
         <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-6">
-          {/* Theme toggle for desktop — top-right corner */}
-          <div className="hidden md:flex justify-end mb-2">
-            <ThemeToggle />
-          </div>
           {children}
         </div>
       </main>
