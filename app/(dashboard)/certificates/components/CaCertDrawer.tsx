@@ -1,18 +1,11 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Drawer,
-  IconButton,
-  InputAdornment,
-  Stack,
-  Tab,
-  Tabs,
-  TextField,
-  Typography,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useRef, useState, useTransition } from "react";
 import {
   createCaCertificateAction,
@@ -68,144 +61,151 @@ export function CaCertDrawer({ open, cert, onClose }: Props) {
   }
 
   return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={handleClose}
-      PaperProps={{ sx: { width: { xs: "100%", sm: 480 }, p: 3 } }}
-    >
-      <Stack spacing={3} height="100%">
-        {/* Header */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6" fontWeight={600}>
-            {isEdit ? "Edit CA Certificate" : "Add CA Certificate"}
-          </Typography>
-          <IconButton onClick={handleClose} size="small">
-            <CloseIcon />
-          </IconButton>
-        </Stack>
+    <Sheet open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <SheetContent side="right" className="w-full sm:w-[480px] sm:max-w-[480px] flex flex-col gap-6 overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>{isEdit ? "Edit CA Certificate" : "Add CA Certificate"}</SheetTitle>
+        </SheetHeader>
 
-        {/* Content */}
         {isEdit ? (
           /* Edit form */
-          <Box
-            component="form"
+          <form
             ref={editRef}
             onSubmit={handleEdit}
-            sx={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}
+            className="flex flex-col gap-4 flex-1"
           >
-            <TextField
-              name="name"
-              label="Name"
-              required
-              fullWidth
-              defaultValue={cert.name}
-              autoFocus
-            />
-            <TextField
-              name="certificate_pem"
-              label="Certificate PEM"
-              required
-              fullWidth
-              multiline
-              minRows={8}
-              defaultValue={cert.certificate_pem}
-              inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-              helperText="PEM-encoded X.509 CA certificate"
-            />
-            <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: "auto", pt: 2 }}>
-              <Button onClick={handleClose} disabled={isPending}>Cancel</Button>
-              <Button type="submit" variant="contained" disabled={isPending}>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-name">Name</Label>
+              <Input
+                id="edit-name"
+                name="name"
+                required
+                defaultValue={cert.name}
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-cert-pem">Certificate PEM</Label>
+              <Textarea
+                id="edit-cert-pem"
+                name="certificate_pem"
+                required
+                defaultValue={cert.certificate_pem}
+                rows={8}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">PEM-encoded X.509 CA certificate</p>
+            </div>
+            <div className="flex gap-2 justify-end mt-auto pt-2">
+              <Button type="button" variant="outline" onClick={handleClose} disabled={isPending}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPending}>
                 {isPending ? "Saving..." : "Save"}
               </Button>
-            </Stack>
-          </Box>
+            </div>
+          </form>
         ) : (
           /* Add: Generate / Import tabs */
-          <Stack spacing={2} sx={{ flex: 1, overflowY: "auto" }}>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-              <Tab value="generate" label="Generate" />
-              <Tab value="import" label="Import PEM" />
-            </Tabs>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as "generate" | "import")} className="flex flex-col gap-4 flex-1">
+            <TabsList className="w-full">
+              <TabsTrigger value="generate" className="flex-1">Generate</TabsTrigger>
+              <TabsTrigger value="import" className="flex-1">Import PEM</TabsTrigger>
+            </TabsList>
 
-            {tab === "generate" && (
-              <Box
-                component="form"
+            <TabsContent value="generate">
+              <form
                 ref={generateRef}
                 onSubmit={handleGenerate}
-                sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+                className="flex flex-col gap-4"
               >
-                <TextField
-                  name="name"
-                  label="Name"
-                  required
-                  fullWidth
-                  autoFocus
-                  placeholder="My Client CA"
-                  helperText="Display name in this UI"
-                />
-                <TextField
-                  name="common_name"
-                  label="Common Name (CN)"
-                  fullWidth
-                  placeholder="My Client CA"
-                  helperText="CN field in the certificate. Defaults to the name above if left blank."
-                />
-                <TextField
-                  name="validity_days"
-                  label="Validity"
-                  type="number"
-                  fullWidth
-                  defaultValue={3650}
-                  inputProps={{ min: 1, max: 3650 }}
-                  InputProps={{ endAdornment: <InputAdornment position="end">days</InputAdornment> }}
-                />
-                <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: "auto", pt: 2 }}>
-                  <Button onClick={handleClose} disabled={isPending}>Cancel</Button>
-                  <Button type="submit" variant="contained" disabled={isPending}>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="gen-name">Name</Label>
+                  <Input
+                    id="gen-name"
+                    name="name"
+                    required
+                    autoFocus
+                    placeholder="My Client CA"
+                  />
+                  <p className="text-xs text-muted-foreground">Display name in this UI</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="gen-cn">Common Name (CN)</Label>
+                  <Input
+                    id="gen-cn"
+                    name="common_name"
+                    placeholder="My Client CA"
+                  />
+                  <p className="text-xs text-muted-foreground">CN field in the certificate. Defaults to the name above if left blank.</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="gen-validity">Validity</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="gen-validity"
+                      name="validity_days"
+                      type="number"
+                      defaultValue={3650}
+                      min={1}
+                      max={3650}
+                      className="flex-1"
+                    />
+                    <span className="text-sm text-muted-foreground">days</span>
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end mt-auto pt-2">
+                  <Button type="button" variant="outline" onClick={handleClose} disabled={isPending}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isPending}>
                     {isPending ? "Generating..." : "Generate CA Certificate"}
                   </Button>
-                </Stack>
-              </Box>
-            )}
+                </div>
+              </form>
+            </TabsContent>
 
-            {tab === "import" && (
-              <Box
-                component="form"
+            <TabsContent value="import">
+              <form
                 ref={importRef}
                 onSubmit={handleImport}
-                sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+                className="flex flex-col gap-4"
               >
-                <TextField
-                  name="name"
-                  label="Name"
-                  required
-                  fullWidth
-                  autoFocus
-                  placeholder="My Client CA"
-                />
-                <TextField
-                  name="certificate_pem"
-                  label="Certificate PEM"
-                  required
-                  fullWidth
-                  multiline
-                  minRows={8}
-                  placeholder={"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"}
-                  inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-                  helperText="PEM-encoded X.509 CA certificate (no private key needed)"
-                />
-                <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: "auto", pt: 2 }}>
-                  <Button onClick={handleClose} disabled={isPending}>Cancel</Button>
-                  <Button type="submit" variant="contained" disabled={isPending}>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="imp-name">Name</Label>
+                  <Input
+                    id="imp-name"
+                    name="name"
+                    required
+                    autoFocus
+                    placeholder="My Client CA"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="imp-cert-pem">Certificate PEM</Label>
+                  <Textarea
+                    id="imp-cert-pem"
+                    name="certificate_pem"
+                    required
+                    rows={8}
+                    placeholder={"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"}
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">PEM-encoded X.509 CA certificate (no private key needed)</p>
+                </div>
+                <div className="flex gap-2 justify-end mt-auto pt-2">
+                  <Button type="button" variant="outline" onClick={handleClose} disabled={isPending}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isPending}>
                     {isPending ? "Adding..." : "Add CA Certificate"}
                   </Button>
-                </Stack>
-              </Box>
-            )}
-          </Stack>
+                </div>
+              </form>
+            </TabsContent>
+          </Tabs>
         )}
-      </Stack>
-    </Drawer>
+      </SheetContent>
+    </Sheet>
   );
 }

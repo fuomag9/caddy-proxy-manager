@@ -1,7 +1,8 @@
 "use client";
 
-import { Card, Chip, Stack, Typography } from "@mui/material";
-import { DataTable } from "@/src/components/ui/DataTable";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/DataTable";
 import type { AcmeHost } from "../page";
 import { RelativeTime } from "./RelativeTime";
 
@@ -16,24 +17,20 @@ const columns = [
   {
     id: "name",
     label: "Proxy Host",
-    render: (r: AcmeHost) => <Typography fontWeight={600}>{r.name}</Typography>,
+    render: (r: AcmeHost) => <span className="font-semibold">{r.name}</span>,
   },
   {
     id: "domains",
     label: "Domains",
     render: (r: AcmeHost) => (
-      <Typography variant="body2" color="text.secondary">
-        {r.domains.join(", ")}
-      </Typography>
+      <p className="text-sm text-muted-foreground">{r.domains.join(", ")}</p>
     ),
   },
   {
     id: "issuer",
     label: "Issuer",
     render: (r: AcmeHost) => (
-      <Typography variant="body2" color="text.secondary">
-        {r.certIssuer ?? "—"}
-      </Typography>
+      <p className="text-sm text-muted-foreground">{r.certIssuer ?? "—"}</p>
     ),
   },
   {
@@ -45,28 +42,26 @@ const columns = [
     id: "status",
     label: "Status",
     render: (r: AcmeHost) => (
-      <Chip
-        label={r.enabled ? "Active" : "Disabled"}
-        color={r.enabled ? "success" : "default"}
-        size="small"
-      />
+      <Badge variant={r.enabled ? "default" : "secondary"}>
+        {r.enabled ? "Active" : "Disabled"}
+      </Badge>
     ),
   },
 ];
 
 function acmeMobileCard(r: AcmeHost) {
   return (
-    <Card variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={0.5}>
-        <Typography variant="subtitle2" fontWeight={700}>{r.name}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.75rem" }}>
-          {r.domains.join(", ")}
-        </Typography>
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+    <Card className="border">
+      <CardContent className="p-3 flex flex-col gap-1">
+        <span className="text-sm font-bold">{r.name}</span>
+        <p className="text-xs text-muted-foreground">{r.domains.join(", ")}</p>
+        <div className="flex items-center gap-2 flex-wrap">
           <RelativeTime validTo={r.certValidTo} status={r.certExpiryStatus} />
-          <Chip label={r.enabled ? "Active" : "Disabled"} color={r.enabled ? "success" : "default"} size="small" />
-        </Stack>
-      </Stack>
+          <Badge variant={r.enabled ? "default" : "secondary"}>
+            {r.enabled ? "Active" : "Disabled"}
+          </Badge>
+        </div>
+      </CardContent>
     </Card>
   );
 }

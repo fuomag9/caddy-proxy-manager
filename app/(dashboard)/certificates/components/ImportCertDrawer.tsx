@@ -1,20 +1,12 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Drawer,
-  IconButton,
-  InputAdornment,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography,
-} from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
-import UploadFileIcon from "@mui/icons-material/UploadFile";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Eye, EyeOff, FileUp } from "lucide-react";
 import { useRef, useState, useTransition } from "react";
 import { createCertificateAction, updateCertificateAction } from "../actions";
 import type { ImportedCertView } from "../page";
@@ -62,145 +54,155 @@ export function ImportCertDrawer({ open, cert, onClose }: Props) {
   }
 
   return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={handleClose}
-      PaperProps={{ sx: { width: { xs: "100%", sm: 480 }, p: 3 } }}
-    >
-      <Stack spacing={3} height="100%">
-        {/* Header */}
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6" fontWeight={600}>
-            {isEdit ? "Edit Certificate" : "Import Certificate"}
-          </Typography>
-          <IconButton onClick={handleClose} size="small">
-            <CloseIcon />
-          </IconButton>
-        </Stack>
+    <Sheet open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <SheetContent side="right" className="w-full sm:w-[480px] sm:max-w-[480px] flex flex-col gap-6 overflow-y-auto">
+        <SheetHeader>
+          <SheetTitle>{isEdit ? "Edit Certificate" : "Import Certificate"}</SheetTitle>
+        </SheetHeader>
 
-        {/* Form */}
-        <Box
-          component="form"
+        <form
           ref={formRef}
           onSubmit={handleSubmit}
-          sx={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}
+          className="flex flex-col gap-4 flex-1"
         >
           <input type="hidden" name="type" value="imported" />
 
-          <TextField
-            name="name"
-            label="Name"
-            defaultValue={isEdit ? cert.name : ""}
-            required
-            fullWidth
-            autoFocus
-            helperText="Descriptive name to identify this certificate"
-          />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ic-name">Name</Label>
+            <Input
+              id="ic-name"
+              name="name"
+              defaultValue={isEdit ? cert.name : ""}
+              required
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">Descriptive name to identify this certificate</p>
+          </div>
 
-          <TextField
-            name="domain_names"
-            label="Domains (one per line)"
-            defaultValue={isEdit ? cert.domains.join("\n") : ""}
-            multiline
-            minRows={3}
-            fullWidth
-            helperText="Domains covered by this certificate"
-          />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ic-domains">Domains (one per line)</Label>
+            <Textarea
+              id="ic-domains"
+              name="domain_names"
+              defaultValue={isEdit ? cert.domains.join("\n") : ""}
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">Domains covered by this certificate</p>
+          </div>
 
           {/* Certificate PEM */}
-          <Stack spacing={1}>
-            <TextField
-              name="certificate_pem"
-              label="Certificate PEM"
-              placeholder={"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"}
-              multiline
-              minRows={6}
-              fullWidth
-              value={certPem}
-              onChange={(e) => setCertPem(e.target.value)}
-              helperText="Full chain recommended (cert + intermediates)"
-              inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-            />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ic-cert-pem">Certificate PEM</Label>
+              <Textarea
+                id="ic-cert-pem"
+                name="certificate_pem"
+                placeholder={"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"}
+                rows={6}
+                value={certPem}
+                onChange={(e) => setCertPem(e.target.value)}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">Full chain recommended (cert + intermediates)</p>
+            </div>
             <input
               type="file"
               ref={certFileRef}
               accept=".pem,.crt,.cer,.txt"
-              style={{ display: "none" }}
+              className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) readFile(file, setCertPem);
               }}
             />
             <Button
-              size="small"
-              variant="outlined"
-              startIcon={<UploadFileIcon />}
+              type="button"
+              size="sm"
+              variant="outline"
+              className="self-start"
               onClick={() => certFileRef.current?.click()}
-              sx={{ alignSelf: "flex-start" }}
             >
+              <FileUp className="h-4 w-4 mr-2" />
               Load from file
             </Button>
-          </Stack>
+          </div>
 
           {/* Private Key PEM */}
-          <Stack spacing={1}>
-            <TextField
-              name="private_key_pem"
-              label="Private Key PEM"
-              placeholder={"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"}
-              multiline={showKey}
-              minRows={showKey ? 6 : undefined}
-              type={showKey ? "text" : "password"}
-              fullWidth
-              value={keyPem}
-              onChange={(e) => setKeyPem(e.target.value)}
-              helperText="Keep this secure! Never share your private key"
-              inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Tooltip title={showKey ? "Hide" : "Show"}>
-                      <IconButton size="small" onClick={() => setShowKey((v) => !v)} edge="end">
-                        {showKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                      </IconButton>
-                    </Tooltip>
-                  </InputAdornment>
-                ),
-              }}
-            />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ic-key-pem">Private Key PEM</Label>
+              <div className="relative">
+                {showKey ? (
+                  <Textarea
+                    id="ic-key-pem"
+                    name="private_key_pem"
+                    placeholder={"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"}
+                    rows={6}
+                    value={keyPem}
+                    onChange={(e) => setKeyPem(e.target.value)}
+                    className="font-mono text-xs"
+                  />
+                ) : (
+                  <Input
+                    id="ic-key-pem"
+                    name="private_key_pem"
+                    type="password"
+                    placeholder="••••••••••••••••"
+                    value={keyPem}
+                    onChange={(e) => setKeyPem(e.target.value)}
+                    className="font-mono text-xs pr-10"
+                  />
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1 h-7 w-7"
+                      onClick={() => setShowKey((v) => !v)}
+                    >
+                      {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{showKey ? "Hide" : "Show"}</TooltipContent>
+                </Tooltip>
+              </div>
+              <p className="text-xs text-muted-foreground">Keep this secure! Never share your private key</p>
+            </div>
             <input
               type="file"
               ref={keyFileRef}
               accept=".pem,.key,.txt"
-              style={{ display: "none" }}
+              className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) readFile(file, setKeyPem);
               }}
             />
             <Button
-              size="small"
-              variant="outlined"
-              startIcon={<UploadFileIcon />}
+              type="button"
+              size="sm"
+              variant="outline"
+              className="self-start"
               onClick={() => keyFileRef.current?.click()}
-              sx={{ alignSelf: "flex-start" }}
             >
+              <FileUp className="h-4 w-4 mr-2" />
               Load from file
             </Button>
-          </Stack>
+          </div>
 
           {/* Actions */}
-          <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: "auto", pt: 2 }}>
-            <Button onClick={handleClose} disabled={isPending}>
+          <div className="flex gap-2 justify-end mt-auto pt-2">
+            <Button type="button" variant="outline" onClick={handleClose} disabled={isPending}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" disabled={isPending}>
+            <Button type="submit" disabled={isPending}>
               {isPending ? "Saving..." : isEdit ? "Save Changes" : "Import Certificate"}
             </Button>
-          </Stack>
-        </Box>
-      </Stack>
-    </Drawer>
+          </div>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }

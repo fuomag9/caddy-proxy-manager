@@ -1,6 +1,6 @@
 "use client";
 
-import { Tooltip, Typography } from "@mui/material";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { CertExpiryStatus } from "../page";
 
 function formatRelative(validTo: string): string {
@@ -34,24 +34,25 @@ export function RelativeTime({
 }) {
   if (validTo === null || status === null) {
     return (
-      <Typography variant="body2" color="text.secondary">
-        —
-      </Typography>
+      <p className="text-sm text-muted-foreground">—</p>
     );
   }
 
-  const color =
+  const colorClass =
     status === "expired"
-      ? "error.main"
+      ? "text-destructive"
       : status === "expiring_soon"
-        ? "warning.main"
-        : "success.main";
+        ? "text-yellow-600 dark:text-yellow-400"
+        : "text-green-600 dark:text-green-400";
 
   return (
-    <Tooltip title={formatFull(validTo)}>
-      <Typography variant="body2" sx={{ color, fontWeight: 500, cursor: "default" }}>
-        {formatRelative(validTo)}
-      </Typography>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <p className={`text-sm font-medium cursor-default ${colorClass}`}>
+          {formatRelative(validTo)}
+        </p>
+      </TooltipTrigger>
+      <TooltipContent>{formatFull(validTo)}</TooltipContent>
     </Tooltip>
   );
 }

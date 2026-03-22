@@ -1,22 +1,23 @@
 "use client";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/DataTable";
 import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  Chip,
-  IconButton,
-  Menu,
-  MenuItem,
-  Stack,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Tooltip,
-  Typography,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { AlertTriangle, MoreVertical, Plus } from "lucide-react";
 import { useState, useTransition } from "react";
-import { DataTable } from "@/src/components/ui/DataTable";
 import { deleteCertificateAction } from "../actions";
 import type { ImportedCertView, ManagedCertView } from "../page";
 import { RelativeTime } from "./RelativeTime";
@@ -33,75 +34,83 @@ function DomainsCell({ domains }: { domains: string[] }) {
   const visible = domains.slice(0, 2);
   const rest = domains.slice(2);
   return (
-    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+    <div className="flex flex-wrap gap-1">
       {visible.map((d) => (
-        <Chip key={d} label={d} size="small" variant="outlined" />
+        <Badge key={d} variant="outline" className="text-xs">{d}</Badge>
       ))}
       {rest.length > 0 && (
-        <Tooltip title={rest.join(", ")}>
-          <Chip label={`+${rest.length} more`} size="small" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="secondary" className="text-xs cursor-default">+{rest.length} more</Badge>
+          </TooltipTrigger>
+          <TooltipContent>{rest.join(", ")}</TooltipContent>
         </Tooltip>
       )}
-    </Stack>
+    </div>
   );
 }
 
 function ActionsMenu({ cert, onEdit }: { cert: ImportedCertView; onEdit: () => void }) {
-  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   function handleDelete() {
     startTransition(async () => {
       await deleteCertificateAction(cert.id);
-      setAnchor(null);
+      setOpen(false);
     });
   }
 
   return (
-    <>
-      <IconButton size="small" onClick={(e) => setAnchor(e.currentTarget)}>
-        <MoreVertIcon fontSize="small" />
-      </IconButton>
-      <Menu
-        anchorEl={anchor}
-        open={Boolean(anchor)}
-        onClose={() => { setAnchor(null); setConfirmDelete(false); }}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-      >
-        <MenuItem onClick={() => { setAnchor(null); onEdit(); }}>Edit</MenuItem>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setConfirmDelete(false);
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => { setOpen(false); onEdit(); }}>Edit</DropdownMenuItem>
         {confirmDelete ? (
-          <MenuItem
-            sx={{ color: "error.main" }}
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
             disabled={isPending}
             onClick={handleDelete}
           >
             {isPending ? "Deleting..." : "Confirm Delete"}
-          </MenuItem>
+          </DropdownMenuItem>
         ) : (
-          <MenuItem sx={{ color: "error.main" }} onClick={() => setConfirmDelete(true)}>
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => setConfirmDelete(true)}
+          >
             Delete
-          </MenuItem>
+          </DropdownMenuItem>
         )}
-      </Menu>
-    </>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
 function importedMobileCard(c: ImportedCertView, onEdit: () => void) {
   return (
-    <Card variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={0.5}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="subtitle2" fontWeight={700}>{c.name}</Typography>
+    <Card className="border">
+      <CardContent className="p-3 flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold">{c.name}</span>
           <ActionsMenu cert={c} onEdit={onEdit} />
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: "0.75rem" }}>
+        </div>
+        <p className="text-xs text-muted-foreground">
           {c.domains.slice(0, 2).join(", ")}{c.domains.length > 2 ? ` +${c.domains.length - 2} more` : ""}
-        </Typography>
+        </p>
         <RelativeTime validTo={c.validTo} status={c.expiryStatus} />
-      </Stack>
+      </CardContent>
     </Card>
   );
 }
@@ -126,7 +135,7 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
     {
       id: "name",
       label: "Name",
-      render: (c: ImportedCertView) => <Typography fontWeight={600}>{c.name}</Typography>,
+      render: (c: ImportedCertView) => <span className="font-semibold">{c.name}</span>,
     },
     {
       id: "domains",
@@ -143,15 +152,13 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
       label: "Used by",
       render: (c: ImportedCertView) =>
         c.usedBy.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            —
-          </Typography>
+          <p className="text-sm text-muted-foreground">—</p>
         ) : (
-          <Stack direction="row" spacing={0.5} flexWrap="wrap">
+          <div className="flex flex-wrap gap-1">
             {c.usedBy.map((h) => (
-              <Chip key={h.id} label={h.name} size="small" variant="outlined" />
+              <Badge key={h.id} variant="outline" className="text-xs">{h.name}</Badge>
             ))}
-          </Stack>
+          </div>
         ),
     },
     {
@@ -165,18 +172,14 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
   ];
 
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-4">
       {/* Add button */}
-      <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-        <Button
-          startIcon={<AddIcon />}
-          variant="outlined"
-          size="small"
-          onClick={() => setDrawerCert(null)}
-        >
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={() => setDrawerCert(null)}>
+          <Plus className="h-4 w-4 mr-2" />
           Import Certificate
         </Button>
-      </Box>
+      </div>
 
       <DataTable
         columns={columns}
@@ -188,13 +191,16 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
 
       {/* Legacy managed certs */}
       {managedCerts.length > 0 && (
-        <Stack spacing={1}>
-          <Alert severity="warning">
-            Legacy &quot;managed&quot; certificate entries detected. These are redundant — Caddy handles
-            HTTPS automatically. Consider deleting them.
+        <div className="flex flex-col gap-2">
+          <Alert variant="destructive" className="border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Legacy &quot;managed&quot; certificate entries detected. These are redundant — Caddy handles
+              HTTPS automatically. Consider deleting them.
+            </AlertDescription>
           </Alert>
           <LegacyManagedTable managedCerts={managedCerts} />
-        </Stack>
+        </div>
       )}
 
       <ImportCertDrawer
@@ -202,7 +208,7 @@ export function ImportedTab({ importedCerts, managedCerts, search, statusFilter 
         cert={drawerCert || null}
         onClose={() => setDrawerCert(false)}
       />
-    </Stack>
+    </div>
   );
 }
 
@@ -214,18 +220,14 @@ function LegacyManagedTable({ managedCerts }: { managedCerts: ManagedCertView[] 
       id: "name",
       label: "Name",
       render: (c: ManagedCertView) => (
-        <Typography variant="body2" fontWeight={600}>
-          {c.name}
-        </Typography>
+        <span className="text-sm font-semibold">{c.name}</span>
       ),
     },
     {
       id: "domains",
       label: "Domains",
       render: (c: ManagedCertView) => (
-        <Typography variant="body2" color="text.secondary">
-          {c.domain_names.join(", ")}
-        </Typography>
+        <p className="text-sm text-muted-foreground">{c.domain_names.join(", ")}</p>
       ),
     },
     {
@@ -234,9 +236,9 @@ function LegacyManagedTable({ managedCerts }: { managedCerts: ManagedCertView[] 
       align: "right" as const,
       render: (c: ManagedCertView) => (
         <Button
-          size="small"
-          variant="outlined"
-          color="error"
+          size="sm"
+          variant="outline"
+          className="border-destructive text-destructive hover:bg-destructive/10"
           disabled={isPending}
           onClick={() => startTransition(async () => { await deleteCertificateAction(c.id); })}
         >
