@@ -2,15 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Card, Chip, IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import { Pencil, Trash2, Copy } from "lucide-react";
 import type { L4ProxyHost } from "@/src/lib/models/l4-proxy-hosts";
 import { toggleL4ProxyHostAction } from "./actions";
-import { PageHeader } from "@/src/components/ui/PageHeader";
-import { SearchField } from "@/src/components/ui/SearchField";
-import { DataTable } from "@/src/components/ui/DataTable";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchField } from "@/components/ui/SearchField";
+import { DataTable } from "@/components/ui/DataTable";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card, CardContent } from "@/components/ui/card";
 import { CreateL4HostDialog, EditL4HostDialog, DeleteL4HostDialog } from "@/src/components/l4-proxy-hosts/L4HostDialogs";
 import { L4PortsApplyBanner } from "@/src/components/l4-proxy-hosts/L4PortsApplyBanner";
 
@@ -77,9 +79,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
       id: "name",
       label: "Name",
       render: (host: L4ProxyHost) => (
-        <Typography variant="body2" fontWeight={600}>
-          {host.name}
-        </Typography>
+        <span className="text-sm font-semibold">{host.name}</span>
       ),
     },
     {
@@ -87,40 +87,33 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
       label: "Protocol",
       width: 80,
       render: (host: L4ProxyHost) => (
-        <Chip
-          label={host.protocol.toUpperCase()}
-          size="small"
-          color={host.protocol === "tcp" ? "primary" : "secondary"}
-          variant="outlined"
-        />
+        <Badge variant={host.protocol === "tcp" ? "default" : "secondary"}>
+          {host.protocol.toUpperCase()}
+        </Badge>
       ),
     },
     {
       id: "listen",
       label: "Listen",
       render: (host: L4ProxyHost) => (
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace" }}>
-          {host.listen_address}
-        </Typography>
+        <span className="text-sm text-muted-foreground font-mono">{host.listen_address}</span>
       ),
     },
     {
       id: "matcher",
       label: "Matcher",
       render: (host: L4ProxyHost) => (
-        <Typography variant="body2" color="text.secondary">
-          {formatMatcher(host)}
-        </Typography>
+        <span className="text-sm text-muted-foreground">{formatMatcher(host)}</span>
       ),
     },
     {
       id: "upstreams",
       label: "Upstreams",
       render: (host: L4ProxyHost) => (
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+        <span className="text-sm text-muted-foreground font-mono">
           {host.upstreams[0]}
           {host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
-        </Typography>
+        </span>
       ),
     },
     {
@@ -129,96 +122,129 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
       align: "right" as const,
       width: 150,
       render: (host: L4ProxyHost) => (
-        <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+        <div className="flex flex-row gap-1 justify-end items-center">
           <Switch
             checked={host.enabled}
-            onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
-            size="small"
-            color="success"
+            onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
           />
-          <Tooltip title="Duplicate">
-            <IconButton
-              size="small"
-              onClick={() => {
-                setDuplicateHost(host);
-                setCreateOpen(true);
-              }}
-              color="info"
-            >
-              <ContentCopyIcon fontSize="small" />
-            </IconButton>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => {
+                  setDuplicateHost(host);
+                  setCreateOpen(true);
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Duplicate</TooltipContent>
           </Tooltip>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => setEditHost(host)} color="primary">
-              <EditIcon fontSize="small" />
-            </IconButton>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setEditHost(host)}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit</TooltipContent>
           </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => setDeleteHost(host)} color="error">
-              <DeleteIcon fontSize="small" />
-            </IconButton>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={() => setDeleteHost(host)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Delete</TooltipContent>
           </Tooltip>
-        </Stack>
+        </div>
       ),
     },
   ];
 
   const mobileCard = (host: L4ProxyHost) => (
-    <Card variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={1}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="subtitle2" fontWeight={700}>
-              {host.name}
-            </Typography>
-            <Chip
-              label={host.protocol.toUpperCase()}
-              size="small"
-              color={host.protocol === "tcp" ? "primary" : "secondary"}
-              variant="outlined"
-            />
-          </Stack>
-          <Stack direction="row" spacing={0.5} alignItems="center">
-            <Switch
-              checked={host.enabled}
-              onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
-              size="small"
-              color="success"
-            />
-            <Tooltip title="Duplicate">
-              <IconButton
-                size="small"
-                onClick={() => {
-                  setDuplicateHost(host);
-                  setCreateOpen(true);
-                }}
-                color="info"
-              >
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Edit">
-              <IconButton size="small" onClick={() => setEditHost(host)} color="primary">
-                <EditIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Delete">
-              <IconButton size="small" onClick={() => setDeleteHost(host)} color="error">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-          {host.listen_address} {"\u2192"} {host.upstreams[0]}
-          {host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
-        </Typography>
-      </Stack>
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-row justify-between items-center">
+            <div className="flex flex-row gap-2 items-center">
+              <span className="text-sm font-bold">{host.name}</span>
+              <Badge variant={host.protocol === "tcp" ? "default" : "secondary"}>
+                {host.protocol.toUpperCase()}
+              </Badge>
+            </div>
+            <div className="flex flex-row gap-1 items-center">
+              <Switch
+                checked={host.enabled}
+                onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      setDuplicateHost(host);
+                      setCreateOpen(true);
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Duplicate</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setEditHost(host)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => setDeleteHost(host)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Delete</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+          <span className="text-xs text-muted-foreground font-mono">
+            {host.listen_address} {"\u2192"} {host.upstreams[0]}
+            {host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
+          </span>
+        </div>
+      </CardContent>
     </Card>
   );
 
   return (
-    <Stack spacing={4}>
+    <div className="flex flex-col gap-8">
       <L4PortsApplyBanner refreshSignal={bannerRefresh} />
       <PageHeader
         title="L4 Proxy Hosts"
@@ -275,6 +301,6 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
           }}
         />
       )}
-    </Stack>
+    </div>
   );
 }
