@@ -68,7 +68,7 @@ test.describe.serial('Redirect Rules – full URLs, cross-domain, wildcards', ()
 
     await page.getByRole('button', { name: /^create$/i }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Functional Advanced Redirects Test')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('table').getByText('Functional Advanced Redirects Test')).toBeVisible({ timeout: 10_000 });
 
     await waitForRoute(DOMAIN);
   });

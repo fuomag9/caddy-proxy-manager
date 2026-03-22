@@ -1,8 +1,9 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { Lock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/DataTable";
+import { StatusChip } from "@/components/ui/StatusChip";
 import type { AcmeHost } from "../page";
 import { RelativeTime } from "./RelativeTime";
 
@@ -17,20 +18,33 @@ const columns = [
   {
     id: "name",
     label: "Proxy Host",
-    render: (r: AcmeHost) => <span className="font-semibold">{r.name}</span>,
-  },
-  {
-    id: "domains",
-    label: "Domains",
     render: (r: AcmeHost) => (
-      <p className="text-sm text-muted-foreground">{r.domains.join(", ")}</p>
+      <div className="flex items-start gap-3">
+        <div className={[
+          "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+          r.enabled
+            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+            : "border-zinc-500/20 bg-zinc-500/10 text-zinc-400",
+        ].join(" ")}>
+          <Lock className="h-3.5 w-3.5" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold leading-tight">{r.name}</p>
+          <p className="text-xs text-muted-foreground font-mono mt-0.5">
+            {r.domains[0]}
+            {r.domains.length > 1 && (
+              <span className="ml-1 text-muted-foreground">+{r.domains.length - 1}</span>
+            )}
+          </p>
+        </div>
+      </div>
     ),
   },
   {
     id: "issuer",
     label: "Issuer",
     render: (r: AcmeHost) => (
-      <p className="text-sm text-muted-foreground">{r.certIssuer ?? "—"}</p>
+      <span className="text-xs text-muted-foreground font-mono">{r.certIssuer ?? "—"}</span>
     ),
   },
   {
@@ -41,25 +55,24 @@ const columns = [
   {
     id: "status",
     label: "Status",
+    width: 110,
     render: (r: AcmeHost) => (
-      <Badge variant={r.enabled ? "default" : "secondary"}>
-        {r.enabled ? "Active" : "Disabled"}
-      </Badge>
+      <StatusChip status={r.enabled ? "active" : "inactive"} />
     ),
   },
 ];
 
 function acmeMobileCard(r: AcmeHost) {
   return (
-    <Card className="border">
-      <CardContent className="p-3 flex flex-col gap-1">
-        <span className="text-sm font-bold">{r.name}</span>
-        <p className="text-xs text-muted-foreground">{r.domains.join(", ")}</p>
-        <div className="flex items-center gap-2 flex-wrap">
+    <Card className={["border-l-2", r.enabled ? "border-l-emerald-500" : "border-l-zinc-500/30"].join(" ")}>
+      <CardContent className="p-4 flex flex-col gap-1.5">
+        <p className="text-sm font-semibold">{r.name}</p>
+        <p className="text-xs text-muted-foreground font-mono">
+          {r.domains[0]}{r.domains.length > 1 ? ` +${r.domains.length - 1}` : ""}
+        </p>
+        <div className="flex items-center gap-2 flex-wrap mt-1">
           <RelativeTime validTo={r.certValidTo} status={r.certExpiryStatus} />
-          <Badge variant={r.enabled ? "default" : "secondary"}>
-            {r.enabled ? "Active" : "Disabled"}
-          </Badge>
+          <StatusChip status={r.enabled ? "active" : "inactive"} />
         </div>
       </CardContent>
     </Card>
@@ -79,7 +92,6 @@ export function AcmeTab({ acmeHosts, acmePagination, search, statusFilter }: Pro
     return true;
   });
 
-  // When filtering client-side, pass a fake pagination that disables server pagination display
   const pagination =
     search || statusFilter
       ? { total: filtered.length, page: 1, perPage: filtered.length || 1 }
@@ -93,6 +105,7 @@ export function AcmeTab({ acmeHosts, acmePagination, search, statusFilter }: Pro
       emptyMessage="No ACME certificates match"
       pagination={pagination}
       mobileCard={acmeMobileCard}
+      rowClassName={(r) => r.enabled ? "" : "opacity-75"}
     />
   );
 }

@@ -55,14 +55,14 @@ test.describe.serial('L4 TCP Proxy Routing', () => {
   test('disabled TCP proxy host stops accepting connections', async ({ page }) => {
     await page.goto('/l4-proxy-hosts');
     const row = page.locator('tr', { hasText: 'L4 TCP Echo Test' });
-    await row.locator('input[type="checkbox"]').first().click({ force: true });
+    await row.getByRole('switch').click();
     await page.waitForTimeout(3_000);
 
     const connected = await tcpConnect('127.0.0.1', TCP_PORT, 2000);
     expect(connected).toBe(false);
 
     // Re-enable
-    await row.locator('input[type="checkbox"]').first().click({ force: true });
+    await row.getByRole('switch').click();
     await page.waitForTimeout(2_000);
   });
 });
@@ -121,14 +121,14 @@ test.describe.serial('L4 UDP Proxy Routing', () => {
   test('disabled UDP proxy host stops responding', async ({ page }) => {
     await page.goto('/l4-proxy-hosts');
     const row = page.locator('tr', { hasText: 'L4 UDP Echo Test' });
-    await row.locator('input[type="checkbox"]').first().click({ force: true });
+    await row.getByRole('switch').click();
     await page.waitForTimeout(3_000);
 
     const res = await udpSend('127.0.0.1', UDP_PORT, 'should-fail', 2000);
     expect(res.received).toBe(false);
 
     // Re-enable
-    await row.locator('input[type="checkbox"]').first().click({ force: true });
+    await row.getByRole('switch').click();
     await page.waitForTimeout(2_000);
   });
 });

@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Network, ArrowRight } from "lucide-react";
 import type { L4ProxyHost } from "@/src/lib/models/l4-proxy-hosts";
 import { toggleL4ProxyHostAction } from "./actions";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchField } from "@/components/ui/SearchField";
 import { DataTable } from "@/components/ui/DataTable";
+import { StatusChip } from "@/components/ui/StatusChip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -26,6 +27,7 @@ type Props = {
   hosts: L4ProxyHost[];
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
+  initialSort?: { sortBy: string; sortDir: "asc" | "desc" };
 };
 
 function formatMatcher(host: L4ProxyHost): string {
@@ -37,7 +39,14 @@ function formatMatcher(host: L4ProxyHost): string {
   }
 }
 
-export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }: Props) {
+function ProtocolBadge({ protocol }: { protocol: string }) {
+  if (protocol === "tcp") {
+    return <Badge variant="info">{protocol.toUpperCase()}</Badge>;
+  }
+  return <Badge variant="warning">{protocol.toUpperCase()}</Badge>;
+}
+
+export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, initialSort }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<L4ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<L4ProxyHost | null>(null);
@@ -73,48 +82,64 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
   const columns = [
     {
       id: "name",
-      label: "Name",
+      label: "Name / Matcher",
+      sortKey: "name",
       render: (host: L4ProxyHost) => (
-        <div>
-          <p className="text-sm font-medium">{host.name}</p>
-          <p className="text-xs text-muted-foreground">{formatMatcher(host)}</p>
+        <div className="flex items-start gap-3">
+          <div className={[
+            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
+            host.protocol === "tcp"
+              ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-500"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-500",
+          ].join(" ")}>
+            <Network className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold leading-tight">{host.name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{formatMatcher(host)}</p>
+          </div>
         </div>
       ),
     },
     {
       id: "protocol",
       label: "Protocol",
+      sortKey: "protocol",
       width: 90,
-      render: (host: L4ProxyHost) => (
-        <Badge variant={host.protocol === "tcp" ? "default" : "secondary"}>
-          {host.protocol.toUpperCase()}
-        </Badge>
-      ),
+      render: (host: L4ProxyHost) => <ProtocolBadge protocol={host.protocol} />,
     },
     {
       id: "listen",
       label: "Listen",
+      sortKey: "listen_address",
       render: (host: L4ProxyHost) => (
-        <span className="text-sm text-muted-foreground font-mono">{host.listen_address}</span>
+        <span className="text-sm font-mono font-medium tabular-nums text-foreground/80">
+          {host.listen_address}
+        </span>
       ),
     },
     {
       id: "upstreams",
       label: "Upstreams",
       render: (host: L4ProxyHost) => (
-        <span className="text-sm text-muted-foreground font-mono">
-          {host.upstreams[0]}{host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <span className="text-sm font-mono font-medium text-foreground/80">
+            {host.upstreams[0]}
+            {host.upstreams.length > 1 && (
+              <span className="ml-1 text-muted-foreground">+{host.upstreams.length - 1}</span>
+            )}
+          </span>
+        </div>
       ),
     },
     {
       id: "status",
       label: "Status",
-      width: 100,
+      sortKey: "enabled",
+      width: 110,
       render: (host: L4ProxyHost) => (
-        <Badge variant={host.enabled ? "default" : "secondary"}>
-          {host.enabled ? "Active" : "Paused"}
-        </Badge>
+        <StatusChip status={host.enabled ? "active" : "inactive"} />
       ),
     },
     {
@@ -153,22 +178,23 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
   ];
 
   const mobileCard = (host: L4ProxyHost) => (
-    <Card>
+    <Card className={[
+      "border-l-2",
+      host.protocol === "tcp" ? "border-l-cyan-500" : "border-l-amber-500",
+    ].join(" ")}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-medium truncate">{host.name}</p>
-              <Badge variant={host.protocol === "tcp" ? "default" : "secondary"}>
-                {host.protocol.toUpperCase()}
-              </Badge>
+              <p className="text-sm font-semibold truncate">{host.name}</p>
+              <ProtocolBadge protocol={host.protocol} />
             </div>
             <p className="text-xs text-muted-foreground font-mono truncate">
-              {host.listen_address} → {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
+              {host.listen_address}
+              <span className="mx-1 text-muted-foreground">→</span>
+              {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
             </p>
-            <Badge variant={host.enabled ? "default" : "secondary"} className="w-fit mt-1">
-              {host.enabled ? "Active" : "Paused"}
-            </Badge>
+            <StatusChip status={host.enabled ? "active" : "inactive"} className="w-fit mt-1" />
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Switch
@@ -179,6 +205,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
                   <MoreHorizontal className="h-4 w-4" />
+                  <span className="sr-only">Open menu</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -218,7 +245,9 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch }:
         keyField="id"
         emptyMessage={searchTerm ? "No L4 hosts match your search" : "No L4 proxy hosts found"}
         pagination={pagination}
+        sort={initialSort}
         mobileCard={mobileCard}
+        rowClassName={(host) => host.enabled ? "" : "opacity-75"}
       />
 
       <CreateL4HostDialog

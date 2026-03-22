@@ -573,13 +573,13 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
   const [mode, setMode] = useState<GeoBlockMode>(initialValues?.geoblock_mode ?? "merge");
 
   return (
-    <div className="rounded-lg border border-yellow-500/60 bg-yellow-500/5 p-4">
+    <div className="rounded-lg border border-rose-500/60 bg-rose-500/5 p-4">
       <input type="hidden" name="geoblock_present" value="1" />
 
       {/* Header */}
       <div className="flex flex-row items-start justify-between gap-2">
         <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
-          <div className="mt-0.5 w-8 h-8 rounded-xl bg-yellow-500 flex items-center justify-center shrink-0">
+          <div className="mt-0.5 w-8 h-8 rounded-xl bg-rose-500 flex items-center justify-center shrink-0">
             <Globe className="h-4 w-4 text-white" />
           </div>
           <div className="min-w-0">

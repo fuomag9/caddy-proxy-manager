@@ -28,7 +28,7 @@ test.describe('Audit Log', () => {
 
     await page.getByRole('button', { name: /^create$/i }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Audit Test Host')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('table').getByText('Audit Test Host')).toBeVisible({ timeout: 10000 });
 
     // Check audit log
     await page.goto('/audit-log');

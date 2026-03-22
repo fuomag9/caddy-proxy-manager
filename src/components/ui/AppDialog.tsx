@@ -46,7 +46,7 @@ export function AppDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className="overflow-y-auto py-4 px-1">{children}</div>
+        <div className="flex-1 min-h-0 overflow-y-auto py-4 px-1">{children}</div>
 
         <DialogFooter>
           {actions ?? (

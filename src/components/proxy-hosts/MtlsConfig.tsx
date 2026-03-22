@@ -25,7 +25,7 @@ export function MtlsFields({ value, caCertificates }: Props) {
   }
 
   return (
-    <div className="rounded-lg border border-blue-500/60 bg-blue-500/5 p-4">
+    <div className="rounded-lg border border-amber-500/60 bg-amber-500/5 p-4">
       <input type="hidden" name="mtls_present" value="1" />
       <input type="hidden" name="mtls_enabled" value={enabled ? "true" : "false"} />
       {enabled && selectedIds.map(id => (
@@ -35,7 +35,7 @@ export function MtlsFields({ value, caCertificates }: Props) {
       {/* Header */}
       <div className="flex flex-row items-start justify-between gap-2">
         <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
-          <div className="mt-0.5 w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
+          <div className="mt-0.5 w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
             <LockKeyhole className="h-4 w-4 text-white" />
           </div>
           <div className="min-w-0">

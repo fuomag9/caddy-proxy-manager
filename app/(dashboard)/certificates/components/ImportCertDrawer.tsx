@@ -161,6 +161,7 @@ export function ImportCertDrawer({ open, cert, onClose }: Props) {
                       size="icon"
                       className="absolute right-1 top-1 h-7 w-7"
                       onClick={() => setShowKey((v) => !v)}
+                      aria-label={showKey ? "Hide private key" : "Show private key"}
                     >
                       {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>

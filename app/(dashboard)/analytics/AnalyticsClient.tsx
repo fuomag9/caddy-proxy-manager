@@ -443,7 +443,7 @@ export default function AnalyticsClient() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground/60">Traffic Intelligence</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Traffic Intelligence</p>
           <h1 className="text-xl font-bold tracking-tight">Analytics</h1>
         </div>
         <div className="flex flex-row items-center gap-3 flex-wrap">
@@ -731,7 +731,7 @@ export default function AnalyticsClient() {
                             <TooltipContent>{rule.message}</TooltipContent>
                           </Tooltip>
                         ) : (
-                          <span className="text-sm text-muted-foreground/40">—</span>
+                          <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </TableCell>
                       <TableCell className="text-sm font-semibold">{rule.count.toLocaleString()}</TableCell>

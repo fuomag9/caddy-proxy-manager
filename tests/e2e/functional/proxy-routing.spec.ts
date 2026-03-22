@@ -48,8 +48,8 @@ test.describe.serial('Proxy Routing', () => {
   test('disabled proxy host stops routing traffic', async ({ page }) => {
     await page.goto('/proxy-hosts');
     const row = page.locator('tr', { hasText: 'Functional Proxy Test' });
-    // Toggle the enabled switch (first checkbox inside the row)
-    await row.locator('input[type="checkbox"]').first().click({ force: true });
+    // Toggle the enabled switch (shadcn Switch renders as button with role="switch")
+    await row.getByRole('switch').click();
     // Give Caddy time to reload config
     await page.waitForTimeout(3_000);
 
@@ -60,7 +60,7 @@ test.describe.serial('Proxy Routing', () => {
     expect(res.body).not.toContain(ECHO_BODY);
 
     // Re-enable
-    await row.locator('input[type="checkbox"]').first().click({ force: true });
+    await row.getByRole('switch').click();
     await page.waitForTimeout(2_000);
   });
 });

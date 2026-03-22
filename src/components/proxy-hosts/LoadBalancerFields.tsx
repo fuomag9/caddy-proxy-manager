@@ -31,7 +31,7 @@ export function LoadBalancerFields({
   const showCookieFields = policy === "cookie";
 
   return (
-    <div className="rounded-lg border border-blue-500/60 bg-blue-500/5 p-5">
+    <div className="rounded-lg border border-cyan-500/60 bg-cyan-500/5 p-5">
       <input type="hidden" name="lb_present" value="1" />
       <input type="hidden" name="lb_enabled_present" value="1" />
       <div className="flex flex-col gap-4">

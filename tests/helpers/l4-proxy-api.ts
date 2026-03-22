@@ -29,9 +29,9 @@ export async function createL4ProxyHost(page: Page, config: L4ProxyHostConfig): 
 
   await page.getByLabel('Name').fill(config.name);
 
-  // Protocol select
+  // Protocol select (shadcn Select renders a button with role="combobox")
   if (config.protocol && config.protocol !== 'tcp') {
-    await page.getByLabel('Protocol').click();
+    await page.getByRole('combobox', { name: 'Protocol' }).first().click();
     await page.getByRole('option', { name: new RegExp(config.protocol, 'i') }).click();
   }
 
@@ -76,5 +76,5 @@ export async function createL4ProxyHost(page: Page, config: L4ProxyHostConfig): 
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10_000 });
 
   // Verify host appears in the table
-  await expect(page.getByText(config.name)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('table').getByText(config.name)).toBeVisible({ timeout: 10_000 });
 }

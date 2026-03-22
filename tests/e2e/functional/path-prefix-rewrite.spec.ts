@@ -30,7 +30,7 @@ test.describe.serial('Path Prefix Rewrite', () => {
     await injectFormFields(page, { ssl_forced_present: 'on' });
     await page.getByRole('button', { name: /^create$/i }).click();
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Functional Path Prefix Rewrite Test')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('table').getByText('Functional Path Prefix Rewrite Test')).toBeVisible({ timeout: 10_000 });
 
     await waitForRoute(DOMAIN);
   });

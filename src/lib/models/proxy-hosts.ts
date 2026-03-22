@@ -2,7 +2,7 @@ import db, { nowIso, toIso } from "../db";
 import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { proxyHosts } from "../db/schema";
-import { desc, eq, count, like, or } from "drizzle-orm";
+import { asc, desc, eq, count, like, or } from "drizzle-orm";
 import { type GeoBlockSettings } from "../settings";
 import { normalizeProxyHostDomains } from "../proxy-host-domains";
 
@@ -1462,7 +1462,22 @@ export async function countProxyHosts(search?: string): Promise<number> {
   return row?.value ?? 0;
 }
 
-export async function listProxyHostsPaginated(limit: number, offset: number, search?: string): Promise<ProxyHost[]> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const PROXY_HOST_SORT_COLUMNS: Record<string, any> = {
+  name: proxyHosts.name,
+  domains: proxyHosts.domains,
+  upstreams: proxyHosts.upstreams,
+  enabled: proxyHosts.enabled,
+  created_at: proxyHosts.createdAt,
+};
+
+export async function listProxyHostsPaginated(
+  limit: number,
+  offset: number,
+  search?: string,
+  sortBy?: string,
+  sortDir?: "asc" | "desc"
+): Promise<ProxyHost[]> {
   const where = search
     ? or(
         like(proxyHosts.name, `%${search}%`),
@@ -1470,11 +1485,13 @@ export async function listProxyHostsPaginated(limit: number, offset: number, sea
         like(proxyHosts.upstreams, `%${search}%`)
       )
     : undefined;
+  const col = (sortBy && PROXY_HOST_SORT_COLUMNS[sortBy]) || proxyHosts.createdAt;
+  const dir = sortDir === "asc" ? asc : desc;
   const hosts = await db
     .select()
     .from(proxyHosts)
     .where(where)
-    .orderBy(desc(proxyHosts.createdAt))
+    .orderBy(dir(col))
     .limit(limit)
     .offset(offset);
   return hosts.map(parseProxyHost);

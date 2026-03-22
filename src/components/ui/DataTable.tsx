@@ -11,7 +11,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -20,6 +20,7 @@ export type Column<T> = {
   label: string;
   align?: "left" | "right" | "center";
   width?: string | number;
+  sortKey?: string;
   render?: (row: T) => ReactNode;
 };
 
@@ -30,11 +31,13 @@ type DataTableProps<T> = {
   emptyMessage?: string;
   loading?: boolean;
   onRowClick?: (row: T) => void;
+  rowClassName?: (row: T) => string;
   pagination?: {
     total: number;
     page: number;
     perPage: number;
   };
+  sort?: { sortBy: string; sortDir: "asc" | "desc" };
   mobileCard?: (row: T) => ReactNode;
 };
 
@@ -77,19 +80,51 @@ function PaginationBar({ page, perPage, total }: { page: number; perPage: number
   );
 }
 
+function SortableHeader({ col, sort }: { col: Column<unknown>; sort?: { sortBy: string; sortDir: "asc" | "desc" } }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  if (!col.sortKey) return <>{col.label}</>;
+
+  const isActive = sort?.sortBy === col.sortKey;
+  const nextDir = isActive && sort?.sortDir === "asc" ? "desc" : "asc";
+
+  function handleSort() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("sortBy", col.sortKey!);
+    params.set("sortDir", nextDir);
+    params.set("page", "1");
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  return (
+    <Button variant="ghost" size="sm" className="-ml-3 h-8 font-medium" onClick={handleSort}>
+      {col.label}
+      {isActive ? (
+        sort?.sortDir === "asc" ? <ArrowUp className="ml-1 h-3.5 w-3.5" /> : <ArrowDown className="ml-1 h-3.5 w-3.5" />
+      ) : (
+        <ArrowUpDown className="ml-1 h-3.5 w-3.5 opacity-50" />
+      )}
+    </Button>
+  );
+}
+
 function DesktopTable<T>({
-  columns, data, keyField, emptyMessage, onRowClick, isEmpty, loading,
+  columns, data, keyField, emptyMessage, onRowClick, rowClassName, isEmpty, loading, sort,
 }: {
   columns: Column<T>[];
   data: T[];
   keyField: keyof T;
   emptyMessage: string;
   onRowClick?: (row: T) => void;
+  rowClassName?: (row: T) => string;
   isEmpty: boolean;
   loading?: boolean;
+  sort?: { sortBy: string; sortDir: "asc" | "desc" };
 }) {
   return (
-    <div className="rounded-md border overflow-x-auto">
+    <div className="rounded-md border bg-card overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -99,7 +134,7 @@ function DesktopTable<T>({
                 style={{ width: col.width }}
                 className={col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
               >
-                {col.label}
+                <SortableHeader col={col as Column<unknown>} sort={sort} />
               </TableHead>
             ))}
           </TableRow>
@@ -126,7 +161,10 @@ function DesktopTable<T>({
               <TableRow
                 key={String(row[keyField])}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""}
+                className={[
+                  onRowClick ? "cursor-pointer hover:bg-muted/50" : "",
+                  rowClassName ? rowClassName(row) : "",
+                ].filter(Boolean).join(" ")}
               >
                 {columns.map((col) => (
                   <TableCell
@@ -152,7 +190,9 @@ export function DataTable<T>({
   emptyMessage = "No data available",
   loading = false,
   onRowClick,
+  rowClassName,
   pagination,
+  sort,
   mobileCard,
 }: DataTableProps<T>) {
   const isEmpty = data.length === 0 && !loading;
@@ -186,7 +226,8 @@ export function DataTable<T>({
           <DesktopTable
             columns={columns} data={data} keyField={keyField}
             emptyMessage={emptyMessage} onRowClick={onRowClick}
-            isEmpty={isEmpty} loading={loading}
+            rowClassName={rowClassName}
+            isEmpty={isEmpty} loading={loading} sort={sort}
           />
           {pagination && <PaginationBar {...pagination} />}
         </div>
@@ -199,6 +240,7 @@ export function DataTable<T>({
       <DesktopTable
         columns={columns} data={data} keyField={keyField}
         emptyMessage={emptyMessage} onRowClick={onRowClick}
+        rowClassName={rowClassName}
         isEmpty={isEmpty} loading={loading}
       />
       {pagination && <PaginationBar {...pagination} />}

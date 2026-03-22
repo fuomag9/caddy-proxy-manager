@@ -1,6 +1,7 @@
 "use client";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import type { CertExpiryStatus } from "../page";
 
 function formatRelative(validTo: string): string {
@@ -10,11 +11,11 @@ function formatRelative(validTo: string): string {
   const hours = Math.floor(absDiff / 3600000);
 
   if (diff < 0) {
-    if (days >= 1) return `EXPIRED ${days} day${days !== 1 ? "s" : ""} ago`;
-    return `EXPIRED ${hours} hour${hours !== 1 ? "s" : ""} ago`;
+    if (days >= 1) return `Expired ${days}d ago`;
+    return `Expired ${hours}h ago`;
   }
-  if (days >= 1) return `in ${days} day${days !== 1 ? "s" : ""}`;
-  return `in ${hours} hour${hours !== 1 ? "s" : ""}`;
+  if (days >= 1) return `${days}d`;
+  return `${hours}h`;
 }
 
 function formatFull(validTo: string): string {
@@ -33,24 +34,32 @@ export function RelativeTime({
   status: CertExpiryStatus | null;
 }) {
   if (validTo === null || status === null) {
-    return (
-      <p className="text-sm text-muted-foreground">—</p>
-    );
+    return <span className="text-sm text-muted-foreground">—</span>;
   }
 
-  const colorClass =
+  const config =
     status === "expired"
-      ? "text-destructive"
+      ? {
+          icon: <AlertCircle className="h-3.5 w-3.5" />,
+          cls: "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400",
+        }
       : status === "expiring_soon"
-        ? "text-yellow-600 dark:text-yellow-400"
-        : "text-green-600 dark:text-green-400";
+        ? {
+            icon: <Clock className="h-3.5 w-3.5" />,
+            cls: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+          }
+        : {
+            icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+            cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+          };
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <p className={`text-sm font-medium cursor-default ${colorClass}`}>
+        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold cursor-default ${config.cls}`}>
+          {config.icon}
           {formatRelative(validTo)}
-        </p>
+        </span>
       </TooltipTrigger>
       <TooltipContent>{formatFull(validTo)}</TooltipContent>
     </Tooltip>

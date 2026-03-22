@@ -348,7 +348,7 @@ function GlobalSuppressedRules({
         {pendingRule && (
           <div className="mt-3 px-4 py-3 rounded-lg border border-yellow-500 bg-muted max-w-[480px]">
             <p className="text-sm font-mono font-bold text-red-400">Rule {pendingRule.id}</p>
-            <p className={cn("text-xs block mt-0.5", pendingRule.message ? "text-muted-foreground" : "text-muted-foreground/60")}>
+            <p className={cn("text-xs block mt-0.5", pendingRule.message ? "text-muted-foreground" : "text-muted-foreground")}>
               {pendingRule.message ?? "No description available — rule has not triggered yet"}
             </p>
             <div className="flex items-center gap-2 mt-3">
@@ -393,7 +393,7 @@ function GlobalSuppressedRules({
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-mono font-bold text-red-400">Rule {id}</p>
-                <p className={cn("text-xs block mt-0.5", messages[id] ? "text-muted-foreground" : "text-muted-foreground/60")}>
+                <p className={cn("text-xs block mt-0.5", messages[id] ? "text-muted-foreground" : "text-muted-foreground")}>
                   {messages[id] ?? "No description available — rule has not triggered yet"}
                 </p>
               </div>
@@ -473,7 +473,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
         </div>
         <p className="text-xs font-mono text-muted-foreground break-all">{event.host || "—"}</p>
         {event.ruleId && (
-          <span className="text-xs text-muted-foreground/60">Rule #{event.ruleId}</span>
+          <span className="text-xs text-muted-foreground">Rule #{event.ruleId}</span>
         )}
       </CardContent>
     </Card>

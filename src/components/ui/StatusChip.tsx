@@ -10,7 +10,7 @@ type StatusChipProps = {
 
 const STATUS_CONFIG: Record<StatusType, { dot: string; text: string; label: string }> = {
   active:   { dot: "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]",  text: "text-green-500",  label: "Active"  },
-  inactive: { dot: "bg-zinc-500",                                          text: "text-zinc-400",   label: "Paused"  },
+  inactive: { dot: "bg-zinc-500",                                          text: "text-zinc-600 dark:text-zinc-400",   label: "Paused"  },
   error:    { dot: "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]",    text: "text-red-500",    label: "Error"   },
   warning:  { dot: "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]", text: "text-amber-500",  label: "Warning" },
 };

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchField } from "@/components/ui/SearchField";
 import type { AcmeHost, CaCertificateView, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
 import { StatusSummaryBar } from "./components/StatusSummaryBar";
 import { AcmeTab } from "./components/AcmeTab";
@@ -21,9 +21,7 @@ type Props = {
 };
 
 function countExpiry(statuses: (CertExpiryStatus | null)[]) {
-  let expired = 0;
-  let expiringSoon = 0;
-  let healthy = 0;
+  let expired = 0, expiringSoon = 0, healthy = 0;
   for (const s of statuses) {
     if (s === "expired") expired++;
     else if (s === "expiring_soon") expiringSoon++;
@@ -45,7 +43,6 @@ export default function CertificatesClient({
   const [searchCa, setSearchCa] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
-  // Aggregate expiry counts across all cert types
   const allStatuses: (CertExpiryStatus | null)[] = [
     ...acmeHosts.map((h) => h.certExpiryStatus),
     ...importedCerts.map((c) => c.expiryStatus),
@@ -53,8 +50,7 @@ export default function CertificatesClient({
   const { expired, expiringSoon, healthy } = countExpiry(allStatuses);
 
   const search = activeTab === "acme" ? searchAcme : activeTab === "imported" ? searchImported : searchCa;
-  const setSearch =
-    activeTab === "acme" ? setSearchAcme : activeTab === "imported" ? setSearchImported : setSearchCa;
+  const setSearch = activeTab === "acme" ? setSearchAcme : activeTab === "imported" ? setSearchImported : setSearchCa;
 
   function handleTabChange(value: string) {
     setActiveTab(value as TabId);
@@ -68,7 +64,7 @@ export default function CertificatesClient({
         description="Caddy automatically handles HTTPS certificates via Let's Encrypt. Import custom certificates only when needed."
       />
 
-      {/* Status summary bar */}
+      {/* Status summary filter chips */}
       <StatusSummaryBar
         expired={expired}
         expiringSoon={expiringSoon}
@@ -77,28 +73,44 @@ export default function CertificatesClient({
         onFilter={setStatusFilter}
       />
 
-      {/* Per-tab search */}
-      <Input
-        placeholder={
-          activeTab === "acme"
-            ? "Search by host name or domain…"
-            : activeTab === "imported"
-              ? "Search by name or domain…"
-              : "Search by name…"
-        }
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-sm"
-        aria-label="search"
-      />
-
-      {/* Tabs */}
+      {/* Tabs + search row */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList>
-          <TabsTrigger value="acme">ACME ({acmePagination.total})</TabsTrigger>
-          <TabsTrigger value="imported">Imported ({importedCerts.length})</TabsTrigger>
-          <TabsTrigger value="ca">CA / mTLS ({caCertificates.length})</TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <TabsList className="w-fit">
+            <TabsTrigger value="acme" className="gap-1.5">
+              ACME
+              <span className="rounded-full bg-muted px-1.5 py-0 text-xs font-bold tabular-nums">
+                {acmePagination.total}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="imported" className="gap-1.5">
+              Imported
+              <span className="rounded-full bg-muted px-1.5 py-0 text-xs font-bold tabular-nums">
+                {importedCerts.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="ca" className="gap-1.5">
+              CA / mTLS
+              <span className="rounded-full bg-muted px-1.5 py-0 text-xs font-bold tabular-nums">
+                {caCertificates.length}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+
+          <SearchField
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={
+              activeTab === "acme"
+                ? "Search by host or domain…"
+                : activeTab === "imported"
+                  ? "Search by name or domain…"
+                  : "Search by name…"
+            }
+            className="sm:max-w-xs"
+            aria-label="search"
+          />
+        </div>
 
         <TabsContent value="acme" className="mt-4">
           <AcmeTab

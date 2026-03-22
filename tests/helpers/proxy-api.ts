@@ -142,26 +142,26 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
 
   await page.getByRole('button', { name: /^create$/i }).click();
   await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(config.name)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('table').getByText(config.name)).toBeVisible({ timeout: 10_000 });
 }
 
 export async function importCertificate(page: Page, config: ImportedCertificateConfig): Promise<void> {
-  await openCertificatesTab(page, /^Imported \(/i);
+  await openCertificatesTab(page, /^Imported/i);
   await page.getByRole('button', { name: /import certificate/i }).click();
   await expect(page.getByRole('heading', { name: /^import certificate$/i })).toBeVisible();
 
   await page.getByRole('textbox', { name: 'Name', exact: true }).fill(config.name);
   await page.getByLabel(/domains \(one per line\)/i).fill(config.domains.join('\n'));
   await page.locator('[name="certificate_pem"]').fill(config.certificatePem);
-  await page.getByRole('button', { name: /show/i }).click();
+  await page.getByRole('button', { name: /show private key/i }).click();
   await page.locator('[name="private_key_pem"]').fill(config.privateKeyPem);
   await page.getByRole('button', { name: /^import certificate$/i }).click();
 
-  await expect(page.getByText(config.name)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(config.name).first()).toBeVisible({ timeout: 10_000 });
 }
 
 export async function generateCaCertificate(page: Page, config: GeneratedCaConfig): Promise<void> {
-  await openCertificatesTab(page, /^CA \/ mTLS \(/i);
+  await openCertificatesTab(page, /^CA \/ mTLS/i);
   await page.getByRole('button', { name: /add ca certificate/i }).click();
   await expect(page.getByRole('heading', { name: /^add ca certificate$/i })).toBeVisible();
 
@@ -181,7 +181,7 @@ export async function issueClientCertificate(
   page: Page,
   config: IssuedClientCertificateConfig
 ): Promise<Buffer> {
-  await openCertificatesTab(page, /^CA \/ mTLS \(/i);
+  await openCertificatesTab(page, /^CA \/ mTLS/i);
   await expandCaRow(page, config.caName);
   await page.getByRole('button', { name: /^issue cert$/i }).click();
   await expect(page.getByRole('dialog', { name: /issue client certificate/i })).toBeVisible();
@@ -213,7 +213,7 @@ export async function issueClientCertificate(
 }
 
 export async function revokeIssuedClientCertificate(page: Page, caName: string, commonName: string): Promise<void> {
-  await openCertificatesTab(page, /^CA \/ mTLS \(/i);
+  await openCertificatesTab(page, /^CA \/ mTLS/i);
   await expandCaRow(page, caName);
   await page.getByRole('button', { name: /^manage$/i }).click();
   const dialog = page.getByRole('dialog', { name: /issued client certificates/i });

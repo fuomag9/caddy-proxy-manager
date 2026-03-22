@@ -15,7 +15,7 @@ export function DnsResolverFields({
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
 
   return (
-    <div className="rounded-lg border border-yellow-500/60 bg-yellow-500/5 p-5">
+    <div className="rounded-lg border border-emerald-500/60 bg-emerald-500/5 p-5">
       <input type="hidden" name="dns_present" value="1" />
       <input type="hidden" name="dns_enabled_present" value="1" />
       <div className="flex flex-col gap-4">

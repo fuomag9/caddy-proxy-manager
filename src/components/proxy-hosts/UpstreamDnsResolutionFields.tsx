@@ -38,7 +38,7 @@ export function UpstreamDnsResolutionFields({
     : `Override: ${currentMode === "inherit" ? "inherit mode" : currentMode}, ${currentFamily === "inherit" ? "inherit family" : currentFamily}`;
 
   return (
-    <div className="rounded-lg border border-blue-500/60 bg-blue-500/5 p-5">
+    <div className="rounded-lg border border-violet-500/60 bg-violet-500/5 p-5">
       <input type="hidden" name="upstream_dns_resolution_present" value="1" />
       <div className="flex flex-col gap-4">
         <div className="flex flex-row items-center justify-between">

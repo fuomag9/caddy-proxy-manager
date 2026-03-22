@@ -11,6 +11,7 @@ import { INITIAL_ACTION_STATE } from "@/lib/actions";
 import type { L4ProxyHost } from "@/lib/models/l4-proxy-hosts";
 import { AppDialog } from "@/components/ui/AppDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -28,6 +29,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { cn } from "@/lib/utils";
+import { Globe, Layers, MapPin, Network, Pin } from "lucide-react";
 
 function FormField({
   label,
@@ -62,6 +65,7 @@ function L4HostForm({
   state: { status: string; message?: string };
   initialData?: L4ProxyHost | null;
 }) {
+  const [enabled, setEnabled] = useState(initialData?.enabled ?? true);
   const [protocol, setProtocol] = useState(initialData?.protocol ?? "tcp");
   const [matcherType, setMatcherType] = useState(
     initialData?.matcher_type ?? "none"
@@ -90,13 +94,27 @@ function L4HostForm({
       )}
 
       <input type="hidden" name="enabled_present" value="1" />
-      <div className="flex items-center gap-2">
+      <input type="hidden" name="enabled" value={enabled ? "on" : ""} />
+      <div className={cn(
+        "flex flex-row items-center justify-between p-4 rounded-lg border transition-all duration-200",
+        enabled
+          ? "border-primary bg-primary/5"
+          : "border-border bg-background"
+      )}>
+        <div>
+          <p className={cn("text-sm font-semibold", enabled ? "text-primary" : "text-foreground")}>
+            {enabled ? "L4 Host Enabled" : "L4 Host Paused"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {enabled
+              ? "This host is active and proxying connections"
+              : "This host is disabled and will not accept connections"}
+          </p>
+        </div>
         <Switch
-          id="enabled"
-          name="enabled"
-          defaultChecked={initialData?.enabled ?? true}
+          checked={enabled}
+          onCheckedChange={setEnabled}
         />
-        <Label htmlFor="enabled">Enabled</Label>
       </div>
 
       <FormField label="Name" htmlFor="name">
@@ -120,8 +138,18 @@ function L4HostForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="tcp">TCP</SelectItem>
-            <SelectItem value="udp">UDP</SelectItem>
+            <SelectItem value="tcp">
+              <div className="flex items-center gap-2">
+                <Badge variant="info" className="text-[10px] px-1.5 py-0">TCP</Badge>
+                TCP
+              </div>
+            </SelectItem>
+            <SelectItem value="udp">
+              <div className="flex items-center gap-2">
+                <Badge variant="warning" className="text-[10px] px-1.5 py-0">UDP</Badge>
+                UDP
+              </div>
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -244,11 +272,16 @@ function L4HostForm({
         type="single"
         collapsible
         defaultValue={defaultLbAccordion}
-        className="border rounded-md px-3"
+        className="border-l-2 border-l-cyan-500 border rounded-md px-3"
       >
         <AccordionItem value="load-balancer" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium">
-            Load Balancer
+          <AccordionTrigger className="text-sm font-medium hover:no-underline">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-500">
+                <Layers className="h-3.5 w-3.5" />
+              </div>
+              Load Balancer
+            </div>
           </AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
@@ -315,7 +348,7 @@ function L4HostForm({
                 />
               </FormField>
 
-              <p className="text-xs text-muted-foreground font-medium mt-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-2">
                 Active Health Check
               </p>
               <input
@@ -371,7 +404,7 @@ function L4HostForm({
                 />
               </FormField>
 
-              <p className="text-xs text-muted-foreground font-medium mt-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-2">
                 Passive Health Check
               </p>
               <input
@@ -441,11 +474,16 @@ function L4HostForm({
         type="single"
         collapsible
         defaultValue={defaultDnsAccordion}
-        className="border rounded-md px-3"
+        className="border-l-2 border-l-emerald-500 border rounded-md px-3"
       >
         <AccordionItem value="dns-resolver" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium">
-            Custom DNS Resolvers
+          <AccordionTrigger className="text-sm font-medium hover:no-underline">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-500">
+                <Globe className="h-3.5 w-3.5" />
+              </div>
+              Custom DNS Resolvers
+            </div>
           </AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
@@ -507,11 +545,16 @@ function L4HostForm({
         type="single"
         collapsible
         defaultValue={defaultGeoblockAccordion}
-        className="border rounded-md px-3"
+        className="border-l-2 border-l-rose-500 border rounded-md px-3"
       >
         <AccordionItem value="geoblock" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium">
-            Geo Blocking
+          <AccordionTrigger className="text-sm font-medium hover:no-underline">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded border border-rose-500/30 bg-rose-500/10 text-rose-500">
+                <MapPin className="h-3.5 w-3.5" />
+              </div>
+              Geo Blocking
+            </div>
           </AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
@@ -543,7 +586,7 @@ function L4HostForm({
                   </SelectContent>
                 </Select>
               </div>
-              <p className="text-xs text-muted-foreground font-medium">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-1">
                 Block Rules
               </p>
               <FormField
@@ -604,7 +647,7 @@ function L4HostForm({
                   }
                 />
               </FormField>
-              <p className="text-xs text-muted-foreground font-medium">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-2">
                 Allow Rules (override blocks)
               </p>
               <FormField
@@ -680,11 +723,16 @@ function L4HostForm({
         type="single"
         collapsible
         defaultValue={defaultUpstreamDnsAccordion}
-        className="border rounded-md px-3"
+        className="border-l-2 border-l-violet-500 border rounded-md px-3"
       >
         <AccordionItem value="upstream-dns" className="border-b-0">
-          <AccordionTrigger className="text-sm font-medium">
-            Upstream DNS Pinning
+          <AccordionTrigger className="text-sm font-medium hover:no-underline">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded border border-violet-500/30 bg-violet-500/10 text-violet-500">
+                <Pin className="h-3.5 w-3.5" />
+              </div>
+              Upstream DNS Pinning
+            </div>
           </AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
@@ -779,7 +827,7 @@ export function CreateL4HostDialog({
       open={open}
       onClose={onClose}
       title={initialData ? "Duplicate L4 Proxy Host" : "Create L4 Proxy Host"}
-      maxWidth="sm"
+      maxWidth="lg"
       submitLabel="Create"
       onSubmit={() => {
         (
@@ -824,7 +872,7 @@ export function EditL4HostDialog({
       open={open}
       onClose={onClose}
       title="Edit L4 Proxy Host"
-      maxWidth="sm"
+      maxWidth="lg"
       submitLabel="Save Changes"
       onSubmit={() => {
         (
@@ -867,7 +915,7 @@ export function DeleteL4HostDialog({
       open={open}
       onClose={onClose}
       title="Delete L4 Proxy Host"
-      maxWidth="sm"
+      maxWidth="lg"
       submitLabel="Delete"
       onSubmit={() => {
         (
@@ -891,19 +939,21 @@ export function DeleteL4HostDialog({
           Are you sure you want to delete the L4 proxy host{" "}
           <strong>{host.name}</strong>?
         </p>
-        <p className="text-sm text-muted-foreground">
-          This will remove the configuration for:
-        </p>
-        <div className="pl-4 flex flex-col gap-1">
-          <p className="text-sm text-muted-foreground">
-            &bull; Protocol: {host.protocol.toUpperCase()}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            &bull; Listen: {host.listen_address}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            &bull; Upstreams: {host.upstreams.join(", ")}
-          </p>
+        <div className="flex flex-col gap-1.5 rounded-md border bg-muted/30 px-4 py-3 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-20 shrink-0">Protocol</span>
+            <Badge variant={host.protocol === "tcp" ? "info" : "warning"} className="text-[10px] px-1.5 py-0">
+              {host.protocol.toUpperCase()}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground w-20 shrink-0">Listen</span>
+            <span className="font-mono text-xs">{host.listen_address}</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-muted-foreground w-20 shrink-0">Upstreams</span>
+            <span className="font-mono text-xs">{host.upstreams.join(", ")}</span>
+          </div>
         </div>
         <p className="text-sm text-destructive font-medium">
           This action cannot be undone.

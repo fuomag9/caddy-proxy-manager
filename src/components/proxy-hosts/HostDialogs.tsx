@@ -58,7 +58,7 @@ export function CreateHostDialog({
             open={open}
             onClose={onClose}
             title={initialData ? "Duplicate Proxy Host" : "Create Proxy Host"}
-            maxWidth="md"
+            maxWidth="lg"
             submitLabel="Create"
             onSubmit={() => {
                 (document.getElementById("create-host-form") as HTMLFormElement)?.requestSubmit();
@@ -76,8 +76,9 @@ export function CreateHostDialog({
                     enabled={true}
                 />
                 <div>
-                    <label className="text-sm font-medium mb-1 block">Name</label>
+                    <label htmlFor="name" className="text-sm font-medium mb-1 block">Name</label>
                     <Input
+                        id="name"
                         name="name"
                         placeholder="My Service"
                         defaultValue={initialData ? `${initialData.name} (Copy)` : ""}
@@ -85,8 +86,9 @@ export function CreateHostDialog({
                     />
                 </div>
                 <div>
-                    <label className="text-sm font-medium mb-1 block">Domains</label>
+                    <label htmlFor="domains" className="text-sm font-medium mb-1 block">Domains</label>
                     <Textarea
+                        id="domains"
                         name="domains"
                         placeholder="app.example.com"
                         defaultValue={initialData?.domains.join("\n") ?? ""}
@@ -101,7 +103,7 @@ export function CreateHostDialog({
                 <div>
                     <label className="text-sm font-medium mb-1 block">Certificate</label>
                     <Select name="certificate_id" defaultValue={String(initialData?.certificate_id ?? "__none__")}>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label="Certificate">
                             <SelectValue placeholder="Managed by Caddy (Auto)" />
                         </SelectTrigger>
                         <SelectContent>
@@ -117,7 +119,7 @@ export function CreateHostDialog({
                 <div>
                     <label className="text-sm font-medium mb-1 block">Access List</label>
                     <Select name="access_list_id" defaultValue={String(initialData?.access_list_id ?? "__none__")}>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label="Access List">
                             <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
@@ -194,7 +196,7 @@ export function EditHostDialog({
             open={open}
             onClose={onClose}
             title="Edit Proxy Host"
-            maxWidth="md"
+            maxWidth="lg"
             submitLabel="Save Changes"
             onSubmit={() => {
                 (document.getElementById("edit-host-form") as HTMLFormElement)?.requestSubmit();
@@ -212,12 +214,13 @@ export function EditHostDialog({
                     enabled={host.enabled}
                 />
                 <div>
-                    <label className="text-sm font-medium mb-1 block">Name</label>
-                    <Input name="name" defaultValue={host.name} required />
+                    <label htmlFor="name" className="text-sm font-medium mb-1 block">Name</label>
+                    <Input id="name" name="name" defaultValue={host.name} required />
                 </div>
                 <div>
-                    <label className="text-sm font-medium mb-1 block">Domains</label>
+                    <label htmlFor="domains" className="text-sm font-medium mb-1 block">Domains</label>
                     <Textarea
+                        id="domains"
                         name="domains"
                         defaultValue={host.domains.join("\n")}
                         rows={2}
@@ -230,7 +233,7 @@ export function EditHostDialog({
                 <div>
                     <label className="text-sm font-medium mb-1 block">Certificate</label>
                     <Select name="certificate_id" defaultValue={String(host.certificate_id ?? "__none__")}>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label="Certificate">
                             <SelectValue placeholder="Managed by Caddy (Auto)" />
                         </SelectTrigger>
                         <SelectContent>
@@ -246,7 +249,7 @@ export function EditHostDialog({
                 <div>
                     <label className="text-sm font-medium mb-1 block">Access List</label>
                     <Select name="access_list_id" defaultValue={String(host.access_list_id ?? "__none__")}>
-                        <SelectTrigger>
+                        <SelectTrigger aria-label="Access List">
                             <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>

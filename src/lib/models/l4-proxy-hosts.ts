@@ -2,7 +2,7 @@ import db, { nowIso, toIso } from "../db";
 import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { l4ProxyHosts } from "../db/schema";
-import { desc, eq, count, like, or } from "drizzle-orm";
+import { asc, desc, eq, count, like, or } from "drizzle-orm";
 
 export type L4Protocol = "tcp" | "udp";
 export type L4MatcherType = "none" | "tls_sni" | "http_host" | "proxy_protocol";
@@ -461,7 +461,23 @@ export async function countL4ProxyHosts(search?: string): Promise<number> {
   return row?.value ?? 0;
 }
 
-export async function listL4ProxyHostsPaginated(limit: number, offset: number, search?: string): Promise<L4ProxyHost[]> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const L4_SORT_COLUMNS: Record<string, any> = {
+  name: l4ProxyHosts.name,
+  protocol: l4ProxyHosts.protocol,
+  listen_address: l4ProxyHosts.listenAddress,
+  upstreams: l4ProxyHosts.upstreams,
+  enabled: l4ProxyHosts.enabled,
+  created_at: l4ProxyHosts.createdAt,
+};
+
+export async function listL4ProxyHostsPaginated(
+  limit: number,
+  offset: number,
+  search?: string,
+  sortBy?: string,
+  sortDir?: "asc" | "desc"
+): Promise<L4ProxyHost[]> {
   const where = search
     ? or(
         like(l4ProxyHosts.name, `%${search}%`),
@@ -469,11 +485,13 @@ export async function listL4ProxyHostsPaginated(limit: number, offset: number, s
         like(l4ProxyHosts.upstreams, `%${search}%`)
       )
     : undefined;
+  const col = (sortBy && L4_SORT_COLUMNS[sortBy]) || l4ProxyHosts.createdAt;
+  const dir = sortDir === "asc" ? asc : desc;
   const hosts = await db
     .select()
     .from(l4ProxyHosts)
     .where(where)
-    .orderBy(desc(l4ProxyHosts.createdAt))
+    .orderBy(dir(col))
     .limit(limit)
     .offset(offset);
   return hosts.map(parseL4ProxyHost);

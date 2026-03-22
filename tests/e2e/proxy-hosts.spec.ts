@@ -28,7 +28,29 @@ test.describe('Proxy Hosts', () => {
 
     // Dialog should close and host appear in table
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('E2E Test Host')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('table').getByText('E2E Test Host')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('clicking Name / Domain header sorts the table', async ({ page }) => {
+    const sortBtn = page.getByRole('button', { name: 'Name / Domain' });
+    await expect(sortBtn).toBeVisible();
+
+    // Click to sort ascending
+    await sortBtn.click();
+    await expect(page).toHaveURL(/sortBy=name/);
+    await expect(page).toHaveURL(/sortDir=asc/);
+
+    // Click again to toggle to descending
+    await sortBtn.click();
+    await expect(page).toHaveURL(/sortDir=desc/);
+  });
+
+  test('clicking Status header sorts by enabled state', async ({ page }) => {
+    const sortBtn = page.getByRole('button', { name: 'Status' });
+    await expect(sortBtn).toBeVisible();
+
+    await sortBtn.click();
+    await expect(page).toHaveURL(/sortBy=enabled/);
   });
 
   test('delete proxy host removes it from table', async ({ page }) => {
@@ -42,11 +64,12 @@ test.describe('Proxy Hosts', () => {
     await page.getByRole('button', { name: /^create$/i }).click();
 
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Host To Delete')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('table').getByText('Host To Delete')).toBeVisible({ timeout: 10000 });
 
-    // Click the Delete icon button for that row (last button in actions column)
+    // Open the dropdown menu for that row and click Delete
     const row = page.locator('tr', { hasText: 'Host To Delete' });
-    await row.getByRole('button').last().click();
+    await row.getByRole('button').first().click();
+    await page.getByRole('menuitem', { name: /delete/i }).click();
 
     // Confirm dialog
     await expect(page.getByRole('dialog')).toBeVisible();
