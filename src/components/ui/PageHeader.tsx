@@ -1,47 +1,32 @@
-import { Button, Stack, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
+import { Plus } from "lucide-react";
 import { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 
 type PageHeaderProps = {
-    title: string;
-    description?: string;
-    action?: {
-        label: string;
-        onClick: () => void;
-        icon?: ReactNode;
-    };
+  title: string;
+  description?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+    icon?: ReactNode;
+  };
 };
 
 export function PageHeader({ title, description, action }: PageHeaderProps) {
-    return (
-        <Stack
-            direction={{ xs: "column", sm: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", sm: "flex-start" }}
-            spacing={2}
-            sx={{ mb: 4 }}
-        >
-            <Stack spacing={1}>
-                <Typography variant="h4" color="text.primary">
-                    {title}
-                </Typography>
-                {description && (
-                    <Typography variant="body1" color="text.secondary" sx={{ maxWidth: 600 }}>
-                        {description}
-                    </Typography>
-                )}
-            </Stack>
-            {action && (
-                <Button
-                    variant="contained"
-                    startIcon={action.icon ?? <AddIcon />}
-                    onClick={action.onClick}
-                    color="primary"
-                    sx={{ fontWeight: 600 }}
-                >
-                    {action.label}
-                </Button>
-            )}
-        </Stack>
-    );
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-8">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+        {description && (
+          <p className="text-sm text-muted-foreground max-w-xl">{description}</p>
+        )}
+      </div>
+      {action && (
+        <Button onClick={action.onClick} className="shrink-0">
+          {action.icon ?? <Plus className="h-4 w-4" />}
+          {action.label}
+        </Button>
+      )}
+    </div>
+  );
 }

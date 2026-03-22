@@ -1,37 +1,21 @@
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { InputHTMLAttributes } from "react";
 
-import { InputAdornment, TextField, TextFieldProps } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
+type SearchFieldProps = InputHTMLAttributes<HTMLInputElement> & {
+  className?: string;
+};
 
-export function SearchField(props: TextFieldProps) {
-    return (
-        <TextField
-            placeholder="Search..."
-            variant="outlined"
-            size="small"
-            slotProps={{
-                input: {
-                    startAdornment: (
-                        <InputAdornment position="start">
-                            <SearchIcon sx={{ color: "text.secondary" }} />
-                        </InputAdornment>
-                    )
-                }
-            }}
-            sx={{
-                maxWidth: 400,
-                "& .MuiOutlinedInput-root": {
-                    bgcolor: "background.paper",
-                    transition: "all 0.2s",
-                    "&:hover": {
-                        bgcolor: "action.hover"
-                    },
-                    "&.Mui-focused": {
-                        bgcolor: "background.paper",
-                        boxShadow: "0 4px 20px rgba(0,0,0,0.2)"
-                    }
-                }
-            }}
-            {...props}
-        />
-    );
+export function SearchField({ className, ...props }: SearchFieldProps) {
+  return (
+    <div className={cn("relative max-w-xs", className)}>
+      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+      <Input
+        placeholder="Search..."
+        className="pl-8"
+        {...props}
+      />
+    </div>
+  );
 }

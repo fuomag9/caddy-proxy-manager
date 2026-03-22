@@ -1,20 +1,16 @@
 "use client";
 
 import {
-  Box,
-  Card,
-  Pagination,
-  Stack,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
+  TableHeader,
   TableRow,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from "@mui/material";
+} from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -38,7 +34,6 @@ type DataTableProps<T> = {
     page: number;
     perPage: number;
   };
-  /** If provided, renders this instead of the table on xs/sm screens */
   mobileCard?: (row: T) => ReactNode;
 };
 
@@ -50,22 +45,91 @@ function PaginationBar({ page, perPage, total }: { page: number; perPage: number
 
   if (pageCount <= 1) return null;
 
-  function handlePageChange(_: React.ChangeEvent<unknown>, newPage: number) {
+  function goTo(newPage: number) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(newPage));
     router.push(`${pathname}?${params.toString()}`);
   }
 
   return (
-    <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-      <Pagination
-        count={pageCount}
-        page={page}
-        onChange={handlePageChange}
-        color="primary"
-        shape="rounded"
-      />
-    </Box>
+    <div className="flex items-center justify-center gap-2 mt-4">
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => goTo(page - 1)}
+        disabled={page <= 1}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+      <span className="text-sm text-muted-foreground">
+        Page {page} of {pageCount}
+      </span>
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => goTo(page + 1)}
+        disabled={page >= pageCount}
+      >
+        <ChevronRight className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function DesktopTable<T>({
+  columns, data, keyField, emptyMessage, onRowClick, isEmpty,
+}: {
+  columns: Column<T>[];
+  data: T[];
+  keyField: keyof T;
+  emptyMessage: string;
+  onRowClick?: (row: T) => void;
+  isEmpty: boolean;
+}) {
+  return (
+    <div className="rounded-md border overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {columns.map((col) => (
+              <TableHead
+                key={col.id}
+                style={{ width: col.width }}
+                className={col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
+              >
+                {col.label}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {isEmpty ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="text-center py-12 text-muted-foreground">
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          ) : (
+            data.map((row) => (
+              <TableRow
+                key={String(row[keyField])}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""}
+              >
+                {columns.map((col) => (
+                  <TableCell
+                    key={col.id}
+                    className={col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
+                  >
+                    {col.render ? col.render(row) : (row as Record<string, unknown>)[col.id] as ReactNode}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -79,76 +143,47 @@ export function DataTable<T>({
   pagination,
   mobileCard,
 }: DataTableProps<T>) {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-
   const isEmpty = data.length === 0 && !loading;
 
-  if (isMobile && mobileCard) {
+  if (mobileCard) {
     return (
-      <Box>
-        {isEmpty ? (
-          <Card variant="outlined" sx={{ py: 6, textAlign: "center" }}>
-            <Typography color="text.secondary">{emptyMessage}</Typography>
-          </Card>
-        ) : (
-          <Stack spacing={1.5}>
-            {data.map((row) => (
-              <Box key={String(row[keyField])}>
-                {mobileCard(row)}
-              </Box>
-            ))}
-          </Stack>
-        )}
-        {pagination && <PaginationBar {...pagination} />}
-      </Box>
+      <div>
+        <div className="block md:hidden">
+          {isEmpty ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                {emptyMessage}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {data.map((row) => (
+                <div key={String(row[keyField])}>{mobileCard(row)}</div>
+              ))}
+            </div>
+          )}
+          {pagination && <PaginationBar {...pagination} />}
+        </div>
+        <div className="hidden md:block">
+          <DesktopTable
+            columns={columns} data={data} keyField={keyField}
+            emptyMessage={emptyMessage} onRowClick={onRowClick}
+            isEmpty={isEmpty}
+          />
+          {pagination && <PaginationBar {...pagination} />}
+        </div>
+      </div>
     );
   }
 
   return (
-    <Box>
-      <TableContainer component={Card} variant="outlined" sx={{ overflowX: "auto" }}>
-        <Table sx={{ minWidth: 600 }}>
-          <TableHead>
-            <TableRow>
-              {columns.map((col) => (
-                <TableCell
-                  key={col.id}
-                  align={col.align || "left"}
-                  width={col.width}
-                >
-                  {col.label}
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isEmpty ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} align="center" sx={{ py: 8 }}>
-                  <Typography color="text.secondary">{emptyMessage}</Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              data.map((row) => (
-                <TableRow
-                  key={String(row[keyField])}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  sx={onRowClick ? { cursor: "pointer", "&:hover": { bgcolor: "action.hover" } } : undefined}
-                >
-                  {columns.map((col) => (
-                    <TableCell key={col.id} align={col.align || "left"}>
-                      {col.render ? col.render(row) : (row as Record<string, unknown>)[col.id] as ReactNode}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
+    <div>
+      <DesktopTable
+        columns={columns} data={data} keyField={keyField}
+        emptyMessage={emptyMessage} onRowClick={onRowClick}
+        isEmpty={isEmpty}
+      />
       {pagination && <PaginationBar {...pagination} />}
-    </Box>
+    </div>
   );
 }
