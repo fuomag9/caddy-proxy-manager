@@ -2,39 +2,21 @@
 
 import {
   Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Box,
-  Button,
-  Checkbox,
-  Chip,
-  CircularProgress,
-  Collapse,
-  Divider,
-  FormControlLabel,
-  Grid,
-  IconButton,
-  InputAdornment,
-  Stack,
-  Switch,
-  Tab,
-  Tabs,
-  TextField,
-  Tooltip,
-  Typography
-} from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ErrorIcon from "@mui/icons-material/Error";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import PublicIcon from "@mui/icons-material/Public";
-import SearchIcon from "@mui/icons-material/Search";
-import CloseIcon from "@mui/icons-material/Close";
-import { useState, useEffect, useMemo, useCallback, SyntheticEvent } from "react";
-import { GeoBlockSettings } from "@/src/lib/settings";
-import { GeoBlockMode } from "@/src/lib/models/proxy-hosts";
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import { Globe, X } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { GeoBlockSettings } from "@/lib/settings";
+import { GeoBlockMode } from "@/lib/models/proxy-hosts";
 import { COUNTRIES, flagEmoji } from "./countries";
 
 // ─── GeoIpStatus ─────────────────────────────────────────────────────────────
@@ -54,14 +36,12 @@ function GeoIpStatus() {
   }, []);
 
   if (loading) {
-    return <CircularProgress size={12} sx={{ color: "text.disabled" }} />;
+    return <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />;
   }
 
   const allLoaded = status?.country && status?.asn;
   const noneLoaded = !status?.country && !status?.asn;
 
-  const color = allLoaded ? "success" : noneLoaded ? "error" : "warning";
-  const Icon = allLoaded ? CheckCircleIcon : noneLoaded ? ErrorIcon : WarningAmberIcon;
   const label = allLoaded ? "GeoIP ready" : noneLoaded ? "GeoIP missing" : "GeoIP partial";
   const tooltip = noneLoaded
     ? "GeoIP databases not found — country/continent/ASN blocking will not work. Enable the geoipupdate service."
@@ -72,16 +52,17 @@ function GeoIpStatus() {
     : "GeoLite2-Country and GeoLite2-ASN databases loaded";
 
   return (
-    <Tooltip title={tooltip} placement="right">
-      <Chip
-        size="small"
-        icon={<Icon sx={{ fontSize: "14px !important" }} />}
-        label={label}
-        color={color}
-        variant="outlined"
-        sx={{ height: 22, fontSize: "0.7rem", fontWeight: 600, letterSpacing: 0.3, cursor: "default", "& .MuiChip-icon": { ml: "6px" } }}
-      />
-    </Tooltip>
+    <span title={tooltip}>
+      <Badge
+        variant="outline"
+        className={cn(
+          "h-[22px] text-[0.7rem] font-semibold tracking-wide cursor-default",
+          allLoaded ? "border-green-500 text-green-600" : noneLoaded ? "border-destructive text-destructive" : "border-yellow-500 text-yellow-600"
+        )}
+      >
+        {label}
+      </Badge>
+    </span>
   );
 }
 
@@ -145,162 +126,131 @@ function CountryPicker({ name, initialValues = [], accentColor = "warning" }: Co
   const selectedInFiltered = filtered.filter((c) => selected.has(c.code)).length;
   const allFilteredSelected = filtered.length > 0 && selectedInFiltered === filtered.length;
 
+  const isWarning = accentColor === "warning";
+
   return (
-    <Box>
+    <div>
       <input type="hidden" name={name} value={[...selected].join(",")} />
 
       {/* Search */}
-      <TextField
-        fullWidth
-        size="small"
-        placeholder="Search by country name or code…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 16, color: "text.disabled" }} />
-              </InputAdornment>
-            ),
-            endAdornment: search ? (
-              <InputAdornment position="end">
-                <IconButton size="small" onClick={() => setSearch("")} edge="end" sx={{ p: 0.25 }}>
-                  <CloseIcon sx={{ fontSize: 14 }} />
-                </IconButton>
-              </InputAdornment>
-            ) : null,
-          },
-        }}
-        sx={{ mb: 0.75 }}
-      />
+      <div className="relative mb-1.5">
+        <Input
+          placeholder="Search by country name or code…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="h-8 text-sm pr-8"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
 
       {/* Toolbar */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={0.75}>
-        <Typography variant="caption" color="text.secondary">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs text-muted-foreground">
           {selected.size > 0 ? (
             <>{selected.size} selected{search && `, ${selectedInFiltered} shown`}</>
           ) : (
-            <Box component="span" sx={{ opacity: 0.5 }}>None selected</Box>
+            <span className="opacity-50">None selected</span>
           )}
-        </Typography>
-        <Stack direction="row" spacing={0.25}>
+        </span>
+        <div className="flex items-center gap-0.5">
           <Button
-            size="small"
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={selectFiltered}
             disabled={allFilteredSelected}
-            sx={{ fontSize: "0.7rem", py: 0.25, px: 0.75, minWidth: 0, textTransform: "none" }}
+            className="text-[0.7rem] py-0.5 px-1.5 h-auto"
           >
             {search ? "Select matching" : "Select all"}
           </Button>
-          <Typography variant="caption" color="text.disabled" sx={{ alignSelf: "center" }}>·</Typography>
+          <span className="text-xs text-muted-foreground">·</span>
           <Button
-            size="small"
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={clearFiltered}
             disabled={selectedInFiltered === 0}
-            sx={{ fontSize: "0.7rem", py: 0.25, px: 0.75, minWidth: 0, textTransform: "none" }}
+            className="text-[0.7rem] py-0.5 px-1.5 h-auto"
           >
             {search ? "Clear matching" : "Clear all"}
           </Button>
-        </Stack>
-      </Stack>
+        </div>
+      </div>
 
       {/* Grid */}
-      <Box
-        sx={{
-          maxHeight: 220,
-          overflowY: "auto",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 0.5,
-          p: 0.75,
-          borderRadius: 1.5,
-          border: "1px solid",
-          borderColor: "divider",
-          bgcolor: (t) => t.palette.mode === "dark" ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)",
-          "&::-webkit-scrollbar": { width: 5 },
-          "&::-webkit-scrollbar-thumb": { borderRadius: 3, bgcolor: "divider" },
-          "&::-webkit-scrollbar-track": { bgcolor: "transparent" },
-        }}
-      >
+      <div className="max-h-[220px] overflow-y-auto flex flex-wrap gap-1 p-1.5 rounded-xl border border-border bg-black/[0.015] dark:bg-white/[0.02]">
         {filtered.length === 0 ? (
-          <Typography variant="caption" color="text.disabled" sx={{ p: 0.5 }}>
+          <span className="text-xs text-muted-foreground p-1">
             No countries match &ldquo;{search}&rdquo;
-          </Typography>
+          </span>
         ) : (
           filtered.map((country) => {
             const isSelected = selected.has(country.code);
             return (
-              <Chip
+              <button
                 key={country.code}
-                label={
-                  <Box component="span" sx={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                    <Box component="span" sx={{ fontSize: "0.85rem", lineHeight: 1 }}>
-                      {flagEmoji(country.code)}
-                    </Box>
-                    <Box component="span">{country.name}</Box>
-                    <Box component="span" sx={{ opacity: 0.55, fontSize: "0.6rem", fontFamily: "monospace" }}>
-                      {country.code}
-                    </Box>
-                  </Box>
-                }
-                size="small"
+                type="button"
                 onClick={() => toggle(country.code)}
-                color={isSelected ? accentColor : "default"}
-                variant={isSelected ? "filled" : "outlined"}
-                sx={{
-                  cursor: "pointer",
-                  fontSize: "0.72rem",
-                  height: 26,
-                  transition: "all 0.1s ease",
-                  "& .MuiChip-label": { px: 0.75 },
-                  ...(!isSelected && {
-                    borderColor: "divider",
-                    "&:hover": { borderColor: "text.disabled", bgcolor: "action.hover" },
-                  }),
-                  ...(isSelected && {
-                    fontWeight: 600,
-                    boxShadow: accentColor === "warning"
-                      ? "0 0 0 1px rgba(237,108,2,0.3)"
-                      : "0 0 0 1px rgba(46,125,50,0.3)",
-                  }),
-                }}
-              />
+                className={cn(
+                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border transition-all duration-100 cursor-pointer h-[26px]",
+                  isSelected
+                    ? isWarning
+                      ? "border-yellow-500 bg-yellow-500/10 font-semibold text-yellow-700 dark:text-yellow-400"
+                      : "border-green-500 bg-green-500/10 font-semibold text-green-700 dark:text-green-400"
+                    : "border-border hover:border-muted-foreground hover:bg-accent"
+                )}
+              >
+                <span className="text-[0.85rem] leading-none">{flagEmoji(country.code)}</span>
+                <span>{country.name}</span>
+                <span className="opacity-55 text-[0.6rem] font-mono">{country.code}</span>
+              </button>
             );
           })
         )}
-      </Box>
+      </div>
 
       {/* Selected summary chips (shown when search is active and selected items are hidden) */}
       {search && selected.size > 0 && (
-        <Box mt={0.75}>
-          <Typography variant="caption" color="text.disabled" display="block" mb={0.5}>
-            All selected ({selected.size}):
-          </Typography>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, maxHeight: 72, overflowY: "auto" }}>
+        <div className="mt-1.5">
+          <span className="text-xs text-muted-foreground block mb-1">All selected ({selected.size}):</span>
+          <div className="flex flex-wrap gap-1 max-h-[72px] overflow-y-auto">
             {[...selected].map((code) => {
               const country = COUNTRIES.find((c) => c.code === code);
               return (
-                <Chip
+                <Badge
                   key={code}
-                  label={
-                    <Box component="span" sx={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                      <Box component="span" sx={{ fontSize: "0.8rem" }}>{flagEmoji(code)}</Box>
-                      <Box component="span">{country?.name ?? code}</Box>
-                    </Box>
-                  }
-                  size="small"
-                  onDelete={() => toggle(code)}
-                  color={accentColor}
-                  variant="filled"
-                  sx={{ fontSize: "0.7rem", height: 22, fontWeight: 600, "& .MuiChip-label": { px: 0.6 } }}
-                />
+                  variant="secondary"
+                  className={cn(
+                    "gap-1 pr-1 text-[0.7rem] h-[22px] font-semibold",
+                    isWarning
+                      ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                      : "bg-green-500/10 text-green-700 dark:text-green-400"
+                  )}
+                >
+                  <span className="text-[0.8rem]">{flagEmoji(code)}</span>
+                  {country?.name ?? code}
+                  <button
+                    type="button"
+                    onClick={() => toggle(code)}
+                    className="rounded-full hover:bg-destructive/20 p-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
               );
             })}
-          </Box>
-        </Box>
+          </div>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }
 
@@ -329,102 +279,70 @@ function ContinentPicker({ name, initialValues = [], accentColor = "warning" }: 
   const isWarning = accentColor === "warning";
 
   return (
-    <Box>
+    <div>
       <input type="hidden" name={name} value={[...selected].join(",")} />
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={0.75}>
-        <Typography variant="caption" color="text.secondary">
-          {selected.size > 0 ? `${selected.size} selected` : <Box component="span" sx={{ opacity: 0.5 }}>None selected</Box>}
-        </Typography>
-        <Stack direction="row" spacing={0.25}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs text-muted-foreground">
+          {selected.size > 0 ? `${selected.size} selected` : <span className="opacity-50">None selected</span>}
+        </span>
+        <div className="flex items-center gap-0.5">
           <Button
-            size="small"
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => setSelected(new Set(CONTINENTS.map((c) => c.code)))}
             disabled={selected.size === CONTINENTS.length}
-            sx={{ fontSize: "0.7rem", py: 0.25, px: 0.75, minWidth: 0, textTransform: "none" }}
+            className="text-[0.7rem] py-0.5 px-1.5 h-auto"
           >
             Select all
           </Button>
-          <Typography variant="caption" color="text.disabled" sx={{ alignSelf: "center" }}>·</Typography>
+          <span className="text-xs text-muted-foreground">·</span>
           <Button
-            size="small"
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => setSelected(new Set())}
             disabled={selected.size === 0}
-            sx={{ fontSize: "0.7rem", py: 0.25, px: 0.75, minWidth: 0, textTransform: "none" }}
+            className="text-[0.7rem] py-0.5 px-1.5 h-auto"
           >
             Clear all
           </Button>
-        </Stack>
-      </Stack>
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
         {CONTINENTS.map((c) => {
           const isSelected = selected.has(c.code);
           return (
-            <Box
+            <button
               key={c.code}
+              type="button"
               onClick={() => toggle(c.code)}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 0.75,
-                px: 1.25,
-                py: 0.75,
-                borderRadius: 1.5,
-                border: "1.5px solid",
-                borderColor: isSelected
-                  ? isWarning ? "warning.main" : "success.main"
-                  : "divider",
-                bgcolor: isSelected
-                  ? (t) => t.palette.mode === "dark"
-                    ? isWarning ? "rgba(237,108,2,0.15)" : "rgba(46,125,50,0.15)"
-                    : isWarning ? "rgba(237,108,2,0.08)" : "rgba(46,125,50,0.08)"
-                  : "transparent",
-                cursor: "pointer",
-                userSelect: "none",
-                transition: "all 0.12s ease",
-                "&:hover": {
-                  borderColor: isSelected
-                    ? isWarning ? "warning.dark" : "success.dark"
-                    : "text.disabled",
-                  bgcolor: isSelected
-                    ? (t) => t.palette.mode === "dark"
-                      ? isWarning ? "rgba(237,108,2,0.22)" : "rgba(46,125,50,0.22)"
-                      : isWarning ? "rgba(237,108,2,0.13)" : "rgba(46,125,50,0.13)"
-                    : "action.hover",
-                },
-                ...(isSelected && {
-                  boxShadow: isWarning
-                    ? "0 0 0 1px rgba(237,108,2,0.25)"
-                    : "0 0 0 1px rgba(46,125,50,0.25)",
-                }),
-              }}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border-[1.5px] cursor-pointer select-none transition-all duration-100",
+                isSelected
+                  ? isWarning
+                    ? "border-yellow-500 bg-yellow-500/10 shadow-[0_0_0_1px_rgba(237,108,2,0.25)]"
+                    : "border-green-500 bg-green-500/10 shadow-[0_0_0_1px_rgba(46,125,50,0.25)]"
+                  : "border-border hover:border-muted-foreground hover:bg-accent"
+              )}
             >
-              <Typography sx={{ fontSize: "1rem", lineHeight: 1 }}>{c.emoji}</Typography>
-              <Box>
-                <Typography
-                  variant="caption"
-                  fontWeight={isSelected ? 700 : 400}
-                  color={isSelected
-                    ? isWarning ? "warning.main" : "success.main"
-                    : "text.primary"}
-                  display="block"
-                  lineHeight={1.2}
-                  sx={{ transition: "all 0.12s ease" }}
-                >
+              <span className="text-base leading-none">{c.emoji}</span>
+              <div>
+                <span className={cn(
+                  "block text-xs leading-snug transition-all duration-100",
+                  isSelected
+                    ? isWarning ? "font-bold text-yellow-700 dark:text-yellow-400" : "font-bold text-green-700 dark:text-green-400"
+                    : "font-normal text-foreground"
+                )}>
                   {c.name}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.disabled"
-                  sx={{ fontSize: "0.62rem", fontFamily: "monospace" }}
-                >
-                  {c.code}
-                </Typography>
-              </Box>
-            </Box>
+                </span>
+                <span className="text-[0.62rem] text-muted-foreground font-mono">{c.code}</span>
+              </div>
+            </button>
           );
         })}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }
 
@@ -461,47 +379,47 @@ function TagInput({ name, label, initialValues = [], placeholder, helperText, va
   }
 
   return (
-    <Box>
+    <div>
       <input type="hidden" name={name} value={tags.join(",")} />
-      <TextField
-        label={label}
-        size="small"
-        fullWidth
-        value={inputValue}
-        placeholder={tags.length === 0 ? placeholder : undefined}
-        helperText={helperText}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "," || e.key === " " || e.key === "Enter") {
-            e.preventDefault();
-            commitInput(inputValue);
-          }
-          if (e.key === "Backspace" && !inputValue && tags.length > 0) {
-            setTags((prev) => prev.slice(0, -1));
-          }
-        }}
-        onBlur={() => {
-          if (inputValue.trim()) commitInput(inputValue);
-        }}
-        slotProps={{
-          input: {
-            startAdornment: tags.length > 0 ? (
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.4, mr: 0.5, my: 0.25 }}>
-                {tags.map((tag) => (
-                  <Chip
-                    key={tag}
-                    label={tag}
-                    size="small"
-                    onDelete={() => setTags((prev) => prev.filter((t) => t !== tag))}
-                    sx={{ height: 20, fontSize: "0.68rem", "& .MuiChip-label": { px: 0.6 }, "& .MuiChip-deleteIcon": { fontSize: 12 } }}
-                  />
-                ))}
-              </Box>
-            ) : undefined,
-          },
-        }}
-      />
-    </Box>
+      <label className="text-sm font-medium mb-1 block">{label}</label>
+      <div className={cn(
+        "flex flex-wrap items-center gap-1 min-h-9 border border-input rounded-md px-3 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
+        tags.length > 0 && "pb-1"
+      )}>
+        {tags.map((tag) => (
+          <Badge key={tag} variant="secondary" className="gap-1 pr-1 text-xs h-5">
+            {tag}
+            <button
+              type="button"
+              onClick={() => setTags((prev) => prev.filter((t) => t !== tag))}
+              className="rounded-full hover:bg-destructive/20 p-0.5"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          </Badge>
+        ))}
+        <input
+          type="text"
+          value={inputValue}
+          placeholder={tags.length === 0 ? placeholder : undefined}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "," || e.key === " " || e.key === "Enter") {
+              e.preventDefault();
+              commitInput(inputValue);
+            }
+            if (e.key === "Backspace" && !inputValue && tags.length > 0) {
+              setTags((prev) => prev.slice(0, -1));
+            }
+          }}
+          onBlur={() => {
+            if (inputValue.trim()) commitInput(inputValue);
+          }}
+          className="flex-1 min-w-[80px] bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+        />
+      </div>
+      {helperText && <p className="text-xs text-muted-foreground mt-1">{helperText}</p>}
+    </div>
   );
 }
 
@@ -515,51 +433,55 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
   );
 
   return (
-    <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={rows.length > 0 ? 1 : 0}>
-        <Typography variant="body2" color="text.secondary">
-          Custom Response Headers
-        </Typography>
-        <Tooltip title="Add header">
-          <IconButton size="small" onClick={() => setRows((prev) => [...prev, { key: "", value: "" }])}>
-            <AddIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Stack>
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm text-muted-foreground">Custom Response Headers</p>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={() => setRows((prev) => [...prev, { key: "", value: "" }])}
+          title="Add header"
+        >
+          <span className="text-base leading-none">+</span>
+        </Button>
+      </div>
       {rows.length === 0 ? (
-        <Typography variant="caption" color="text.disabled">
-          No custom headers — click + to add one.
-        </Typography>
+        <span className="text-xs text-muted-foreground">No custom headers — click + to add one.</span>
       ) : (
-        <Stack spacing={1}>
+        <div className="flex flex-col gap-2">
           {rows.map((row, i) => (
-            <Stack key={i} direction="row" spacing={1} alignItems="flex-start">
+            <div key={i} className="flex items-start gap-2">
               <input type="hidden" name="geoblock_response_headers_keys[]" value={row.key} />
               <input type="hidden" name="geoblock_response_headers_values[]" value={row.value} />
-              <TextField
-                label="Header"
+              <Input
+                placeholder="Header"
                 value={row.key}
                 onChange={(e) => setRows((prev) => prev.map((r, j) => j === i ? { ...r, key: e.target.value } : r))}
-                size="small"
-                fullWidth
+                className="h-8 text-sm"
               />
-              <TextField
-                label="Value"
+              <Input
+                placeholder="Value"
                 value={row.value}
                 onChange={(e) => setRows((prev) => prev.map((r, j) => j === i ? { ...r, value: e.target.value } : r))}
-                size="small"
-                fullWidth
+                className="h-8 text-sm"
               />
-              <Tooltip title="Remove">
-                <IconButton size="small" color="error" onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))} sx={{ mt: 0.5 }}>
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
+                title="Remove"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           ))}
-        </Stack>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }
 
@@ -579,34 +501,30 @@ function RulesPanel({ prefix, initial }: RulesPanelProps) {
   const ips = prefix === "block" ? (initial?.block_ips ?? []) : (initial?.allow_ips ?? []);
 
   return (
-    <Stack spacing={2.5}>
+    <div className="flex flex-col gap-6">
       {/* Countries */}
-      <Box>
-        <Typography variant="body2" fontWeight={600} mb={1} color="text.primary">
-          Countries
-        </Typography>
+      <div>
+        <p className="text-sm font-semibold mb-2">Countries</p>
         <CountryPicker
           name={`geoblock_${prefix}_countries`}
           initialValues={countries}
           accentColor={accentColor}
         />
-      </Box>
+      </div>
 
-      <Divider />
+      <div className="border-t border-border" />
 
       {/* Continents */}
-      <Box>
-        <Typography variant="body2" fontWeight={600} mb={1} color="text.primary">
-          Continents
-        </Typography>
+      <div>
+        <p className="text-sm font-semibold mb-2">Continents</p>
         <ContinentPicker
           name={`geoblock_${prefix}_continents`}
           initialValues={continents}
           accentColor={accentColor}
         />
-      </Box>
+      </div>
 
-      <Divider />
+      <div className="border-t border-border" />
 
       {/* ASNs */}
       <TagInput
@@ -619,27 +537,23 @@ function RulesPanel({ prefix, initial }: RulesPanelProps) {
       />
 
       {/* CIDRs + IPs */}
-      <Grid container spacing={2}>
-        <Grid size={6}>
-          <TagInput
-            name={`geoblock_${prefix}_cidrs`}
-            label="CIDRs"
-            initialValues={cidrs}
-            placeholder="10.0.0.0/8…"
-            helperText="Press Enter or comma to add"
-          />
-        </Grid>
-        <Grid size={6}>
-          <TagInput
-            name={`geoblock_${prefix}_ips`}
-            label="IP Addresses"
-            initialValues={ips}
-            placeholder="1.2.3.4…"
-            helperText="Press Enter or comma to add"
-          />
-        </Grid>
-      </Grid>
-    </Stack>
+      <div className="grid grid-cols-2 gap-4">
+        <TagInput
+          name={`geoblock_${prefix}_cidrs`}
+          label="CIDRs"
+          initialValues={cidrs}
+          placeholder="10.0.0.0/8…"
+          helperText="Press Enter or comma to add"
+        />
+        <TagInput
+          name={`geoblock_${prefix}_ips`}
+          label="IP Addresses"
+          initialValues={ips}
+          placeholder="1.2.3.4…"
+          helperText="Press Enter or comma to add"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -657,138 +571,97 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
   const initial = initialValues?.geoblock ?? null;
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);
   const [mode, setMode] = useState<GeoBlockMode>(initialValues?.geoblock_mode ?? "merge");
-  const [rulesTab, setRulesTab] = useState(0);
 
   return (
-    <Box
-      sx={{
-        borderRadius: 2,
-        border: "1px solid",
-        borderColor: "warning.main",
-        bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(237,108,2,0.06)" : "rgba(237,108,2,0.04)",
-        p: 2
-      }}
-    >
+    <div className="rounded-lg border border-yellow-500/60 bg-yellow-500/5 p-4">
       <input type="hidden" name="geoblock_present" value="1" />
 
       {/* Header */}
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
-        <Stack direction="row" alignItems="flex-start" spacing={1.5} flex={1} minWidth={0}>
-          <Box
-            sx={{
-              mt: 0.25,
-              width: 32,
-              height: 32,
-              borderRadius: 1.5,
-              bgcolor: "warning.main",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <PublicIcon sx={{ fontSize: 18, color: "#fff" }} />
-          </Box>
-          <Box minWidth={0}>
-            <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
-              <Typography variant="subtitle1" fontWeight={700} lineHeight={1.3}>
-                Geo Blocking
-              </Typography>
+      <div className="flex flex-row items-start justify-between gap-2">
+        <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
+          <div className="mt-0.5 w-8 h-8 rounded-xl bg-yellow-500 flex items-center justify-center shrink-0">
+            <Globe className="h-4 w-4 text-white" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-row items-center gap-2 flex-wrap">
+              <p className="text-sm font-bold leading-snug">Geo Blocking</p>
               <GeoIpStatus />
-            </Stack>
-            <Typography variant="body2" color="text.secondary" mt={0.25}>
+            </div>
+            <p className="text-sm text-muted-foreground mt-0.5">
               Block or allow traffic by country, continent, ASN, CIDR, or IP
-            </Typography>
-          </Box>
-        </Stack>
+            </p>
+          </div>
+        </div>
         <Switch
           name="geoblock_enabled"
           checked={enabled}
-          onChange={(_, checked) => setEnabled(checked)}
-          sx={{ flexShrink: 0 }}
+          onCheckedChange={setEnabled}
+          className="shrink-0"
         />
-      </Stack>
+      </div>
 
       {/* Mode selector */}
       <input type="hidden" name="geoblock_mode" value={mode} />
 
       {/* Detail fields */}
-      <Collapse in={enabled} timeout="auto" unmountOnExit>
-        <Box mt={2}>
-          {showModeSelector && (
-            <>
-              <Stack direction="row" spacing={1}>
-                {(["merge", "override"] as GeoBlockMode[]).map((v) => (
-                  <Box
-                    key={v}
-                    onClick={() => setMode(v)}
-                    sx={{
-                      flex: 1,
-                      py: 0.75,
-                      px: 1.5,
-                      borderRadius: 1.5,
-                      border: "1.5px solid",
-                      borderColor: mode === v ? "warning.main" : "divider",
-                      bgcolor: mode === v
-                        ? (theme) => theme.palette.mode === "dark" ? "rgba(237,108,2,0.12)" : "rgba(237,108,2,0.08)"
-                        : "transparent",
-                      cursor: "pointer",
-                      textAlign: "center",
-                      transition: "all 0.15s ease",
-                      userSelect: "none",
-                      "&:hover": {
-                        borderColor: mode === v ? "warning.main" : "text.disabled",
-                      },
-                    }}
-                  >
-                    <Typography
-                      variant="body2"
-                      fontWeight={mode === v ? 600 : 400}
-                      color={mode === v ? "warning.main" : "text.secondary"}
-                      sx={{ transition: "all 0.15s ease" }}
-                    >
-                      {v === "merge" ? "Merge with global" : "Override global"}
-                    </Typography>
-                  </Box>
-                ))}
-              </Stack>
-              <Divider sx={{ mt: 2, mb: 2 }} />
-            </>
-          )}
-          {!showModeSelector && <Divider sx={{ mb: 2 }} />}
+      <div className={cn(
+        "overflow-hidden transition-all duration-200",
+        enabled ? "max-h-[3000px] opacity-100 mt-4" : "max-h-0 opacity-0 pointer-events-none"
+      )}>
+        {showModeSelector && (
+          <>
+            <div className="flex gap-2">
+              {(["merge", "override"] as GeoBlockMode[]).map((v) => (
+                <div
+                  key={v}
+                  onClick={() => setMode(v)}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-xl border-[1.5px] cursor-pointer text-center transition-all duration-150 select-none",
+                    mode === v
+                      ? "border-yellow-500 bg-yellow-500/10"
+                      : "border-border hover:border-muted-foreground"
+                  )}
+                >
+                  <p className={cn(
+                    "text-sm transition-all duration-150",
+                    mode === v ? "font-semibold text-yellow-700 dark:text-yellow-400" : "font-normal text-muted-foreground"
+                  )}>
+                    {v === "merge" ? "Merge with global" : "Override global"}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-border mt-4 mb-4" />
+          </>
+        )}
+        {!showModeSelector && <div className="border-t border-border mb-4" />}
 
-          {/* Block / Allow tabs */}
-          <Tabs
-            value={rulesTab}
-            onChange={(_: SyntheticEvent, v: number) => setRulesTab(v)}
-            variant="fullWidth"
-            sx={{ mb: 2.5, "& .MuiTab-root": { textTransform: "none", fontWeight: 500 } }}
-          >
-            <Tab label="Block Rules" />
-            <Tab label="Allow Rules" />
-          </Tabs>
-
-          <Box hidden={rulesTab !== 0}>
+        {/* Block / Allow tabs */}
+        <Tabs defaultValue="block">
+          <TabsList className="w-full">
+            <TabsTrigger value="block" className="flex-1">Block Rules</TabsTrigger>
+            <TabsTrigger value="allow" className="flex-1">Allow Rules</TabsTrigger>
+          </TabsList>
+          <TabsContent value="block" className="mt-4">
             <RulesPanel prefix="block" initial={initial} />
-          </Box>
-
-          <Box hidden={rulesTab !== 1}>
-            <Box mb={1.5}>
-              <Typography variant="caption" color="text.secondary">
-                Allow rules take precedence over block rules.
-              </Typography>
-            </Box>
+          </TabsContent>
+          <TabsContent value="allow" className="mt-4">
+            <p className="text-xs text-muted-foreground mb-3">
+              Allow rules take precedence over block rules.
+            </p>
             <RulesPanel prefix="allow" initial={initial} />
-          </Box>
+          </TabsContent>
+        </Tabs>
 
-          {/* Advanced: Trusted Proxies + Block Response */}
-          <Box mt={2.5}>
-            <Accordion disableGutters elevation={0} sx={{ bgcolor: "transparent", border: "1px solid", borderColor: "divider", borderRadius: 1, "&:before": { display: "none" } }}>
-              <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 44, "& .MuiAccordionSummary-content": { my: 0.5 } }}>
-                <Typography variant="body2" fontWeight={500}>Trusted Proxies &amp; Block Response</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Stack spacing={2}>
+        {/* Advanced: Trusted Proxies + Block Response */}
+        <div className="mt-6">
+          <Accordion type="single" collapsible>
+            <AccordionItem value="advanced" className="border rounded-lg border-border">
+              <AccordionTrigger className="px-4 py-2.5 text-sm font-medium hover:no-underline">
+                Trusted Proxies &amp; Block Response
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <div className="flex flex-col gap-4">
                   <TagInput
                     name="geoblock_trusted_proxies"
                     label="Trusted Proxies"
@@ -797,64 +670,60 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                     helperText="Used to parse X-Forwarded-For. Use private_ranges for all RFC-1918 ranges."
                   />
 
-                  <Tooltip title="When enabled, requests where the real client IP cannot be determined (e.g. behind a trusted proxy with no usable X-Forwarded-For) are blocked. Default: off (fail-open).">
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          name="geoblock_fail_closed"
-                          defaultChecked={initial?.fail_closed ?? false}
-                          size="small"
-                        />
-                      }
-                      label={<Typography variant="body2">Fail closed (block indeterminate IPs)</Typography>}
+                  <div className="flex items-center gap-2" title="When enabled, requests where the real client IP cannot be determined (e.g. behind a trusted proxy with no usable X-Forwarded-For) are blocked. Default: off (fail-open).">
+                    <Checkbox
+                      id="geoblock-fail-closed"
+                      name="geoblock_fail_closed"
+                      defaultChecked={initial?.fail_closed ?? false}
                     />
-                  </Tooltip>
+                    <label htmlFor="geoblock-fail-closed" className="text-sm cursor-pointer">
+                      Fail closed (block indeterminate IPs)
+                    </label>
+                  </div>
 
-                  <Divider />
+                  <div className="border-t border-border" />
 
-                  <Grid container spacing={2}>
-                    <Grid size={4}>
-                      <TextField
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-1">
+                      <label className="text-sm font-medium mb-1 block">Status Code</label>
+                      <Input
                         name="geoblock_response_status"
-                        label="Status Code"
                         type="number"
-                        inputProps={{ min: 100, max: 599 }}
+                        min={100}
+                        max={599}
                         defaultValue={initial?.response_status ?? 403}
-                        helperText="HTTP status when blocked"
-                        fullWidth
-                        size="small"
+                        className="h-8 text-sm"
                       />
-                    </Grid>
-                    <Grid size={8}>
-                      <TextField
+                      <p className="text-xs text-muted-foreground mt-1">HTTP status when blocked</p>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-sm font-medium mb-1 block">Response Body</label>
+                      <Input
                         name="geoblock_response_body"
-                        label="Response Body"
                         defaultValue={initial?.response_body ?? "Forbidden"}
-                        helperText="Body text returned to blocked clients"
-                        fullWidth
-                        size="small"
+                        className="h-8 text-sm"
                       />
-                    </Grid>
-                    <Grid size={12}>
-                      <TextField
+                      <p className="text-xs text-muted-foreground mt-1">Body text returned to blocked clients</p>
+                    </div>
+                    <div className="col-span-3">
+                      <label className="text-sm font-medium mb-1 block">Redirect URL</label>
+                      <Input
                         name="geoblock_redirect_url"
-                        label="Redirect URL"
                         defaultValue={initial?.redirect_url ?? ""}
-                        helperText="If set, sends a 302 redirect instead of status/body above"
-                        fullWidth
-                        size="small"
                         placeholder="https://example.com/blocked"
+                        className="h-8 text-sm"
                       />
-                    </Grid>
-                  </Grid>
+                      <p className="text-xs text-muted-foreground mt-1">If set, sends a 302 redirect instead of status/body above</p>
+                    </div>
+                  </div>
 
                   <ResponseHeadersEditor initialHeaders={initial?.response_headers ?? {}} />
-                </Stack>
-              </AccordionDetails>
-            </Accordion>
-          </Box>
-        </Box>
-      </Collapse>
-    </Box>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
+      </div>
+    </div>
   );
 }

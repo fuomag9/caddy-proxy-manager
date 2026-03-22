@@ -1,5 +1,7 @@
-
-import { Alert, Box, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useFormState } from "react-dom";
 import { useEffect } from "react";
 import {
@@ -7,12 +9,12 @@ import {
     deleteProxyHostAction,
     updateProxyHostAction
 } from "@/app/(dashboard)/proxy-hosts/actions";
-import { INITIAL_ACTION_STATE } from "@/src/lib/actions";
-import { AccessList } from "@/src/lib/models/access-lists";
-import { Certificate } from "@/src/lib/models/certificates";
-import { ProxyHost } from "@/src/lib/models/proxy-hosts";
-import { AuthentikSettings } from "@/src/lib/settings";
-import { AppDialog } from "@/src/components/ui/AppDialog";
+import { INITIAL_ACTION_STATE } from "@/lib/actions";
+import { AccessList } from "@/lib/models/access-lists";
+import { Certificate } from "@/lib/models/certificates";
+import { ProxyHost } from "@/lib/models/proxy-hosts";
+import { AuthentikSettings } from "@/lib/settings";
+import { AppDialog } from "@/components/ui/AppDialog";
 import { AuthentikFields } from "./AuthentikFields";
 import { DnsResolverFields } from "./DnsResolverFields";
 import { LoadBalancerFields } from "./LoadBalancerFields";
@@ -24,7 +26,7 @@ import { WafFields } from "./WafFields";
 import { MtlsFields } from "./MtlsConfig";
 import { RedirectsFields } from "./RedirectsFields";
 import { RewriteFields } from "./RewriteFields";
-import type { CaCertificate } from "@/src/lib/models/ca-certificates";
+import type { CaCertificate } from "@/lib/models/ca-certificates";
 
 export function CreateHostDialog({
     open,
@@ -59,14 +61,13 @@ export function CreateHostDialog({
             maxWidth="md"
             submitLabel="Create"
             onSubmit={() => {
-                // Trigger generic form submit
                 (document.getElementById("create-host-form") as HTMLFormElement)?.requestSubmit();
             }}
         >
-            <Stack component="form" id="create-host-form" action={formAction} spacing={2.5}>
+            <form id="create-host-form" action={formAction} className="flex flex-col gap-5">
                 {state.status !== "idle" && state.message && (
-                    <Alert severity={state.status === "error" ? "error" : "success"}>
-                        {state.message}
+                    <Alert variant={state.status === "error" ? "destructive" : "default"}>
+                        <AlertDescription>{state.message}</AlertDescription>
                     </Alert>
                 )}
                 <SettingsToggles
@@ -74,64 +75,85 @@ export function CreateHostDialog({
                     skipHttpsValidation={initialData?.skip_https_hostname_validation}
                     enabled={true}
                 />
-                <TextField
-                    name="name"
-                    label="Name"
-                    placeholder="My Service"
-                    defaultValue={initialData ? `${initialData.name} (Copy)` : ""}
-                    required
-                    fullWidth
-                />
-                <TextField
-                    name="domains"
-                    label="Domains"
-                    placeholder="app.example.com"
-                    defaultValue={initialData?.domains.join("\n") ?? ""}
-                    helperText="One per line or comma-separated. Wildcards like *.example.com are supported."
-                    multiline
-                    minRows={2}
-                    required
-                    fullWidth
-                />
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Name</label>
+                    <Input
+                        name="name"
+                        placeholder="My Service"
+                        defaultValue={initialData ? `${initialData.name} (Copy)` : ""}
+                        required
+                    />
+                </div>
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Domains</label>
+                    <Textarea
+                        name="domains"
+                        placeholder="app.example.com"
+                        defaultValue={initialData?.domains.join("\n") ?? ""}
+                        required
+                        rows={2}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                        One per line or comma-separated. Wildcards like *.example.com are supported.
+                    </p>
+                </div>
                 <UpstreamInput defaultUpstreams={initialData?.upstreams} />
-                <TextField select name="certificate_id" label="Certificate" defaultValue={initialData?.certificate_id ?? ""} fullWidth>
-                    <MenuItem value="">Managed by Caddy (Auto)</MenuItem>
-                    {certificates.map((cert) => (
-                        <MenuItem key={cert.id} value={cert.id}>
-                            {cert.name}
-                        </MenuItem>
-                    ))}
-                </TextField>
-                <TextField select name="access_list_id" label="Access List" defaultValue={initialData?.access_list_id ?? ""} fullWidth>
-                    <MenuItem value="">None</MenuItem>
-                    {accessLists.map((list) => (
-                        <MenuItem key={list.id} value={list.id}>
-                            {list.name}
-                        </MenuItem>
-                    ))}
-                </TextField>
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Certificate</label>
+                    <Select name="certificate_id" defaultValue={String(initialData?.certificate_id ?? "")}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Managed by Caddy (Auto)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">Managed by Caddy (Auto)</SelectItem>
+                            {certificates.map((cert) => (
+                                <SelectItem key={cert.id} value={String(cert.id)}>
+                                    {cert.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Access List</label>
+                    <Select name="access_list_id" defaultValue={String(initialData?.access_list_id ?? "")}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">None</SelectItem>
+                            {accessLists.map((list) => (
+                                <SelectItem key={list.id} value={String(list.id)}>
+                                    {list.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
                 <RedirectsFields initialData={initialData?.redirects} />
                 <RewriteFields initialData={initialData?.rewrite} />
-                <TextField
-                    name="custom_pre_handlers_json"
-                    label="Custom Pre-Handlers (JSON)"
-                    placeholder='[{"handler": "headers", ...}]'
-                    defaultValue={initialData?.custom_pre_handlers_json ?? ""}
-                    helperText="Optional JSON array of Caddy handlers"
-                    multiline
-                    minRows={3}
-                    fullWidth
-                />
-                <TextField
-                    name="custom_reverse_proxy_json"
-                    label="Custom Reverse Proxy (JSON)"
-                    placeholder='{"headers": {"request": {...}}}'
-                    defaultValue={initialData?.custom_reverse_proxy_json ?? ""}
-                    helperText="Deep-merge into reverse_proxy handler (only applies in proxy mode)"
-                    multiline
-                    minRows={3}
-                    fullWidth
-                />
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
+                    <Textarea
+                        name="custom_pre_handlers_json"
+                        placeholder='[{"handler": "headers", ...}]'
+                        defaultValue={initialData?.custom_pre_handlers_json ?? ""}
+                        rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Optional JSON array of Caddy handlers</p>
+                </div>
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Custom Reverse Proxy (JSON)</label>
+                    <Textarea
+                        name="custom_reverse_proxy_json"
+                        placeholder='{"headers": {"request": {...}}}'
+                        defaultValue={initialData?.custom_reverse_proxy_json ?? ""}
+                        rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Deep-merge into reverse_proxy handler (only applies in proxy mode)
+                    </p>
+                </div>
                 <AuthentikFields defaults={authentikDefaults} authentik={initialData?.authentik} />
                 <LoadBalancerFields loadBalancer={initialData?.load_balancer} />
                 <DnsResolverFields dnsResolver={initialData?.dns_resolver} />
@@ -139,7 +161,7 @@ export function CreateHostDialog({
                 <GeoBlockFields />
                 <WafFields value={initialData?.waf} />
                 <MtlsFields value={initialData?.mtls} caCertificates={caCertificates} />
-            </Stack>
+            </form>
         </AppDialog>
     );
 }
@@ -178,10 +200,10 @@ export function EditHostDialog({
                 (document.getElementById("edit-host-form") as HTMLFormElement)?.requestSubmit();
             }}
         >
-            <Stack component="form" id="edit-host-form" action={formAction} spacing={2.5}>
+            <form id="edit-host-form" action={formAction} className="flex flex-col gap-5">
                 {state.status !== "idle" && state.message && (
-                    <Alert severity={state.status === "error" ? "error" : "success"}>
-                        {state.message}
+                    <Alert variant={state.status === "error" ? "destructive" : "default"}>
+                        <AlertDescription>{state.message}</AlertDescription>
                     </Alert>
                 )}
                 <SettingsToggles
@@ -189,66 +211,89 @@ export function EditHostDialog({
                     skipHttpsValidation={host.skip_https_hostname_validation}
                     enabled={host.enabled}
                 />
-                <TextField name="name" label="Name" defaultValue={host.name} required fullWidth />
-                <TextField
-                    name="domains"
-                    label="Domains"
-                    defaultValue={host.domains.join("\n")}
-                    helperText="One per line or comma-separated. Wildcards like *.example.com are supported."
-                    multiline
-                    minRows={2}
-                    fullWidth
-                />
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Name</label>
+                    <Input name="name" defaultValue={host.name} required />
+                </div>
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Domains</label>
+                    <Textarea
+                        name="domains"
+                        defaultValue={host.domains.join("\n")}
+                        rows={2}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                        One per line or comma-separated. Wildcards like *.example.com are supported.
+                    </p>
+                </div>
                 <UpstreamInput defaultUpstreams={host.upstreams} />
-                <TextField select name="certificate_id" label="Certificate" defaultValue={host.certificate_id ?? ""} fullWidth>
-                    <MenuItem value="">Managed by Caddy (Auto)</MenuItem>
-                    {certificates.map((cert) => (
-                        <MenuItem key={cert.id} value={cert.id}>
-                            {cert.name}
-                        </MenuItem>
-                    ))}
-                </TextField>
-                <TextField select name="access_list_id" label="Access List" defaultValue={host.access_list_id ?? ""} fullWidth>
-                    <MenuItem value="">None</MenuItem>
-                    {accessLists.map((list) => (
-                        <MenuItem key={list.id} value={list.id}>
-                            {list.name}
-                        </MenuItem>
-                    ))}
-                </TextField>
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Certificate</label>
+                    <Select name="certificate_id" defaultValue={String(host.certificate_id ?? "")}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Managed by Caddy (Auto)" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">Managed by Caddy (Auto)</SelectItem>
+                            {certificates.map((cert) => (
+                                <SelectItem key={cert.id} value={String(cert.id)}>
+                                    {cert.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Access List</label>
+                    <Select name="access_list_id" defaultValue={String(host.access_list_id ?? "")}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">None</SelectItem>
+                            {accessLists.map((list) => (
+                                <SelectItem key={list.id} value={String(list.id)}>
+                                    {list.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
                 <RedirectsFields initialData={host.redirects} />
                 <RewriteFields initialData={host.rewrite} />
-                <TextField
-                    name="custom_pre_handlers_json"
-                    label="Custom Pre-Handlers (JSON)"
-                    defaultValue={host.custom_pre_handlers_json ?? ""}
-                    helperText="Optional JSON array of Caddy handlers"
-                    multiline
-                    minRows={3}
-                    fullWidth
-                />
-                <TextField
-                    name="custom_reverse_proxy_json"
-                    label="Custom Reverse Proxy (JSON)"
-                    defaultValue={host.custom_reverse_proxy_json ?? ""}
-                    helperText="Deep-merge into reverse_proxy handler (only applies in proxy mode)"
-                    multiline
-                    minRows={3}
-                    fullWidth
-                />
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
+                    <Textarea
+                        name="custom_pre_handlers_json"
+                        defaultValue={host.custom_pre_handlers_json ?? ""}
+                        rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Optional JSON array of Caddy handlers</p>
+                </div>
+                <div>
+                    <label className="text-sm font-medium mb-1 block">Custom Reverse Proxy (JSON)</label>
+                    <Textarea
+                        name="custom_reverse_proxy_json"
+                        defaultValue={host.custom_reverse_proxy_json ?? ""}
+                        rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Deep-merge into reverse_proxy handler (only applies in proxy mode)
+                    </p>
+                </div>
                 <AuthentikFields authentik={host.authentik} />
                 <LoadBalancerFields loadBalancer={host.load_balancer} />
                 <DnsResolverFields dnsResolver={host.dns_resolver} />
                 <UpstreamDnsResolutionFields upstreamDnsResolution={host.upstream_dns_resolution} />
                 <GeoBlockFields
-                  initialValues={{
-                    geoblock: host.geoblock,
-                    geoblock_mode: host.geoblock_mode,
-                  }}
+                    initialValues={{
+                        geoblock: host.geoblock,
+                        geoblock_mode: host.geoblock_mode,
+                    }}
                 />
                 <WafFields value={host.waf} />
                 <MtlsFields value={host.mtls} caCertificates={caCertificates} />
-            </Stack>
+            </form>
         </AppDialog>
     );
 }
@@ -281,30 +326,26 @@ export function DeleteHostDialog({
                 (document.getElementById("delete-host-form") as HTMLFormElement)?.requestSubmit();
             }}
         >
-            <Stack component="form" id="delete-host-form" action={formAction} spacing={2}>
+            <form id="delete-host-form" action={formAction} className="flex flex-col gap-4">
                 {state.status !== "idle" && state.message && (
-                    <Alert severity={state.status === "error" ? "error" : "success"}>
-                        {state.message}
+                    <Alert variant={state.status === "error" ? "destructive" : "default"}>
+                        <AlertDescription>{state.message}</AlertDescription>
                     </Alert>
                 )}
-                <Typography variant="body1">
+                <p className="text-sm">
                     Are you sure you want to delete the proxy host <strong>{host.name}</strong>?
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
+                </p>
+                <p className="text-sm text-muted-foreground">
                     This will remove the configuration for:
-                </Typography>
-                <Box sx={{ pl: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                        • Domains: {host.domains.join(", ")}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                        • Upstreams: {host.upstreams.join(", ")}
-                    </Typography>
-                </Box>
-                <Typography variant="body2" color="error.main" fontWeight={500}>
+                </p>
+                <div className="pl-4">
+                    <p className="text-sm text-muted-foreground">• Domains: {host.domains.join(", ")}</p>
+                    <p className="text-sm text-muted-foreground">• Upstreams: {host.upstreams.join(", ")}</p>
+                </div>
+                <p className="text-sm text-destructive font-medium">
                     This action cannot be undone.
-                </Typography>
-            </Stack>
+                </p>
+            </form>
         </AppDialog>
     );
 }

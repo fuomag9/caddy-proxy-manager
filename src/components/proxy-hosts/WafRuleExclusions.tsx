@@ -1,7 +1,9 @@
 "use client";
 
-import { Box, Chip, IconButton, Stack, TextField, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Plus, X } from "lucide-react";
 import { useState } from "react";
 
 type Props = {
@@ -25,39 +27,45 @@ export function WafRuleExclusions({ value }: Props) {
   }
 
   return (
-    <Box>
+    <div>
       <input type="hidden" name="waf_excluded_rule_ids" value={JSON.stringify(ids)} />
-      <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
         Excluded Rule IDs
-      </Typography>
-      <Typography variant="caption" color="text.secondary" display="block" mb={0.75}>
+      </span>
+      <span className="text-xs text-muted-foreground block mb-2">
         Rules listed here are disabled via <code>SecRuleRemoveById</code>
-      </Typography>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" gap={0.75} mb={ids.length ? 1 : 0}>
-        {ids.map((id) => (
-          <Chip
-            key={id}
-            label={id}
-            size="small"
-            onDelete={() => removeId(id)}
-            sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}
-          />
-        ))}
-      </Stack>
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ maxWidth: 260 }}>
-        <TextField
-          size="small"
-          label="Rule ID"
+      </span>
+      {ids.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {ids.map((id) => (
+            <Badge key={id} variant="secondary" className="gap-1 pr-1 font-mono text-xs">
+              {id}
+              <button
+                type="button"
+                onClick={() => removeId(id)}
+                className="rounded-full hover:bg-destructive/20 p-0.5"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2 max-w-[260px]">
+        <Input
+          size={1}
+          placeholder="Rule ID"
           value={inputVal}
           onChange={(e) => setInputVal(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addId(); } }}
-          inputProps={{ inputMode: "numeric", pattern: "[0-9]*" }}
-          sx={{ flex: 1 }}
+          inputMode="numeric"
+          pattern="[0-9]*"
+          className="flex-1 h-8 text-sm"
         />
-        <IconButton size="small" onClick={addId} color="primary">
-          <AddIcon fontSize="small" />
-        </IconButton>
-      </Stack>
-    </Box>
+        <Button type="button" size="icon" variant="ghost" onClick={addId} className="h-8 w-8">
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
   );
 }

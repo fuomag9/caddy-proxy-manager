@@ -1,6 +1,5 @@
-
-import { Box, Stack, Switch, Typography } from "@mui/material";
-import type { SwitchProps } from "@mui/material";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 type ToggleSetting = {
@@ -8,7 +7,6 @@ type ToggleSetting = {
     label: string;
     description: string;
     defaultChecked: boolean;
-    color?: SwitchProps["color"];
 };
 
 type SettingsTogglesProps = {
@@ -28,12 +26,8 @@ export function SettingsToggles({
         enabled: enabled
     });
 
-    const handleChange = (name: keyof typeof values) => (event: React.ChangeEvent<HTMLInputElement>) => {
-        setValues(prev => ({ ...prev, [name]: event.target.checked }));
-    };
-
-    const handleEnabledChange = (_: React.ChangeEvent<HTMLInputElement>, checked: boolean) => {
-        setValues(prev => ({ ...prev, enabled: checked }));
+    const handleChange = (name: keyof typeof values) => (checked: boolean) => {
+        setValues(prev => ({ ...prev, [name]: checked }));
     };
 
     const settings: ToggleSetting[] = [
@@ -42,98 +36,67 @@ export function SettingsToggles({
             label: "HSTS Subdomains",
             description: "Include subdomains in the Strict-Transport-Security header",
             defaultChecked: values.hsts_subdomains,
-            color: "primary"
         },
         {
             name: "skip_https_hostname_validation",
             label: "Skip HTTPS Validation",
             description: "Skip SSL certificate hostname verification for backend connections",
             defaultChecked: values.skip_https_hostname_validation,
-            color: "primary"
         }
     ];
 
     return (
-        <Stack spacing={3}>
+        <div className="flex flex-col gap-6">
             <input type="hidden" name="enabled_present" value="1" />
             <input type="hidden" name="enabled" value={values.enabled ? "on" : ""} />
 
             {/* Main Enable Switch */}
-            <Stack
-                direction="row"
-                alignItems="center"
-                justifyContent="space-between"
-                sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    border: "1px solid",
-                    borderColor: values.enabled ? "primary.main" : "divider",
-                    bgcolor: values.enabled ? "rgba(99, 102, 241, 0.04)" : "background.paper",
-                    transition: "all 0.2s ease"
-                }}
-            >
-                <Box>
-                    <Typography variant="subtitle1" fontWeight={600} color={values.enabled ? "primary.main" : "text.primary"}>
+            <div className={cn(
+                "flex flex-row items-center justify-between p-4 rounded-lg border transition-all duration-200",
+                values.enabled
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-background"
+            )}>
+                <div>
+                    <p className={cn("text-sm font-semibold", values.enabled ? "text-primary" : "text-foreground")}>
                         {values.enabled ? "Proxy Host Enabled" : "Proxy Host Paused"}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    </p>
+                    <p className="text-sm text-muted-foreground">
                         {values.enabled
                             ? "This host is active and routing traffic"
                             : "This host is disabled and will not respond to requests"}
-                    </Typography>
-                </Box>
+                    </p>
+                </div>
                 <Switch
                     checked={values.enabled}
-                    onChange={handleEnabledChange}
-                    color="primary"
+                    onCheckedChange={handleChange("enabled")}
                 />
-            </Stack>
+            </div>
 
             {/* Advanced Options */}
-            <Box
-                sx={{
-                    borderRadius: 2,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    bgcolor: "background.paper",
-                    overflow: "hidden"
-                }}
-            >
-                <Box sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider", bgcolor: "rgba(255,255,255,0.02)" }}>
-                    <Typography variant="subtitle2" fontWeight={600}>
-                        Advanced Options
-                    </Typography>
-                </Box>
-                <Stack divider={<Box sx={{ borderBottom: "1px solid", borderColor: "divider" }} />}>
+            <div className="rounded-lg border border-border bg-background overflow-hidden">
+                <div className="px-4 py-3 border-b border-border bg-white/5 dark:bg-white/2">
+                    <p className="text-sm font-semibold">Advanced Options</p>
+                </div>
+                <div className="divide-y divide-border">
                     {settings.map((setting) => (
-                        <Box key={setting.name}>
+                        <div key={setting.name}>
                             <input type="hidden" name={`${setting.name}_present`} value="1" />
-                            <Stack
-                                direction="row"
-                                alignItems="center"
-                                justifyContent="space-between"
-                                sx={{ px: 2, py: 1.5 }}
-                            >
-                                <Box sx={{ pr: 2 }}>
-                                    <Typography variant="body2" fontWeight={500}>
-                                        {setting.label}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                        {setting.description}
-                                    </Typography>
-                                </Box>
+                            <div className="flex flex-row items-center justify-between px-4 py-3">
+                                <div className="pr-4">
+                                    <p className="text-sm font-medium">{setting.label}</p>
+                                    <span className="text-xs text-muted-foreground">{setting.description}</span>
+                                </div>
                                 <Switch
                                     name={setting.name}
                                     checked={values[setting.name]}
-                                    onChange={handleChange(setting.name)}
-                                    size="small"
-                                    color={setting.color}
+                                    onCheckedChange={handleChange(setting.name)}
                                 />
-                            </Stack>
-                        </Box>
+                            </div>
+                        </div>
                     ))}
-                </Stack>
-            </Box>
-        </Stack>
+                </div>
+            </div>
+        </div>
     );
 }

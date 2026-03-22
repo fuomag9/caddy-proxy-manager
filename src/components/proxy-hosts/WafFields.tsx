@@ -1,22 +1,13 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Checkbox,
-  Collapse,
-  Divider,
-  FormControlLabel,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-} from "@mui/material";
-import GppBadIcon from "@mui/icons-material/GppBad";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { ChevronDown, ClipboardCopy, ShieldOff } from "lucide-react";
 import { useState } from "react";
-import { type WafHostConfig } from "@/src/lib/models/proxy-hosts";
+import { type WafHostConfig } from "@/lib/models/proxy-hosts";
 import { WafRuleExclusions } from "./WafRuleExclusions";
 
 type WafMode = "merge" | "override";
@@ -45,16 +36,7 @@ export function WafFields({ value, showModeSelector = true }: Props) {
   const [showTemplates, setShowTemplates] = useState(false);
 
   return (
-    <Box
-      sx={{
-        borderRadius: 2,
-        border: "1px solid",
-        borderColor: "error.main",
-        bgcolor: (theme) =>
-          theme.palette.mode === "dark" ? "rgba(211,47,47,0.06)" : "rgba(211,47,47,0.04)",
-        p: 2,
-      }}
-    >
+    <div className="rounded-lg border border-destructive bg-destructive/5 p-4">
       <input type="hidden" name="waf_present" value="1" />
       <input type="hidden" name="waf_enabled" value={enabled ? "on" : ""} />
       <input type="hidden" name="waf_mode" value={wafMode} />
@@ -63,211 +45,158 @@ export function WafFields({ value, showModeSelector = true }: Props) {
       <input type="hidden" name="waf_custom_directives" value={customDirectives} />
 
       {/* Header */}
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
-        <Stack direction="row" alignItems="flex-start" spacing={1.5} flex={1} minWidth={0}>
-          <Box
-            sx={{
-              mt: 0.25,
-              width: 32,
-              height: 32,
-              borderRadius: 1.5,
-              bgcolor: "error.main",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <GppBadIcon sx={{ fontSize: 18, color: "#fff" }} />
-          </Box>
-          <Box minWidth={0}>
-            <Typography variant="subtitle1" fontWeight={700} lineHeight={1.3}>
-              Web Application Firewall
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mt={0.25}>
+      <div className="flex flex-row items-start justify-between gap-2">
+        <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
+          <div className="mt-0.5 w-8 h-8 rounded-xl bg-destructive flex items-center justify-center shrink-0">
+            <ShieldOff className="h-4 w-4 text-white" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold leading-snug">Web Application Firewall</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
               Inspect and block malicious requests via Coraza / OWASP CRS
-            </Typography>
-          </Box>
-        </Stack>
+            </p>
+          </div>
+        </div>
         <Switch
           checked={enabled}
-          onChange={(_, checked) => setEnabled(checked)}
-          sx={{ flexShrink: 0 }}
+          onCheckedChange={setEnabled}
+          className="shrink-0"
         />
-      </Stack>
+      </div>
 
       {/* Expanded content */}
-      <Collapse in={enabled} timeout="auto" unmountOnExit>
-        <Box mt={2}>
-          {/* Override mode selector */}
-          {showModeSelector && (
-            <>
-              <Stack direction="row" spacing={1}>
-                {(["merge", "override"] as WafMode[]).map((v) => (
-                  <Box
-                    key={v}
-                    onClick={() => setWafMode(v)}
-                    sx={{
-                      flex: 1,
-                      py: 0.75,
-                      px: 1.5,
-                      borderRadius: 1.5,
-                      border: "1.5px solid",
-                      borderColor: wafMode === v ? "error.main" : "divider",
-                      bgcolor:
-                        wafMode === v
-                          ? (theme) =>
-                              theme.palette.mode === "dark"
-                                ? "rgba(211,47,47,0.12)"
-                                : "rgba(211,47,47,0.08)"
-                          : "transparent",
-                      cursor: "pointer",
-                      textAlign: "center",
-                      transition: "all 0.15s ease",
-                      userSelect: "none",
-                      "&:hover": {
-                        borderColor: wafMode === v ? "error.main" : "text.disabled",
-                      },
-                    }}
-                  >
-                    <Typography
-                      variant="body2"
-                      fontWeight={wafMode === v ? 600 : 400}
-                      color={wafMode === v ? "error.main" : "text.secondary"}
-                      sx={{ transition: "all 0.15s ease" }}
-                    >
-                      {v === "merge" ? "Merge with global" : "Override global"}
-                    </Typography>
-                  </Box>
-                ))}
-              </Stack>
-              <Divider sx={{ mt: 2, mb: 2 }} />
-            </>
-          )}
-          {!showModeSelector && <Divider sx={{ mb: 2 }} />}
-
-          {/* Engine mode */}
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            fontWeight={600}
-            sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-          >
-            Engine Mode
-          </Typography>
-          <Stack direction="row" spacing={1} mt={0.75}>
-            {(["inherit", "Off", "On"] as EngineMode[]).map((v) => (
-              <Box
-                key={v}
-                onClick={() => setEngineMode(v)}
-                sx={{
-                  flex: 1,
-                  py: 0.75,
-                  px: 1,
-                  borderRadius: 1.5,
-                  border: "1.5px solid",
-                  borderColor: engineMode === v ? "error.main" : "divider",
-                  bgcolor:
-                    engineMode === v
-                      ? (theme) =>
-                          theme.palette.mode === "dark"
-                            ? "rgba(211,47,47,0.12)"
-                            : "rgba(211,47,47,0.08)"
-                      : "transparent",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  transition: "all 0.15s ease",
-                  userSelect: "none",
-                  "&:hover": {
-                    borderColor: engineMode === v ? "error.main" : "text.disabled",
-                  },
-                }}
-              >
-                <Typography
-                  variant="body2"
-                  fontWeight={engineMode === v ? 600 : 400}
-                  color={engineMode === v ? "error.main" : "text.secondary"}
-                  sx={{ transition: "all 0.15s ease", fontSize: "0.8rem" }}
+      <div className={cn(
+        "overflow-hidden transition-all duration-200",
+        enabled ? "max-h-[2000px] opacity-100 mt-4" : "max-h-0 opacity-0 pointer-events-none"
+      )}>
+        {/* Override mode selector */}
+        {showModeSelector && (
+          <>
+            <div className="flex gap-2">
+              {(["merge", "override"] as WafMode[]).map((v) => (
+                <div
+                  key={v}
+                  onClick={() => setWafMode(v)}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-xl border-[1.5px] cursor-pointer text-center transition-all duration-150 select-none",
+                    wafMode === v
+                      ? "border-destructive bg-destructive/10"
+                      : "border-border hover:border-muted-foreground"
+                  )}
                 >
-                  {v === "inherit" ? "Global default" : v}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
+                  <p className={cn(
+                    "text-sm transition-all duration-150",
+                    wafMode === v ? "font-semibold text-destructive" : "font-normal text-muted-foreground"
+                  )}>
+                    {v === "merge" ? "Merge with global" : "Override global"}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-border mt-4 mb-4" />
+          </>
+        )}
+        {!showModeSelector && <div className="border-t border-border mb-4" />}
 
-          <Divider sx={{ mt: 2, mb: 1.5 }} />
-
-          {/* OWASP CRS */}
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={loadCrs}
-                onChange={(_, checked) => setLoadCrs(checked)}
-                size="small"
-              />
-            }
-            label={
-              <Box>
-                <Typography variant="body2" fontWeight={500}>
-                  Load OWASP Core Rule Set
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Covers SQLi, XSS, LFI, RCE and hundreds of other attack patterns
-                </Typography>
-              </Box>
-            }
-          />
-
-          {/* Excluded rule IDs */}
-          <Box mt={1.5}>
-            <WafRuleExclusions value={value?.excluded_rule_ids} />
-          </Box>
-
-          {/* Custom directives */}
-          <Box mt={1.5}>
-            <TextField
-              label="Custom SecLang Directives"
-              multiline
-              minRows={3}
-              maxRows={10}
-              value={customDirectives}
-              onChange={(e) => setCustomDirectives(e.target.value)}
-              placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
-              inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-              helperText="ModSecurity SecLang syntax. Appended after OWASP CRS if enabled."
-              fullWidth
-            />
-          </Box>
-
-          {/* Quick Templates */}
-          <Box mt={0.5}>
-            <Button
-              size="small"
-              endIcon={<ExpandMoreIcon sx={{ transform: showTemplates ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />}
-              onClick={() => setShowTemplates((v) => !v)}
-              sx={{ color: "text.secondary", textTransform: "none", px: 0 }}
+        {/* Engine mode */}
+        <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
+          Engine Mode
+        </span>
+        <div className="flex gap-2 mt-1.5">
+          {(["inherit", "Off", "On"] as EngineMode[]).map((v) => (
+            <div
+              key={v}
+              onClick={() => setEngineMode(v)}
+              className={cn(
+                "flex-1 py-2 px-2 rounded-xl border-[1.5px] cursor-pointer text-center transition-all duration-150 select-none",
+                engineMode === v
+                  ? "border-destructive bg-destructive/10"
+                  : "border-border hover:border-muted-foreground"
+              )}
             >
-              Quick Templates
-            </Button>
-            <Collapse in={showTemplates}>
-              <Stack spacing={0.75} mt={0.75}>
-                {QUICK_TEMPLATES.map((t) => (
-                  <Button
-                    key={t.label}
-                    size="small"
-                    variant="outlined"
-                    startIcon={<ContentCopyIcon fontSize="inherit" />}
-                    onClick={() => setCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
-                    sx={{ justifyContent: "flex-start", textTransform: "none", fontFamily: "monospace", fontSize: "0.72rem" }}
-                  >
-                    {t.label}
-                  </Button>
-                ))}
-              </Stack>
-            </Collapse>
-          </Box>
-        </Box>
-      </Collapse>
-    </Box>
+              <p className={cn(
+                "text-[0.8rem] transition-all duration-150",
+                engineMode === v ? "font-semibold text-destructive" : "font-normal text-muted-foreground"
+              )}>
+                {v === "inherit" ? "Global default" : v}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-border mt-4 mb-3" />
+
+        {/* OWASP CRS */}
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="waf-load-crs"
+            checked={loadCrs}
+            onCheckedChange={(checked) => setLoadCrs(!!checked)}
+          />
+          <label htmlFor="waf-load-crs" className="cursor-pointer">
+            <p className="text-sm font-medium">Load OWASP Core Rule Set</p>
+            <span className="text-xs text-muted-foreground">
+              Covers SQLi, XSS, LFI, RCE and hundreds of other attack patterns
+            </span>
+          </label>
+        </div>
+
+        {/* Excluded rule IDs */}
+        <div className="mt-4">
+          <WafRuleExclusions value={value?.excluded_rule_ids} />
+        </div>
+
+        {/* Custom directives */}
+        <div className="mt-4">
+          <Textarea
+            placeholder={`SecRule REQUEST_URI "@contains /secret" "id:9001,deny,status:403,log,msg:'Blocked path'"`}
+            value={customDirectives}
+            onChange={(e) => setCustomDirectives(e.target.value)}
+            className="font-mono text-xs min-h-[80px]"
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Custom SecLang Directives — ModSecurity SecLang syntax. Appended after OWASP CRS if enabled.
+          </p>
+        </div>
+
+        {/* Quick Templates */}
+        <div className="mt-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowTemplates((v) => !v)}
+            className="text-muted-foreground px-0 text-sm"
+          >
+            Quick Templates
+            <ChevronDown className={cn(
+              "h-4 w-4 ml-1 transition-transform duration-200",
+              showTemplates && "rotate-180"
+            )} />
+          </Button>
+          <div className={cn(
+            "overflow-hidden transition-all duration-200",
+            showTemplates ? "max-h-[500px] opacity-100 mt-2" : "max-h-0 opacity-0 pointer-events-none"
+          )}>
+            <div className="flex flex-col gap-1.5">
+              {QUICK_TEMPLATES.map((t) => (
+                <Button
+                  key={t.label}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
+                  className="justify-start font-mono text-[0.72rem]"
+                >
+                  <ClipboardCopy className="h-3 w-3 mr-1 shrink-0" />
+                  {t.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

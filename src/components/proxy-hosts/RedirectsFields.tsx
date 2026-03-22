@@ -1,12 +1,10 @@
 "use client";
 import { useState } from "react";
-import {
-  Box, Button, IconButton, MenuItem, Select,
-  Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography,
-} from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
-import AddIcon from "@mui/icons-material/Add";
-import type { RedirectRule } from "@/src/lib/models/proxy-hosts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Trash2, Plus } from "lucide-react";
+import type { RedirectRule } from "@/lib/models/proxy-hosts";
 
 type Props = { initialData?: RedirectRule[] };
 
@@ -23,66 +21,65 @@ export function RedirectsFields({ initialData = [] }: Props) {
     setRules((r) => r.map((rule, idx) => (idx === i ? { ...rule, [key]: value } : rule)));
 
   return (
-    <Box>
-      <Typography variant="subtitle2" gutterBottom>
-        Redirects
-      </Typography>
+    <div>
+      <p className="text-sm font-semibold mb-2">Redirects</p>
       <input type="hidden" name="redirects_json" value={JSON.stringify(rules)} />
       {rules.length > 0 && (
-        <Table size="small" sx={{ mb: 1 }}>
-          <TableHead>
-            <TableRow>
-              <TableCell>From Path</TableCell>
-              <TableCell>To URL / Path</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell />
-            </TableRow>
-          </TableHead>
-          <TableBody>
+        <div className="mb-2">
+          <div className="grid grid-cols-[1fr_1fr_90px_40px] gap-2 mb-1">
+            <span className="text-xs font-medium text-muted-foreground px-1">From Path</span>
+            <span className="text-xs font-medium text-muted-foreground px-1">To URL / Path</span>
+            <span className="text-xs font-medium text-muted-foreground px-1">Status</span>
+            <span />
+          </div>
+          <div className="flex flex-col gap-2">
             {rules.map((rule, i) => (
-              <TableRow key={i}>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    placeholder="/.well-known/carddav"
-                    value={rule.from}
-                    onChange={(e) => updateRule(i, "from", e.target.value)}
-                    fullWidth
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    placeholder="/remote.php/dav/"
-                    value={rule.to}
-                    onChange={(e) => updateRule(i, "to", e.target.value)}
-                    fullWidth
-                  />
-                </TableCell>
-                <TableCell sx={{ width: 90 }}>
-                  <Select
-                    size="small"
-                    value={rule.status}
-                    onChange={(e) => updateRule(i, "status", Number(e.target.value))}
-                  >
+              <div key={i} className="grid grid-cols-[1fr_1fr_90px_40px] gap-2 items-center">
+                <Input
+                  size={1}
+                  placeholder="/.well-known/carddav"
+                  value={rule.from}
+                  onChange={(e) => updateRule(i, "from", e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  size={1}
+                  placeholder="/remote.php/dav/"
+                  value={rule.to}
+                  onChange={(e) => updateRule(i, "to", e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Select
+                  value={String(rule.status)}
+                  onValueChange={(v) => updateRule(i, "status", Number(v))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
                     {[301, 302, 307, 308].map((s) => (
-                      <MenuItem key={s} value={s}>{s}</MenuItem>
+                      <SelectItem key={s} value={String(s)}>{s}</SelectItem>
                     ))}
-                  </Select>
-                </TableCell>
-                <TableCell sx={{ width: 40 }}>
-                  <IconButton size="small" onClick={() => removeRule(i)}>
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => removeRule(i)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             ))}
-          </TableBody>
-        </Table>
+          </div>
+        </div>
       )}
-      <Button size="small" startIcon={<AddIcon />} onClick={addRule}>
+      <Button type="button" variant="ghost" size="sm" onClick={addRule}>
+        <Plus className="h-4 w-4 mr-1" />
         Add Redirect
       </Button>
-    </Box>
+    </div>
   );
 }

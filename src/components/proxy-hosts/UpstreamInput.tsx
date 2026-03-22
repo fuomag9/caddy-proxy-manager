@@ -1,9 +1,8 @@
-import { Box, Button, IconButton, Stack, TextField, Tooltip, Typography, Autocomplete } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import RemoveCircleIcon from "@mui/icons-material/RemoveCircle";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MinusCircle, Plus } from "lucide-react";
 import { useState } from "react";
-
-const PROTOCOL_OPTIONS = ["http://", "https://"];
 
 type UpstreamEntry = {
     protocol: string;
@@ -33,7 +32,7 @@ export function UpstreamInput({
 
     const [entries, setEntries] = useState<UpstreamEntry[]>(initialEntries);
 
-    const handleProtocolChange = (index: number, newProtocol: string | null) => {
+    const handleProtocolChange = (index: number, newProtocol: string) => {
         const updated = [...entries];
         updated[index].protocol = newProtocol || "http://";
         setEntries(updated);
@@ -69,69 +68,56 @@ export function UpstreamInput({
         .join("\n");
 
     return (
-        <Box>
+        <div>
             <input type="hidden" name={name} value={serializedValue} />
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Upstreams
-            </Typography>
-            <Stack spacing={1.5}>
+            <p className="text-sm text-muted-foreground mb-1">Upstreams</p>
+            <div className="flex flex-col gap-3">
                 {entries.map((entry, index) => (
-                    <Stack key={index} direction="row" spacing={1} alignItems="flex-start">
-                        <Autocomplete
-                            freeSolo
-                            options={PROTOCOL_OPTIONS}
-                            value={entry.protocol}
-                            onChange={(_, newValue) => handleProtocolChange(index, newValue)}
-                            onInputChange={(_, newInputValue) => {
-                                if (newInputValue) {
-                                    handleProtocolChange(index, newInputValue);
-                                }
-                            }}
-                            disableClearable
-                            sx={{ width: 140 }}
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    size="small"
-                                    placeholder="http://"
-                                />
-                            )}
-                        />
-                        <TextField
+                    <div key={index} className="flex items-start gap-2">
+                        <Select value={entry.protocol} onValueChange={(val) => handleProtocolChange(index, val)}>
+                            <SelectTrigger className="w-28">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="http://">http://</SelectItem>
+                                <SelectItem value="https://">https://</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Input
                             value={entry.address}
                             onChange={(e) => handleAddressChange(index, e.target.value)}
                             placeholder="10.0.0.5:8080"
-                            size="small"
-                            fullWidth
+                            className="flex-1"
                             required={index === 0}
                         />
-                        <Tooltip title={entries.length === 1 ? "At least one upstream required" : "Remove upstream"}>
-                            <span>
-                                <IconButton
-                                    size="small"
-                                    onClick={() => handleRemove(index)}
-                                    disabled={entries.length === 1}
-                                    color="error"
-                                    sx={{ mt: 0.5 }}
-                                >
-                                    <RemoveCircleIcon fontSize="small" />
-                                </IconButton>
-                            </span>
-                        </Tooltip>
-                    </Stack>
+                        <span title={entries.length === 1 ? "At least one upstream required" : "Remove upstream"}>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemove(index)}
+                                disabled={entries.length === 1}
+                                className="text-destructive hover:text-destructive mt-0.5"
+                            >
+                                <MinusCircle className="h-4 w-4" />
+                            </Button>
+                        </span>
+                    </div>
                 ))}
                 <Button
-                    startIcon={<AddIcon />}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={handleAdd}
-                    size="small"
-                    sx={{ alignSelf: "flex-start" }}
+                    className="self-start"
                 >
+                    <Plus className="h-4 w-4 mr-1" />
                     Add Upstream
                 </Button>
-            </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+            </div>
+            <span className="text-xs text-muted-foreground mt-0.5 block">
                 Backend servers to proxy requests to
-            </Typography>
-        </Box>
+            </span>
+        </div>
     );
 }

@@ -1,19 +1,13 @@
 "use client";
 
-import {
-  Alert,
-  Box,
-  Checkbox,
-  Collapse,
-  FormControlLabel,
-  Stack,
-  Switch,
-  Typography,
-} from "@mui/material";
-import LockPersonIcon from "@mui/icons-material/LockPerson";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import { LockKeyhole } from "lucide-react";
 import { useState } from "react";
-import type { CaCertificate } from "@/src/lib/models/ca-certificates";
-import type { MtlsConfig } from "@/src/lib/models/proxy-hosts";
+import type { CaCertificate } from "@/lib/models/ca-certificates";
+import type { MtlsConfig } from "@/lib/models/proxy-hosts";
 
 type Props = {
   value?: MtlsConfig | null;
@@ -31,16 +25,7 @@ export function MtlsFields({ value, caCertificates }: Props) {
   }
 
   return (
-    <Box
-      sx={{
-        borderRadius: 2,
-        border: "1px solid",
-        borderColor: "info.main",
-        bgcolor: (theme) =>
-          theme.palette.mode === "dark" ? "rgba(2,136,209,0.06)" : "rgba(2,136,209,0.04)",
-        p: 2,
-      }}
-    >
+    <div className="rounded-lg border border-blue-500/60 bg-blue-500/5 p-4">
       <input type="hidden" name="mtls_present" value="1" />
       <input type="hidden" name="mtls_enabled" value={enabled ? "true" : "false"} />
       {enabled && selectedIds.map(id => (
@@ -48,79 +33,60 @@ export function MtlsFields({ value, caCertificates }: Props) {
       ))}
 
       {/* Header */}
-      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
-        <Stack direction="row" alignItems="flex-start" spacing={1.5} flex={1} minWidth={0}>
-          <Box
-            sx={{
-              mt: 0.25,
-              width: 32,
-              height: 32,
-              borderRadius: 1.5,
-              bgcolor: "info.main",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <LockPersonIcon sx={{ fontSize: 18, color: "#fff" }} />
-          </Box>
-          <Box minWidth={0}>
-            <Typography variant="subtitle1" fontWeight={700} lineHeight={1.3}>
-              Mutual TLS (mTLS)
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mt={0.25}>
+      <div className="flex flex-row items-start justify-between gap-2">
+        <div className="flex flex-row items-start gap-3 flex-1 min-w-0">
+          <div className="mt-0.5 w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
+            <LockKeyhole className="h-4 w-4 text-white" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold leading-snug">Mutual TLS (mTLS)</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
               Require clients to present a certificate signed by a trusted CA
-            </Typography>
-          </Box>
-        </Stack>
+            </p>
+          </div>
+        </div>
         <Switch
           checked={enabled}
-          onChange={(_, checked) => setEnabled(checked)}
-          sx={{ flexShrink: 0 }}
+          onCheckedChange={setEnabled}
+          className="shrink-0"
         />
-      </Stack>
+      </div>
 
-      <Collapse in={enabled} timeout="auto" unmountOnExit>
-        <Box mt={2}>
-          <Alert severity="info" sx={{ mb: 2 }}>
+      <div className={cn(
+        "overflow-hidden transition-all duration-200",
+        enabled ? "max-h-[1000px] opacity-100 mt-4" : "max-h-0 opacity-0 pointer-events-none"
+      )}>
+        <Alert className="mb-4">
+          <AlertDescription>
             mTLS requires TLS to be configured on this host (certificate must be set).
-          </Alert>
+          </AlertDescription>
+        </Alert>
 
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            fontWeight={600}
-            sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-          >
-            Trusted Client CA Certificates
-          </Typography>
+        <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
+          Trusted Client CA Certificates
+        </span>
 
-          {caCertificates.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" mt={1}>
-              No CA certificates configured. Add them on the Certificates page.
-            </Typography>
-          ) : (
-            <Stack mt={0.5}>
-              {caCertificates.map(ca => (
-                <FormControlLabel
-                  key={ca.id}
-                  control={
-                    <Checkbox
-                      checked={selectedIds.includes(ca.id)}
-                      onChange={() => toggleId(ca.id)}
-                      size="small"
-                    />
-                  }
-                  label={
-                    <Typography variant="body2">{ca.name}</Typography>
-                  }
+        {caCertificates.length === 0 ? (
+          <p className="text-sm text-muted-foreground mt-2">
+            No CA certificates configured. Add them on the Certificates page.
+          </p>
+        ) : (
+          <div className="flex flex-col mt-1">
+            {caCertificates.map(ca => (
+              <div key={ca.id} className="flex items-center gap-2 py-1">
+                <Checkbox
+                  id={`ca-cert-${ca.id}`}
+                  checked={selectedIds.includes(ca.id)}
+                  onCheckedChange={() => toggleId(ca.id)}
                 />
-              ))}
-            </Stack>
-          )}
-        </Box>
-      </Collapse>
-    </Box>
+                <label htmlFor={`ca-cert-${ca.id}`} className="text-sm cursor-pointer">
+                  {ca.name}
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
