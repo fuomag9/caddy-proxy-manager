@@ -47,9 +47,11 @@ test.describe.serial('L4 TCP Proxy Routing', () => {
     expect(connected).toBe(true);
   });
 
-  test('unused TCP port does not accept connections', async () => {
-    const connected = await tcpConnect('127.0.0.1', TCP_PORT_2, 2000);
-    expect(connected).toBe(false);
+  test('unused TCP port does not echo data back', async () => {
+    // Docker accepts the TCP connection at the container level even without a Caddy listener,
+    // but no data should be proxied/echoed back since there's no L4 host configured on this port.
+    const res = await tcpSend('127.0.0.1', TCP_PORT_2, 'probe', 2000);
+    expect(res.data).not.toContain('probe');
   });
 
   test('disabled TCP proxy host stops accepting connections', async ({ page }) => {

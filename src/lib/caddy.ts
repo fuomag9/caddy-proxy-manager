@@ -1495,8 +1495,13 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
       routes.push(route);
     }
 
+    // Determine protocol from the hosts on this listen address.
+    // All hosts sharing a listen address must use the same protocol.
+    const protocol = hosts[0].protocol as string;
+    const listenValue = protocol === "udp" ? `udp/${listenAddr}` : listenAddr;
+
     servers[`l4_server_${serverIdx++}`] = {
-      listen: [listenAddr],
+      listen: [listenValue],
       routes,
     };
   }

@@ -157,7 +157,10 @@ export async function importCertificate(page: Page, config: ImportedCertificateC
   await page.locator('[name="private_key_pem"]').fill(config.privateKeyPem);
   await page.getByRole('button', { name: /^import certificate$/i }).click();
 
-  await expect(page.getByText(config.name).first()).toBeVisible({ timeout: 10_000 });
+  // Wait for the import sheet to close, then verify the cert appears in the table
+  await expect(page.getByRole('heading', { name: /^import certificate$/i })).not.toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(500); // allow page to revalidate
+  await expect(page.locator('table').getByText(config.name).first()).toBeVisible({ timeout: 10_000 });
 }
 
 export async function generateCaCertificate(page: Page, config: GeneratedCaConfig): Promise<void> {
@@ -174,7 +177,8 @@ export async function generateCaCertificate(page: Page, config: GeneratedCaConfi
   }
 
   await page.getByRole('button', { name: /generate ca certificate/i }).click();
-  await expect(page.getByText(config.name)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: /^add ca certificate$/i })).not.toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('table').getByText(config.name).first()).toBeVisible({ timeout: 15_000 });
 }
 
 export async function issueClientCertificate(
