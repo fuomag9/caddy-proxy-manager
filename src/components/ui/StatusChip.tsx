@@ -22,7 +22,7 @@ export function StatusChip({ status, label, className }: StatusChipProps) {
   return (
     <span className={cn(
       "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full",
-      "bg-white/[0.03] border border-white/[0.08]",
+      "bg-muted/30 border border-border",
       className
     )}>
       <span className={cn("w-2 h-2 rounded-full shrink-0", config.dot)} />
