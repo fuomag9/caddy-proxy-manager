@@ -8,9 +8,7 @@ import {
   proxyHosts
 } from "@/src/lib/db/schema";
 import { count, desc, isNull, sql } from "drizzle-orm";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import SecurityIcon from "@mui/icons-material/Security";
-import VpnKeyIcon from "@mui/icons-material/VpnKey";
+import { ArrowLeftRight, ShieldCheck, KeyRound } from "lucide-react";
 import { ReactNode } from "react";
 import { getAnalyticsSummary } from "@/src/lib/analytics-db";
 
@@ -38,9 +36,9 @@ async function loadStats(): Promise<StatCard[]> {
   const accessListsCount = accessListCountResult[0]?.value ?? 0;
 
   return [
-    { label: "Proxy Hosts", icon: <SwapHorizIcon fontSize="large" />, count: proxyHostsCount, href: "/proxy-hosts" },
-    { label: "Certificates", icon: <SecurityIcon fontSize="large" />, count: certificatesCount, href: "/certificates" },
-    { label: "Access Lists", icon: <VpnKeyIcon fontSize="large" />, count: accessListsCount, href: "/access-lists" }
+    { label: "Proxy Hosts", icon: <ArrowLeftRight className="h-8 w-8" />, count: proxyHostsCount, href: "/proxy-hosts" },
+    { label: "Certificates", icon: <ShieldCheck className="h-8 w-8" />, count: certificatesCount, href: "/certificates" },
+    { label: "Access Lists", icon: <KeyRound className="h-8 w-8" />, count: accessListsCount, href: "/access-lists" }
   ];
 }
 

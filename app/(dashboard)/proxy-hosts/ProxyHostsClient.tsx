@@ -2,20 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Card, IconButton, Stack, Switch, Tooltip, Typography } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import type { AccessList } from "@/src/lib/models/access-lists";
-import type { Certificate } from "@/src/lib/models/certificates";
-import type { ProxyHost } from "@/src/lib/models/proxy-hosts";
-import type { CaCertificate } from "@/src/lib/models/ca-certificates";
-import type { AuthentikSettings } from "@/src/lib/settings";
+import { Copy, Pencil, Trash2 } from "lucide-react";
+import type { AccessList } from "@/lib/models/access-lists";
+import type { Certificate } from "@/lib/models/certificates";
+import type { ProxyHost } from "@/lib/models/proxy-hosts";
+import type { CaCertificate } from "@/lib/models/ca-certificates";
+import type { AuthentikSettings } from "@/lib/settings";
 import { toggleProxyHostAction } from "./actions";
-import { PageHeader } from "@/src/components/ui/PageHeader";
-import { SearchField } from "@/src/components/ui/SearchField";
-import { DataTable } from "@/src/components/ui/DataTable";
-import { CreateHostDialog, EditHostDialog, DeleteHostDialog } from "@/src/components/proxy-hosts/HostDialogs";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SearchField } from "@/components/ui/SearchField";
+import { DataTable } from "@/components/ui/DataTable";
+import { CreateHostDialog, EditHostDialog, DeleteHostDialog } from "@/components/proxy-hosts/HostDialogs";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Card } from "@/components/ui/card";
 
 type Props = {
   hosts: ProxyHost[];
@@ -67,33 +68,27 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       id: "name",
       label: "Name",
       render: (host: ProxyHost) => (
-        <Stack>
-          <Typography variant="body2" fontWeight={600}>
-            {host.name}
-          </Typography>
-        </Stack>
+        <p className="text-sm font-semibold">{host.name}</p>
       )
     },
     {
       id: "domains",
       label: "Domains",
       render: (host: ProxyHost) => (
-        <Stack>
-          <Typography variant="body2" color="text.secondary">
-            {host.domains[0]}
-            {host.domains.length > 1 && ` +${host.domains.length - 1} more`}
-          </Typography>
-        </Stack>
+        <p className="text-sm text-muted-foreground">
+          {host.domains[0]}
+          {host.domains.length > 1 && ` +${host.domains.length - 1} more`}
+        </p>
       )
     },
     {
       id: "upstreams",
       label: "Target",
       render: (host: ProxyHost) => (
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+        <p className="text-sm text-muted-foreground font-mono">
           {host.upstreams[0]}
           {host.upstreams.length > 1 && ` +${host.upstreams.length - 1} more`}
-        </Typography>
+        </p>
       )
     },
     {
@@ -102,80 +97,120 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       align: "right" as const,
       width: 150,
       render: (host: ProxyHost) => (
-        <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
+        <div className="flex items-center gap-1 justify-end">
           <Switch
             checked={host.enabled}
-            onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
-            size="small"
-            color="success"
+            onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
           />
-          <Tooltip title="Duplicate">
-            <IconButton
-              size="small"
-              onClick={() => {
-                setDuplicateHost(host);
-                setCreateOpen(true);
-              }}
-              color="info"
-            >
-              <ContentCopyIcon fontSize="small" />
-            </IconButton>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-blue-400"
+                onClick={() => {
+                  setDuplicateHost(host);
+                  setCreateOpen(true);
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Duplicate</TooltipContent>
           </Tooltip>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => setEditHost(host)} color="primary">
-              <EditIcon fontSize="small" />
-            </IconButton>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setEditHost(host)}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit</TooltipContent>
           </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" onClick={() => setDeleteHost(host)} color="error">
-              <DeleteIcon fontSize="small" />
-            </IconButton>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive"
+                onClick={() => setDeleteHost(host)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Delete</TooltipContent>
           </Tooltip>
-        </Stack>
+        </div>
       )
     }
   ];
 
   const mobileCard = (host: ProxyHost) => (
-    <Card variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={1}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="subtitle2" fontWeight={700}>
-            {host.name}
-          </Typography>
-          <Stack direction="row" spacing={0.5} alignItems="center">
+    <Card className="p-4">
+      <div className="flex flex-col gap-1">
+        <div className="flex justify-between items-center">
+          <p className="text-sm font-bold">{host.name}</p>
+          <div className="flex items-center gap-0.5">
             <Switch
               checked={host.enabled}
-              onChange={(e) => handleToggleEnabled(host.id, e.target.checked)}
-              size="small"
-              color="success"
+              onCheckedChange={(checked) => handleToggleEnabled(host.id, checked)}
             />
-            <Tooltip title="Duplicate">
-              <IconButton size="small" onClick={() => { setDuplicateHost(host); setCreateOpen(true); }} color="info">
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-blue-400"
+                  onClick={() => { setDuplicateHost(host); setCreateOpen(true); }}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Duplicate</TooltipContent>
             </Tooltip>
-            <Tooltip title="Edit">
-              <IconButton size="small" aria-label="Edit" onClick={() => setEditHost(host)} color="primary">
-                <EditIcon fontSize="small" />
-              </IconButton>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  aria-label="Edit"
+                  onClick={() => setEditHost(host)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit</TooltipContent>
             </Tooltip>
-            <Tooltip title="Delete">
-              <IconButton size="small" aria-label="Delete" onClick={() => setDeleteHost(host)} color="error">
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive"
+                  aria-label="Delete"
+                  onClick={() => setDeleteHost(host)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete</TooltipContent>
             </Tooltip>
-          </Stack>
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground font-mono">
           {host.domains[0]}{host.domains.length > 1 ? ` +${host.domains.length - 1}` : ""} → {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
-        </Typography>
-      </Stack>
+        </p>
+      </div>
     </Card>
   );
 
   return (
-    <Stack spacing={4}>
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Proxy Hosts"
         description="Define HTTP(S) reverse proxies orchestrated by Caddy with automated certificates."
@@ -232,6 +267,6 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           onClose={() => setDeleteHost(null)}
         />
       )}
-    </Stack>
+    </div>
   );
 }

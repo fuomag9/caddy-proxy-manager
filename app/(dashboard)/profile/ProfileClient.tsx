@@ -1,36 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Chip,
   Dialog,
-  DialogActions,
   DialogContent,
-  DialogContentText,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
-  Divider,
-  IconButton,
-  Stack,
-  TextField,
-  Typography
-} from "@mui/material";
-import type { ChipProps } from "@mui/material";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { signIn } from "next-auth/react";
-import PersonIcon from "@mui/icons-material/Person";
-import LockIcon from "@mui/icons-material/Lock";
-import LinkIcon from "@mui/icons-material/Link";
-import LinkOffIcon from "@mui/icons-material/LinkOff";
-import LoginIcon from "@mui/icons-material/Login";
-import PhotoCamera from "@mui/icons-material/PhotoCamera";
-import DeleteIcon from "@mui/icons-material/Delete";
+import { Camera, Link, LogIn, Lock, Trash2, Unlink, User } from "lucide-react";
 
-interface User {
+interface UserData {
   id: number;
   email: string;
   name: string | null;
@@ -42,7 +32,7 @@ interface User {
 }
 
 interface ProfileClientProps {
-  user: User;
+  user: UserData;
   enabledProviders: Array<{ id: string; name: string }>;
 }
 
@@ -262,295 +252,277 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
     return provider;
   };
 
-  const getProviderColor = (provider: string): ChipProps["color"] => {
-    if (provider === "credentials") return "default";
-    return "primary";
-  };
-
   return (
-    <Box>
-      <Typography variant="h4" gutterBottom>
-        Profile & Account Settings
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl font-bold tracking-tight">Profile & Account Settings</h1>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
-          {error}
+        <Alert variant="destructive">
+          <AlertDescription className="flex justify-between items-center">
+            {error}
+            <Button variant="ghost" size="sm" onClick={() => setError(null)} className="h-auto p-0 text-xs">Dismiss</Button>
+          </AlertDescription>
         </Alert>
       )}
 
       {success && (
-        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
-          {success}
+        <Alert>
+          <AlertDescription className="flex justify-between items-center">
+            {success}
+            <Button variant="ghost" size="sm" onClick={() => setSuccess(null)} className="h-auto p-0 text-xs">Dismiss</Button>
+          </AlertDescription>
         </Alert>
       )}
 
-      <Stack spacing={3}>
+      <div className="flex flex-col gap-4">
         {/* Account Information */}
         <Card>
-          <CardContent>
-            <Stack spacing={2}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <PersonIcon color="primary" />
-                <Typography variant="h6">Account Information</Typography>
-              </Box>
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">Account Information</h2>
+            </div>
 
-              <Divider />
+            <Separator />
 
-              {/* Avatar Section */}
-              <Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  Profile Picture
-                </Typography>
-                <Box display="flex" alignItems="center" gap={2}>
-                  <Avatar
-                    src={avatarUrl || undefined}
-                    alt={user.name || user.email}
-                    sx={{ width: 80, height: 80 }}
-                  >
+            {/* Avatar Section */}
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">Profile Picture</p>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={avatarUrl || undefined} alt={user.name || user.email} />
+                  <AvatarFallback className="text-2xl">
                     {(!avatarUrl && user.name) ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
-                  </Avatar>
-                  <Box display="flex" gap={1}>
-                    <Button
-                      variant="outlined"
-                      component="label"
-                      startIcon={<PhotoCamera />}
-                      disabled={loading}
-                    >
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex gap-2">
+                  <Button variant="outline" asChild disabled={loading}>
+                    <label className="cursor-pointer">
+                      <Camera className="h-4 w-4 mr-2" />
                       Upload
                       <input
                         type="file"
-                        hidden
+                        className="hidden"
                         accept="image/*"
                         onChange={handleAvatarUpload}
                       />
+                    </label>
+                  </Button>
+                  {avatarUrl && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive"
+                      onClick={handleAvatarDelete}
+                      disabled={loading}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </Button>
-                    {avatarUrl && (
-                      <IconButton
-                        color="error"
-                        onClick={handleAvatarDelete}
-                        disabled={loading}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    )}
-                  </Box>
-                </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Recommended: Square image, max 2MB
-                </Typography>
-              </Box>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Recommended: Square image, max 2MB</p>
+            </div>
 
-              <Divider />
+            <Separator />
 
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Email
-                </Typography>
-                <Typography variant="body1">{user.email}</Typography>
-              </Box>
+            <div>
+              <p className="text-sm text-muted-foreground">Email</p>
+              <p className="text-sm">{user.email}</p>
+            </div>
 
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Name
-                </Typography>
-                <Typography variant="body1">{user.name || "Not set"}</Typography>
-              </Box>
+            <div>
+              <p className="text-sm text-muted-foreground">Name</p>
+              <p className="text-sm">{user.name || "Not set"}</p>
+            </div>
 
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Role
-                </Typography>
-                <Chip label={user.role} size="small" color="primary" />
-              </Box>
+            <div>
+              <p className="text-sm text-muted-foreground">Role</p>
+              <Badge>{user.role}</Badge>
+            </div>
 
-              <Box>
-                <Typography variant="body2" color="text.secondary">
-                  Authentication Method
-                </Typography>
-                <Chip
-                  label={getProviderName(user.provider)}
-                  size="small"
-                  color={getProviderColor(user.provider)}
-                />
-              </Box>
+            <div>
+              <p className="text-sm text-muted-foreground">Authentication Method</p>
+              <Badge variant={user.provider === "credentials" ? "secondary" : "default"}>
+                {getProviderName(user.provider)}
+              </Badge>
+            </div>
 
-              {hasPassword && (
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Password
-                  </Typography>
-                  <Typography variant="body1" color="success.main">
-                    ✓ Password is set
-                  </Typography>
-                </Box>
-              )}
-            </Stack>
+            {hasPassword && (
+              <div>
+                <p className="text-sm text-muted-foreground">Password</p>
+                <p className="text-sm text-green-600 dark:text-green-400">&#10003; Password is set</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Password Management */}
         <Card>
-          <CardContent>
-            <Stack spacing={2}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <LockIcon color="primary" />
-                <Typography variant="h6">Password Management</Typography>
-              </Box>
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <div className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">Password Management</h2>
+            </div>
 
-              <Divider />
+            <Separator />
 
-              {hasPassword ? (
-                <Box>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    Change your password to maintain account security
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    onClick={() => setPasswordDialogOpen(true)}
-                    sx={{ mt: 1 }}
-                  >
-                    Change Password
-                  </Button>
-                </Box>
-              ) : (
-                <Box>
-                  <Alert severity="warning" sx={{ mb: 2 }}>
+            {hasPassword ? (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Change your password to maintain account security</p>
+                <Button variant="outline" onClick={() => setPasswordDialogOpen(true)}>
+                  Change Password
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <Alert className="border-yellow-500/50 text-yellow-700 dark:text-yellow-400">
+                  <AlertDescription>
                     You are using OAuth-only authentication. Setting a password will allow you to
                     sign in with either OAuth or credentials.
-                  </Alert>
-                  <Button
-                    variant="contained"
-                    onClick={() => setPasswordDialogOpen(true)}
-                  >
-                    Set Password
-                  </Button>
-                </Box>
-              )}
-            </Stack>
+                  </AlertDescription>
+                </Alert>
+                <Button onClick={() => setPasswordDialogOpen(true)}>
+                  Set Password
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* OAuth Management */}
         {enabledProviders.length > 0 && (
           <Card>
-            <CardContent>
-              <Stack spacing={2}>
-                <Box display="flex" alignItems="center" gap={1}>
-                  <LinkIcon color="primary" />
-                  <Typography variant="h6">OAuth Connections</Typography>
-                </Box>
+            <CardContent className="flex flex-col gap-4 pt-6">
+              <div className="flex items-center gap-2">
+                <Link className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold">OAuth Connections</h2>
+              </div>
 
-                <Divider />
+              <Separator />
 
-                {hasOAuth ? (
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Your account is linked to {getProviderName(user.provider)}
-                    </Typography>
+              {hasOAuth ? (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Your account is linked to {getProviderName(user.provider)}
+                  </p>
 
-                    {hasPassword ? (
+                  {hasPassword ? (
+                    <Button
+                      variant="outline"
+                      className="text-yellow-600 border-yellow-600/50"
+                      onClick={() => setUnlinkDialogOpen(true)}
+                    >
+                      <Unlink className="h-4 w-4 mr-2" />
+                      Unlink OAuth Account
+                    </Button>
+                  ) : (
+                    <Alert className="border-blue-500/50 text-blue-700 dark:text-blue-400">
+                      <AlertDescription>
+                        To unlink OAuth, you must first set a password as a fallback authentication method.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Link an OAuth provider to enable single sign-on
+                  </p>
+
+                  <div className="flex flex-col gap-2">
+                    {enabledProviders.map((provider) => (
                       <Button
-                        variant="outlined"
-                        color="warning"
-                        startIcon={<LinkOffIcon />}
-                        onClick={() => setUnlinkDialogOpen(true)}
-                        sx={{ mt: 1 }}
+                        key={provider.id}
+                        variant="outline"
+                        onClick={() => handleLinkOAuth(provider.id)}
+                        className="w-full"
                       >
-                        Unlink OAuth Account
+                        <LogIn className="h-4 w-4 mr-2" />
+                        Link {provider.name}
                       </Button>
-                    ) : (
-                      <Alert severity="info" sx={{ mt: 1 }}>
-                        To unlink OAuth, you must first set a password as a fallback authentication
-                        method.
-                      </Alert>
-                    )}
-                  </Box>
-                ) : (
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Link an OAuth provider to enable single sign-on
-                    </Typography>
-
-                    <Stack spacing={1} sx={{ mt: 2 }}>
-                      {enabledProviders.map((provider) => (
-                        <Button
-                          key={provider.id}
-                          variant="outlined"
-                          startIcon={<LoginIcon />}
-                          onClick={() => handleLinkOAuth(provider.id)}
-                          fullWidth
-                        >
-                          Link {provider.name}
-                        </Button>
-                      ))}
-                    </Stack>
-                  </Box>
-                )}
-              </Stack>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
-      </Stack>
+      </div>
 
       {/* Change Password Dialog */}
-      <Dialog open={passwordDialogOpen} onClose={() => setPasswordDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{hasPassword ? "Change Password" : "Set Password"}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{hasPassword ? "Change Password" : "Set Password"}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 mt-2">
             {hasPassword && (
-              <TextField
-                label="Current Password"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                fullWidth
-                autoComplete="current-password"
-              />
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="currentPassword">Current Password</Label>
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </div>
             )}
-            <TextField
-              label="New Password"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              fullWidth
-              autoComplete="new-password"
-              helperText="Minimum 12 characters"
-            />
-            <TextField
-              label="Confirm New Password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              fullWidth
-              autoComplete="new-password"
-            />
-          </Stack>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-muted-foreground">Minimum 12 characters</p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handlePasswordChange} disabled={loading}>
+              {loading ? "Saving..." : hasPassword ? "Change Password" : "Set Password"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPasswordDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handlePasswordChange} variant="contained" disabled={loading}>
-            {loading ? "Saving..." : hasPassword ? "Change Password" : "Set Password"}
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Unlink OAuth Dialog */}
-      <Dialog open={unlinkDialogOpen} onClose={() => setUnlinkDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Unlink OAuth Account</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to unlink your {getProviderName(user.provider)} account?
-            You will only be able to sign in with your username and password after this.
-          </DialogContentText>
+      <Dialog open={unlinkDialogOpen} onOpenChange={setUnlinkDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unlink OAuth Account</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to unlink your {getProviderName(user.provider)} account?
+              You will only be able to sign in with your username and password after this.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUnlinkDialogOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleUnlinkOAuth}
+              className="text-yellow-600 border-yellow-600/50"
+              variant="outline"
+              disabled={loading}
+            >
+              {loading ? "Unlinking..." : "Unlink OAuth"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUnlinkDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleUnlinkOAuth} variant="contained" color="warning" disabled={loading}>
-            {loading ? "Unlinking..." : "Unlink OAuth"}
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 }

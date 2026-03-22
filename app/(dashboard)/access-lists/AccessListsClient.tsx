@@ -1,23 +1,12 @@
 "use client";
 
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Divider,
-  IconButton,
-  List,
-  ListItem,
-  ListItemSecondaryAction,
-  ListItemText,
-  Pagination,
-  Stack,
-  TextField,
-  Typography
-} from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
-import type { AccessList } from "@/src/lib/models/access-lists";
+import { Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import type { AccessList } from "@/lib/models/access-lists";
 import {
   addAccessEntryAction,
   createAccessListAction,
@@ -38,128 +27,157 @@ export default function AccessListsClient({ lists, pagination }: Props) {
   const searchParams = useSearchParams();
   const pageCount = Math.ceil(pagination.total / pagination.perPage);
 
-  function handlePageChange(_: React.ChangeEvent<unknown>, page: number) {
+  function handlePageChange(page: number) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(page));
     router.push(`${pathname}?${params.toString()}`);
   }
-  return (
-    <Stack spacing={4} sx={{ width: "100%" }}>
-      <Stack spacing={1}>
-        <Typography variant="h4" fontWeight={600}>
-          Access Lists
-        </Typography>
-        <Typography color="text.secondary">Protect proxy hosts with HTTP basic authentication credentials.</Typography>
-      </Stack>
 
-      <Stack spacing={3}>
+  return (
+    <div className="flex flex-col gap-6 w-full">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold tracking-tight">Access Lists</h1>
+        <p className="text-sm text-muted-foreground">Protect proxy hosts with HTTP basic authentication credentials.</p>
+      </div>
+
+      <div className="flex flex-col gap-4">
         {lists.map((list) => (
           <Card key={list.id}>
-            <CardContent sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <Stack component="form" action={(formData) => updateAccessListAction(list.id, formData)} spacing={2}>
-                <Typography variant="h6" fontWeight={600}>
-                  Access List
-                </Typography>
-                <TextField name="name" label="Name" defaultValue={list.name} fullWidth />
-                <TextField
-                  name="description"
-                  label="Description"
-                  defaultValue={list.description ?? ""}
-                  multiline
-                  minRows={2}
-                  fullWidth
-                />
-                <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-                  <Button type="submit" variant="contained">
+            <CardContent className="flex flex-col gap-4 pt-6">
+              <form action={(formData) => updateAccessListAction(list.id, formData)} className="flex flex-col gap-3">
+                <h2 className="text-lg font-semibold">Access List</h2>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`name-${list.id}`}>Name</Label>
+                  <Input id={`name-${list.id}`} name="name" defaultValue={list.name} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={`desc-${list.id}`}>Description</Label>
+                  <textarea
+                    id={`desc-${list.id}`}
+                    name="description"
+                    defaultValue={list.description ?? ""}
+                    rows={2}
+                    className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="submit" variant="default">
                     Save
                   </Button>
                   <Button
                     type="submit"
                     formAction={deleteAccessListAction.bind(null, list.id)}
-                    variant="outlined"
-                    color="error"
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
                   >
                     Delete list
                   </Button>
-                </Box>
-              </Stack>
+                </div>
+              </form>
 
-              <Divider sx={{ my: 1 }} />
+              <Separator />
 
-              <Stack spacing={1.5}>
-                <Typography fontWeight={600}>Accounts</Typography>
+              <div className="flex flex-col gap-2">
+                <p className="font-semibold">Accounts</p>
                 {list.entries.length === 0 ? (
-                  <Typography color="text.secondary">No credentials configured.</Typography>
+                  <p className="text-sm text-muted-foreground">No credentials configured.</p>
                 ) : (
-                  <List dense disablePadding>
+                  <div className="flex flex-col gap-2">
                     {list.entries.map((entry) => (
-                      <ListItem key={entry.id} sx={{ bgcolor: "background.default", borderRadius: 2, mb: 1 }}>
-                        <ListItemText primary={entry.username} secondary={`Created ${new Date(entry.created_at).toLocaleDateString()}`} />
-                        <ListItemSecondaryAction>
-                          <form action={deleteAccessEntryAction.bind(null, list.id, entry.id)}>
-                            <IconButton type="submit" edge="end" color="error">
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </form>
-                        </ListItemSecondaryAction>
-                      </ListItem>
+                      <div
+                        key={entry.id}
+                        className="flex items-center justify-between rounded-md bg-muted/40 px-3 py-2"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{entry.username}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Created {new Date(entry.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <form action={deleteAccessEntryAction.bind(null, list.id, entry.id)}>
+                          <Button type="submit" variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </form>
+                      </div>
                     ))}
-                  </List>
+                  </div>
                 )}
-              </Stack>
+              </div>
 
-              <Divider sx={{ my: 1 }} />
+              <Separator />
 
-              <Stack component="form" action={(formData) => addAccessEntryAction(list.id, formData)} spacing={1.5} direction={{ xs: "column", sm: "row" }}>
-                <TextField name="username" label="Username" required fullWidth />
-                <TextField name="password" label="Password" type="password" required fullWidth />
-                <Button type="submit" variant="contained">
-                  Add
-                </Button>
-              </Stack>
+              <form
+                action={(formData) => addAccessEntryAction(list.id, formData)}
+                className="flex flex-col sm:flex-row gap-2 items-end"
+              >
+                <div className="flex flex-col gap-1.5 w-full">
+                  <Label htmlFor={`username-${list.id}`}>Username</Label>
+                  <Input id={`username-${list.id}`} name="username" required />
+                </div>
+                <div className="flex flex-col gap-1.5 w-full">
+                  <Label htmlFor={`password-${list.id}`}>Password</Label>
+                  <Input id={`password-${list.id}`} name="password" type="password" required />
+                </div>
+                <Button type="submit" className="shrink-0">Add</Button>
+              </form>
             </CardContent>
           </Card>
         ))}
-      </Stack>
+      </div>
 
       {pageCount > 1 && (
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-          <Pagination
-            count={pageCount}
-            page={pagination.page}
-            onChange={handlePageChange}
-            color="primary"
-            shape="rounded"
-          />
-        </Box>
+        <div className="flex justify-center gap-2 mt-2">
+          {Array.from({ length: pageCount }, (_, i) => i + 1).map((page) => (
+            <Button
+              key={page}
+              variant={page === pagination.page ? "default" : "outline"}
+              size="sm"
+              onClick={() => handlePageChange(page)}
+            >
+              {page}
+            </Button>
+          ))}
+        </div>
       )}
 
-      <Stack spacing={2} component="section">
-        <Typography variant="h6" fontWeight={600}>
-          Create access list
-        </Typography>
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Create access list</h2>
         <Card>
-          <CardContent>
-            <Stack component="form" action={createAccessListAction} spacing={2}>
-              <TextField name="name" label="Name" placeholder="Internal users" required fullWidth />
-              <TextField name="description" label="Description" placeholder="Optional description" multiline minRows={2} fullWidth />
-              <TextField
-                name="users"
-                label="Seed members"
-                helperText="One per line, username:password"
-                multiline
-                minRows={3}
-                fullWidth
-              />
-              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                <Button type="submit" variant="contained">
-                  Create Access List
-                </Button>
-              </Box>
-            </Stack>
+          <CardContent className="pt-6">
+            <form action={createAccessListAction} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="create-name">Name</Label>
+                <Input id="create-name" name="name" placeholder="Internal users" required />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="create-description">Description</Label>
+                <textarea
+                  id="create-description"
+                  name="description"
+                  placeholder="Optional description"
+                  rows={2}
+                  className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="create-users">Seed members</Label>
+                <textarea
+                  id="create-users"
+                  name="users"
+                  rows={3}
+                  placeholder="One per line, username:password"
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                />
+                <p className="text-xs text-muted-foreground">One per line, username:password</p>
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit">Create Access List</Button>
+              </div>
+            </form>
           </CardContent>
         </Card>
-      </Stack>
-    </Stack>
+      </section>
+    </div>
   );
 }

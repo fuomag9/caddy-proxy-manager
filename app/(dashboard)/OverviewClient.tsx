@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import Grid from "@mui/material/Grid";
-import { Card, CardActionArea, CardContent, Paper, Stack, Typography, Box } from "@mui/material";
-import BarChartIcon from "@mui/icons-material/BarChart";
+import { Card, CardContent } from "@/components/ui/card";
+import { BarChart2 } from "lucide-react";
 import { ReactNode } from "react";
 
 type StatCard = {
@@ -35,155 +34,111 @@ export default function OverviewClient({
   recentEvents: RecentEvent[];
 }) {
   return (
-    <Stack spacing={5}>
-      <Stack spacing={1.5}>
-        <Typography variant="overline" sx={{ color: "rgba(148, 163, 184, 0.6)", letterSpacing: 4 }}>
+    <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400/60">
           Control Center
-        </Typography>
-        <Typography
-          variant="h4"
-          sx={{
-            fontWeight: 700,
+        </span>
+        <h1
+          className="text-3xl font-bold"
+          style={{
             background: "linear-gradient(120deg, rgba(127, 91, 255, 1) 0%, rgba(34, 211, 238, 0.9) 80%)",
             WebkitBackgroundClip: "text",
-            color: "transparent"
+            WebkitTextFillColor: "transparent"
           }}
         >
           Welcome back, {userName}
-        </Typography>
-        <Typography color="text.secondary" sx={{ maxWidth: 560 }}>
+        </h1>
+        <p className="text-sm text-muted-foreground max-w-[560px]">
           Everything you need to orchestrate Caddy proxies, certificates, and secure edge services lives here.
-        </Typography>
-      </Stack>
+        </p>
+      </div>
 
-      <Grid container spacing={3}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         {stats.map((stat) => (
-          <Grid key={stat.label} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-            <Card
-              elevation={0}
-              sx={{
-                height: "100%",
-                border: "1px solid rgba(148, 163, 184, 0.14)"
-              }}
+          <Card
+            key={stat.label}
+            className="border border-slate-400/10 bg-transparent shadow-none h-full"
+          >
+            <Link
+              href={stat.href}
+              className="block h-full transition-colors hover:bg-gradient-to-br hover:from-violet-500/10 hover:to-cyan-400/[0.06] rounded-[inherit]"
             >
-              <CardActionArea
-                component={Link}
-                href={stat.href}
-                sx={{
-                  height: "100%",
-                  p: 0,
-                  "&:hover": {
-                    background: "linear-gradient(135deg, rgba(127, 91, 255, 0.16), rgba(34, 211, 238, 0.08))"
-                  }
-                }}
-              >
-                <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  <Box
-                    sx={{
-                      color: "rgba(127, 91, 255, 0.8)",
-                      display: "flex",
-                      alignItems: "center"
-                    }}
-                  >
-                    {stat.icon}
-                  </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: "-0.03em" }}>
-                    {stat.count}
-                  </Typography>
-                  <Typography color="text.secondary" sx={{ fontWeight: 500 }}>
-                    {stat.label}
-                  </Typography>
-                </CardContent>
-              </CardActionArea>
-            </Card>
-          </Grid>
+              <CardContent className="flex flex-col gap-1 pt-6">
+                <div className="text-violet-400/80 flex items-center">
+                  {stat.icon}
+                </div>
+                <span className="text-3xl font-bold tracking-tight">
+                  {stat.count}
+                </span>
+                <span className="text-sm text-muted-foreground font-medium">
+                  {stat.label}
+                </span>
+              </CardContent>
+            </Link>
+          </Card>
         ))}
 
         {/* Traffic (24h) card */}
-        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-          <Card elevation={0} sx={{ height: "100%", border: "1px solid rgba(148, 163, 184, 0.14)" }}>
-            <CardActionArea
-              component={Link}
-              href="/analytics"
-              sx={{
-                height: "100%",
-                p: 0,
-                "&:hover": {
-                  background: "linear-gradient(135deg, rgba(127, 91, 255, 0.16), rgba(34, 211, 238, 0.08))"
-                }
-              }}
-            >
-              <CardContent sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <Box sx={{ color: "rgba(127, 91, 255, 0.8)", display: "flex", alignItems: "center" }}>
-                  <BarChartIcon fontSize="large" />
-                </Box>
-                {trafficSummary ? (
-                  <>
-                    <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: "-0.03em" }}>
-                      {trafficSummary.totalRequests.toLocaleString()}
-                    </Typography>
-                    <Typography color="text.secondary" sx={{ fontWeight: 500 }}>
-                      Traffic (24h)
-                      {trafficSummary.totalRequests > 0 && (
-                        <Box component="span" sx={{ ml: 1, color: trafficSummary.blockedPercent > 0 ? "error.light" : "text.secondary", fontSize: "0.8em" }}>
-                          · {trafficSummary.blockedPercent}% blocked
-                        </Box>
-                      )}
-                    </Typography>
-                  </>
-                ) : (
-                  <>
-                    <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: "-0.03em" }}>—</Typography>
-                    <Typography color="text.secondary" sx={{ fontWeight: 500 }}>Traffic (24h)</Typography>
-                  </>
-                )}
-              </CardContent>
-            </CardActionArea>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Stack spacing={2}>
-        <Typography variant="h6" sx={{ fontWeight: 600, letterSpacing: -0.2 }}>
-          Recent Activity
-        </Typography>
-        {recentEvents.length === 0 ? (
-          <Paper
-            elevation={0}
-            sx={{
-              p: 4,
-              textAlign: "center",
-              color: "text.secondary",
-              background: "rgba(12, 18, 30, 0.7)"
-            }}
+        <Card className="border border-slate-400/10 bg-transparent shadow-none h-full">
+          <Link
+            href="/analytics"
+            className="block h-full transition-colors hover:bg-gradient-to-br hover:from-violet-500/10 hover:to-cyan-400/[0.06] rounded-[inherit]"
           >
+            <CardContent className="flex flex-col gap-1 pt-6">
+              <div className="text-violet-400/80 flex items-center">
+                <BarChart2 className="h-8 w-8" />
+              </div>
+              {trafficSummary ? (
+                <>
+                  <span className="text-3xl font-bold tracking-tight">
+                    {trafficSummary.totalRequests.toLocaleString()}
+                  </span>
+                  <span className="text-sm text-muted-foreground font-medium">
+                    Traffic (24h)
+                    {trafficSummary.totalRequests > 0 && (
+                      <span
+                        className={`ml-1 text-[0.8em] ${trafficSummary.blockedPercent > 0 ? "text-red-400" : "text-muted-foreground"}`}
+                      >
+                        · {trafficSummary.blockedPercent}% blocked
+                      </span>
+                    )}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-3xl font-bold tracking-tight">—</span>
+                  <span className="text-sm text-muted-foreground font-medium">Traffic (24h)</span>
+                </>
+              )}
+            </CardContent>
+          </Link>
+        </Card>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-lg font-semibold tracking-tight">Recent Activity</h2>
+        {recentEvents.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground rounded-md bg-[rgba(12,18,30,0.7)]">
             No activity recorded yet.
-          </Paper>
+          </div>
         ) : (
-          <Stack spacing={1.5}>
+          <div className="flex flex-col gap-1.5">
             {recentEvents.map((event, index) => (
-              <Paper
+              <div
                 key={`${event.created_at}-${index}`}
-                elevation={0}
-                sx={{
-                  p: 3,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 2,
-                  background: "linear-gradient(120deg, rgba(17, 25, 40, 0.9), rgba(15, 23, 42, 0.7))",
-                  border: "1px solid rgba(148, 163, 184, 0.08)"
-                }}
+                className="flex justify-between items-center gap-2 rounded-md p-4 border border-slate-400/[0.08]"
+                style={{ background: "linear-gradient(120deg, rgba(17, 25, 40, 0.9), rgba(15, 23, 42, 0.7))" }}
               >
-                <Typography fontWeight={500}>{event.summary}</Typography>
-                <Typography variant="body2" color="text.secondary">
+                <span className="text-sm font-medium">{event.summary}</span>
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
                   {new Date(event.created_at).toLocaleString()}
-                </Typography>
-              </Paper>
+                </span>
+              </div>
             ))}
-          </Stack>
+          </div>
         )}
-      </Stack>
-    </Stack>
+      </div>
+    </div>
   );
 }

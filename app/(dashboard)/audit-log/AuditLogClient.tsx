@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Card, Chip, Stack, TextField, Typography } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import { DataTable } from "@/src/components/ui/DataTable";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/DataTable";
+import { SearchField } from "@/components/ui/SearchField";
 
 type EventRow = {
   id: number;
@@ -58,9 +59,9 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
       label: "Time",
       width: 180,
       render: (r: EventRow) => (
-        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
           {new Date(r.created_at).toLocaleString()}
-        </Typography>
+        </span>
       ),
     },
     {
@@ -68,53 +69,44 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
       label: "User",
       width: 160,
       render: (r: EventRow) => (
-        <Chip label={r.user} size="small" variant="outlined" />
+        <Badge variant="outline">{r.user}</Badge>
       ),
     },
     {
       id: "summary",
       label: "Event",
       render: (r: EventRow) => (
-        <Typography variant="body2">{r.summary}</Typography>
+        <p className="text-sm">{r.summary}</p>
       ),
     },
   ];
 
   const mobileCard = (r: EventRow) => (
-    <Card variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={0.5}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Chip label={r.user} size="small" variant="outlined" />
-          <Typography variant="caption" color="text.secondary">
+    <Card>
+      <CardContent className="p-3 flex flex-col gap-1">
+        <div className="flex justify-between items-center">
+          <Badge variant="outline">{r.user}</Badge>
+          <span className="text-xs text-muted-foreground">
             {new Date(r.created_at).toLocaleString()}
-          </Typography>
-        </Stack>
-        <Typography variant="body2">{r.summary}</Typography>
-      </Stack>
+          </span>
+        </div>
+        <p className="text-sm">{r.summary}</p>
+      </CardContent>
     </Card>
   );
 
   return (
-    <Stack spacing={2} sx={{ width: "100%" }}>
-      <Typography variant="h4" fontWeight={600}>
-        Audit Log
-      </Typography>
-      <Typography color="text.secondary">Review configuration changes and user activity.</Typography>
+    <div className="flex flex-col gap-4 w-full">
+      <h1 className="text-2xl font-bold tracking-tight">Audit Log</h1>
+      <p className="text-sm text-muted-foreground">Review configuration changes and user activity.</p>
 
-      <TextField
-        placeholder="Search audit log..."
+      <SearchField
         value={searchTerm}
         onChange={(e) => {
           setSearchTerm(e.target.value);
           updateSearch(e.target.value);
         }}
-        slotProps={{
-          input: {
-            startAdornment: <SearchIcon sx={{ mr: 1, color: "rgba(255, 255, 255, 0.5)" }} />,
-          },
-        }}
-        size="small"
-        sx={{ maxWidth: 400 }}
+        placeholder="Search audit log..."
       />
 
       <DataTable
@@ -125,6 +117,6 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
         pagination={pagination}
         mobileCard={mobileCard}
       />
-    </Stack>
+    </div>
   );
 }
