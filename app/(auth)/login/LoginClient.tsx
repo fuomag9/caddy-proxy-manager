@@ -2,12 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { Alert, Box, Button, Card, CardContent, Divider, Stack, TextField, Typography } from "@mui/material";
 import { signIn } from "next-auth/react";
-import LoginIcon from "@mui/icons-material/Login";
+import { LogIn } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
 
 interface LoginClientProps {
-  enabledProviders: Array<{id: string; name: string}>;
+  enabledProviders: Array<{ id: string; name: string }>;
 }
 
 export default function LoginClient({ enabledProviders = [] }: LoginClientProps) {
@@ -35,12 +40,11 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
       redirect: false,
       callbackUrl: "/",
       username,
-      password
+      password,
     });
 
     if (!result || result.error || result.ok === false) {
       let message: string | null = null;
-
       if (result?.status === 429) {
         message = result.error && result.error !== "CredentialsSignin"
           ? result.error
@@ -48,7 +52,6 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
       } else if (result?.error && result.error !== "CredentialsSignin") {
         message = result.error;
       }
-
       setLoginError(message ?? "Invalid username or password.");
       setLoginPending(false);
       return;
@@ -61,93 +64,102 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
   const handleOAuthSignIn = async (providerId: string) => {
     setLoginError(null);
     setOauthPending(providerId);
-
     try {
-      await signIn(providerId, {
-        callbackUrl: "/"
-      });
+      await signIn(providerId, { callbackUrl: "/" });
     } catch {
-      setLoginError(`Failed to sign in with OAuth`);
+      setLoginError("Failed to sign in with OAuth");
       setOauthPending(null);
     }
   };
 
+  const disabled = loginPending || !!oauthPending;
+
   return (
-    <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "background.default" }}>
-      <Card sx={{ maxWidth: 440, width: "100%", p: 1.5 }} elevation={6}>
-        <CardContent>
-          <Stack spacing={3}>
-            <Stack spacing={1} textAlign="center">
-              <Typography variant="h5" fontWeight={600}>
-                Caddy Proxy Manager
-              </Typography>
-              <Typography color="text.secondary">
-                {enabledProviders.length > 0 ? "Sign in to your account" : "Sign in with your credentials"}
-              </Typography>
-            </Stack>
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center space-y-1">
+          <CardTitle className="text-2xl font-bold">Caddy Proxy Manager</CardTitle>
+          <CardDescription>
+            {enabledProviders.length > 0
+              ? "Sign in to your account"
+              : "Sign in with your credentials"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loginError && (
+            <Alert variant="destructive">
+              <AlertDescription>{loginError}</AlertDescription>
+            </Alert>
+          )}
 
-            {loginError && <Alert severity="error">{loginError}</Alert>}
-
-            {/* OAuth Providers */}
-            {enabledProviders.length > 0 && (
-              <Stack spacing={2}>
+          {enabledProviders.length > 0 && (
+            <>
+              <div className="space-y-2">
                 {enabledProviders.map((provider) => {
                   const isPending = oauthPending === provider.id;
                   return (
                     <Button
                       key={provider.id}
-                      variant="outlined"
-                      size="large"
-                      fullWidth
-                      startIcon={<LoginIcon />}
+                      variant="outline"
+                      className="w-full"
                       onClick={() => handleOAuthSignIn(provider.id)}
-                      disabled={!!oauthPending || loginPending}
+                      disabled={disabled}
                     >
-                      {isPending ? `Signing in with ${provider.name}...` : `Continue with ${provider.name}`}
+                      {isPending ? (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                      ) : (
+                        <LogIn className="h-4 w-4 mr-2" />
+                      )}
+                      {isPending ? `Signing in with ${provider.name}…` : `Continue with ${provider.name}`}
                     </Button>
                   );
                 })}
+              </div>
+              <div className="relative">
+                <Separator />
+                <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+                  Or sign in with credentials
+                </span>
+              </div>
+            </>
+          )}
 
-                <Divider>
-                  <Typography variant="body2" color="text.secondary">
-                    Or sign in with credentials
-                  </Typography>
-                </Divider>
-              </Stack>
-            )}
-
-            <Stack component="form" onSubmit={handleSignIn} spacing={2}>
-              <TextField
+          <form onSubmit={handleSignIn} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
                 name="username"
-                label="Username"
                 required
-                fullWidth
                 autoComplete="username"
                 autoFocus={enabledProviders.length === 0}
-                disabled={loginPending || !!oauthPending}
+                disabled={disabled}
               />
-              <TextField
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
                 name="password"
-                label="Password"
                 type="password"
                 required
-                fullWidth
                 autoComplete="current-password"
-                disabled={loginPending || !!oauthPending}
+                disabled={disabled}
               />
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                fullWidth
-                disabled={loginPending || !!oauthPending}
-              >
-                {loginPending ? "Signing in…" : "Sign in"}
-              </Button>
-            </Stack>
-          </Stack>
+            </div>
+            <Button type="submit" className="w-full" disabled={disabled}>
+              {loginPending ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent mr-2" />
+                  Signing in…
+                </>
+              ) : (
+                "Sign in"
+              )}
+            </Button>
+          </form>
         </CardContent>
       </Card>
-    </Box>
+    </div>
   );
 }
