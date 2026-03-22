@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card, CardContent } from "@/components/ui/card";
-import { CreateL4HostDialog, EditL4HostDialog, DeleteL4HostDialog } from "@/src/components/l4-proxy-hosts/L4HostDialogs";
-import { L4PortsApplyBanner } from "@/src/components/l4-proxy-hosts/L4PortsApplyBanner";
+import { CreateL4HostDialog, EditL4HostDialog, DeleteL4HostDialog } from "@/components/l4-proxy-hosts/L4HostDialogs";
+import { L4PortsApplyBanner } from "@/components/l4-proxy-hosts/L4PortsApplyBanner";
 
 type Props = {
   hosts: L4ProxyHost[];
