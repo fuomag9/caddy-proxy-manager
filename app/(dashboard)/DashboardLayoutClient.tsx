@@ -8,12 +8,12 @@ import {
   LayoutDashboard, ArrowLeftRight, Cable, KeyRound, ShieldCheck,
   ShieldOff, BarChart2, History, Settings, LogOut, Menu, Sun, Moon,
 } from "lucide-react";
-import { Sheet, SheetContent } from "@/src/components/ui/sheet";
-import { Button } from "@/src/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/src/components/ui/avatar";
-import { Separator } from "@/src/components/ui/separator";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
-import { cn } from "@/src/lib/utils";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 type User = {
   id: string;
