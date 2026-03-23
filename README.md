@@ -12,25 +12,7 @@ Web interface for managing [Caddy Server](https://caddyserver.com/) reverse prox
 
 ## Overview
 
-This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a shadcn/ui interface.
-
-**Key features:**
-- Reverse proxy configuration with multiple upstreams, load balancing, and custom headers
-- L4 TCP/UDP stream proxying with TLS SNI matching, proxy protocol, load balancing, and geo blocking
-- WAF (Web Application Firewall) powered by Coraza with OWASP Core Rule Set, per-host config, and event log
-- Server-side search and pagination across all data tables
-- HTTP basic auth access lists with multi-account support
-- OAuth2/OIDC authentication support
-- Automatic HTTPS via Caddy's ACME (Let's Encrypt) with Cloudflare DNS-01 support
-- ACME certificate visibility with real issuer, expiry status, and per-host tracking
-- Built-in CA for issuing internal client certificates
-- Optional upstream DNS pinning (resolve upstream hostnames on config apply)
-- Geo blocking per proxy host — block/allow by country, continent, ASN, CIDR, or IP
-- Custom certificate import (internal CA, wildcards, etc.)
-- Instance sync — push configuration from a master to one or more slave instances
-- Audit logging of all configuration changes with full-text search
-- Mobile-responsive UI (iPhone and narrow viewports)
-- Built with Next.js 16, React 19, shadcn/ui, Tailwind CSS, Drizzle ORM, and TypeScript
+This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a shadcn/ui interface. Built with Next.js 16, React 19, shadcn/ui, Tailwind CSS, Drizzle ORM, and TypeScript.
 
 ---
 
