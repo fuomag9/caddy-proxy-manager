@@ -119,6 +119,7 @@ services:
   # Requires Docker socket access (read-only) to recreate the caddy container.
   l4-port-manager:
     container_name: caddy-proxy-manager-l4-ports
+    image: ghcr.io/fuomag9/caddy-proxy-manager-l4-port-manager:latest
     build:
       context: .
       dockerfile: docker/l4-port-manager/Dockerfile

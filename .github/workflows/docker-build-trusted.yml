@@ -29,6 +29,9 @@ jobs:
           - service: caddy
             dockerfile: docker/caddy/Dockerfile
             context: .
+          - service: l4-port-manager
+            dockerfile: docker/l4-port-manager/Dockerfile
+            context: .
 
     steps:
       - name: Checkout repository
