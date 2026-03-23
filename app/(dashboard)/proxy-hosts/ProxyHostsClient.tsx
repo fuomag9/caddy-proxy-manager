@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Globe, MoreHorizontal, ArrowRight, Shield } from "lucide-react";
+import { Globe, MoreHorizontal, ArrowRight, Shield, Bug, MapPin, Scale, KeyRound, UserCheck, CornerRightDown, Replace } from "lucide-react";
 import type { AccessList } from "@/lib/models/access-lists";
 import type { Certificate } from "@/lib/models/certificates";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
@@ -118,21 +118,58 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
     {
       id: "features",
       label: "Features",
-      render: (host: ProxyHost) => (
-        <div className="flex flex-wrap gap-1">
-          {host.certificate_id && (
-            <Badge variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>
-          )}
-          {host.access_list_id && (
-            <Badge variant="warning" className="text-[10px] px-1.5 py-0">
+      render: (host: ProxyHost) => {
+        const badges = [
+          host.certificate_id && (
+            <Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>
+          ),
+          host.access_list_id && (
+            <Badge key="auth" variant="warning" className="text-[10px] px-1.5 py-0">
               <Shield className="h-2.5 w-2.5 mr-0.5" />Auth
             </Badge>
-          )}
-          {!host.certificate_id && !host.access_list_id && (
-            <span className="text-xs text-muted-foreground">—</span>
-          )}
-        </div>
-      ),
+          ),
+          host.authentik?.enabled && (
+            <Badge key="authentik" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <UserCheck className="h-2.5 w-2.5 mr-0.5" />Authentik
+            </Badge>
+          ),
+          host.waf?.enabled && (
+            <Badge key="waf" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <Bug className="h-2.5 w-2.5 mr-0.5" />WAF
+            </Badge>
+          ),
+          host.geoblock?.enabled && (
+            <Badge key="geo" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <MapPin className="h-2.5 w-2.5 mr-0.5" />Geo
+            </Badge>
+          ),
+          host.load_balancer?.enabled && (
+            <Badge key="lb" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <Scale className="h-2.5 w-2.5 mr-0.5" />LB
+            </Badge>
+          ),
+          host.mtls?.enabled && (
+            <Badge key="mtls" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <KeyRound className="h-2.5 w-2.5 mr-0.5" />mTLS
+            </Badge>
+          ),
+          host.redirects?.length > 0 && (
+            <Badge key="redirects" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <CornerRightDown className="h-2.5 w-2.5 mr-0.5" />Redirects
+            </Badge>
+          ),
+          host.rewrite && (
+            <Badge key="rewrite" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <Replace className="h-2.5 w-2.5 mr-0.5" />Rewrite
+            </Badge>
+          ),
+        ].filter(Boolean);
+        return (
+          <div className="flex flex-wrap gap-1">
+            {badges.length > 0 ? badges : <span className="text-xs text-muted-foreground">—</span>}
+          </div>
+        );
+      },
     },
     {
       id: "status",
