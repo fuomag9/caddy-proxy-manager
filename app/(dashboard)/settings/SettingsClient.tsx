@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useFormState } from "react-dom";
 import {
-  Cloud, Globe, Globe2, KeyRound, Network, Pin, Activity,
+  Cloud, Globe, Network, Pin, Activity,
   ScrollText, Settings2, UserCheck, MapPin,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";

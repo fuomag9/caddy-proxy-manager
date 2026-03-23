@@ -30,7 +30,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
-import { Globe, Layers, MapPin, Network, Pin } from "lucide-react";
+import { Globe, Layers, MapPin, Pin } from "lucide-react";
 
 function FormField({
   label,
