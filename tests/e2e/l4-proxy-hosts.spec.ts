@@ -16,7 +16,7 @@ test.describe('L4 Proxy Hosts page', () => {
   test('shows empty state when search has no results', async ({ page }) => {
     await page.goto('/l4-proxy-hosts');
     await page.getByPlaceholder(/search/i).fill('zzz-nonexistent-host-zzz');
-    await expect(page.getByText(/no l4 hosts match/i).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/no l4 hosts match/i).last()).toBeVisible({ timeout: 5_000 });
   });
 
   test('create dialog opens and contains expected fields', async ({ page }) => {
