@@ -13,10 +13,10 @@ test.describe('L4 Proxy Hosts page', () => {
     await expect(page.getByRole('heading', { name: 'L4 Proxy Hosts' })).toBeVisible();
   });
 
-  test.skip('shows empty state when no L4 hosts exist', async ({ page }) => {
-    // Skipped: test database may already contain L4 hosts (e.g. "test")
+  test('shows empty state when search has no results', async ({ page }) => {
     await page.goto('/l4-proxy-hosts');
-    await expect(page.getByText(/no l4 proxy hosts found/i)).toBeVisible();
+    await page.getByPlaceholder(/search/i).fill('zzz-nonexistent-host-zzz');
+    await expect(page.getByText(/no l4 hosts match/i).first()).toBeVisible({ timeout: 5_000 });
   });
 
   test('create dialog opens and contains expected fields', async ({ page }) => {

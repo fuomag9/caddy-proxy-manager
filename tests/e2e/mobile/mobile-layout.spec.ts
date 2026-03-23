@@ -99,7 +99,7 @@ test.describe('Mobile layout', () => {
     await expect(page.getByRole('menuitem', { name: /delete/i })).toBeVisible();
   });
 
-  test.skip('analytics page loads without horizontal body overflow', async ({ page }) => {
+  test('analytics page loads without horizontal body overflow', async ({ page }) => {
     await page.goto('/analytics');
     // Wait for content to load
     await page.waitForLoadState('networkidle');
