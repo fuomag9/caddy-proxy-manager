@@ -54,18 +54,19 @@ test.describe.serial('L4 TCP Proxy Routing', () => {
     expect(res.data).not.toContain('probe');
   });
 
-  test('disabled TCP proxy host stops accepting connections', async ({ page }) => {
+  test('disabled TCP proxy host stops proxying data', async ({ page }) => {
     await page.goto('/l4-proxy-hosts');
     const row = page.locator('tr', { hasText: 'L4 TCP Echo Test' });
     await row.getByRole('switch').click();
     await page.waitForTimeout(3_000);
 
-    const connected = await tcpConnect('127.0.0.1', TCP_PORT, 2000);
-    expect(connected).toBe(false);
+    // Docker still accepts the TCP connection, but Caddy should not proxy/echo data
+    const res = await tcpSend('127.0.0.1', TCP_PORT, 'should-not-echo\n', 2000);
+    expect(res.data).not.toContain('should-not-echo');
 
-    // Re-enable
+    // Re-enable and wait for route to come back
     await row.getByRole('switch').click();
-    await page.waitForTimeout(2_000);
+    await waitForTcpRoute('127.0.0.1', TCP_PORT);
   });
 });
 
@@ -81,6 +82,9 @@ test.describe.serial('L4 Multiple TCP Hosts', () => {
   });
 
   test('both TCP ports route traffic independently', async () => {
+    // Ensure both ports are ready (port 1 may have been toggled in earlier test)
+    await waitForTcpRoute('127.0.0.1', TCP_PORT);
+    await waitForTcpRoute('127.0.0.1', TCP_PORT_2);
     const res1 = await tcpSend('127.0.0.1', TCP_PORT, 'port1\n');
     const res2 = await tcpSend('127.0.0.1', TCP_PORT_2, 'port2\n');
     expect(res1.connected).toBe(true);
@@ -102,7 +106,8 @@ test.describe.serial('L4 UDP Proxy Routing', () => {
       listenAddress: `:${UDP_PORT}`,
       upstream: 'udp-echo:9001',
     });
-    await waitForUdpRoute('127.0.0.1', UDP_PORT);
+    // UDP listeners may take longer to start than TCP — use a longer timeout
+    await waitForUdpRoute('127.0.0.1', UDP_PORT, 30_000);
   });
 
   test('routes UDP datagrams to the upstream echo server', async () => {

@@ -1439,9 +1439,11 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
         resolvedDials = pinned;
       }
 
+      // For UDP hosts, upstream dials must also use the udp/ prefix
+      const dialPrefix = (host.protocol as string) === "udp" ? "udp/" : "";
       const proxyHandler: Record<string, unknown> = {
         handler: "proxy",
-        upstreams: resolvedDials.map((u) => ({ dial: [u] })),
+        upstreams: resolvedDials.map((u) => ({ dial: [`${dialPrefix}${u}`] })),
       };
       if (host.proxyProtocolVersion) {
         proxyHandler.proxy_protocol = host.proxyProtocolVersion;
