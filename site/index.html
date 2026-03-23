@@ -13,7 +13,7 @@
   <meta property="og:url" content="https://caddyproxymanager.com/" />
   <meta property="og:title" content="Caddy Proxy Manager - Control Every Edge" />
   <meta property="og:description"
-    content="Caddy Proxy Manager – Modern Web UI for Caddy with WAF, automatic HTTPS, geo blocking, instance sync, and reverse proxy management." />
+    content="Caddy Proxy Manager – Modern Web UI for Caddy with WAF, automatic HTTPS, geo blocking, L4 TCP/UDP proxying, instance sync, and reverse proxy management." />
   <meta property="og:image" content="https://caddyproxymanager.com/assets/images/preview.png" />
 
   <!-- Fonts -->
@@ -42,6 +42,7 @@
         <a href="#features">Features</a>
         <a href="#spotlights">Showcase</a>
         <a href="#deployment">Install</a>
+        <a href="https://github.com/fuomag9/caddy-proxy-manager/wiki" target="_blank">Wiki</a>
         <a href="https://github.com/fuomag9/caddy-proxy-manager" target="_blank">GitHub</a>
       </nav>
     </div>
@@ -50,9 +51,9 @@
   <main>
     <!-- Hero -->
     <section class="hero container">
-      <div class="hero-eyebrow">Open Source &middot; Docker &middot; Next.js</div>
+      <div class="hero-eyebrow">Open Source &middot; Docker &middot; Next.js &middot; shadcn/ui</div>
       <h1>Control Every Edge.</h1>
-      <p>The modern web interface for Caddy Server. WAF protection, automatic HTTPS, geo blocking, traffic analytics, instance sync, and a full audit trail. All in one place.</p>
+      <p>The modern web interface for Caddy Server. WAF protection, automatic HTTPS, geo blocking, L4 TCP/UDP proxying, traffic analytics, instance sync, and a full audit trail. All in one place.</p>
 
       <div class="btn-group">
         <a href="#deployment" class="btn btn-primary">Get Started</a>
@@ -82,6 +83,11 @@
           <div class="card-icon">⇄</div>
           <h3>Reverse Proxy</h3>
           <p>Configure multiple upstreams, load balancing, custom headers, and per-host enable/disable with a clean editor.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔌</div>
+          <h3>L4 TCP/UDP Proxy</h3>
+          <p>Layer 4 stream proxying for TCP and UDP. TLS SNI matching, proxy protocol, health checks, and geo blocking at the transport layer.</p>
         </div>
         <div class="card">
           <div class="card-icon">🛡️</div>

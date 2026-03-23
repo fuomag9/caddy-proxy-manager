@@ -12,10 +12,11 @@ Web interface for managing [Caddy Server](https://caddyserver.com/) reverse prox
 
 ## Overview
 
-This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a Material UI interface.
+This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a shadcn/ui interface.
 
 **Key features:**
 - Reverse proxy configuration with multiple upstreams, load balancing, and custom headers
+- L4 TCP/UDP stream proxying with TLS SNI matching, proxy protocol, load balancing, and geo blocking
 - WAF (Web Application Firewall) powered by Coraza with OWASP Core Rule Set, per-host config, and event log
 - Server-side search and pagination across all data tables
 - HTTP basic auth access lists with multi-account support
@@ -29,7 +30,7 @@ This project provides a web UI for Caddy Server, eliminating the need to manuall
 - Instance sync — push configuration from a master to one or more slave instances
 - Audit logging of all configuration changes with full-text search
 - Mobile-responsive UI (iPhone and narrow viewports)
-- Built with Next.js 16, React 19, Drizzle ORM, and TypeScript
+- Built with Next.js 16, React 19, shadcn/ui, Tailwind CSS, Drizzle ORM, and TypeScript
 
 ---
 
@@ -52,8 +53,9 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 ## Features
 
 - **Proxy Hosts** - Reverse proxies with custom headers, multiple upstreams, load balancing, and enable/disable toggle
+- **L4 Proxy Hosts** - TCP/UDP stream proxying with TLS SNI matching, proxy protocol (v1/v2), load balancing, health checks, and per-host geo blocking
 - **WAF** - Web Application Firewall powered by Coraza with optional OWASP Core Rule Set (SQLi, XSS, LFI, RCE). Per-host enable/disable, global and per-host rule suppression, custom SecLang directives, and a searchable event log with severity and blocked/detected classification
-- **Analytics** - Live traffic charts, country map, top user agents, and blocked request log with configurable time ranges
+- **Analytics** - Live traffic charts, protocol breakdown, country map, top user agents, and blocked request log with configurable time ranges
 - **Search & Pagination** - Server-side search and pagination on all data tables (proxy hosts, access lists, audit log, certificates)
 - **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host
 - **Access Lists** - Multi-account HTTP basic auth protection assignable per proxy host
@@ -308,7 +310,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **[Caddy Server](https://caddyserver.com/)** – The amazing web server that powers this project
 - **[Nginx Proxy Manager](https://github.com/NginxProxyManager/nginx-proxy-manager)** – The original project
 - **[Next.js](https://nextjs.org/)** – React framework for production
-- **[Material UI](https://mui.com/)** – Beautiful React components
+- **[shadcn/ui](https://ui.shadcn.com/)** – Beautifully designed components built on Radix UI and Tailwind CSS
 - **[Drizzle ORM](https://orm.drizzle.team/)** – Lightweight SQL migrations and type-safe queries
 
 ---
