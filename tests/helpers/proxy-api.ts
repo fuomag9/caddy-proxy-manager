@@ -87,39 +87,18 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
   }
 
   if (config.mtlsCaNames?.length) {
-    await page.evaluate(() => {
-      const form = document.getElementById('create-host-form');
-      const mtlsHidden = form?.querySelector<HTMLInputElement>('input[name="mtls_enabled"]');
-      const section = mtlsHidden?.parentElement;
-      const switchInput = section?.querySelector<HTMLInputElement>('input[type="checkbox"]');
-      if (!form || !mtlsHidden || !section || !switchInput) {
-        throw new Error('mTLS section not found in create host dialog');
-      }
-      switchInput.click();
-    });
+    // Enable mTLS — the switch is near the "Mutual TLS (mTLS)" text
+    // Scroll to the mTLS section first, then click the switch in the containing card
+    const mtlsCard = page.locator('input[name="mtls_enabled"]').locator('..');
+    await mtlsCard.scrollIntoViewIfNeeded();
+    await mtlsCard.getByRole('switch').click();
 
     await expect(page.getByText(/trusted client ca certificates/i)).toBeVisible({ timeout: 10_000 });
-    await page.evaluate((caNames: string[]) => {
-      const form = document.getElementById('create-host-form');
-      const mtlsHidden = form?.querySelector<HTMLInputElement>('input[name="mtls_enabled"]');
-      const section = mtlsHidden?.parentElement;
-      if (!form || !mtlsHidden || !section) {
-        throw new Error('mTLS section not found in create host dialog');
-      }
 
-      for (const caName of caNames) {
-        const label = Array.from(section.querySelectorAll('label')).find((el) =>
-          el.textContent?.includes(caName)
-        );
-        const input = label?.querySelector<HTMLInputElement>('input[type="checkbox"]');
-        if (!label || !input) {
-          throw new Error(`mTLS CA checkbox not found for "${caName}"`);
-        }
-        if (!input.checked) {
-          input.click();
-        }
-      }
-    }, config.mtlsCaNames);
+    // Check each CA certificate by label
+    for (const caName of config.mtlsCaNames) {
+      await page.getByLabel(caName, { exact: true }).check();
+    }
     await expect(page.locator('input[name="mtls_ca_cert_id"]')).toHaveCount(config.mtlsCaNames.length);
   }
 
@@ -223,13 +202,13 @@ export async function revokeIssuedClientCertificate(page: Page, caName: string, 
   const dialog = page.getByRole('dialog', { name: /issued client certificates/i });
   await expect(dialog).toBeVisible();
 
-  const card = dialog
-    .getByRole('heading', { name: commonName, exact: true })
-    .locator('xpath=ancestor::div[.//button[normalize-space()="Revoke"]][1]');
-  await expect(card).toBeVisible({ timeout: 10_000 });
-  await card.getByRole('button', { name: /^revoke$/i }).click();
-  await expect(dialog.getByRole('heading', { name: commonName, exact: true })).toHaveCount(0, { timeout: 15_000 });
-  await page.getByRole('button', { name: /^close$/i }).click();
+  // Find the cert card containing the common name and click its Revoke button
+  const certCard = dialog.locator('.rounded-lg.border', { hasText: commonName });
+  await expect(certCard).toBeVisible({ timeout: 10_000 });
+  await certCard.getByRole('button', { name: /^revoke$/i }).click();
+  // After revoking, the cert should no longer be visible (hidden by default, only shown with "Show revoked")
+  await expect(certCard.getByRole('button', { name: /^revoke$/i })).not.toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: /^close$/i }).first().click();
 }
 
 async function saveDownload(download: Download): Promise<string> {
