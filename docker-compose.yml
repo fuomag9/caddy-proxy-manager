@@ -89,11 +89,8 @@ services:
       - "80:80/udp"
       - "443:443"
       - "443:443/udp"
-      # L4 (TCP/UDP) proxy ports — expose as needed for L4 proxy hosts, e.g.:
-      # - "5432:5432"     # PostgreSQL
-      # - "3306:3306"     # MySQL
-      # - "6379:6379"     # Redis
-      # Admin API (port 2019) is only exposed on internal network for security
+      # - "2019:2019"     # Admin API
+      # Admin API (port 2019) is only exposed on internal network for security, enable at your risk
       # Web UI accesses via http://caddy:2019 internally
       # Uncomment the line below to expose metrics externally for Grafana/Prometheus
       # - "9090:9090"  # Metrics available at http://localhost:9090/metrics (configure in Settings first)
