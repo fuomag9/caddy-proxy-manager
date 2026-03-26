@@ -18,11 +18,8 @@ import type { TestDb } from '../helpers/db';
 // ---------------------------------------------------------------------------
 
 const ctx = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mkdirSync } = require('node:fs');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { join } = require('node:path');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { tmpdir } = require('node:os');
   const dir = join(tmpdir(), `instance-sync-test-${Date.now()}`);
   mkdirSync(dir, { recursive: true });

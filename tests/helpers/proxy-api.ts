@@ -76,14 +76,22 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
   }
 
   if (config.certificateName) {
-    await page.getByRole('combobox', { name: /certificate/i }).click();
-    await page.getByRole('option', { name: config.certificateName, exact: true }).click();
+    const certTrigger = page.getByRole('combobox', { name: /certificate/i });
+    await certTrigger.scrollIntoViewIfNeeded();
+    await certTrigger.click();
+    const certOption = page.getByRole('option', { name: config.certificateName, exact: true });
+    await expect(certOption).toBeVisible({ timeout: 5_000 });
+    await certOption.click();
   }
 
   if (config.accessListName) {
-    // MUI TextField select — click to open dropdown, then pick the option
-    await page.getByRole('combobox', { name: /access list/i }).click();
-    await page.getByRole('option', { name: config.accessListName }).click();
+    // shadcn/Radix Select — click trigger to open portal dropdown, wait for option, then click
+    const accessListTrigger = page.getByRole('combobox', { name: /access list/i });
+    await accessListTrigger.scrollIntoViewIfNeeded();
+    await accessListTrigger.click();
+    const option = page.getByRole('option', { name: config.accessListName });
+    await expect(option).toBeVisible({ timeout: 5_000 });
+    await option.click();
   }
 
   if (config.mtlsCaNames?.length) {
