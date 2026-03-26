@@ -409,9 +409,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
   secret: config.sessionSecret,
-  // H7: Do not blindly trust Host header — use NEXTAUTH_URL instead.
-  // trustHost is only safe behind a proxy that normalizes the Host header.
-  trustHost: !!process.env.NEXTAUTH_TRUST_HOST,
+  // H7: Only trust Host header when explicitly opted in or when NEXTAUTH_URL
+  // is set (operator has declared the canonical URL, so Host validation is moot).
+  trustHost: !!process.env.NEXTAUTH_TRUST_HOST || !!process.env.NEXTAUTH_URL,
   basePath: "/api/auth",
 });
 
