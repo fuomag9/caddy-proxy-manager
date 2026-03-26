@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard, ArrowLeftRight, Cable, KeyRound, ShieldCheck,
   ShieldOff, BarChart2, History, Settings, LogOut, Menu, Sun, Moon,
+  FileJson2,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { href: "/waf",            label: "WAF",            icon: ShieldOff       },
   { href: "/analytics",      label: "Analytics",      icon: BarChart2       },
   { href: "/audit-log",      label: "Audit Log",      icon: History         },
+  { href: "/api-docs",       label: "API Docs",       icon: FileJson2       },
   { href: "/settings",       label: "Settings",       icon: Settings        },
 ] as const;
 

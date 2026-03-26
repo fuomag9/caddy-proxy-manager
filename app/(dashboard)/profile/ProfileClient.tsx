@@ -18,7 +18,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { signIn } from "next-auth/react";
-import { Camera, Link, LogIn, Lock, Trash2, Unlink, User } from "lucide-react";
+import { Camera, Check, Clock, Copy, Key, Link, LogIn, Lock, Plus, Trash2, Unlink, User, AlertTriangle } from "lucide-react";
+import type { ApiToken } from "@/lib/models/api-tokens";
+import { createApiTokenAction, deleteApiTokenAction } from "../api-tokens/actions";
 
 interface UserData {
   id: number;
@@ -34,9 +36,10 @@ interface UserData {
 interface ProfileClientProps {
   user: UserData;
   enabledProviders: Array<{ id: string; name: string }>;
+  apiTokens: ApiToken[];
 }
 
-export default function ProfileClient({ user, enabledProviders }: ProfileClientProps) {
+export default function ProfileClient({ user, enabledProviders, apiTokens }: ProfileClientProps) {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -46,6 +49,8 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url);
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const hasPassword = !!user.password_hash;
   const hasOAuth = user.provider !== "credentials";
@@ -243,6 +248,39 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
       setError("An error occurred while deleting avatar");
       setLoading(false);
     }
+  };
+
+  const handleCreateToken = async (formData: FormData) => {
+    setError(null);
+    setNewToken(null);
+    const result = await createApiTokenAction(formData);
+    if ("error" in result) {
+      setError(result.error);
+    } else {
+      setNewToken(result.rawToken);
+      setSuccess("API token created successfully");
+    }
+  };
+
+  const handleCopyToken = () => {
+    if (newToken) {
+      navigator.clipboard.writeText(newToken);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const formatDate = (iso: string | null): string => {
+    if (!iso) return "Never";
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric", month: "short", day: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  };
+
+  const isExpired = (expiresAt: string | null): boolean => {
+    if (!expiresAt) return false;
+    return new Date(expiresAt) <= new Date();
   };
 
   const getProviderName = (provider: string) => {
@@ -448,6 +486,118 @@ export default function ProfileClient({ user, enabledProviders }: ProfileClientP
             </CardContent>
           </Card>
         )}
+
+        {/* API Tokens */}
+        <Card>
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <div className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">API Tokens</h2>
+            </div>
+
+            <Separator />
+
+            <p className="text-sm text-muted-foreground">
+              Create tokens for programmatic access to the API using <code className="text-xs bg-muted px-1 py-0.5 rounded">Authorization: Bearer {'<token>'}</code>
+            </p>
+
+            {/* Newly created token */}
+            {newToken && (
+              <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/5 p-4 flex flex-col gap-2">
+                <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                  Copy this token now — it will not be shown again.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 rounded-md border bg-muted/50 px-3 py-2 text-xs font-mono break-all select-all">
+                    {newToken}
+                  </code>
+                  <Button variant="outline" size="sm" className="shrink-0 h-8 gap-1.5" onClick={handleCopyToken}>
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copied ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Existing tokens */}
+            {apiTokens.length > 0 && (
+              <div className="flex flex-col divide-y divide-border rounded-md border overflow-hidden">
+                {apiTokens.map((token) => {
+                  const expired = isExpired(token.expires_at);
+                  return (
+                    <div
+                      key={token.id}
+                      className={`flex items-center justify-between px-4 py-3 bg-muted/20 hover:bg-muted/40 transition-colors ${expired ? "opacity-60" : ""}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Key className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium truncate">{token.name}</p>
+                            {expired && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                                <AlertTriangle className="h-2.5 w-2.5" />
+                                Expired
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0">
+                            <p className="text-xs text-muted-foreground">
+                              Created {formatDate(token.created_at)}
+                            </p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              Used {formatDate(token.last_used_at)}
+                            </p>
+                            {token.expires_at && (
+                              <p className="text-xs text-muted-foreground">
+                                {expired ? "Expired" : "Expires"} {formatDate(token.expires_at)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <form action={deleteApiTokenAction.bind(null, token.id)}>
+                        <Button type="submit" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </form>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {apiTokens.length === 0 && !newToken && (
+              <div className="flex items-center gap-2 rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
+                <Key className="h-4 w-4 shrink-0" />
+                No API tokens yet — create one below.
+              </div>
+            )}
+
+            {/* Create new token */}
+            <form action={handleCreateToken} className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="token-name" className="text-xs">
+                    Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input id="token-name" name="name" required placeholder="e.g. CI/CD Pipeline" className="h-8 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="token-expires" className="text-xs">Expires at</Label>
+                  <Input id="token-expires" name="expires_at" type="datetime-local" className="h-8 text-sm" />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button type="submit" size="sm">
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Create Token
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Change Password Dialog */}
