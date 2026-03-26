@@ -108,7 +108,7 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     );
   }
 
-  // L7: Runtime-validate excluded_rule_ids are positive integers
+  // Runtime-validate excluded_rule_ids are positive integers
   if (waf.excluded_rule_ids?.length) {
     const validIds = waf.excluded_rule_ids.filter(
       (id): id is number => typeof id === "number" && Number.isFinite(id) && id > 0 && Number.isInteger(id)
@@ -132,7 +132,7 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     'SecResponseBodyAccess Off',
   );
 
-  // H5: Validate WAF custom directives — block dangerous engine-level overrides
+  // Block dangerous engine-level overrides in custom directives
   if (waf.custom_directives?.trim()) {
     const directives = waf.custom_directives.trim();
     const forbiddenPatterns = [

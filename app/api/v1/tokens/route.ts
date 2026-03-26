@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    // C3: Validate expires_at before passing to createApiToken
+    // Validate expires_at before passing to createApiToken
     if (body.expires_at !== undefined && body.expires_at !== null && typeof body.expires_at !== "string") {
       return NextResponse.json({ error: "expires_at must be a string (ISO 8601 date)" }, { status: 400 });
     }

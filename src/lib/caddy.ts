@@ -800,7 +800,7 @@ async function buildProxyRoutes(
       outpostRoute = {
         match: [
           {
-            // M10: Sanitize outpostDomain to prevent path traversal and placeholder injection
+            // Sanitize outpostDomain to prevent path traversal and placeholder injection
             path: [`/${authentik.outpostDomain.replace(/\.\./g, '').replace(/\{[^}]*\}/g, '').replace(/\/+/g, '/')}/*`]
           }
         ],
@@ -879,7 +879,7 @@ async function buildProxyRoutes(
     }
 
     // Structured path prefix rewrite
-    // M9: Sanitize path_prefix to prevent Caddy placeholder injection
+    // Sanitize path_prefix to prevent Caddy placeholder injection
     if (meta.rewrite?.path_prefix) {
       const safePrefix = meta.rewrite.path_prefix.replace(/\{[^}]*\}/g, '');
       if (safePrefix) {

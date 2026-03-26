@@ -111,9 +111,8 @@ services:
       retries: 3
       start_period: 10s
 
-  # H2: Docker socket proxy — restricts API surface exposed to l4-port-manager.
+  # Docker socket proxy — restricts API surface exposed to l4-port-manager.
   # Only allows GET, POST to /containers/ and /compose/ endpoints.
-  # Prevents container escape via unrestricted Docker API access.
   docker-socket-proxy:
     container_name: caddy-proxy-manager-docker-proxy
     image: tecnativa/docker-socket-proxy:latest

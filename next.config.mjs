@@ -20,9 +20,8 @@ const nextConfig = {
     }
   },
   output: 'standalone',
-  // M6: Security headers (CSP, X-Frame-Options, etc.) are set per-request in
-  // proxy.ts middleware with a unique nonce, so they are NOT defined here.
-  // Static headers() would override the nonce-based CSP with a nonce-less one.
+  // Security headers (CSP, etc.) are set per-request in proxy.ts middleware
+  // with a unique nonce, so they are NOT defined here as static headers.
 };
 
 export default nextConfig;

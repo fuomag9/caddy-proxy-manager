@@ -12,7 +12,7 @@ export type AuditEvent = {
   created_at: string;
 };
 
-// L6: Escape LIKE metacharacters so user input is treated as literal text
+// Escape LIKE metacharacters so user input is treated as literal text
 function escapeLikePattern(input: string): string {
   return input.replace(/[%_\\]/g, (ch) => `\\${ch}`);
 }

@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // M3: Rate limit password change attempts to prevent brute-forcing current password
+    // Rate limit password change attempts to prevent brute-forcing current password
     const rateLimitKey = `password-change:${session.user.id}`;
     const rateCheck = isRateLimited(rateLimitKey);
     if (rateCheck.blocked) {
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { currentPassword, newPassword } = body;
 
-    // L4: Enforce password complexity matching production admin password requirements
+    // Enforce password complexity matching production admin password requirements
     if (!newPassword || newPassword.length < 12) {
       return NextResponse.json(
         { error: "New password must be at least 12 characters long" },

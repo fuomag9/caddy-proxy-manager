@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 const isDev = process.env.NODE_ENV === "development";
 
 /**
- * M6: Build a nonce-based Content-Security-Policy per request.
+ * Build a nonce-based Content-Security-Policy per request.
  * Next.js reads the nonce from the CSP request header and applies it
  * to all inline scripts it generates.
  */

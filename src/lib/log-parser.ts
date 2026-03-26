@@ -161,7 +161,7 @@ function insertBatch(rows: typeof trafficEvents.$inferInsert[]): void {
 
 function purgeOldEntries(): void {
   const cutoff = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
-  // M5: Use parameterized query instead of string interpolation
+  // Use parameterized query instead of string interpolation
   db.run(sql`DELETE FROM traffic_events WHERE ts < ${cutoff}`);
 }
 

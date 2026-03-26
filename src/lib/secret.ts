@@ -32,7 +32,7 @@ export function encryptSecret(value: string): string {
 }
 
 /**
- * L5: Legacy fallback is time-limited. After the migration grace period,
+ * Legacy fallback is time-limited. After the migration grace period,
  * the legacy key is no longer tried, forcing re-encryption of old secrets.
  * Set LEGACY_KEY_CUTOFF_DATE env var to extend/disable (ISO 8601 date or "never").
  */
@@ -49,7 +49,7 @@ export function decryptSecret(value: string): string {
   try {
     return _decryptWithKey(value, deriveKey());
   } catch (hkdfError: unknown) {
-    // L5: Only fall back to legacy key within the grace period
+    // Only fall back to legacy key within the grace period
     if (LEGACY_KEY_CUTOFF && new Date() > LEGACY_KEY_CUTOFF) {
       throw new Error(
         "[secret] HKDF decryption failed and legacy key grace period has expired. " +

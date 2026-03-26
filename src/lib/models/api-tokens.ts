@@ -34,7 +34,7 @@ export async function createApiToken(
   createdBy: number,
   expiresAt?: string
 ): Promise<{ token: ApiToken; rawToken: string }> {
-  // C3: Validate expires_at is a valid ISO 8601 date in the future
+  // Validate expires_at is a valid ISO 8601 date in the future
   let validatedExpiresAt: string | null = null;
   if (expiresAt) {
     const parsed = new Date(expiresAt);

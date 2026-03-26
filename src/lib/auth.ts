@@ -392,7 +392,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string;
         session.user.provider = token.provider as string;
 
-        // H1: Always fetch current role and avatar from database to reflect
+        // Always fetch current role from database to reflect
         // role changes (e.g. demotion) without waiting for JWT expiry
         const userId = Number(token.id);
         const currentUser = await getUserById(userId);
@@ -409,7 +409,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
   secret: config.sessionSecret,
-  // H7: Only trust Host header when explicitly opted in or when NEXTAUTH_URL
+  // Only trust Host header when explicitly opted in or when NEXTAUTH_URL
   // is set (operator has declared the canonical URL, so Host validation is moot).
   trustHost: !!process.env.NEXTAUTH_TRUST_HOST || !!process.env.NEXTAUTH_URL,
   basePath: "/api/auth",
@@ -451,10 +451,8 @@ export async function requireAdmin() {
  */
 export function checkSameOrigin(request: NextRequest): NextResponse | null {
   const origin = request.headers.get("origin");
-  // L1: For mutating requests, require Origin header to be present.
+  // For mutating requests, require Origin header to be present.
   // Browsers always send Origin on cross-origin POST/PUT/DELETE.
-  // A missing Origin on a mutating request from a cookie-authenticated session
-  // could indicate a non-browser attacker with a stolen cookie.
   const method = request.method.toUpperCase();
   const isMutating = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
   if (!origin) {

@@ -46,7 +46,7 @@ export async function authenticateApiRequest(
     throw new ApiAuthError("Unauthorized", 401);
   }
 
-  // M14: Deny access when role is missing rather than defaulting to "user"
+  // Deny access when role is missing rather than defaulting to "user"
   const role = session.user.role;
   if (!role) {
     throw new ApiAuthError("Session missing role claim", 401);

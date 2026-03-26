@@ -202,7 +202,7 @@ function isL4ProxyHost(value: unknown): value is NonNullable<SyncPayload["data"]
 }
 
 /**
- * H8: Validate semantic content of proxy host fields to prevent
+ * Validate semantic content of proxy host fields to prevent
  * config injection via compromised master or stolen sync token.
  */
 function validateProxyHostContent(host: Record<string, unknown>): string | null {
@@ -341,7 +341,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid sync payload structure" }, { status: 400 });
   }
 
-  // H8: Semantic validation of proxy host content
+  // Semantic validation of proxy host content
   for (const host of (payload as SyncPayload).data.proxyHosts) {
     const err = validateProxyHostContent(host as unknown as Record<string, unknown>);
     if (err) {

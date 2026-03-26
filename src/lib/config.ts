@@ -30,8 +30,7 @@ function resolveSessionSecret(): string {
     return DEV_SECRET;
   }
 
-  // C1: Fail-closed on unrecognized NODE_ENV to prevent silent DEV_SECRET usage
-  // in staging, test, or misconfigured environments.
+  // Fail-closed on unrecognized NODE_ENV to prevent silent DEV_SECRET usage
   if (!isDevelopment && !isProduction && !secret) {
     throw new Error(
       `SESSION_SECRET is required when NODE_ENV="${process.env.NODE_ENV ?? ""}" ` +
