@@ -16,11 +16,11 @@ vi.mock('@/src/lib/api-auth', () => {
     requireApiAdmin: vi.fn().mockResolvedValue({ userId: 1, role: 'admin', authMethod: 'bearer' }),
     requireApiUser: vi.fn().mockResolvedValue({ userId: 1, role: 'admin', authMethod: 'bearer' }),
     apiErrorResponse: vi.fn((error: unknown) => {
-      const { NextResponse } = require('next/server');
-      if (error && typeof error === 'object' && 'status' in error) {
-        return NextResponse.json({ error: (error as Error).message }, { status: (error as any).status });
+      const { NextResponse: NR } = require('next/server');
+      if (error instanceof ApiAuthError) {
+        return NR.json({ error: error.message }, { status: error.status });
       }
-      return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
+      return NR.json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
     }),
     ApiAuthError,
   };
@@ -124,7 +124,7 @@ describe('POST /api/v1/tokens', () => {
     mockCreateApiToken.mockResolvedValue(tokenResult as any);
 
     const response = await POST(createMockRequest({ method: 'POST', body: { name: 'Expiring Token', expires_at: '2027-01-01' } }));
-    const data = await response.json();
+    await response.json();
 
     expect(response.status).toBe(201);
     expect(mockCreateApiToken).toHaveBeenCalledWith('Expiring Token', 1, '2027-01-01');

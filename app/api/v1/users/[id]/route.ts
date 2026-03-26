@@ -3,7 +3,8 @@ import { requireApiUser, requireApiAdmin, apiErrorResponse, ApiAuthError } from 
 import { getUserById, updateUserProfile } from "@/src/lib/models/user";
 
 function stripPasswordHash(user: Record<string, unknown>) {
-  const { password_hash, ...rest } = user;
+  const { password_hash: _, ...rest } = user;
+  void _;
   return rest;
 }
 

@@ -19,4 +19,11 @@ export default [
       '@next/next/no-img-element': 'off',
     },
   },
+  {
+    files: ['tests/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 ];

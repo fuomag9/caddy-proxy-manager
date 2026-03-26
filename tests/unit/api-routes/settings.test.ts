@@ -41,11 +41,11 @@ vi.mock('@/src/lib/api-auth', () => {
     requireApiAdmin: vi.fn().mockResolvedValue({ userId: 1, role: 'admin', authMethod: 'bearer' }),
     requireApiUser: vi.fn().mockResolvedValue({ userId: 1, role: 'admin', authMethod: 'bearer' }),
     apiErrorResponse: vi.fn((error: unknown) => {
-      const { NextResponse } = require('next/server');
-      if (error && typeof error === 'object' && 'status' in error) {
-        return NextResponse.json({ error: (error as Error).message }, { status: (error as any).status });
+      const { NextResponse: NR } = require('next/server');
+      if (error instanceof ApiAuthError) {
+        return NR.json({ error: error.message }, { status: error.status });
       }
-      return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
+      return NR.json({ error: error instanceof Error ? error.message : 'Internal server error' }, { status: 500 });
     }),
     ApiAuthError,
   };
@@ -218,7 +218,7 @@ describe('PUT /api/v1/settings/[group]', () => {
 
     const body = {};
     const response = await PUT(createMockRequest({ method: 'PUT', body }), { params: Promise.resolve({ group: 'sync-token' }) });
-    const data = await response.json();
+    await response.json();
 
     expect(response.status).toBe(200);
     expect(mockSetSlaveMasterToken).toHaveBeenCalledWith(null);

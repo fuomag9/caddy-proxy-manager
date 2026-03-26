@@ -196,7 +196,7 @@ describe('api-tokens integration', () => {
     const userB = await insertUser({ email: 'b@localhost', subject: 'b@localhost', role: 'user' });
 
     const { token: tokenA } = await insertApiToken(userA.id, { name: 'A Token' });
-    const { token: tokenB } = await insertApiToken(userB.id, { name: 'B Token' });
+    await insertApiToken(userB.id, { name: 'B Token' });
 
     // User B deletes only their own tokens
     await db.delete(apiTokens).where(eq(apiTokens.createdBy, userB.id));
