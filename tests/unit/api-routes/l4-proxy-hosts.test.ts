@@ -132,6 +132,16 @@ describe('PUT /api/v1/l4-proxy-hosts/[id]', () => {
     expect(data.listen_port).toBe(4444);
     expect(mockUpdate).toHaveBeenCalledWith(1, body, 1);
   });
+
+  it('returns 500 when host not found', async () => {
+    mockUpdate.mockRejectedValue(new Error('not found'));
+
+    const response = await PUT(createMockRequest({ method: 'PUT', body: { listen_port: 4444 } }), { params: Promise.resolve({ id: '999' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('not found');
+  });
 });
 
 describe('DELETE /api/v1/l4-proxy-hosts/[id]', () => {
@@ -144,5 +154,138 @@ describe('DELETE /api/v1/l4-proxy-hosts/[id]', () => {
     expect(response.status).toBe(200);
     expect(data).toEqual({ ok: true });
     expect(mockDelete).toHaveBeenCalledWith(1, 1);
+  });
+
+  it('returns 500 when host not found', async () => {
+    mockDelete.mockRejectedValue(new Error('not found'));
+
+    const response = await DELETE(createMockRequest({ method: 'DELETE' }), { params: Promise.resolve({ id: '999' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('not found');
+  });
+});
+
+describe('POST /api/v1/l4-proxy-hosts (all options)', () => {
+  it('creates L4 host with all options', async () => {
+    const fullBody = {
+      name: "PostgreSQL Proxy",
+      listen_addresses: [":5432"],
+      matchers: ["db.example.com"],
+      upstreams: ["db-primary:5432", "db-replica:5432"],
+      protocol: "tcp",
+      matcher_type: "tls_sni",
+      tls_termination: true,
+      proxy_protocol_version: "v2",
+      enabled: true,
+      load_balancer: {
+        enabled: true,
+        policy: "least_conn",
+        tryDuration: "10s",
+        tryInterval: "500ms",
+        retries: 2,
+        activeHealthCheck: {
+          enabled: true,
+          port: 5432,
+          interval: "15s",
+          timeout: "3s",
+        },
+        passiveHealthCheck: {
+          enabled: true,
+          failDuration: "30s",
+          maxFails: 3,
+          unhealthyLatency: "5s",
+        },
+      },
+      dns_resolver: {
+        enabled: true,
+        resolvers: ["1.1.1.1"],
+        fallbacks: [],
+        timeout: "3s",
+      },
+      upstream_dns_resolution: {
+        enabled: true,
+        family: "ipv4",
+      },
+      geoblock: {
+        enabled: true,
+        block_countries: ["CN"],
+        block_continents: [],
+        block_asns: [],
+        block_cidrs: [],
+        block_ips: [],
+        allow_countries: [],
+        allow_continents: [],
+        allow_asns: [],
+        allow_cidrs: [],
+        allow_ips: [],
+        trusted_proxies: [],
+        fail_closed: true,
+        response_status: 403,
+        response_body: "Blocked",
+        response_headers: {},
+        redirect_url: "",
+      },
+      geoblock_mode: "override",
+    };
+
+    const returnValue = { id: 10, ...fullBody, created_at: '2026-03-26T00:00:00Z', updated_at: '2026-03-26T00:00:00Z' };
+    mockCreate.mockResolvedValue(returnValue as any);
+
+    const response = await POST(createMockRequest({ method: 'POST', body: fullBody }));
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.id).toBe(10);
+    expect(mockCreate).toHaveBeenCalledWith(fullBody, 1);
+  });
+
+  it('creates UDP L4 host without TLS', async () => {
+    const body = {
+      name: "DNS Proxy",
+      listen_addresses: [":53"],
+      matchers: [],
+      upstreams: ["dns:53"],
+      protocol: "udp",
+      matcher_type: "none",
+      tls_termination: false,
+      enabled: true,
+    };
+
+    const returnValue = { id: 11, ...body, created_at: '2026-03-26T00:00:00Z', updated_at: '2026-03-26T00:00:00Z' };
+    mockCreate.mockResolvedValue(returnValue as any);
+
+    const response = await POST(createMockRequest({ method: 'POST', body }));
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.id).toBe(11);
+    expect(data.protocol).toBe("udp");
+    expect(data.tls_termination).toBe(false);
+    expect(data.matchers).toEqual([]);
+    expect(mockCreate).toHaveBeenCalledWith(body, 1);
+  });
+});
+
+describe('PUT /api/v1/l4-proxy-hosts/[id] (partial update)', () => {
+  it('updates L4 host matcher and protocol', async () => {
+    const partialBody = {
+      matcher_type: "http_host",
+      matchers: ["new.example.com"],
+      proxy_protocol_version: "v1",
+    };
+
+    const updated = { ...sampleHost, ...partialBody };
+    mockUpdate.mockResolvedValue(updated as any);
+
+    const response = await PUT(createMockRequest({ method: 'PUT', body: partialBody }), { params: Promise.resolve({ id: '1' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledWith(1, partialBody, 1);
+    expect(data.matcher_type).toBe("http_host");
+    expect(data.matchers).toEqual(["new.example.com"]);
+    expect(data.proxy_protocol_version).toBe("v1");
   });
 });

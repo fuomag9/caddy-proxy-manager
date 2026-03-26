@@ -130,6 +130,16 @@ describe('PUT /api/v1/certificates/[id]', () => {
     expect(data.domains).toEqual(['updated.example.com']);
     expect(mockUpdate).toHaveBeenCalledWith(1, body, 1);
   });
+
+  it('returns 500 when certificate not found', async () => {
+    mockUpdate.mockRejectedValue(new Error('not found'));
+
+    const response = await PUT(createMockRequest({ method: 'PUT', body: { domains: ['x.com'] } }), { params: Promise.resolve({ id: '999' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('not found');
+  });
 });
 
 describe('DELETE /api/v1/certificates/[id]', () => {
@@ -142,5 +152,107 @@ describe('DELETE /api/v1/certificates/[id]', () => {
     expect(response.status).toBe(200);
     expect(data).toEqual({ ok: true });
     expect(mockDelete).toHaveBeenCalledWith(1, 1);
+  });
+
+  it('returns 500 when certificate not found', async () => {
+    mockDelete.mockRejectedValue(new Error('not found'));
+
+    const response = await DELETE(createMockRequest({ method: 'DELETE' }), { params: Promise.resolve({ id: '999' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('not found');
+  });
+});
+
+describe('POST /api/v1/certificates - input variations', () => {
+  it('creates managed certificate with provider_options', async () => {
+    const managedCert = {
+      name: 'Wildcard',
+      type: 'managed',
+      domain_names: ['*.example.com'],
+      auto_renew: true,
+      provider_options: { api_token: 'cloudflare-token' },
+    };
+    mockCreate.mockResolvedValue({
+      id: 10,
+      ...managedCert,
+      certificate_pem: null,
+      private_key_pem: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    } as any);
+
+    const response = await POST(createMockRequest({ method: 'POST', body: managedCert }));
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.id).toBe(10);
+    expect(data.type).toBe('managed');
+    expect(data.provider_options).toEqual({ api_token: 'cloudflare-token' });
+    expect(data.certificate_pem).toBeNull();
+    expect(data.private_key_pem).toBeNull();
+    expect(mockCreate).toHaveBeenCalledWith(managedCert, 1);
+  });
+
+  it('creates imported certificate with PEM', async () => {
+    const importedCert = {
+      name: 'Custom Cert',
+      type: 'imported',
+      domain_names: ['custom.example.com'],
+      auto_renew: false,
+      certificate_pem: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----',
+      private_key_pem: '-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----',
+    };
+    mockCreate.mockResolvedValue({
+      id: 11,
+      ...importedCert,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    } as any);
+
+    const response = await POST(createMockRequest({ method: 'POST', body: importedCert }));
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.id).toBe(11);
+    expect(data.type).toBe('imported');
+    expect(data.certificate_pem).toContain('BEGIN CERTIFICATE');
+    expect(data.private_key_pem).toContain('BEGIN PRIVATE KEY');
+    expect(mockCreate).toHaveBeenCalledWith(importedCert, 1);
+  });
+});
+
+describe('GET /api/v1/certificates/[id] - full fields', () => {
+  it('returns certificate with all fields', async () => {
+    const fullCert = {
+      id: 1,
+      name: 'Full Cert',
+      type: 'imported',
+      domains: ['secure.example.com'],
+      domain_names: ['secure.example.com'],
+      status: 'active',
+      auto_renew: false,
+      provider_options: null,
+      certificate_pem: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----',
+      private_key_pem: '-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----',
+      expires_at: '2027-01-01',
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    };
+    mockGet.mockResolvedValue(fullCert as any);
+
+    const response = await getGET(createMockRequest(), { params: Promise.resolve({ id: '1' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.id).toBe(1);
+    expect(data.name).toBe('Full Cert');
+    expect(data.type).toBe('imported');
+    expect(data.certificate_pem).toContain('BEGIN CERTIFICATE');
+    expect(data.private_key_pem).toContain('BEGIN PRIVATE KEY');
+    expect(data.auto_renew).toBe(false);
+    expect(data.created_at).toBe('2026-01-01');
+    expect(data.updated_at).toBe('2026-01-01');
   });
 });

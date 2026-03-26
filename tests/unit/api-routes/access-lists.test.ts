@@ -135,6 +135,16 @@ describe('PUT /api/v1/access-lists/[id]', () => {
     expect(data.name).toBe('Updated List');
     expect(mockUpdate).toHaveBeenCalledWith(1, body, 1);
   });
+
+  it('returns 500 when access list not found', async () => {
+    mockUpdate.mockRejectedValue(new Error('not found'));
+
+    const response = await PUT(createMockRequest({ method: 'PUT', body: { name: 'X' } }), { params: Promise.resolve({ id: '999' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('not found');
+  });
 });
 
 describe('DELETE /api/v1/access-lists/[id]', () => {
@@ -147,6 +157,16 @@ describe('DELETE /api/v1/access-lists/[id]', () => {
     expect(response.status).toBe(200);
     expect(data).toEqual({ ok: true });
     expect(mockDelete).toHaveBeenCalledWith(1, 1);
+  });
+
+  it('returns 500 when access list not found', async () => {
+    mockDelete.mockRejectedValue(new Error('not found'));
+
+    const response = await DELETE(createMockRequest({ method: 'DELETE' }), { params: Promise.resolve({ id: '999' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('not found');
   });
 });
 
@@ -179,5 +199,57 @@ describe('DELETE /api/v1/access-lists/[id]/entries/[entryId]', () => {
     expect(response.status).toBe(200);
     expect(data.entries).toHaveLength(0);
     expect(mockRemoveEntry).toHaveBeenCalledWith(1, 1, 1);
+  });
+});
+
+describe('POST /api/v1/access-lists - with seed users', () => {
+  it('creates access list with seed users', async () => {
+    const input = {
+      name: 'Staff',
+      description: 'Staff access',
+      users: [
+        { username: 'alice', password: 'secret123' },
+        { username: 'bob', password: 'pass456' },
+      ],
+    };
+    mockCreate.mockResolvedValue({
+      id: 3,
+      ...input,
+      entries: [],
+      created_at: '2026-01-01T00:00:00Z',
+    } as any);
+
+    const response = await listPOST(createMockRequest({ method: 'POST', body: input }));
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.id).toBe(3);
+    expect(data.name).toBe('Staff');
+    expect(data.description).toBe('Staff access');
+    expect(data.users).toHaveLength(2);
+    expect(data.users[0].username).toBe('alice');
+    expect(data.users[1].username).toBe('bob');
+    expect(mockCreate).toHaveBeenCalledWith(input, 1);
+  });
+});
+
+describe('POST /api/v1/access-lists/[id]/entries - with username and password', () => {
+  it('adds entry with username and password', async () => {
+    const entry = { username: 'charlie', password: 'newpass789' };
+    const updatedList = {
+      ...sampleList,
+      entries: [...sampleList.entries, { id: 2, ...entry }],
+    };
+    mockAddEntry.mockResolvedValue(updatedList as any);
+
+    const response = await entriesPOST(
+      createMockRequest({ method: 'POST', body: entry }),
+      { params: Promise.resolve({ id: '1' }) }
+    );
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.entries).toHaveLength(2);
+    expect(mockAddEntry).toHaveBeenCalledWith(1, entry, 1);
   });
 });

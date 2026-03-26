@@ -129,6 +129,16 @@ describe('PUT /api/v1/ca-certificates/[id]', () => {
     expect(data.name).toBe('Updated CA');
     expect(mockUpdate).toHaveBeenCalledWith(1, body, 1);
   });
+
+  it('returns 500 when CA certificate not found', async () => {
+    mockUpdate.mockRejectedValue(new Error('not found'));
+
+    const response = await PUT(createMockRequest({ method: 'PUT', body: { name: 'X' } }), { params: Promise.resolve({ id: '999' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('not found');
+  });
 });
 
 describe('DELETE /api/v1/ca-certificates/[id]', () => {
@@ -141,5 +151,15 @@ describe('DELETE /api/v1/ca-certificates/[id]', () => {
     expect(response.status).toBe(200);
     expect(data).toEqual({ ok: true });
     expect(mockDelete).toHaveBeenCalledWith(1, 1);
+  });
+
+  it('returns 500 when CA certificate not found', async () => {
+    mockDelete.mockRejectedValue(new Error('not found'));
+
+    const response = await DELETE(createMockRequest({ method: 'DELETE' }), { params: Promise.resolve({ id: '999' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(data.error).toBe('not found');
   });
 });

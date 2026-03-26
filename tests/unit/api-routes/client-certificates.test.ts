@@ -129,3 +129,94 @@ describe('DELETE /api/v1/client-certificates/[id]', () => {
     expect(mockRevoke).toHaveBeenCalledWith(1, 1);
   });
 });
+
+describe('POST /api/v1/client-certificates - all required fields', () => {
+  it('creates client certificate with all required fields', async () => {
+    const input = {
+      ca_certificate_id: 1,
+      common_name: 'device-01',
+      serial_number: 'A1B2C3D4',
+      fingerprint_sha256: 'AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89',
+      certificate_pem: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----',
+      valid_from: '2026-01-01T00:00:00Z',
+      valid_to: '2027-01-01T00:00:00Z',
+    };
+    mockCreate.mockResolvedValue({
+      id: 5,
+      ...input,
+      revoked_at: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    } as any);
+
+    const response = await POST(createMockRequest({ method: 'POST', body: input }));
+    const data = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(data.id).toBe(5);
+    expect(data.common_name).toBe('device-01');
+    expect(data.serial_number).toBe('A1B2C3D4');
+    expect(data.fingerprint_sha256).toContain('AB:CD:EF');
+    expect(data.certificate_pem).toContain('BEGIN CERTIFICATE');
+    expect(data.valid_from).toBe('2026-01-01T00:00:00Z');
+    expect(data.valid_to).toBe('2027-01-01T00:00:00Z');
+    expect(data.revoked_at).toBeNull();
+    expect(mockCreate).toHaveBeenCalledWith(input, 1);
+  });
+});
+
+describe('DELETE /api/v1/client-certificates/[id] - revoked_at timestamp', () => {
+  it('returns certificate with revoked_at set', async () => {
+    const revokedCert = {
+      ...sampleClientCert,
+      serial_number: 'AABB1122',
+      fingerprint_sha256: '11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00',
+      valid_from: '2026-01-01T00:00:00Z',
+      valid_to: '2027-01-01T00:00:00Z',
+      status: 'revoked',
+      revoked_at: '2026-03-26T00:00:00Z',
+    };
+    mockRevoke.mockResolvedValue(revokedCert as any);
+
+    const response = await DELETE(createMockRequest({ method: 'DELETE' }), { params: Promise.resolve({ id: '1' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.status).toBe('revoked');
+    expect(data.revoked_at).toBe('2026-03-26T00:00:00Z');
+    expect(mockRevoke).toHaveBeenCalledWith(1, 1);
+  });
+});
+
+describe('GET /api/v1/client-certificates/[id] - full fields', () => {
+  it('returns full client certificate with all fields', async () => {
+    const fullCert = {
+      id: 3,
+      ca_certificate_id: 1,
+      common_name: 'full-device',
+      serial_number: 'DEADBEEF',
+      fingerprint_sha256: 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99',
+      certificate_pem: '-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----',
+      valid_from: '2026-01-01T00:00:00Z',
+      valid_to: '2027-06-01T00:00:00Z',
+      revoked_at: null,
+      status: 'active',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockGet.mockResolvedValue(fullCert as any);
+
+    const response = await getGET(createMockRequest(), { params: Promise.resolve({ id: '3' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.id).toBe(3);
+    expect(data.common_name).toBe('full-device');
+    expect(data.serial_number).toBe('DEADBEEF');
+    expect(data.fingerprint_sha256).toContain('AA:BB:CC');
+    expect(data.valid_from).toBe('2026-01-01T00:00:00Z');
+    expect(data.valid_to).toBe('2027-06-01T00:00:00Z');
+    expect(data.revoked_at).toBeNull();
+    expect(data.certificate_pem).toContain('BEGIN CERTIFICATE');
+  });
+});
