@@ -12,13 +12,21 @@ export type AuditEvent = {
   created_at: string;
 };
 
+// L6: Escape LIKE metacharacters so user input is treated as literal text
+function escapeLikePattern(input: string): string {
+  return input.replace(/[%_\\]/g, (ch) => `\\${ch}`);
+}
+
 export async function countAuditEvents(search?: string): Promise<number> {
   const where = search
-    ? or(
-        like(auditEvents.summary, `%${search}%`),
-        like(auditEvents.action, `%${search}%`),
-        like(auditEvents.entityType, `%${search}%`)
-      )
+    ? (() => {
+        const escaped = escapeLikePattern(search);
+        return or(
+          like(auditEvents.summary, `%${escaped}%`),
+          like(auditEvents.action, `%${escaped}%`),
+          like(auditEvents.entityType, `%${escaped}%`)
+        );
+      })()
     : undefined;
   const [row] = await db.select({ value: count() }).from(auditEvents).where(where);
   return row?.value ?? 0;
@@ -30,11 +38,14 @@ export async function listAuditEvents(
   search?: string
 ): Promise<AuditEvent[]> {
   const where = search
-    ? or(
-        like(auditEvents.summary, `%${search}%`),
-        like(auditEvents.action, `%${search}%`),
-        like(auditEvents.entityType, `%${search}%`)
-      )
+    ? (() => {
+        const escaped = escapeLikePattern(search);
+        return or(
+          like(auditEvents.summary, `%${escaped}%`),
+          like(auditEvents.action, `%${escaped}%`),
+          like(auditEvents.entityType, `%${escaped}%`)
+        );
+      })()
     : undefined;
   const events = await db
     .select()

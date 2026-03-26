@@ -111,9 +111,33 @@ services:
       retries: 3
       start_period: 10s
 
+  # H2: Docker socket proxy — restricts API surface exposed to l4-port-manager.
+  # Only allows GET, POST to /containers/ and /compose/ endpoints.
+  # Prevents container escape via unrestricted Docker API access.
+  docker-socket-proxy:
+    container_name: caddy-proxy-manager-docker-proxy
+    image: tecnativa/docker-socket-proxy:latest
+    restart: unless-stopped
+    environment:
+      CONTAINERS: 1
+      POST: 1
+      # Deny everything else by default
+      IMAGES: 0
+      NETWORKS: 0
+      VOLUMES: 0
+      EXEC: 0
+      SWARM: 0
+      AUTH: 0
+      SECRETS: 0
+      BUILD: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - caddy-network
+
   # L4 Port Manager sidecar — automatically recreates the caddy container
   # when L4 proxy host ports change.
-  # Requires Docker socket access (read-only) to recreate the caddy container.
+  # Uses Docker socket proxy instead of direct Docker socket access.
   l4-port-manager:
     container_name: caddy-proxy-manager-l4-ports
     image: ghcr.io/fuomag9/caddy-proxy-manager-l4-port-manager:latest
@@ -125,13 +149,17 @@ services:
       DATA_DIR: /data
       COMPOSE_DIR: /compose
       POLL_INTERVAL: "${L4_PORT_MANAGER_POLL_INTERVAL:-2}"
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - caddy-manager-data:/data
       - .:/compose:ro
     depends_on:
       caddy:
         condition: service_healthy
+      docker-socket-proxy:
+        condition: service_started
+    networks:
+      - caddy-network
 
   geoipupdate:
     container_name: geoipupdate-${HOSTNAME}

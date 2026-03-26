@@ -31,15 +31,32 @@ export function encryptSecret(value: string): string {
   return `${PREFIX}${iv.toString("base64")}:${tag.toString("base64")}:${ciphertext.toString("base64")}`;
 }
 
+/**
+ * L5: Legacy fallback is time-limited. After the migration grace period,
+ * the legacy key is no longer tried, forcing re-encryption of old secrets.
+ * Set LEGACY_KEY_CUTOFF_DATE env var to extend/disable (ISO 8601 date or "never").
+ */
+const LEGACY_KEY_CUTOFF_ENV = process.env.LEGACY_KEY_CUTOFF_DATE;
+const LEGACY_KEY_CUTOFF = LEGACY_KEY_CUTOFF_ENV === "never"
+  ? null
+  : new Date(LEGACY_KEY_CUTOFF_ENV || "2026-06-01T00:00:00Z");
+
 export function decryptSecret(value: string): string {
   if (!value) return "";
   if (!isEncryptedSecret(value)) return value;
 
-  // Try new HKDF key first, fall back to old SHA-256 key for existing data.
-  // Log when the legacy path is taken so operators know when re-encryption is complete.
+  // Try new HKDF key first
   try {
     return _decryptWithKey(value, deriveKey());
-  } catch {
+  } catch (hkdfError) {
+    // L5: Only fall back to legacy key within the grace period
+    if (LEGACY_KEY_CUTOFF && new Date() > LEGACY_KEY_CUTOFF) {
+      throw new Error(
+        "[secret] HKDF decryption failed and legacy key grace period has expired. " +
+        "Re-encrypt this secret with the current key. " +
+        "Set LEGACY_KEY_CUTOFF_DATE=never to temporarily restore legacy key support."
+      );
+    }
     console.warn("[secret] HKDF decryption failed; retrying with legacy SHA-256 key. Re-encrypt this secret to remove the legacy key dependency.");
     return _decryptWithKey(value, deriveKeyLegacy());
   }

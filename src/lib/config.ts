@@ -30,7 +30,17 @@ function resolveSessionSecret(): string {
     return DEV_SECRET;
   }
 
-  // Use provided secret or dev secret
+  // C1: Fail-closed on unrecognized NODE_ENV to prevent silent DEV_SECRET usage
+  // in staging, test, or misconfigured environments.
+  if (!isDevelopment && !isProduction && !secret) {
+    throw new Error(
+      `SESSION_SECRET is required when NODE_ENV="${process.env.NODE_ENV ?? ""}" ` +
+      `(not "development" or "production"). ` +
+      "Generate a secure secret with: openssl rand -base64 32"
+    );
+  }
+
+  // Use provided secret or dev secret (only reachable in development)
   const finalSecret = secret || DEV_SECRET;
 
   // Strict validation in production runtime

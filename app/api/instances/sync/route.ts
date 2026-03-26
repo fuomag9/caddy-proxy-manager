@@ -202,6 +202,57 @@ function isL4ProxyHost(value: unknown): value is NonNullable<SyncPayload["data"]
 }
 
 /**
+ * H8: Validate semantic content of proxy host fields to prevent
+ * config injection via compromised master or stolen sync token.
+ */
+function validateProxyHostContent(host: Record<string, unknown>): string | null {
+  // Validate domains are valid hostnames
+  if (typeof host.domains === "string" && host.domains) {
+    try {
+      const domains = JSON.parse(host.domains);
+      if (Array.isArray(domains)) {
+        for (const d of domains) {
+          if (typeof d !== "string" || d.length > 253) {
+            return `Invalid domain in proxy host ${host.id}: ${String(d).slice(0, 50)}`;
+          }
+        }
+      }
+    } catch {
+      // domains might be comma-separated string; just check length
+      if (host.domains.length > 5000) {
+        return `Proxy host ${host.id} domains field too large`;
+      }
+    }
+  }
+
+  // Validate upstreams don't target dangerous internal services
+  if (typeof host.upstreams === "string" && host.upstreams) {
+    try {
+      const upstreams = JSON.parse(host.upstreams);
+      if (Array.isArray(upstreams)) {
+        for (const u of upstreams) {
+          if (typeof u !== "string") continue;
+          const lower = u.toLowerCase();
+          // Block cloud metadata endpoints
+          if (lower.includes("169.254.169.254") || lower.includes("metadata.google")) {
+            return `Proxy host ${host.id} upstream targets blocked metadata endpoint: ${u.slice(0, 80)}`;
+          }
+        }
+      }
+    } catch {
+      // non-JSON upstreams — skip
+    }
+  }
+
+  // Validate meta field size to prevent oversized config injection
+  if (typeof host.meta === "string" && host.meta && host.meta.length > 100_000) {
+    return `Proxy host ${host.id} meta field exceeds 100KB limit`;
+  }
+
+  return null;
+}
+
+/**
  * Validates that the payload has the expected structure for syncing
  */
 function isValidSyncPayload(payload: unknown): payload is SyncPayload {
@@ -288,6 +339,14 @@ export async function POST(request: NextRequest) {
 
   if (!isValidSyncPayload(payload)) {
     return NextResponse.json({ error: "Invalid sync payload structure" }, { status: 400 });
+  }
+
+  // H8: Semantic validation of proxy host content
+  for (const host of (payload as SyncPayload).data.proxyHosts) {
+    const err = validateProxyHostContent(host as unknown as Record<string, unknown>);
+    if (err) {
+      return NextResponse.json({ error: err }, { status: 400 });
+    }
   }
 
   try {

@@ -1,5 +1,6 @@
 import { auth } from "@/src/lib/auth";
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 
 /**
  * Next.js Proxy for route protection.
@@ -8,6 +9,30 @@ import { NextResponse } from "next/server";
  *
  * Note: Proxy always runs on Node.js runtime.
  */
+
+const isDev = process.env.NODE_ENV === "development";
+
+/**
+ * M6: Build a nonce-based Content-Security-Policy per request.
+ * Next.js reads the nonce from the CSP request header and applies it
+ * to all inline scripts it generates.
+ */
+function buildCsp(nonce: string): string {
+  const directives = [
+    "default-src 'self'",
+    isDev
+      ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval'`
+      : `script-src 'self' 'nonce-${nonce}'`,
+    // style-src still needs 'unsafe-inline' for React JSX inline style props
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob:",
+    "worker-src blob:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+  ];
+  return directives.join("; ");
+}
 
 export default auth((req) => {
   const isAuthenticated = !!req.auth;
@@ -30,7 +55,26 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  // Generate per-request nonce for CSP
+  const nonce = crypto.randomBytes(16).toString("base64");
+  const csp = buildCsp(nonce);
+
+  // Set CSP as a request header so Next.js can read the nonce
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("Content-Security-Policy", csp);
+
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+
+  // Also set CSP as a response header for browser enforcement
+  response.headers.set("Content-Security-Policy", csp);
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()");
+
+  return response;
 });
 
 export const config = {

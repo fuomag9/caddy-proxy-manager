@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import maxmind, { CountryResponse } from 'maxmind';
 import db from './db';
 import { trafficEvents, logParseState } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 const LOG_FILE = '/logs/access.log';
 const GEOIP_DB = '/usr/share/GeoIP/GeoLite2-Country.mmdb';
@@ -161,9 +161,8 @@ function insertBatch(rows: typeof trafficEvents.$inferInsert[]): void {
 
 function purgeOldEntries(): void {
   const cutoff = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
-  db.delete(trafficEvents).where(eq(trafficEvents.ts, cutoff)).run();
-  // Use raw sql for < comparison
-  db.run(`DELETE FROM traffic_events WHERE ts < ${cutoff}`);
+  // M5: Use parameterized query instead of string interpolation
+  db.run(sql`DELETE FROM traffic_events WHERE ts < ${cutoff}`);
 }
 
 // ── public API ───────────────────────────────────────────────────────────────

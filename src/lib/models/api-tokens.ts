@@ -34,6 +34,19 @@ export async function createApiToken(
   createdBy: number,
   expiresAt?: string
 ): Promise<{ token: ApiToken; rawToken: string }> {
+  // C3: Validate expires_at is a valid ISO 8601 date in the future
+  let validatedExpiresAt: string | null = null;
+  if (expiresAt) {
+    const parsed = new Date(expiresAt);
+    if (isNaN(parsed.getTime())) {
+      throw new Error("expires_at must be a valid ISO 8601 date");
+    }
+    if (parsed <= new Date()) {
+      throw new Error("expires_at must be in the future");
+    }
+    validatedExpiresAt = parsed.toISOString();
+  }
+
   const rawToken = randomBytes(32).toString("hex");
   const tokenHash = hashToken(rawToken);
   const now = nowIso();
@@ -45,7 +58,7 @@ export async function createApiToken(
       tokenHash,
       createdBy,
       createdAt: now,
-      expiresAt: expiresAt ?? null,
+      expiresAt: validatedExpiresAt,
     })
     .returning();
 
@@ -109,10 +122,10 @@ export async function validateToken(
     return null;
   }
 
-  // Check expiry
+  // Check expiry — reject tokens with invalid or past expiry dates
   if (row.expiresAt) {
     const expiresAt = new Date(row.expiresAt);
-    if (expiresAt <= new Date()) {
+    if (isNaN(expiresAt.getTime()) || expiresAt <= new Date()) {
       return null;
     }
   }

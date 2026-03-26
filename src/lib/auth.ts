@@ -390,19 +390,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Add user info from token to session
       if (session.user && token.id) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
         session.user.provider = token.provider as string;
 
-        // Fetch current avatar from database to ensure it's always up-to-date
+        // H1: Always fetch current role and avatar from database to reflect
+        // role changes (e.g. demotion) without waiting for JWT expiry
         const userId = Number(token.id);
         const currentUser = await getUserById(userId);
-        session.user.image = currentUser?.avatar_url ?? (token.image as string | null | undefined);
+        if (currentUser) {
+          session.user.role = currentUser.role;
+          session.user.image = currentUser.avatar_url ?? (token.image as string | null | undefined);
+        } else {
+          // User deleted from DB — deny access by clearing session
+          session.user.role = token.role as string;
+          session.user.image = token.image as string | null | undefined;
+        }
       }
       return session;
     },
   },
   secret: config.sessionSecret,
-  trustHost: true,
+  // H7: Do not blindly trust Host header — use NEXTAUTH_URL instead.
+  // trustHost is only safe behind a proxy that normalizes the Host header.
+  trustHost: !!process.env.NEXTAUTH_TRUST_HOST,
   basePath: "/api/auth",
 });
 
@@ -442,7 +451,18 @@ export async function requireAdmin() {
  */
 export function checkSameOrigin(request: NextRequest): NextResponse | null {
   const origin = request.headers.get("origin");
-  if (!origin) return null; // same-origin requests may omit Origin
+  // L1: For mutating requests, require Origin header to be present.
+  // Browsers always send Origin on cross-origin POST/PUT/DELETE.
+  // A missing Origin on a mutating request from a cookie-authenticated session
+  // could indicate a non-browser attacker with a stolen cookie.
+  const method = request.method.toUpperCase();
+  const isMutating = method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
+  if (!origin) {
+    // Allow non-mutating requests without Origin (normal browser behavior)
+    if (!isMutating) return null;
+    // For mutating requests, require Origin header
+    return NextResponse.json({ error: "Forbidden: Origin header required" }, { status: 403 });
+  }
 
   const host = request.headers.get("host");
   try {

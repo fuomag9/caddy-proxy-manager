@@ -108,8 +108,14 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     );
   }
 
+  // L7: Runtime-validate excluded_rule_ids are positive integers
   if (waf.excluded_rule_ids?.length) {
-    parts.push(`SecRuleRemoveById ${waf.excluded_rule_ids.join(' ')}`);
+    const validIds = waf.excluded_rule_ids.filter(
+      (id): id is number => typeof id === "number" && Number.isFinite(id) && id > 0 && Number.isInteger(id)
+    );
+    if (validIds.length > 0) {
+      parts.push(`SecRuleRemoveById ${validIds.join(' ')}`);
+    }
   }
 
   parts.push(
@@ -126,8 +132,25 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     'SecResponseBodyAccess Off',
   );
 
+  // H5: Validate WAF custom directives — block dangerous engine-level overrides
   if (waf.custom_directives?.trim()) {
-    parts.push(waf.custom_directives.trim());
+    const directives = waf.custom_directives.trim();
+    const forbiddenPatterns = [
+      /^\s*SecRuleEngine\s/im,
+      /^\s*SecAuditEngine\s/im,
+      /^\s*SecAuditLog\s/im,
+      /^\s*SecAuditLogFormat\s/im,
+      /^\s*SecResponseBodyAccess\s/im,
+    ];
+    const lines = directives.split('\n');
+    const safeLines = lines.filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return true;
+      return !forbiddenPatterns.some(pattern => pattern.test(trimmed));
+    });
+    if (safeLines.length > 0) {
+      parts.push(safeLines.join('\n'));
+    }
   }
 
   const handler: Record<string, unknown> = { handler: 'waf', directives: parts.join('\n') };

@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import maxmind, { CountryResponse } from 'maxmind';
 import db from './db';
 import { wafEvents, wafLogParseState } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 const AUDIT_LOG = '/logs/waf-audit.log';
 const RULES_LOG = '/logs/waf-rules.log';
@@ -213,7 +213,8 @@ function insertBatch(rows: typeof wafEvents.$inferInsert[]): void {
 
 function purgeOldEntries(): void {
   const cutoff = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
-  db.run(`DELETE FROM waf_events WHERE ts < ${cutoff}`);
+  // M5: Use parameterized query instead of string interpolation
+  db.run(sql`DELETE FROM waf_events WHERE ts < ${cutoff}`);
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
