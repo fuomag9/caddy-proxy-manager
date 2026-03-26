@@ -1,5 +1,3 @@
-/* global process */
-
 // When building under Node.js (not Bun), redirect bun:sqlite to a better-sqlite3 shim
 // so `next build` works locally without Bun installed.
 const isBun = typeof globalThis.Bun !== 'undefined';

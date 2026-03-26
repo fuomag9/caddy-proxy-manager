@@ -48,13 +48,14 @@ export function decryptSecret(value: string): string {
   // Try new HKDF key first
   try {
     return _decryptWithKey(value, deriveKey());
-  } catch (hkdfError) {
+  } catch (hkdfError: unknown) {
     // L5: Only fall back to legacy key within the grace period
     if (LEGACY_KEY_CUTOFF && new Date() > LEGACY_KEY_CUTOFF) {
       throw new Error(
         "[secret] HKDF decryption failed and legacy key grace period has expired. " +
         "Re-encrypt this secret with the current key. " +
-        "Set LEGACY_KEY_CUTOFF_DATE=never to temporarily restore legacy key support."
+        "Set LEGACY_KEY_CUTOFF_DATE=never to temporarily restore legacy key support.",
+        { cause: hkdfError }
       );
     }
     console.warn("[secret] HKDF decryption failed; retrying with legacy SHA-256 key. Re-encrypt this secret to remove the legacy key dependency.");
