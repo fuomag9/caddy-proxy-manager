@@ -416,6 +416,18 @@ function parseRedirectsConfig(formData: FormData): RedirectRule[] | null {
   }
 }
 
+function parseLocationRulesConfig(formData: FormData): import("@/src/lib/models/proxy-hosts").LocationRule[] | null {
+  const raw = formData.get("location_rules_json");
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 function parseRewriteConfig(formData: FormData): RewriteConfig | null {
   const prefix = formData.get("rewrite_path_prefix");
   if (!prefix || typeof prefix !== "string" || !prefix.trim()) return null;
@@ -494,6 +506,7 @@ export async function createProxyHostAction(
         mtls: parseMtlsConfig(formData),
         redirects: parseRedirectsConfig(formData),
         rewrite: parseRewriteConfig(formData),
+        location_rules: parseLocationRulesConfig(formData),
       },
       userId
     );
@@ -570,6 +583,7 @@ export async function updateProxyHostAction(
         mtls: formData.has("mtls_present") ? parseMtlsConfig(formData) : undefined,
         redirects: formData.has("redirects_json") ? parseRedirectsConfig(formData) : undefined,
         rewrite: formData.has("rewrite_path_prefix") ? parseRewriteConfig(formData) : undefined,
+        location_rules: formData.has("location_rules_json") ? parseLocationRulesConfig(formData) : undefined,
       },
       userId
     );

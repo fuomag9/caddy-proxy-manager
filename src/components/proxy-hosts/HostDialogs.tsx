@@ -25,6 +25,7 @@ import { GeoBlockFields } from "./GeoBlockFields";
 import { WafFields } from "./WafFields";
 import { MtlsFields } from "./MtlsConfig";
 import { RedirectsFields } from "./RedirectsFields";
+import { LocationRulesFields } from "./LocationRulesFields";
 import { RewriteFields } from "./RewriteFields";
 import type { CaCertificate } from "@/lib/models/ca-certificates";
 
@@ -133,6 +134,7 @@ export function CreateHostDialog({
                     </Select>
                 </div>
                 <RedirectsFields initialData={initialData?.redirects} />
+                <LocationRulesFields initialData={initialData?.location_rules} />
                 <RewriteFields initialData={initialData?.rewrite} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
@@ -263,6 +265,7 @@ export function EditHostDialog({
                     </Select>
                 </div>
                 <RedirectsFields initialData={host.redirects} />
+                <LocationRulesFields initialData={host.location_rules} />
                 <RewriteFields initialData={host.rewrite} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
