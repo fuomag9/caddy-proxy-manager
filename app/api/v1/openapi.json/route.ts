@@ -1321,7 +1321,7 @@ const spec = {
           fail_closed: { type: "boolean", description: "Block when client IP cannot be determined" },
           response_status: { type: "integer", example: 403 },
           response_body: { type: "string", example: "Forbidden" },
-          response_headers: { type: "object", additionalProperties: { type: "string" } },
+          response_headers: { type: "object", additionalProperties: { type: "string" }, example: { "Content-Type": "text/plain", "X-Custom": "blocked" }, description: "Custom response headers (header name → value)" },
           redirect_url: { type: "string", description: "If set, 302 redirect instead of status/body" },
         },
       },
@@ -1363,6 +1363,15 @@ const spec = {
         },
         required: ["path_prefix"],
       },
+      LocationRule: {
+        type: "object",
+        description: "Route a path pattern to specific upstream servers (like nginx location blocks)",
+        properties: {
+          path: { type: "string", example: "/ws/*", description: "Caddy path pattern to match" },
+          upstreams: { type: "array", items: { type: "string" }, example: ["ws-backend:8080", "ws-backend2:8080"], description: "Upstream servers for this path" },
+        },
+        required: ["path", "upstreams"],
+      },
 
       // ── Main resource schemas ───────────────────────────────────
       ProxyHost: {
@@ -1395,6 +1404,7 @@ const spec = {
           mtls: { oneOf: [{ $ref: "#/components/schemas/MtlsConfig" }, { type: "null" }] },
           redirects: { type: "array", items: { $ref: "#/components/schemas/RedirectRule" } },
           rewrite: { oneOf: [{ $ref: "#/components/schemas/RewriteConfig" }, { type: "null" }] },
+          location_rules: { type: "array", items: { $ref: "#/components/schemas/LocationRule" }, description: "Path-based routing rules (routes specific paths to different upstreams)" },
         },
         required: ["id", "name", "domains", "upstreams", "enabled", "created_at", "updated_at"],
       },
@@ -1425,6 +1435,7 @@ const spec = {
           mtls: { oneOf: [{ $ref: "#/components/schemas/MtlsConfig" }, { type: "null" }] },
           redirects: { type: "array", items: { $ref: "#/components/schemas/RedirectRule" } },
           rewrite: { oneOf: [{ $ref: "#/components/schemas/RewriteConfig" }, { type: "null" }] },
+          location_rules: { type: "array", items: { $ref: "#/components/schemas/LocationRule" }, description: "Path-based routing rules (routes specific paths to different upstreams)" },
         },
         required: ["name", "domains", "upstreams"],
       },
