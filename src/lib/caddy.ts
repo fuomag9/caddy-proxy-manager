@@ -116,7 +116,7 @@ type ProxyHostMeta = {
   waf?: WafHostConfig;
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
-  location_rules?: { path: string; upstreams: string[] }[];
+  location_rules?: LocationRule[];
 };
 
 type L4Meta = {
@@ -623,8 +623,8 @@ type BuildProxyRoutesOptions = {
   globalWaf?: WafSettings | null;
 };
 
-function buildLocationReverseProxy(
-  rule: { path: string; upstreams: string[] },
+export function buildLocationReverseProxy(
+  rule: LocationRule,
   skipHttpsValidation: boolean,
   preserveHostHeader: boolean
 ): { safePath: string; reverseProxyHandler: Record<string, unknown> } {
@@ -1042,6 +1042,8 @@ async function buildProxyRoutes(
             });
           }
 
+          // Location rules are unprotected (no forwardAuthHandler), matching the catch-all
+          // behavior when protected_paths is configured — only explicitly protected paths get auth.
           const locationRules = meta.location_rules ?? [];
           for (const rule of locationRules) {
             const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
