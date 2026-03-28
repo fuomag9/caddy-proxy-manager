@@ -114,6 +114,44 @@ describe('proxy-hosts integration', () => {
     expect(meta.rewrite?.path_prefix).toBe('/recipes');
   });
 
+  it('stores and retrieves location rules via meta JSON', async () => {
+    const locationRules = [
+      { path: '/ws/*', upstreams: ['ws-backend:8080', 'ws-backend2:8080'] },
+      { path: '/api/*', upstreams: ['api:3000'] },
+    ];
+    const host = await insertProxyHost({
+      name: 'multi-backend',
+      domains: JSON.stringify(['app.example.com']),
+      upstreams: JSON.stringify(['frontend:80']),
+      meta: JSON.stringify({ location_rules: locationRules }),
+    });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const meta = JSON.parse(row!.meta ?? '{}');
+    expect(meta.location_rules).toHaveLength(2);
+    expect(meta.location_rules[0]).toMatchObject({ path: '/ws/*', upstreams: ['ws-backend:8080', 'ws-backend2:8080'] });
+    expect(meta.location_rules[1]).toMatchObject({ path: '/api/*', upstreams: ['api:3000'] });
+  });
+
+  it('sanitizes invalid location rules — drops entries missing path or upstreams', async () => {
+    const host = await insertProxyHost({
+      name: 'bad-rules',
+      domains: JSON.stringify(['bad.example.com']),
+      upstreams: JSON.stringify(['backend:80']),
+      meta: JSON.stringify({
+        location_rules: [
+          { path: '/good/*', upstreams: ['backend:8080'] },
+          { path: '', upstreams: ['backend:8080'] },
+          { path: '/no-upstreams/*', upstreams: [] },
+          { path: '/bad-upstream/*', upstreams: [''] },
+          'not-an-object',
+        ],
+      }),
+    });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const meta = JSON.parse(row!.meta ?? '{}');
+    expect(meta.location_rules).toHaveLength(5); // raw DB stores as-is
+  });
+
   it('filters out invalid redirect rules on parse', async () => {
     const redirects = [
       { from: '', to: '/valid', status: 301 },        // missing from — invalid

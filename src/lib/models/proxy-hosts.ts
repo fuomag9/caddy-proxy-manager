@@ -38,6 +38,11 @@ export type RewriteConfig = {
   path_prefix: string; // e.g. "/recipes"
 };
 
+export type LocationRule = {
+  path: string;      // Caddy path pattern, e.g. "/ws/*", "/api/*"
+  upstreams: string[]; // e.g. ["backend:8080", "backend2:8080"]
+};
+
 export type WafHostConfig = {
   enabled?: boolean;
   mode?: 'Off' | 'On';
@@ -229,6 +234,7 @@ type ProxyHostMeta = {
   mtls?: MtlsConfig;
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
+  location_rules?: LocationRule[];
 };
 
 export type ProxyHost = {
@@ -259,6 +265,7 @@ export type ProxyHost = {
   mtls: MtlsConfig | null;
   redirects: RedirectRule[];
   rewrite: RewriteConfig | null;
+  location_rules: LocationRule[];
 };
 
 export type ProxyHostInput = {
@@ -286,6 +293,7 @@ export type ProxyHostInput = {
   mtls?: MtlsConfig | null;
   redirects?: RedirectRule[] | null;
   rewrite?: RewriteConfig | null;
+  location_rules?: LocationRule[] | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -574,6 +582,10 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.rewrite = meta.rewrite;
   }
 
+  if (meta.location_rules && meta.location_rules.length > 0) {
+    normalized.location_rules = meta.location_rules;
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
 }
 
@@ -602,6 +614,27 @@ function sanitizeRewriteConfig(value: unknown): RewriteConfig | null {
   return { path_prefix: prefix };
 }
 
+function sanitizeLocationRules(value: unknown): LocationRule[] {
+  if (!Array.isArray(value)) return [];
+  const valid: LocationRule[] = [];
+  for (const item of value) {
+    if (
+      item &&
+      typeof item === "object" &&
+      typeof item.path === "string" && item.path.trim() &&
+      Array.isArray(item.upstreams)
+    ) {
+      const upstreams = (item.upstreams as unknown[])
+        .filter((u): u is string => typeof u === "string" && Boolean(u.trim()))
+        .map((u) => u.trim());
+      if (upstreams.length > 0) {
+        valid.push({ path: item.path.trim(), upstreams });
+      }
+    }
+  }
+  return valid;
+}
+
 function parseMeta(value: string | null): ProxyHostMeta {
   if (!value) {
     return {};
@@ -621,6 +654,7 @@ function parseMeta(value: string | null): ProxyHostMeta {
       mtls: parsed.mtls,
       redirects: sanitizeRedirectRules(parsed.redirects),
       rewrite: sanitizeRewriteConfig(parsed.rewrite) ?? undefined,
+      location_rules: sanitizeLocationRules(parsed.location_rules),
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -1113,6 +1147,15 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
+  if (input.location_rules !== undefined) {
+    const rules = sanitizeLocationRules(input.location_rules ?? []);
+    if (rules.length > 0) {
+      next.location_rules = rules;
+    } else {
+      delete next.location_rules;
+    }
+  }
+
   return serializeMeta(next);
 }
 
@@ -1442,6 +1485,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     mtls: meta.mtls ?? null,
     redirects: meta.redirects ?? [],
     rewrite: meta.rewrite ?? null,
+    location_rules: meta.location_rules ?? [],
   };
 }
 
