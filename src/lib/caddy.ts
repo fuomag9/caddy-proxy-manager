@@ -1804,7 +1804,7 @@ async function buildCaddyDocument() {
     loggingLogs.http_access = {
       writer: { output: "file", filename: "/logs/access.log", mode: "0640" },
       encoder: { format: loggingFormat },
-      include: ["http.log.access"]
+      include: ["http.log.access", "http.handlers.blocker"]
     };
   }
   const loggingApp = { logging: { logs: loggingLogs } };
