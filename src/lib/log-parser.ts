@@ -79,6 +79,7 @@ interface CaddyLogEntry {
     proto?: string;
     headers?: Record<string, string[]>;
   };
+  resp_headers?: Record<string, string[]>;
 }
 
 // Build a set of signatures from caddy-blocker's "request blocked" entries so we
@@ -117,6 +118,15 @@ export function parseLine(line: string, blocked: Set<string>): typeof trafficEve
 
   const key = `${ts}|${clientIp}|${method}|${uri}`;
 
+  // Geo-blocker returns 403 via Caddy's own handler — these never produce a
+  // "request blocked" log entry, so they won't appear in the blocked set.
+  // Detect them by their response signature: status 403, Server header is
+  // "Caddy", and no Via header (which would indicate an upstream 403).
+  const isGeoBlocked =
+    status === 403 &&
+    entry.resp_headers?.['Server']?.[0] === 'Caddy' &&
+    !entry.resp_headers?.['Via'];
+
   return {
     ts,
     clientIp,
@@ -128,7 +138,7 @@ export function parseLine(line: string, blocked: Set<string>): typeof trafficEve
     proto: req.proto ?? '',
     bytesSent: entry.size ?? 0,
     userAgent: req.headers?.['User-Agent']?.[0] ?? '',
-    isBlocked: blocked.has(key),
+    isBlocked: blocked.has(key) || isGeoBlocked,
   };
 }
 

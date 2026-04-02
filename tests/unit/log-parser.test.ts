@@ -177,5 +177,41 @@ describe('log-parser', () => {
       const result = parseLine(entry, emptyBlocked);
       expect(result!.countryCode).toBeNull();
     });
+
+    it('marks isBlocked true for geo-blocked requests (status 403, Server:Caddy, no Via)', () => {
+      const entry = JSON.stringify({
+        ts: 1700000500,
+        msg: 'handled request',
+        status: 403,
+        request: { client_ip: '1.2.3.4', host: 'example.com', method: 'GET', uri: '/' },
+        resp_headers: { Server: ['Caddy'] },
+      });
+      const result = parseLine(entry, emptyBlocked);
+      expect(result!.isBlocked).toBe(true);
+    });
+
+    it('does not mark isBlocked for upstream 403 responses (Via header present)', () => {
+      const entry = JSON.stringify({
+        ts: 1700000600,
+        msg: 'handled request',
+        status: 403,
+        request: { client_ip: '1.2.3.4', host: 'example.com', method: 'GET', uri: '/private' },
+        resp_headers: { Server: ['Caddy'], Via: ['1.1 upstream'] },
+      });
+      const result = parseLine(entry, emptyBlocked);
+      expect(result!.isBlocked).toBe(false);
+    });
+
+    it('does not mark isBlocked for non-403 Caddy responses', () => {
+      const entry = JSON.stringify({
+        ts: 1700000700,
+        msg: 'handled request',
+        status: 200,
+        request: { client_ip: '1.2.3.4', host: 'example.com', method: 'GET', uri: '/' },
+        resp_headers: { Server: ['Caddy'] },
+      });
+      const result = parseLine(entry, emptyBlocked);
+      expect(result!.isBlocked).toBe(false);
+    });
   });
 });
