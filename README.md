@@ -34,17 +34,26 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 
 ## Features
 
-- **Proxy Hosts** - Reverse proxies with custom headers, multiple upstreams, load balancing, and enable/disable toggle
-- **L4 Proxy Hosts** - TCP/UDP stream proxying with TLS SNI matching, proxy protocol (v1/v2), load balancing, health checks, and per-host geo blocking
+- **Proxy Hosts** - Reverse proxies with custom headers, multiple upstreams, load balancing (8 policies), active/passive health checks, retries, and enable/disable toggle
+- **L4 Proxy Hosts** - TCP/UDP stream proxying with TLS SNI matching, proxy protocol (v1/v2), load balancing, health checks, and per-host geo blocking. Automatic Docker Compose port management via sidecar
+- **Location Rules** - Path-based routing to different upstreams per proxy host (e.g. `/api/*` to one backend, `/ws/*` to another)
+- **Redirect & Rewrite** - Per-host redirect rules (301/302/307/308) and path prefix rewriting
 - **WAF** - Web Application Firewall powered by Coraza with optional OWASP Core Rule Set (SQLi, XSS, LFI, RCE). Per-host enable/disable, global and per-host rule suppression, custom SecLang directives, and a searchable event log with severity and blocked/detected classification
 - **Analytics** - Live traffic charts, protocol breakdown, country map, top user agents, and blocked request log with configurable time ranges
-- **Search & Pagination** - Server-side search and pagination on all data tables (proxy hosts, access lists, audit log, certificates)
-- **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host
-- **Access Lists** - Multi-account HTTP basic auth protection assignable per proxy host
-- **Certificates** - Automatic HTTPS for every proxy host via Caddy ACME (Let's Encrypt / ZeroSSL), with issuer and expiry visibility + manual SSL/TLS import. Built-in CA for issuing internal client certificates
+- **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host. Allow rules override block rules. Fail-closed mode, custom response codes/bodies, and trusted proxy support
+- **Access Lists** - Multi-account HTTP basic auth protection (bcrypt-hashed) assignable per proxy host
+- **Certificates** - Automatic HTTPS for every proxy host via Caddy ACME (Let's Encrypt / ZeroSSL), manual SSL/TLS import with expiry monitoring, and a built-in CA for issuing and revoking internal client certificates (mTLS)
+- **mTLS** - Mutual TLS per proxy host using built-in CA certificates. Issue, track, and revoke client certificates
+- **Authentik Integration** - Forward-auth SSO per proxy host with configurable header forwarding and protected paths
+- **DNS Controls** - Custom DNS resolvers per host, upstream DNS pinning with IPv4/IPv6/both address family selection
+- **REST API** - Full REST API under `/api/v1/` with Bearer token authentication, covering all resources. Interactive OpenAPI 3.1.0 docs at `/api-docs`
+- **API Tokens** - Create and manage API tokens with optional expiration for programmatic access
 - **Instance Sync** - Master/slave configuration sync for multi-instance deployments. The master pushes proxy hosts, certificates, access lists, and settings to slaves on every change
-- **Settings** - ACME email, Cloudflare DNS-01, upstream DNS pinning defaults, Authentik outpost, Prometheus metrics
-- **Audit Log** - Searchable configuration change history with user attribution
+- **OAuth / SSO** - OAuth2/OIDC authentication with any compliant provider (Authentik, Keycloak, Auth0, etc.). Account linking from the Profile page
+- **Settings** - ACME email, Cloudflare DNS-01, upstream DNS pinning defaults, Authentik outpost, Prometheus metrics, logging format
+- **Audit Log** - Searchable configuration change history with user attribution and pagination
+- **Search & Pagination** - Server-side search and pagination on all data tables
+- **Dark Mode** - Full dark/light theme support with system preference detection
 - **Mobile UI** - Fully responsive interface optimised for iPhone and other narrow viewports
 
 ---
