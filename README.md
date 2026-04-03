@@ -62,7 +62,6 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `CADDY_API_URL` | Caddy Admin API endpoint | `http://caddy:2019` (prod)<br/>`http://localhost:2019` (dev) | No |
 | `DATABASE_URL` | SQLite database URL | `file:/app/data/caddy-proxy-manager.db` | No |
 | `CERTS_DIRECTORY` | Certificate storage directory | `./data/certs` | No |
-| `CADDY_CERTS_DIR` | Caddy cert storage path used for ACME metadata scanning (non-default deployments) | `/caddy-data/caddy/certificates` | No |
 | `LOGIN_MAX_ATTEMPTS` | Max login attempts before rate limit | `5` | No |
 | `LOGIN_WINDOW_MS` | Rate limit window in milliseconds | `300000` (5 min) | No |
 | `LOGIN_BLOCK_MS` | Rate limit block duration in milliseconds | `900000` (15 min) | No |

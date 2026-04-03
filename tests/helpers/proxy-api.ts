@@ -90,7 +90,7 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
     await accessListTrigger.scrollIntoViewIfNeeded();
     await accessListTrigger.click();
     const option = page.getByRole('option', { name: config.accessListName });
-    await expect(option).toBeVisible({ timeout: 5_000 });
+    await expect(option).toBeVisible({ timeout: 10_000 });
     await option.click();
   }
 

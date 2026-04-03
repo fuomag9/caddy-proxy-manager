@@ -4,7 +4,6 @@ import { proxyHosts, certificates } from '@/src/lib/db/schema';
 import { isNull, isNotNull, count } from 'drizzle-orm';
 import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
-import { scanAcmeCerts } from '@/src/lib/acme-certs';
 import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-certificates';
 import { listIssuedClientCertificates, type IssuedClientCertificate } from '@/src/lib/models/issued-client-certificates';
 
@@ -23,10 +22,6 @@ export type AcmeHost = {
   domains: string[];
   ssl_forced: boolean;
   enabled: boolean;
-  certValidTo: string | null;
-  certValidFrom: string | null;
-  certIssuer: string | null;
-  certExpiryStatus: CertExpiryStatus | null;
 };
 
 export type ImportedCertView = {
@@ -86,8 +81,6 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
   const offset = (page - 1) * PER_PAGE;
-  const acmeCertMap = scanAcmeCerts();
-
   const [caCerts, issuedClientCerts] = await Promise.all([
     listCaCertificates(),
     listIssuedClientCertificates()
@@ -124,25 +117,13 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       .where(isNotNull(proxyHosts.certificateId)),
   ]);
 
-  const acmeHosts: AcmeHost[] = acmeRows.map(r => {
-    const domains = JSON.parse(r.domains) as string[];
-    let certInfo = null;
-    for (const domain of domains) {
-      const info = acmeCertMap.get(domain.toLowerCase());
-      if (info) { certInfo = info; break; }
-    }
-    return {
-      id: r.id,
-      name: r.name,
-      domains,
-      ssl_forced: r.sslForced,
-      enabled: r.enabled,
-      certValidTo: certInfo?.validTo ?? null,
-      certValidFrom: certInfo?.validFrom ?? null,
-      certIssuer: certInfo?.issuer ?? null,
-      certExpiryStatus: certInfo?.validTo ? getExpiryStatus(certInfo.validTo) : null,
-    };
-  });
+  const acmeHosts: AcmeHost[] = acmeRows.map(r => ({
+    id: r.id,
+    name: r.name,
+    domains: JSON.parse(r.domains) as string[],
+    ssl_forced: r.sslForced,
+    enabled: r.enabled,
+  }));
 
   const usageMap = new Map<number, { id: number; name: string; domains: string[] }[]>();
   for (const u of usageRows) {
