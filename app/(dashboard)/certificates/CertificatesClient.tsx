@@ -44,6 +44,7 @@ export default function CertificatesClient({
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
   const allStatuses: (CertExpiryStatus | null)[] = [
+    ...acmeHosts.map((h) => h.certExpiryStatus),
     ...importedCerts.map((c) => c.expiryStatus),
   ];
   const { expired, expiringSoon, healthy } = countExpiry(allStatuses);

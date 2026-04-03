@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/DataTable";
 import { StatusChip } from "@/components/ui/StatusChip";
 import type { AcmeHost } from "../page";
+import { RelativeTime } from "./RelativeTime";
 
 type Props = {
   acmeHosts: AcmeHost[];
@@ -40,6 +41,18 @@ const columns = [
     ),
   },
   {
+    id: "issuer",
+    label: "Issuer",
+    render: (r: AcmeHost) => (
+      <span className="text-xs text-muted-foreground font-mono">{r.certIssuer ?? "—"}</span>
+    ),
+  },
+  {
+    id: "expiry",
+    label: "Expiry",
+    render: (r: AcmeHost) => <RelativeTime validTo={r.certValidTo} status={r.certExpiryStatus} />,
+  },
+  {
     id: "status",
     label: "Status",
     width: 110,
@@ -58,6 +71,7 @@ function acmeMobileCard(r: AcmeHost) {
           {r.domains[0]}{r.domains.length > 1 ? ` +${r.domains.length - 1}` : ""}
         </p>
         <div className="flex items-center gap-2 flex-wrap mt-1">
+          <RelativeTime validTo={r.certValidTo} status={r.certExpiryStatus} />
           <StatusChip status={r.enabled ? "active" : "inactive"} />
         </div>
       </CardContent>
@@ -67,7 +81,7 @@ function acmeMobileCard(r: AcmeHost) {
 
 export function AcmeTab({ acmeHosts, acmePagination, search, statusFilter }: Props) {
   const filtered = acmeHosts.filter((h) => {
-    if (statusFilter) return false; // ACME hosts have no expiry status
+    if (statusFilter && h.certExpiryStatus !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
