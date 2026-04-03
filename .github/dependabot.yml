@@ -28,7 +28,7 @@ updates:
       - "fuomag9"
     labels:
       - "dependencies"
-      - "npm"
+      - "bun"
     commit-message:
       prefix: "deps"
       include: "scope"
