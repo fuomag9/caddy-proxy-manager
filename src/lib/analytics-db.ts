@@ -1,6 +1,6 @@
 import { sql, and, gte, lte, eq, inArray } from 'drizzle-orm';
 import db from './db';
-import { trafficEvents, proxyHosts } from './db/schema';
+import { trafficEvents, proxyHosts, wafEvents } from './db/schema';
 import { existsSync } from 'node:fs';
 
 export type Interval = '1h' | '12h' | '24h' | '7d' | '30d';
@@ -51,8 +51,23 @@ export async function getAnalyticsSummary(from: number, to: number, hosts: strin
     .where(where)
     .get();
 
+  // Count WAF blocks in the same time window
+  const wafConditions = [gte(wafEvents.ts, from), lte(wafEvents.ts, to), eq(wafEvents.blocked, true)];
+  if (hosts.length === 1) {
+    wafConditions.push(eq(wafEvents.host, hosts[0]));
+  } else if (hosts.length > 1) {
+    wafConditions.push(inArray(wafEvents.host, hosts));
+  }
+  const wafRow = db
+    .select({ blocked: sql<number>`count(*)` })
+    .from(wafEvents)
+    .where(and(...wafConditions))
+    .get();
+
   const total = row?.total ?? 0;
-  const blocked = row?.blocked ?? 0;
+  const geoBlocked = row?.blocked ?? 0;
+  const wafBlocked = wafRow?.blocked ?? 0;
+  const blocked = geoBlocked + wafBlocked;
 
   return {
     totalRequests: total,
