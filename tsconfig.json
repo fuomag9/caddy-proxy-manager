@@ -17,7 +17,6 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "baseUrl": ".",
     "types": [
       "bun-types",
       "node"
@@ -25,10 +24,10 @@
     "paths": {
       "@/*": [
         "./*",
-        "src/*"
+        "./src/*"
       ],
       "@/src/*": [
-        "src/*"
+        "./src/*"
       ]
     },
     "esModuleInterop": true,
