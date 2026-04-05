@@ -9,7 +9,6 @@ import {
   proxyHosts,
   users,
 } from '../../src/lib/db/schema';
-import { eq } from 'drizzle-orm';
 
 let db: TestDb;
 

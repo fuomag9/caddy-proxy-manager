@@ -5,7 +5,7 @@
  * to ensure the new "trust user X" model works correctly alongside the legacy CA model.
  */
 import { describe, it, expect } from 'vitest';
-import { buildClientAuthentication, pemToBase64Der } from '../../src/lib/caddy-mtls';
+import { buildClientAuthentication } from '../../src/lib/caddy-mtls';
 
 function makeCaPem(label: string): string {
   return `-----BEGIN CERTIFICATE-----\n${label}\n-----END CERTIFICATE-----`;

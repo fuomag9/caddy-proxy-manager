@@ -6,9 +6,6 @@ import {
   forwardAuthExchanges,
   forwardAuthAccess,
   groupMembers,
-  users,
-  groups,
-  proxyHosts
 } from "../db/schema";
 import { and, eq, gt, inArray, lt } from "drizzle-orm";
 
@@ -218,13 +215,13 @@ export async function checkHostAccessByDomain(
   });
 
   for (const ph of allHosts) {
-    let domains: string[] = [];
+    let parsed: string[];
     try {
-      domains = JSON.parse(ph.domains);
+      parsed = JSON.parse(ph.domains);
     } catch {
       continue;
     }
-    if (domains.some((d) => d.toLowerCase() === host.toLowerCase())) {
+    if (parsed.some((d) => d.toLowerCase() === host.toLowerCase())) {
       const hasAccess = await checkHostAccess(userId, ph.id);
       return { hasAccess, proxyHostId: ph.id };
     }
@@ -299,21 +296,21 @@ export async function isForwardAuthDomain(host: string): Promise<boolean> {
   });
 
   for (const ph of allHosts) {
-    let domains: string[] = [];
+    let parsed: string[];
     try {
-      domains = JSON.parse(ph.domains);
+      parsed = JSON.parse(ph.domains);
     } catch {
       continue;
     }
-    if (domains.some((d) => d.toLowerCase() === host.toLowerCase())) {
+    if (parsed.some((d) => d.toLowerCase() === host.toLowerCase())) {
       // Check that this host actually has forward auth enabled
-      let meta: Record<string, unknown> = {};
+      let parsedMeta: Record<string, unknown>;
       try {
-        meta = ph.meta ? JSON.parse(ph.meta) : {};
+        parsedMeta = ph.meta ? JSON.parse(ph.meta) : {};
       } catch {
         continue;
       }
-      const fa = meta.cpm_forward_auth as Record<string, unknown> | undefined;
+      const fa = parsedMeta.cpm_forward_auth as Record<string, unknown> | undefined;
       if (fa?.enabled) return true;
     }
   }

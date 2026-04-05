@@ -6,13 +6,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../helpers/db';
 import {
-  mtlsRoles,
-  mtlsCertificateRoles,
   issuedClientCertificates,
   caCertificates,
   users,
 } from '../../src/lib/db/schema';
-import { eq, isNull } from 'drizzle-orm';
 
 let db: TestDb;
 

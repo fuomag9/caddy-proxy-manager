@@ -6,7 +6,6 @@ import {
   forwardAuthExchanges,
   forwardAuthAccess,
   groups,
-  groupMembers,
   users,
   proxyHosts
 } from '@/src/lib/db/schema';
@@ -24,10 +23,6 @@ function nowIso() {
 
 function futureIso(seconds: number) {
   return new Date(Date.now() + seconds * 1000).toISOString();
-}
-
-function pastIso(seconds: number) {
-  return new Date(Date.now() - seconds * 1000).toISOString();
 }
 
 function hashToken(raw: string): string {

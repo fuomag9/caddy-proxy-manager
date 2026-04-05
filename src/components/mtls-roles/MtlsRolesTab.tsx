@@ -6,12 +6,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ShieldCheck, Plus, Trash2, UserPlus } from "lucide-react";
+import { ShieldCheck, Plus, UserPlus } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
-import { AppDialog } from "@/components/ui/AppDialog";
 import type { MtlsRole, MtlsRoleWithCertificates } from "@/lib/models/mtls-roles";
 import type { IssuedClientCertificate } from "@/lib/models/issued-client-certificates";
 

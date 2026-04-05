@@ -8,7 +8,7 @@ import {
   caCertificates,
   proxyHosts,
 } from '@/src/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 let db: TestDb;
 
