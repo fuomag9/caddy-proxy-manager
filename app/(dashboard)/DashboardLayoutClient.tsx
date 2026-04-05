@@ -21,21 +21,22 @@ type User = {
   name?: string | null;
   email?: string | null;
   image?: string | null;
+  role?: string;
 };
 
 const NAV_ITEMS = [
-  { href: "/",               label: "Overview",       icon: LayoutDashboard },
-  { href: "/proxy-hosts",    label: "Proxy Hosts",    icon: ArrowLeftRight  },
-  { href: "/l4-proxy-hosts", label: "L4 Proxy Hosts", icon: Cable           },
-  { href: "/access-lists",   label: "Access Lists",   icon: KeyRound        },
-  { href: "/groups",          label: "Groups",          icon: Users           },
-  { href: "/users",           label: "Users",           icon: UserCog         },
-  { href: "/certificates",   label: "Certificates",   icon: ShieldCheck     },
-  { href: "/waf",            label: "WAF",            icon: ShieldOff       },
-  { href: "/analytics",      label: "Analytics",      icon: BarChart2       },
-  { href: "/audit-log",      label: "Audit Log",      icon: History         },
-  { href: "/api-docs",       label: "API Docs",       icon: FileJson2       },
-  { href: "/settings",       label: "Settings",       icon: Settings        },
+  { href: "/",               label: "Overview",       icon: LayoutDashboard, adminOnly: false },
+  { href: "/proxy-hosts",    label: "Proxy Hosts",    icon: ArrowLeftRight,  adminOnly: true  },
+  { href: "/l4-proxy-hosts", label: "L4 Proxy Hosts", icon: Cable,           adminOnly: true  },
+  { href: "/access-lists",   label: "Access Lists",   icon: KeyRound,        adminOnly: true  },
+  { href: "/groups",          label: "Groups",          icon: Users,           adminOnly: true  },
+  { href: "/users",           label: "Users",           icon: UserCog,         adminOnly: true  },
+  { href: "/certificates",   label: "Certificates",   icon: ShieldCheck,     adminOnly: true  },
+  { href: "/waf",            label: "WAF",            icon: ShieldOff,       adminOnly: true  },
+  { href: "/analytics",      label: "Analytics",      icon: BarChart2,       adminOnly: true  },
+  { href: "/audit-log",      label: "Audit Log",      icon: History,         adminOnly: true  },
+  { href: "/api-docs",       label: "API Docs",       icon: FileJson2,       adminOnly: true  },
+  { href: "/settings",       label: "Settings",       icon: Settings,        adminOnly: true  },
 ] as const;
 
 function ThemeToggle() {
@@ -59,6 +60,8 @@ function NavContent({ pathname, user, onNavigate }: {
   onNavigate?: () => void;
 }) {
   const router = useRouter();
+  const isAdmin = user.role === "admin";
+  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <div className="flex flex-col h-full">
@@ -74,7 +77,7 @@ function NavContent({ pathname, user, onNavigate }: {
       {/* Nav items */}
       <ScrollArea className="flex-1 px-2 py-2">
         <nav className="flex flex-col gap-0.5">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {visibleItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
             return (
               <Button

@@ -1,5 +1,5 @@
 import db, { toIso } from "@/src/lib/db";
-import { requireAdmin } from "@/src/lib/auth";
+import { requireUser } from "@/src/lib/auth";
 import OverviewClient from "./OverviewClient";
 import {
   accessLists,
@@ -43,7 +43,21 @@ async function loadStats(): Promise<StatCard[]> {
 }
 
 export default async function OverviewPage() {
-  const session = await requireAdmin();
+  const session = await requireUser();
+  const isAdmin = session.user.role === "admin";
+
+  // Non-admin users see a minimal welcome page
+  if (!isAdmin) {
+    return (
+      <OverviewClient
+        userName={session.user.name ?? session.user.email ?? "User"}
+        stats={[]}
+        trafficSummary={null}
+        recentEvents={[]}
+      />
+    );
+  }
+
   const [stats, trafficSummary, recentEventsRaw] = await Promise.all([
     loadStats(),
     getAnalyticsSummary(Math.floor(Date.now() / 1000) - 86400, Math.floor(Date.now() / 1000), []).catch(() => null),
