@@ -4,6 +4,9 @@ vi.mock('@/src/lib/models/user', () => ({
   listUsers: vi.fn(),
   getUserById: vi.fn(),
   updateUserProfile: vi.fn(),
+  updateUserRole: vi.fn(),
+  updateUserStatus: vi.fn(),
+  deleteUser: vi.fn(),
 }));
 
 vi.mock('@/src/lib/api-auth', () => {
@@ -130,10 +133,11 @@ describe('GET /api/v1/users/[id]', () => {
 });
 
 describe('PUT /api/v1/users/[id]', () => {
-  it('updates a user', async () => {
+  it('updates a user profile', async () => {
     const body = { name: 'Updated Name' };
     const updated = { ...sampleUser, name: 'Updated Name' };
     mockUpdateUserProfile.mockResolvedValue(updated as any);
+    mockGetUserById.mockResolvedValue(updated as any);
 
     const response = await PUT(createMockRequest({ method: 'PUT', body }), { params: Promise.resolve({ id: '1' }) });
     const data = await response.json();
@@ -141,11 +145,11 @@ describe('PUT /api/v1/users/[id]', () => {
     expect(response.status).toBe(200);
     expect(data.name).toBe('Updated Name');
     expect(data).not.toHaveProperty('password_hash');
-    expect(mockUpdateUserProfile).toHaveBeenCalledWith(1, body);
+    expect(mockUpdateUserProfile).toHaveBeenCalledWith(1, { name: 'Updated Name' });
   });
 
   it('returns 404 when updating non-existent user', async () => {
-    mockUpdateUserProfile.mockResolvedValue(null as any);
+    mockGetUserById.mockResolvedValue(null as any);
 
     const response = await PUT(createMockRequest({ method: 'PUT', body: { name: 'X' } }), { params: Promise.resolve({ id: '999' }) });
     const data = await response.json();

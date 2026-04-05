@@ -142,3 +142,27 @@ export async function promoteToAdmin(userId: number): Promise<void> {
     })
     .where(eq(users.id, userId));
 }
+
+export async function updateUserRole(userId: number, role: User["role"]): Promise<User | null> {
+  const now = nowIso();
+  const [updated] = await db
+    .update(users)
+    .set({ role, updatedAt: now })
+    .where(eq(users.id, userId))
+    .returning();
+  return updated ? parseDbUser(updated) : null;
+}
+
+export async function updateUserStatus(userId: number, status: string): Promise<User | null> {
+  const now = nowIso();
+  const [updated] = await db
+    .update(users)
+    .set({ status, updatedAt: now })
+    .where(eq(users.id, userId))
+    .returning();
+  return updated ? parseDbUser(updated) : null;
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  await db.delete(users).where(eq(users.id, userId));
+}
