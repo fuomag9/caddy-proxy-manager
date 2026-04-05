@@ -47,16 +47,14 @@ const ALL_DASHBOARD_PAGES = [...USER_ACCESSIBLE_PAGES, ...ADMIN_ONLY_PAGES];
 
 /**
  * Create a test user inside the running web container using bun.
- * Uses bcrypt to hash the password (same as the app does).
+ * Uses Bun's built-in Bun.password.hash (bcrypt) — no npm deps needed.
  */
 function ensureTestUser(username: string, password: string, role: string) {
-  // Bun uses ESM by default — use import() for bcryptjs
   const script = `
     import { Database } from "bun:sqlite";
-    import bcrypt from "bcryptjs";
     const db = new Database("./data/caddy-proxy-manager.db");
     const email = "${username}@localhost";
-    const hash = bcrypt.hashSync("${password}", 12);
+    const hash = await Bun.password.hash("${password}", { algorithm: "bcrypt", cost: 12 });
     const now = new Date().toISOString();
     const existing = db.query("SELECT id FROM users WHERE email = ?").get(email);
     if (existing) {
