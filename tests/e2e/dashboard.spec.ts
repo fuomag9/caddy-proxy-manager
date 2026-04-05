@@ -15,9 +15,10 @@ test.describe('Dashboard home page', () => {
   });
 
   test('shows stat cards for Proxy Hosts, Certificates, and Access Lists', async ({ page }) => {
-    await expect(page.getByText('Proxy Hosts')).toBeVisible();
-    await expect(page.getByText('Certificates')).toBeVisible();
-    await expect(page.getByText('Access Lists')).toBeVisible();
+    // Stat card labels are inside <p> tags — use exact text to avoid matching nav items
+    await expect(page.locator('p', { hasText: 'Proxy Hosts' })).toBeVisible();
+    await expect(page.locator('p', { hasText: 'Certificates' })).toBeVisible();
+    await expect(page.locator('p', { hasText: 'Access Lists' })).toBeVisible();
   });
 
   test('shows Traffic (24h) card', async ({ page }) => {

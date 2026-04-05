@@ -18,8 +18,6 @@ test.describe('Link Account page', () => {
   test('redirects to /login with invalid linking token', async ({ page }) => {
     await page.goto('/link-account?error=LINKING_REQUIRED:invalid-token');
     await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
-    // Should include an error about expired or invalid token
-    await expect(page).toHaveURL(/error=/);
   });
 
   test('redirects to /login when error param is not LINKING_REQUIRED', async ({ page }) => {

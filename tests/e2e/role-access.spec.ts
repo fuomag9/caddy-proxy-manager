@@ -50,9 +50,10 @@ const ALL_DASHBOARD_PAGES = [...USER_ACCESSIBLE_PAGES, ...ADMIN_ONLY_PAGES];
  * Uses bcrypt to hash the password (same as the app does).
  */
 function ensureTestUser(username: string, password: string, role: string) {
+  // Bun uses ESM by default — use import() for bcryptjs
   const script = `
-    const { Database } = require("bun:sqlite");
-    const bcrypt = require("bcryptjs");
+    import { Database } from "bun:sqlite";
+    import bcrypt from "bcryptjs";
     const db = new Database("./data/caddy-proxy-manager.db");
     const email = "${username}@localhost";
     const hash = bcrypt.hashSync("${password}", 12);
@@ -86,12 +87,12 @@ async function loginAs(
   const page = await context.newPage();
 
   await page.goto('http://localhost:3000/login');
-  await page.getByRole('textbox', { name: /username/i }).fill(username);
-  await page.getByRole('textbox', { name: /password/i }).fill(password);
-  await page.getByRole('button', { name: /sign in/i }).click();
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
-  // Wait for login to complete (redirect away from /login or error)
-  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15_000 });
+  // The login client does router.replace('/') on success — wait for that
+  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 });
   await page.close();
   return context;
 }

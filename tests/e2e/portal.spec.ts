@@ -23,7 +23,7 @@ test.describe('Portal login page', () => {
     // Credential form fields
     await expect(page.getByLabel('Username')).toBeVisible();
     await expect(page.getByLabel('Password')).toBeVisible();
-    await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   });
 
   test('shows error with invalid credentials', async ({ page }) => {
@@ -31,7 +31,7 @@ test.describe('Portal login page', () => {
 
     await page.getByLabel('Username').fill('wronguser');
     await page.getByLabel('Password').fill('wrongpass');
-    await page.getByRole('button', { name: /sign in/i }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
     // Should show an error message
     await expect(page.locator('[role="alert"]')).toBeVisible({ timeout: 10_000 });

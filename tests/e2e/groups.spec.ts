@@ -59,10 +59,12 @@ test.describe('Groups page', () => {
     await page.getByTitle('Add member').first().click();
     await expect(page.getByText('Add a user to this group')).toBeVisible();
 
-    // Click the first available user to add them
-    const userButton = page.locator('button', { hasText: /testadmin/ });
-    if (await userButton.isVisible()) {
-      await userButton.click();
+    // Click the first available user in the add-member list to add them.
+    // The add-member list items are full-width buttons inside a bordered container.
+    const memberList = page.locator('.border.rounded-md');
+    const firstUser = memberList.locator('button').first();
+    if (await firstUser.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await firstUser.click();
 
       // Member should now appear in the group
       await expect(page.getByText('1 member')).toBeVisible({ timeout: 10_000 });
