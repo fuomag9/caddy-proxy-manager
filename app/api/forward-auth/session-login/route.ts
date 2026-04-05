@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/src/lib/auth";
+import { config } from "@/src/lib/config";
 import {
   createForwardAuthSession,
   createExchangeCode,
@@ -13,6 +14,13 @@ import { logAuditEvent } from "@/src/lib/audit";
  */
 export async function POST(request: NextRequest) {
   try {
+    // CSRF: verify the request originates from the CPM portal
+    const origin = request.headers.get("origin");
+    const baseOrigin = new URL(config.baseUrl).origin;
+    if (!origin || origin !== baseOrigin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -30,6 +38,9 @@ export async function POST(request: NextRequest) {
       targetUrl = new URL(redirectUri);
     } catch {
       return NextResponse.json({ error: "Invalid redirect URI" }, { status: 400 });
+    }
+    if (targetUrl.protocol !== "https:" && targetUrl.protocol !== "http:") {
+      return NextResponse.json({ error: "Invalid redirect URI scheme" }, { status: 400 });
     }
 
     const userId = Number(session.user.id);
@@ -50,8 +61,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Create forward auth session and exchange code
-    const { rawToken, session: faSession } = await createForwardAuthSession(userId);
-    const { rawCode } = await createExchangeCode(faSession.id, rawToken, redirectUri);
+    const { session: faSession } = await createForwardAuthSession(userId);
+    const { rawCode } = await createExchangeCode(faSession.id, redirectUri);
 
     logAuditEvent({
       userId,

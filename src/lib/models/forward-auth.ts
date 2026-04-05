@@ -10,7 +10,7 @@ import {
   groups,
   proxyHosts
 } from "../db/schema";
-import { eq, inArray, lt } from "drizzle-orm";
+import { and, eq, gt, inArray, lt } from "drizzle-orm";
 
 const DEFAULT_SESSION_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 const EXCHANGE_CODE_TTL = 60; // 60 seconds
@@ -96,7 +96,6 @@ export async function deleteUserForwardAuthSessions(userId: number): Promise<voi
 
 export async function createExchangeCode(
   sessionId: number,
-  rawSessionToken: string,
   redirectUri: string
 ): Promise<{ rawCode: string }> {
   const rawCode = randomBytes(32).toString("hex");
@@ -107,7 +106,7 @@ export async function createExchangeCode(
   await db.insert(forwardAuthExchanges).values({
     sessionId,
     codeHash,
-    sessionToken: rawSessionToken,
+    sessionToken: "[pending]", // placeholder — fresh token generated at redemption
     redirectUri,
     expiresAt,
     used: false,
@@ -121,25 +120,42 @@ export async function redeemExchangeCode(
   rawCode: string
 ): Promise<{ sessionId: number; redirectUri: string; rawSessionToken: string } | null> {
   const codeHash = hashToken(rawCode);
+  const now = nowIso();
 
-  const exchange = await db.query.forwardAuthExchanges.findFirst({
-    where: (table, operators) => operators.eq(table.codeHash, codeHash)
-  });
-
-  if (!exchange) return null;
-  if (exchange.used) return null;
-  if (new Date(exchange.expiresAt) <= new Date()) return null;
-
-  // Mark as used atomically
-  await db
+  // Atomic claim: only succeeds if the exchange exists, is unused, and not expired
+  const claimed = await db
     .update(forwardAuthExchanges)
     .set({ used: true })
+    .where(
+      and(
+        eq(forwardAuthExchanges.codeHash, codeHash),
+        eq(forwardAuthExchanges.used, false),
+        gt(forwardAuthExchanges.expiresAt, now)
+      )
+    )
+    .returning();
+
+  if (claimed.length === 0) return null;
+  const exchange = claimed[0];
+
+  // Generate a fresh session token (never stored in the exchange table)
+  const rawToken = randomBytes(32).toString("hex");
+  const tokenHash = hashToken(rawToken);
+
+  await db
+    .update(forwardAuthSessions)
+    .set({ tokenHash })
+    .where(eq(forwardAuthSessions.id, exchange.sessionId));
+
+  // Delete the redeemed exchange immediately
+  await db
+    .delete(forwardAuthExchanges)
     .where(eq(forwardAuthExchanges.id, exchange.id));
 
   return {
     sessionId: exchange.sessionId,
     redirectUri: exchange.redirectUri,
-    rawSessionToken: exchange.sessionToken
+    rawSessionToken: rawToken
   };
 }
 
@@ -157,7 +173,6 @@ export async function checkHostAccess(
   userId: number,
   proxyHostId: number
 ): Promise<boolean> {
-  // Admins always have access
   const user = await db.query.users.findFirst({
     where: (table, operators) => operators.eq(table.id, userId)
   });
@@ -274,6 +289,35 @@ export async function setForwardAuthAccess(
   });
 
   return getForwardAuthAccessForHost(proxyHostId);
+}
+
+// ── Domain Validation ────────────────────────────────────────────────
+
+export async function isForwardAuthDomain(host: string): Promise<boolean> {
+  const allHosts = await db.query.proxyHosts.findMany({
+    where: (table, operators) => operators.eq(table.enabled, true)
+  });
+
+  for (const ph of allHosts) {
+    let domains: string[] = [];
+    try {
+      domains = JSON.parse(ph.domains);
+    } catch {
+      continue;
+    }
+    if (domains.some((d) => d.toLowerCase() === host.toLowerCase())) {
+      // Check that this host actually has forward auth enabled
+      let meta: Record<string, unknown> = {};
+      try {
+        meta = ph.meta ? JSON.parse(ph.meta) : {};
+      } catch {
+        continue;
+      }
+      const fa = meta.cpm_forward_auth as Record<string, unknown> | undefined;
+      if (fa?.enabled) return true;
+    }
+  }
+  return false;
 }
 
 // ── Cleanup ──────────────────────────────────────────────────────────

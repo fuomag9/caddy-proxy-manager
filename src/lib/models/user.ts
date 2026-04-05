@@ -1,6 +1,7 @@
 import db, { nowIso, toIso } from "../db";
 import { users } from "../db/schema";
 import { and, count, eq } from "drizzle-orm";
+import { deleteUserForwardAuthSessions } from "./forward-auth";
 
 export type User = {
   id: number;
@@ -160,6 +161,12 @@ export async function updateUserStatus(userId: number, status: string): Promise<
     .set({ status, updatedAt: now })
     .where(eq(users.id, userId))
     .returning();
+
+  // Revoke all forward auth sessions when user is deactivated
+  if (status !== "active") {
+    await deleteUserForwardAuthSessions(userId);
+  }
+
   return updated ? parseDbUser(updated) : null;
 }
 

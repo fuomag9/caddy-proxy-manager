@@ -8,7 +8,7 @@ import {
   checkHostAccessByDomain
 } from "@/src/lib/models/forward-auth";
 import { logAuditEvent } from "@/src/lib/audit";
-import { isRateLimited } from "@/src/lib/rate-limit";
+import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
 
 /**
  * Forward auth login endpoint — validates credentials and starts the exchange flow.
@@ -16,6 +16,13 @@ import { isRateLimited } from "@/src/lib/rate-limit";
  */
 export async function POST(request: NextRequest) {
   try {
+    // CSRF: verify the request originates from the CPM portal
+    const origin = request.headers.get("origin");
+    const baseOrigin = new URL(config.baseUrl).origin;
+    if (!origin || origin !== baseOrigin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     const username = typeof body.username === "string" ? body.username.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -28,16 +35,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Redirect URI is required" }, { status: 400 });
     }
 
-    // Validate redirect URI
+    // Validate redirect URI — only allow http/https schemes
     let targetUrl: URL;
     try {
       targetUrl = new URL(redirectUri);
     } catch {
       return NextResponse.json({ error: "Invalid redirect URI" }, { status: 400 });
     }
+    if (targetUrl.protocol !== "https:" && targetUrl.protocol !== "http:") {
+      return NextResponse.json({ error: "Invalid redirect URI scheme" }, { status: 400 });
+    }
 
-    // Rate limiting
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    // Rate limiting — prefer x-real-ip (set by reverse proxy) over x-forwarded-for
+    const ip =
+      request.headers.get("x-real-ip")?.trim() ||
+      request.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ||
+      "unknown";
     const rateLimitResult = isRateLimited(ip);
     if (rateLimitResult.blocked) {
       return NextResponse.json(
@@ -53,6 +66,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user || user.status !== "active" || !user.passwordHash) {
+      registerFailedAttempt(ip);
       logAuditEvent({
         userId: null,
         action: "forward_auth_login_failed",
@@ -62,8 +76,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
-    const isValid = bcrypt.compareSync(password, user.passwordHash);
+    const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
+      registerFailedAttempt(ip);
       logAuditEvent({
         userId: user.id,
         action: "forward_auth_login_failed",
@@ -73,6 +88,9 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
+
+    // Successful credential check — reset rate limiter for this IP
+    resetAttempts(ip);
 
     // Check if user has access to the target host
     const { hasAccess } = await checkHostAccessByDomain(user.id, targetUrl.hostname);
@@ -90,8 +108,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Create session and exchange code
-    const { rawToken, session } = await createForwardAuthSession(user.id);
-    const { rawCode } = await createExchangeCode(session.id, rawToken, redirectUri);
+    const { session } = await createForwardAuthSession(user.id);
+    const { rawCode } = await createExchangeCode(session.id, redirectUri);
 
     logAuditEvent({
       userId: user.id,
