@@ -120,6 +120,27 @@ docker compose up -d
 
 ---
 
+## User Roles
+
+CPM has three roles with increasing privileges:
+
+| Capability | Viewer | User | Admin |
+|------------|:------:|:----:|:-----:|
+| Log in to the dashboard | Yes | Yes | Yes |
+| View own profile | Yes | Yes | Yes |
+| Access forward-auth-protected apps (when granted) | Yes | Yes | Yes |
+| Manage proxy hosts, certificates, access lists | No | No | Yes |
+| Manage users, groups, and settings | No | No | Yes |
+| View analytics, audit log, and API docs | No | No | Yes |
+| Create and manage API tokens | No | No | Yes |
+| Access the REST API (`/api/v1/`) | No | No | Yes |
+
+New users default to the **user** role. The initial admin account is created from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` environment variables.
+
+> **Forward Auth access** is separate from role — all roles must be explicitly granted access to each protected host via the forward auth access list.
+
+---
+
 ## Certificate Management
 
 Caddy automatically obtains Let's Encrypt certificates for all proxy hosts.
@@ -258,7 +279,6 @@ OAuth login appears on the login page alongside credentials. Users can link OAut
 
 ## Roadmap
 
-- [ ] Multi-user RBAC
 - [ ] Additional DNS providers (Route53, Namecheap, etc.)
 
 [Open an issue](https://github.com/fuomag9/caddy-proxy-manager/issues) for feature requests.
