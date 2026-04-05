@@ -8,6 +8,8 @@ import type { Certificate } from "@/lib/models/certificates";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
 import type { CaCertificate } from "@/lib/models/ca-certificates";
 import type { AuthentikSettings } from "@/lib/settings";
+import type { MtlsRole } from "@/lib/models/mtls-roles";
+import type { IssuedClientCertificate } from "@/lib/models/issued-client-certificates";
 import { toggleProxyHostAction } from "./actions";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchField } from "@/components/ui/SearchField";
@@ -35,13 +37,17 @@ type Props = {
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
   initialSort?: { sortBy: string; sortDir: "asc" | "desc" };
+  mtlsRoles?: MtlsRole[];
+  issuedClientCerts?: IssuedClientCertificate[];
 };
 
-export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort }: Props) {
+export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort, mtlsRoles, issuedClientCerts }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
+  // Counter forces CreateHostDialog to remount on each open, resetting useFormState
+  const [dialogKey, setDialogKey] = useState(0);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
 
   const router = useRouter();
@@ -200,7 +206,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => setEditHost(host)}>Edit</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setDuplicateHost(host); setCreateOpen(true); }}>Duplicate</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setDuplicateHost(host); { setDialogKey(k => k + 1); setCreateOpen(true); }; }}>Duplicate</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
@@ -248,7 +254,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => setEditHost(host)}>Edit</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setDuplicateHost(host); setCreateOpen(true); }}>Duplicate</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setDuplicateHost(host); { setDialogKey(k => k + 1); setCreateOpen(true); }; }}>Duplicate</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteHost(host)}>Delete</DropdownMenuItem>
               </DropdownMenuContent>
@@ -264,7 +270,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       <PageHeader
         title="Proxy Hosts"
         description="Define HTTP(S) reverse proxies orchestrated by Caddy with automated certificates."
-        action={{ label: "Create Host", onClick: () => setCreateOpen(true) }}
+        action={{ label: "Create Host", onClick: () => { setDialogKey(k => k + 1); setCreateOpen(true); } }}
       />
 
       <div className="flex items-center gap-2">
@@ -287,6 +293,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       />
 
       <CreateHostDialog
+        key={dialogKey}
         open={createOpen}
         onClose={() => { setCreateOpen(false); setTimeout(() => setDuplicateHost(null), 200); }}
         initialData={duplicateHost}
@@ -294,6 +301,8 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
         accessLists={accessLists}
         authentikDefaults={authentikDefaults}
         caCertificates={caCertificates}
+        mtlsRoles={mtlsRoles ?? []}
+        issuedClientCerts={issuedClientCerts ?? []}
       />
 
       {editHost && (
@@ -304,6 +313,8 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           certificates={certificates}
           accessLists={accessLists}
           caCertificates={caCertificates}
+          mtlsRoles={mtlsRoles ?? []}
+          issuedClientCerts={issuedClientCerts ?? []}
         />
       )}
 

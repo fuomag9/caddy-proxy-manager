@@ -4,13 +4,15 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SearchField } from "@/components/ui/SearchField";
-import type { AcmeHost, CaCertificateView, CertExpiryStatus, ImportedCertView, ManagedCertView } from "./page";
+import type { AcmeHost, CaCertificateView, CertExpiryStatus, ImportedCertView, ManagedCertView, MtlsRole } from "./page";
+import type { IssuedClientCertificate } from "@/lib/models/issued-client-certificates";
 import { StatusSummaryBar } from "./components/StatusSummaryBar";
 import { AcmeTab } from "./components/AcmeTab";
 import { ImportedTab } from "./components/ImportedTab";
 import { CaTab } from "./components/CaTab";
+import { MtlsRolesTab } from "@/components/mtls-roles/MtlsRolesTab";
 
-type TabId = "acme" | "imported" | "ca";
+type TabId = "acme" | "imported" | "ca" | "roles";
 
 type Props = {
   acmeHosts: AcmeHost[];
@@ -18,6 +20,8 @@ type Props = {
   managedCerts: ManagedCertView[];
   caCertificates: CaCertificateView[];
   acmePagination: { total: number; page: number; perPage: number };
+  mtlsRoles: MtlsRole[];
+  issuedClientCerts: IssuedClientCertificate[];
 };
 
 function countExpiry(statuses: (CertExpiryStatus | null)[]) {
@@ -36,11 +40,14 @@ export default function CertificatesClient({
   managedCerts,
   caCertificates,
   acmePagination,
+  mtlsRoles,
+  issuedClientCerts,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("acme");
   const [searchAcme, setSearchAcme] = useState("");
   const [searchImported, setSearchImported] = useState("");
   const [searchCa, setSearchCa] = useState("");
+  const [searchRoles, setSearchRoles] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
   const allStatuses: (CertExpiryStatus | null)[] = [
@@ -48,8 +55,8 @@ export default function CertificatesClient({
   ];
   const { expired, expiringSoon, healthy } = countExpiry(allStatuses);
 
-  const search = activeTab === "acme" ? searchAcme : activeTab === "imported" ? searchImported : searchCa;
-  const setSearch = activeTab === "acme" ? setSearchAcme : activeTab === "imported" ? setSearchImported : setSearchCa;
+  const search = activeTab === "acme" ? searchAcme : activeTab === "imported" ? searchImported : activeTab === "roles" ? searchRoles : searchCa;
+  const setSearch = activeTab === "acme" ? setSearchAcme : activeTab === "imported" ? setSearchImported : activeTab === "roles" ? setSearchRoles : setSearchCa;
 
   function handleTabChange(value: string) {
     setActiveTab(value as TabId);
@@ -94,6 +101,12 @@ export default function CertificatesClient({
                 {caCertificates.length}
               </span>
             </TabsTrigger>
+            <TabsTrigger value="roles" className="gap-1.5">
+              Roles
+              <span className="rounded-full bg-muted px-1.5 py-0 text-xs font-bold tabular-nums">
+                {mtlsRoles.length}
+              </span>
+            </TabsTrigger>
           </TabsList>
 
           <SearchField
@@ -132,6 +145,13 @@ export default function CertificatesClient({
             caCertificates={caCertificates}
             search={searchCa}
             statusFilter={statusFilter}
+          />
+        </TabsContent>
+        <TabsContent value="roles" className="mt-4">
+          <MtlsRolesTab
+            roles={mtlsRoles}
+            issuedCerts={issuedClientCerts}
+            search={searchRoles}
           />
         </TabsContent>
       </Tabs>

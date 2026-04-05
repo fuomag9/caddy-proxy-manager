@@ -51,7 +51,9 @@ import {
   l4ProxyHosts
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule } from "./models/proxy-hosts";
-import { buildClientAuthentication, groupMtlsDomainsByCaSet } from "./caddy-mtls";
+import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, type MtlsAccessRuleLike } from "./caddy-mtls";
+import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
+import { getAccessRulesForHosts } from "./models/mtls-access-rules";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
@@ -621,6 +623,11 @@ type BuildProxyRoutesOptions = {
   globalUpstreamDnsResolutionSettings: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
   globalWaf?: WafSettings | null;
+  mtlsRbac?: {
+    roleFingerprintMap: Map<number, Set<string>>;
+    certFingerprintMap: Map<number, string>;
+    accessRulesByHost: Map<number, MtlsAccessRuleLike[]>;
+  };
 };
 
 export function buildLocationReverseProxy(
@@ -1106,6 +1113,12 @@ async function buildProxyRoutes(
       }
     } else {
       const locationRules = meta.location_rules ?? [];
+
+      // Check for mTLS RBAC access rules for this proxy host
+      const hostAccessRules = options.mtlsRbac?.accessRulesByHost.get(row.id);
+      const hasMtlsRbac = hostAccessRules && hostAccessRules.length > 0
+        && options.mtlsRbac?.roleFingerprintMap && options.mtlsRbac?.certFingerprintMap;
+
       for (const domainGroup of domainGroups) {
         for (const rule of locationRules) {
           const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
@@ -1120,12 +1133,41 @@ async function buildProxyRoutes(
             terminal: true,
           });
         }
-        const route: CaddyHttpRoute = {
-          match: [{ host: domainGroup }],
-          handle: [...handlers, reverseProxyHandler],
-          terminal: true,
-        };
-        hostRoutes.push(route);
+
+        if (hasMtlsRbac) {
+          // mTLS RBAC: wrap in subroute with path-based fingerprint enforcement
+          const rbacSubroutes = buildMtlsRbacSubroutes(
+            hostAccessRules,
+            options.mtlsRbac!.roleFingerprintMap,
+            options.mtlsRbac!.certFingerprintMap,
+            handlers,
+            reverseProxyHandler
+          );
+          if (rbacSubroutes) {
+            hostRoutes.push({
+              match: [{ host: domainGroup }],
+              handle: [{
+                handler: "subroute",
+                routes: rbacSubroutes,
+              }],
+              terminal: true,
+            });
+          } else {
+            // Fallback: no subroutes generated, use normal routing
+            hostRoutes.push({
+              match: [{ host: domainGroup }],
+              handle: [...handlers, reverseProxyHandler],
+              terminal: true,
+            });
+          }
+        } else {
+          const route: CaddyHttpRoute = {
+            match: [{ host: domainGroup }],
+            handle: [...handlers, reverseProxyHandler],
+            terminal: true,
+          };
+          hostRoutes.push(route);
+        }
       }
     }
 
@@ -1142,14 +1184,15 @@ function buildTlsConnectionPolicies(
   mTlsDomainMap: Map<string, number[]>,
   caCertMap: Map<number, { id: number; certificatePem: string }>,
   issuedClientCertMap: Map<number, string[]>,
-  cAsWithAnyIssuedCerts: Set<number>
+  cAsWithAnyIssuedCerts: Set<number>,
+  mTlsDomainLeafOverride: Map<string, string[]>
 ) {
   const policies: Record<string, unknown>[] = [];
   const readyCertificates = new Set<number>();
   const importedCertPems: { certificate: string; key: string }[] = [];
 
   const buildAuth = (domains: string[]) =>
-    buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap, cAsWithAnyIssuedCerts);
+    buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap, cAsWithAnyIssuedCerts, mTlsDomainLeafOverride);
 
   /**
    * Pushes one TLS policy per unique CA set found in `mTlsDomains`.
@@ -1628,6 +1671,7 @@ async function buildCaddyDocument() {
       .from(caCertificates),
     db
       .select({
+        id: issuedClientCertificates.id,
         caCertificateId: issuedClientCertificates.caCertificateId,
         certificatePem: issuedClientCertificates.certificatePem
       })
@@ -1692,17 +1736,70 @@ async function buildCaddyDocument() {
     return map;
   }, new Map());
 
-  // Build domain → CA cert IDs map for mTLS-enabled hosts
+  // Build a lookup: issued cert ID → { id, caCertificateId, certificatePem }
+  const issuedCertById = new Map(issuedClientCertRows.map(r => [r.id, r]));
+
+  // Resolve role IDs → cert IDs for trusted_role_ids in mTLS config
+  const roleCertIdMap = await buildRoleCertIdMap();
+
+  // Build domain → CA cert IDs map for mTLS-enabled hosts.
+  // New model (trusted_client_cert_ids + trusted_role_ids): derive CAs from selected certs and pin to those certs.
+  // Old model (ca_certificate_ids): trust entire CAs as before.
   const mTlsDomainMap = new Map<string, number[]>();
+  // Per-domain override: which specific leaf cert PEMs to pin (new model only)
+  const mTlsDomainLeafOverride = new Map<string, string[]>();
   for (const row of proxyHostRows) {
     if (!row.enabled) continue;
     const meta = parseJson<{ mtls?: MtlsConfig }>(row.meta, {});
-    if (!meta.mtls?.enabled || !meta.mtls.ca_certificate_ids?.length) continue;
+    if (!meta.mtls?.enabled) continue;
+
     const domains = parseJson<string[]>(row.domains, []).map(d => d.trim().toLowerCase()).filter(Boolean);
-    for (const domain of domains) {
-      mTlsDomainMap.set(domain, meta.mtls.ca_certificate_ids);
+    if (domains.length === 0) continue;
+
+    // Collect all trusted cert IDs from both direct selection and roles
+    const allCertIds = new Set<number>();
+    if (meta.mtls.trusted_client_cert_ids) {
+      for (const id of meta.mtls.trusted_client_cert_ids) allCertIds.add(id);
+    }
+    if (meta.mtls.trusted_role_ids) {
+      for (const roleId of meta.mtls.trusted_role_ids) {
+        const certIds = roleCertIdMap.get(roleId);
+        if (certIds) for (const id of certIds) allCertIds.add(id);
+      }
+    }
+
+    if (allCertIds.size > 0) {
+      // New model: derive CAs from resolved cert IDs and collect leaf PEMs
+      const derivedCaIds = new Set<number>();
+      const leafPems: string[] = [];
+      for (const certId of allCertIds) {
+        const cert = issuedCertById.get(certId);
+        if (cert) {
+          derivedCaIds.add(cert.caCertificateId);
+          leafPems.push(cert.certificatePem);
+        }
+      }
+      if (derivedCaIds.size === 0) continue;
+      const caIdArr = Array.from(derivedCaIds);
+      for (const domain of domains) {
+        mTlsDomainMap.set(domain, caIdArr);
+        mTlsDomainLeafOverride.set(domain, leafPems);
+      }
+    } else if (meta.mtls.ca_certificate_ids?.length) {
+      // Legacy model: trust entire CAs (backward compat)
+      for (const domain of domains) {
+        mTlsDomainMap.set(domain, meta.mtls.ca_certificate_ids);
+      }
     }
   }
+
+  // Build mTLS RBAC data for HTTP-layer enforcement
+  const enabledProxyHostIds = proxyHostRows.filter((r) => r.enabled).map((r) => r.id);
+  const [roleFingerprintMap, certFingerprintMap, accessRulesByHost] = await Promise.all([
+    buildRoleFingerprintMap(),
+    buildCertFingerprintMap(),
+    getAccessRulesForHosts(enabledProxyHostIds),
+  ]);
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
   const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf] = await Promise.all([
@@ -1723,7 +1820,8 @@ async function buildCaddyDocument() {
     mTlsDomainMap,
     caCertMap,
     issuedClientCertMap,
-    cAsWithAnyIssuedCerts
+    cAsWithAnyIssuedCerts,
+    mTlsDomainLeafOverride
   );
 
   const httpRoutes: CaddyHttpRoute[] = await buildProxyRoutes(
@@ -1734,7 +1832,12 @@ async function buildCaddyDocument() {
       globalDnsSettings: dnsSettings,
       globalUpstreamDnsResolutionSettings: upstreamDnsResolutionSettings,
       globalGeoBlock,
-      globalWaf
+      globalWaf,
+      mtlsRbac: {
+        roleFingerprintMap,
+        certFingerprintMap,
+        accessRulesByHost,
+      },
     }
   );
 

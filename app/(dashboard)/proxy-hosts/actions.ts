@@ -394,8 +394,9 @@ function parseMtlsConfig(formData: FormData): MtlsConfig | null {
   if (!formData.has("mtls_present")) return null;
   const enabled = formData.get("mtls_enabled") === "true";
   if (!enabled) return null;
-  const ids = formData.getAll("mtls_ca_cert_id").map(Number).filter(n => Number.isFinite(n) && n > 0);
-  return { enabled, ca_certificate_ids: ids };
+  const certIds = formData.getAll("mtls_cert_id").map(Number).filter(n => Number.isFinite(n) && n > 0);
+  const roleIds = formData.getAll("mtls_role_id").map(Number).filter(n => Number.isFinite(n) && n > 0);
+  return { enabled, trusted_client_cert_ids: certIds, trusted_role_ids: roleIds };
 }
 
 function parseRedirectsConfig(formData: FormData): RedirectRule[] | null {

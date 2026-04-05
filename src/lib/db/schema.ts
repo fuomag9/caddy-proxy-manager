@@ -274,6 +274,70 @@ export const wafLogParseState = sqliteTable('waf_log_parse_state', {
   value: text('value').notNull(),
 });
 
+// ── mTLS RBAC ──────────────────────────────────────────────────────────
+
+export const mtlsRoles = sqliteTable(
+  "mtls_roles",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    description: text("description"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull()
+  },
+  (table) => ({
+    nameUnique: uniqueIndex("mtls_roles_name_unique").on(table.name)
+  })
+);
+
+export const mtlsCertificateRoles = sqliteTable(
+  "mtls_certificate_roles",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    issuedClientCertificateId: integer("issued_client_certificate_id")
+      .references(() => issuedClientCertificates.id, { onDelete: "cascade" })
+      .notNull(),
+    mtlsRoleId: integer("mtls_role_id")
+      .references(() => mtlsRoles.id, { onDelete: "cascade" })
+      .notNull(),
+    createdAt: text("created_at").notNull()
+  },
+  (table) => ({
+    certRoleUnique: uniqueIndex("mtls_cert_role_unique").on(
+      table.issuedClientCertificateId,
+      table.mtlsRoleId
+    ),
+    roleIdx: index("mtls_certificate_roles_role_idx").on(table.mtlsRoleId)
+  })
+);
+
+export const mtlsAccessRules = sqliteTable(
+  "mtls_access_rules",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    proxyHostId: integer("proxy_host_id")
+      .references(() => proxyHosts.id, { onDelete: "cascade" })
+      .notNull(),
+    pathPattern: text("path_pattern").notNull(),
+    allowedRoleIds: text("allowed_role_ids").notNull().default("[]"),
+    allowedCertIds: text("allowed_cert_ids").notNull().default("[]"),
+    denyAll: integer("deny_all", { mode: "boolean" }).notNull().default(false),
+    priority: integer("priority").notNull().default(0),
+    description: text("description"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull()
+  },
+  (table) => ({
+    proxyHostIdx: index("mtls_access_rules_proxy_host_idx").on(table.proxyHostId),
+    hostPathUnique: uniqueIndex("mtls_access_rules_host_path_unique").on(
+      table.proxyHostId,
+      table.pathPattern
+    )
+  })
+);
+
 export const l4ProxyHosts = sqliteTable("l4_proxy_hosts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),

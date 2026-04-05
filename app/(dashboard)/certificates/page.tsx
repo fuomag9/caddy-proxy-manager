@@ -6,9 +6,11 @@ import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
 import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-certificates';
 import { listIssuedClientCertificates, type IssuedClientCertificate } from '@/src/lib/models/issued-client-certificates';
+import { listMtlsRoles, type MtlsRole } from '@/src/lib/models/mtls-roles';
 
 export type { CaCertificate };
 export type { IssuedClientCertificate };
+export type { MtlsRole };
 
 export type CaCertificateView = CaCertificate & {
   issuedCerts: IssuedClientCertificate[];
@@ -83,8 +85,9 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
   const offset = (page - 1) * PER_PAGE;
   const [caCerts, issuedClientCerts] = await Promise.all([
     listCaCertificates(),
-    listIssuedClientCertificates()
+    listIssuedClientCertificates(),
   ]);
+  const mtlsRoles = await listMtlsRoles().catch(() => []);
 
   const [acmeRows, acmeTotal, certRows, usageRows] = await Promise.all([
     db
@@ -176,6 +179,8 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       managedCerts={managedCerts}
       caCertificates={caCertificateViews}
       acmePagination={{ total: acmeTotal, page, perPage: PER_PAGE }}
+      mtlsRoles={mtlsRoles}
+      issuedClientCerts={issuedClientCerts}
     />
   );
 }

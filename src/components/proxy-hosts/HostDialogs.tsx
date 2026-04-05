@@ -28,6 +28,8 @@ import { RedirectsFields } from "./RedirectsFields";
 import { LocationRulesFields } from "./LocationRulesFields";
 import { RewriteFields } from "./RewriteFields";
 import type { CaCertificate } from "@/lib/models/ca-certificates";
+import type { MtlsRole } from "@/lib/models/mtls-roles";
+import type { IssuedClientCertificate } from "@/lib/models/issued-client-certificates";
 
 export function CreateHostDialog({
     open,
@@ -36,7 +38,9 @@ export function CreateHostDialog({
     accessLists,
     authentikDefaults,
     initialData,
-    caCertificates = []
+    caCertificates = [],
+    mtlsRoles = [],
+    issuedClientCerts = [],
 }: {
     open: boolean;
     onClose: () => void;
@@ -45,6 +49,8 @@ export function CreateHostDialog({
     authentikDefaults: AuthentikSettings | null;
     initialData?: ProxyHost | null;
     caCertificates?: CaCertificate[];
+    mtlsRoles?: MtlsRole[];
+    issuedClientCerts?: IssuedClientCertificate[];
 }) {
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
 
@@ -164,7 +170,12 @@ export function CreateHostDialog({
                 <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstream_dns_resolution} />
                 <GeoBlockFields />
                 <WafFields value={initialData?.waf} />
-                <MtlsFields value={initialData?.mtls} caCertificates={caCertificates} />
+                <MtlsFields
+                    value={initialData?.mtls}
+                    caCertificates={caCertificates}
+                    mtlsRoles={mtlsRoles}
+                    issuedClientCerts={issuedClientCerts}
+                />
             </form>
         </AppDialog>
     );
@@ -176,7 +187,9 @@ export function EditHostDialog({
     onClose,
     certificates,
     accessLists,
-    caCertificates = []
+    caCertificates = [],
+    mtlsRoles = [],
+    issuedClientCerts = [],
 }: {
     open: boolean;
     host: ProxyHost;
@@ -184,6 +197,8 @@ export function EditHostDialog({
     certificates: Certificate[];
     accessLists: AccessList[];
     caCertificates?: CaCertificate[];
+    mtlsRoles?: MtlsRole[];
+    issuedClientCerts?: IssuedClientCertificate[];
 }) {
     const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
 
@@ -298,7 +313,13 @@ export function EditHostDialog({
                     }}
                 />
                 <WafFields value={host.waf} />
-                <MtlsFields value={host.mtls} caCertificates={caCertificates} />
+                <MtlsFields
+                    value={host.mtls}
+                    caCertificates={caCertificates}
+                    proxyHostId={host.id}
+                    mtlsRoles={mtlsRoles}
+                    issuedClientCerts={issuedClientCerts}
+                />
             </form>
         </AppDialog>
     );

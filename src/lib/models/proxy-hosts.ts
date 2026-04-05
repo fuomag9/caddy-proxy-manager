@@ -218,7 +218,12 @@ type ProxyHostAuthentikMeta = {
 
 export type MtlsConfig = {
   enabled: boolean;
-  ca_certificate_ids: number[];
+  /** Trust specific issued client certificates (derives CAs automatically) */
+  trusted_client_cert_ids?: number[];
+  /** Trust all certificates belonging to these roles */
+  trusted_role_ids?: number[];
+  /** @deprecated Old model: trust entire CAs. Kept for backward compat migration. */
+  ca_certificate_ids?: number[];
 };
 
 type ProxyHostMeta = {
