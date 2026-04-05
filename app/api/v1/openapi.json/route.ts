@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireApiAdmin, apiErrorResponse } from "@/src/lib/api-auth";
 
 const spec = {
   openapi: "3.1.0",
@@ -1768,10 +1769,15 @@ const spec = {
   },
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  try {
+    await requireApiAdmin(request);
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
   return NextResponse.json(spec, {
     headers: {
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": "private, max-age=3600",
     },
   });
 }

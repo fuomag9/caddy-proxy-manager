@@ -1,4 +1,4 @@
-import { requireUser } from "@/src/lib/auth";
+import { requireAdmin } from "@/src/lib/auth";
 import ApiDocsClient from "./ApiDocsClient";
 
 export const metadata = {
@@ -6,7 +6,7 @@ export const metadata = {
 };
 
 export default async function ApiDocsPage() {
-  await requireUser();
+  await requireAdmin();
 
   return <ApiDocsClient />;
 }

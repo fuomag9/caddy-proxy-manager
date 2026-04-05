@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/src/lib/auth';
+import { requireAdmin } from '@/src/lib/auth';
 import { getAnalyticsTimeline, INTERVAL_SECONDS } from '@/src/lib/analytics-db';
 
 export async function GET(req: NextRequest) {
-  await requireUser();
+  await requireAdmin();
   const { searchParams } = req.nextUrl;
   const hostsParam = searchParams.get('hosts') ?? '';
   const hosts = hostsParam ? hostsParam.split(',').filter(Boolean) : [];

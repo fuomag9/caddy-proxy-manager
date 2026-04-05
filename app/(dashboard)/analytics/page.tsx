@@ -1,7 +1,7 @@
-import { requireUser } from '@/src/lib/auth';
+import { requireAdmin } from '@/src/lib/auth';
 import AnalyticsClient from './AnalyticsClient';
 
 export default async function AnalyticsPage() {
-  await requireUser();
+  await requireAdmin();
   return <AnalyticsClient />;
 }
