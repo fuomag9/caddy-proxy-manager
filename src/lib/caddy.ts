@@ -1814,7 +1814,7 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
 }
 
 async function buildCaddyDocument() {
-  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows, allIssuedCaCertIds] = await Promise.all([
+  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows, allIssuedCaCertIds, allIssuedCertCaMap] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -1871,6 +1871,15 @@ async function buildCaddyDocument() {
     // (trust any cert signed by that CA).
     db
       .selectDistinct({ caCertificateId: issuedClientCertificates.caCertificateId })
+      .from(issuedClientCertificates),
+    // All issued certs (including revoked) — cert ID → CA ID only.
+    // Used to derive CA IDs for the new trust model even when all certs are revoked,
+    // so the domain stays in mTlsDomainMap and gets a fail-closed mTLS policy.
+    db
+      .select({
+        id: issuedClientCertificates.id,
+        caCertificateId: issuedClientCertificates.caCertificateId
+      })
       .from(issuedClientCertificates)
   ]);
 
@@ -1925,8 +1934,10 @@ async function buildCaddyDocument() {
     return map;
   }, new Map());
 
-  // Build a lookup: issued cert ID → { id, caCertificateId, certificatePem }
+  // Build a lookup: issued cert ID → { id, caCertificateId, certificatePem } (active only)
   const issuedCertById = new Map(issuedClientCertRows.map(r => [r.id, r]));
+  // Cert ID → CA ID for ALL certs (including revoked), used to derive CA IDs for fail-closed
+  const certIdToCaId = new Map(allIssuedCertCaMap.map(r => [r.id, r.caCertificateId]));
 
   // Resolve role IDs → cert IDs for trusted_role_ids in mTLS config
   const roleCertIdMap = await buildRoleCertIdMap();
@@ -1968,11 +1979,22 @@ async function buildCaddyDocument() {
           leafPems.push(cert.certificatePem);
         }
       }
-      if (derivedCaIds.size === 0) continue;
+      if (derivedCaIds.size === 0) {
+        // All referenced certs are revoked — derive CAs from the full cert map
+        // (including revoked) so the domain stays in mTlsDomainMap and gets a
+        // fail-closed mTLS policy via buildClientAuthentication.
+        for (const certId of allCertIds) {
+          const caId = certIdToCaId.get(certId);
+          if (caId !== undefined) derivedCaIds.add(caId);
+        }
+        if (derivedCaIds.size === 0) continue;
+      }
       const caIdArr = Array.from(derivedCaIds);
       for (const domain of domains) {
         mTlsDomainMap.set(domain, caIdArr);
-        mTlsDomainLeafOverride.set(domain, leafPems);
+        if (leafPems.length > 0) {
+          mTlsDomainLeafOverride.set(domain, leafPems);
+        }
       }
     } else if (meta.mtls.ca_certificate_ids?.length) {
       // Legacy model: trust entire CAs (backward compat)

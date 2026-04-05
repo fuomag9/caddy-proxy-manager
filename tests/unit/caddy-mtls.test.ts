@@ -106,7 +106,7 @@ describe('buildClientAuthentication', () => {
     expect(result!.trusted_leaf_certs).toBeUndefined();
   });
 
-  it('excludes managed CA when all its issued certs are revoked (no active certs)', () => {
+  it('pins to CA cert itself when all its issued certs are revoked (fail-closed)', () => {
     const mTlsDomainMap = new Map([['app.example.com', [1]]]);
     const caCertMap = makeCaCertMap([1, 'CA_A']);
     const issuedClientCertMap = new Map([[1, []]]); // CA 1 managed, zero active certs
@@ -120,7 +120,12 @@ describe('buildClientAuthentication', () => {
       cAsWithAnyIssuedCerts
     );
 
-    expect(result).toBeNull(); // No CA trusted → null
+    // Returns a valid client_authentication that no client can satisfy:
+    // CA is trusted for chain validation, but leaf is pinned to the CA cert itself
+    expect(result).not.toBeNull();
+    expect(result!.mode).toBe('require_and_verify');
+    expect(result!.trusted_ca_certs).toEqual(['CA_A']);
+    expect(result!.trusted_leaf_certs).toEqual(['CA_A']); // CA cert as leaf pin → unmatchable
   });
 
   it('includes CA cert and active leaf certs for managed CA with active certs', () => {
@@ -182,7 +187,7 @@ describe('buildClientAuthentication', () => {
     expect(result!.trusted_leaf_certs).toEqual(['LEAF_B1']);
   });
 
-  it('returns null when the only configured CA is managed with all certs revoked', () => {
+  it('returns fail-closed config when the only configured CA is managed with all certs revoked', () => {
     const mTlsDomainMap = new Map([['app.example.com', [1]]]);
     const caCertMap = makeCaCertMap([1, 'CA_A']);
     const issuedClientCertMap = new Map([[1, []]]);
@@ -195,7 +200,11 @@ describe('buildClientAuthentication', () => {
       issuedClientCertMap,
       cAsWithAnyIssuedCerts
     );
-    expect(result).toBeNull();
+    // Must NOT return null — returns a valid but unsatisfiable client_authentication
+    expect(result).not.toBeNull();
+    expect(result!.mode).toBe('require_and_verify');
+    expect(result!.trusted_ca_certs).toEqual(['CA_A']);
+    expect(result!.trusted_leaf_certs).toEqual(['CA_A']); // poison-pill → no client can match
   });
 
   it('domain lookup is case-insensitive', () => {

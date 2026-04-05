@@ -105,12 +105,19 @@ export function buildClientAuthentication(
 
       if (cAsWithAnyIssuedCerts.has(id)) {
         const activeLeafCerts = issuedClientCertMap.get(id) ?? [];
-        if (activeLeafCerts.length === 0) {
-          continue;
-        }
         trustedCaCerts.push(pemToBase64Der(ca.certificatePem));
-        for (const certPem of activeLeafCerts) {
-          trustedLeafCerts.push(pemToBase64Der(certPem));
+        if (activeLeafCerts.length === 0) {
+          // All certs revoked — pin to the CA cert itself as a leaf cert.
+          // No client cert can hash-match a CA cert, so this rejects all
+          // clients while keeping a valid client_authentication block
+          // (avoids relying on Caddy's experimental "drop" field).
+          // Note: presenting the CA cert as a client cert would require the
+          // CA's private key, which is already a full compromise scenario.
+          trustedLeafCerts.push(pemToBase64Der(ca.certificatePem));
+        } else {
+          for (const certPem of activeLeafCerts) {
+            trustedLeafCerts.push(pemToBase64Der(certPem));
+          }
         }
       } else {
         trustedCaCerts.push(pemToBase64Der(ca.certificatePem));
