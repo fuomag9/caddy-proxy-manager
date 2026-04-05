@@ -120,6 +120,13 @@
       "when": 1775400000000,
       "tag": "0016_mtls_rbac",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1775500000000,
+      "tag": "0017_forward_auth",
+      "breakpoints": true
     }
   ]
 }

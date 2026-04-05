@@ -41,10 +41,12 @@ export default auth((req) => {
   // Allow public routes
   if (
     pathname === "/login" ||
+    pathname === "/portal" ||
     pathname.startsWith("/api/auth") ||
     pathname === "/api/health" ||
     pathname === "/api/instances/sync" ||
-    pathname.startsWith("/api/v1/")
+    pathname.startsWith("/api/v1/") ||
+    pathname.startsWith("/api/forward-auth/")
   ) {
     return NextResponse.next();
   }

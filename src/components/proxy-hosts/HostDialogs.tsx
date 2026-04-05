@@ -24,12 +24,17 @@ import { UpstreamInput } from "./UpstreamInput";
 import { GeoBlockFields } from "./GeoBlockFields";
 import { WafFields } from "./WafFields";
 import { MtlsFields } from "./MtlsConfig";
+import { CpmForwardAuthFields } from "./CpmForwardAuthFields";
 import { RedirectsFields } from "./RedirectsFields";
 import { LocationRulesFields } from "./LocationRulesFields";
 import { RewriteFields } from "./RewriteFields";
 import type { CaCertificate } from "@/lib/models/ca-certificates";
 import type { MtlsRole } from "@/lib/models/mtls-roles";
 import type { IssuedClientCertificate } from "@/lib/models/issued-client-certificates";
+
+type ForwardAuthUser = { id: number; email: string; name: string | null; role: string };
+type ForwardAuthGroup = { id: number; name: string; description: string | null; member_count: number };
+type ForwardAuthAccessData = { userIds: number[]; groupIds: number[] };
 
 export function CreateHostDialog({
     open,
@@ -41,6 +46,8 @@ export function CreateHostDialog({
     caCertificates = [],
     mtlsRoles = [],
     issuedClientCerts = [],
+    forwardAuthUsers = [],
+    forwardAuthGroups = [],
 }: {
     open: boolean;
     onClose: () => void;
@@ -51,6 +58,8 @@ export function CreateHostDialog({
     caCertificates?: CaCertificate[];
     mtlsRoles?: MtlsRole[];
     issuedClientCerts?: IssuedClientCertificate[];
+    forwardAuthUsers?: ForwardAuthUser[];
+    forwardAuthGroups?: ForwardAuthGroup[];
 }) {
     const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
 
@@ -165,6 +174,11 @@ export function CreateHostDialog({
                     </p>
                 </div>
                 <AuthentikFields defaults={authentikDefaults} authentik={initialData?.authentik} />
+                <CpmForwardAuthFields
+                    cpmForwardAuth={initialData?.cpm_forward_auth}
+                    users={forwardAuthUsers}
+                    groups={forwardAuthGroups}
+                />
                 <LoadBalancerFields loadBalancer={initialData?.load_balancer} />
                 <DnsResolverFields dnsResolver={initialData?.dns_resolver} />
                 <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstream_dns_resolution} />
@@ -190,6 +204,9 @@ export function EditHostDialog({
     caCertificates = [],
     mtlsRoles = [],
     issuedClientCerts = [],
+    forwardAuthUsers = [],
+    forwardAuthGroups = [],
+    forwardAuthAccess,
 }: {
     open: boolean;
     host: ProxyHost;
@@ -199,6 +216,9 @@ export function EditHostDialog({
     caCertificates?: CaCertificate[];
     mtlsRoles?: MtlsRole[];
     issuedClientCerts?: IssuedClientCertificate[];
+    forwardAuthUsers?: ForwardAuthUser[];
+    forwardAuthGroups?: ForwardAuthGroup[];
+    forwardAuthAccess?: ForwardAuthAccessData | null;
 }) {
     const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
 
@@ -303,6 +323,12 @@ export function EditHostDialog({
                     </p>
                 </div>
                 <AuthentikFields authentik={host.authentik} />
+                <CpmForwardAuthFields
+                    cpmForwardAuth={host.cpm_forward_auth}
+                    users={forwardAuthUsers}
+                    groups={forwardAuthGroups}
+                    currentAccess={forwardAuthAccess}
+                />
                 <LoadBalancerFields loadBalancer={host.load_balancer} />
                 <DnsResolverFields dnsResolver={host.dns_resolver} />
                 <UpstreamDnsResolutionFields upstreamDnsResolution={host.upstream_dns_resolution} />

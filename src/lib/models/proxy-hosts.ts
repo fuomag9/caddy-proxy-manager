@@ -226,6 +226,21 @@ export type MtlsConfig = {
   ca_certificate_ids?: number[];
 };
 
+export type CpmForwardAuthConfig = {
+  enabled: boolean;
+  protected_paths: string[] | null;
+};
+
+export type CpmForwardAuthInput = {
+  enabled?: boolean;
+  protected_paths?: string[] | null;
+};
+
+type CpmForwardAuthMeta = {
+  enabled?: boolean;
+  protected_paths?: string[];
+};
+
 type ProxyHostMeta = {
   custom_reverse_proxy_json?: string;
   custom_pre_handlers_json?: string;
@@ -237,6 +252,7 @@ type ProxyHostMeta = {
   geoblock_mode?: GeoBlockMode;
   waf?: WafHostConfig;
   mtls?: MtlsConfig;
+  cpm_forward_auth?: CpmForwardAuthMeta;
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
   location_rules?: LocationRule[];
@@ -268,6 +284,7 @@ export type ProxyHost = {
   geoblock_mode: GeoBlockMode;
   waf: WafHostConfig | null;
   mtls: MtlsConfig | null;
+  cpm_forward_auth: CpmForwardAuthConfig | null;
   redirects: RedirectRule[];
   rewrite: RewriteConfig | null;
   location_rules: LocationRule[];
@@ -296,6 +313,7 @@ export type ProxyHostInput = {
   geoblock_mode?: GeoBlockMode;
   waf?: WafHostConfig | null;
   mtls?: MtlsConfig | null;
+  cpm_forward_auth?: CpmForwardAuthInput | null;
   redirects?: RedirectRule[] | null;
   rewrite?: RewriteConfig | null;
   location_rules?: LocationRule[] | null;
@@ -529,6 +547,21 @@ function sanitizeUpstreamDnsResolutionMeta(
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
+function sanitizeCpmForwardAuthMeta(meta: CpmForwardAuthMeta | undefined): CpmForwardAuthMeta | undefined {
+  if (!meta) return undefined;
+  const normalized: CpmForwardAuthMeta = {};
+  if (meta.enabled !== undefined) {
+    normalized.enabled = Boolean(meta.enabled);
+  }
+  if (Array.isArray(meta.protected_paths)) {
+    const paths = meta.protected_paths.map((p) => p?.trim()).filter((p): p is string => Boolean(p));
+    if (paths.length > 0) {
+      normalized.protected_paths = paths;
+    }
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 function serializeMeta(meta: ProxyHostMeta | null | undefined) {
   if (!meta) {
     return null;
@@ -578,6 +611,13 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
 
   if (meta.mtls && meta.mtls.enabled) {
     normalized.mtls = meta.mtls;
+  }
+
+  if (meta.cpm_forward_auth) {
+    const cfa = sanitizeCpmForwardAuthMeta(meta.cpm_forward_auth);
+    if (cfa) {
+      normalized.cpm_forward_auth = cfa;
+    }
   }
 
   if (meta.redirects && meta.redirects.length > 0) {
@@ -657,6 +697,7 @@ function parseMeta(value: string | null): ProxyHostMeta {
       geoblock_mode: parsed.geoblock_mode,
       waf: parsed.waf,
       mtls: parsed.mtls,
+      cpm_forward_auth: sanitizeCpmForwardAuthMeta(parsed.cpm_forward_auth),
       redirects: sanitizeRedirectRules(parsed.redirects),
       rewrite: sanitizeRewriteConfig(parsed.rewrite) ?? undefined,
       location_rules: sanitizeLocationRules(parsed.location_rules),
@@ -1134,6 +1175,18 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
+  if (input.cpm_forward_auth !== undefined) {
+    if (input.cpm_forward_auth && input.cpm_forward_auth.enabled) {
+      const cfa: CpmForwardAuthMeta = { enabled: true };
+      if (input.cpm_forward_auth.protected_paths && input.cpm_forward_auth.protected_paths.length > 0) {
+        cfa.protected_paths = input.cpm_forward_auth.protected_paths;
+      }
+      next.cpm_forward_auth = cfa;
+    } else {
+      delete next.cpm_forward_auth;
+    }
+  }
+
   if (input.redirects !== undefined) {
     const rules = sanitizeRedirectRules(input.redirects ?? []);
     if (rules.length > 0) {
@@ -1488,6 +1541,9 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     geoblock_mode: meta.geoblock_mode ?? "merge",
     waf: meta.waf ?? null,
     mtls: meta.mtls ?? null,
+    cpm_forward_auth: meta.cpm_forward_auth?.enabled
+      ? { enabled: true, protected_paths: meta.cpm_forward_auth.protected_paths ?? null }
+      : null,
     redirects: meta.redirects ?? [],
     rewrite: meta.rewrite ?? null,
     location_rules: meta.location_rules ?? [],
@@ -1622,6 +1678,12 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {}),
     ...(existing.waf ? { waf: existing.waf } : {}),
     ...(existing.mtls ? { mtls: existing.mtls } : {}),
+    ...(existing.cpm_forward_auth?.enabled ? {
+      cpm_forward_auth: {
+        enabled: true,
+        ...(existing.cpm_forward_auth.protected_paths ? { protected_paths: existing.cpm_forward_auth.protected_paths } : {})
+      }
+    } : {}),
   };
   const meta = buildMeta(existingMeta, input);
 

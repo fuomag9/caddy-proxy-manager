@@ -177,7 +177,8 @@ export const config = {
     tokenUrl: process.env.OAUTH_TOKEN_URL ?? null,
     userinfoUrl: process.env.OAUTH_USERINFO_URL ?? null,
     allowAutoLinking: process.env.OAUTH_ALLOW_AUTO_LINKING === "true",
-  }
+  },
+  forwardAuthInternalUrl: process.env.FORWARD_AUTH_INTERNAL_URL ?? null,
 };
 
 /**

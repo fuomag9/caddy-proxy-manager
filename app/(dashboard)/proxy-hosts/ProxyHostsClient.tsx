@@ -28,6 +28,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+type ForwardAuthUser = { id: number; email: string; name: string | null; role: string };
+type ForwardAuthGroup = { id: number; name: string; description: string | null; member_count: number };
+type ForwardAuthAccessMap = Record<number, { userIds: number[]; groupIds: number[] }>;
+
 type Props = {
   hosts: ProxyHost[];
   certificates: Certificate[];
@@ -39,9 +43,12 @@ type Props = {
   initialSort?: { sortBy: string; sortDir: "asc" | "desc" };
   mtlsRoles?: MtlsRole[];
   issuedClientCerts?: IssuedClientCertificate[];
+  forwardAuthUsers?: ForwardAuthUser[];
+  forwardAuthGroups?: ForwardAuthGroup[];
+  forwardAuthAccessMap?: ForwardAuthAccessMap;
 };
 
-export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort, mtlsRoles, issuedClientCerts }: Props) {
+export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort, mtlsRoles, issuedClientCerts, forwardAuthUsers, forwardAuthGroups, forwardAuthAccessMap }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
@@ -303,6 +310,8 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
         caCertificates={caCertificates}
         mtlsRoles={mtlsRoles ?? []}
         issuedClientCerts={issuedClientCerts ?? []}
+        forwardAuthUsers={forwardAuthUsers ?? []}
+        forwardAuthGroups={forwardAuthGroups ?? []}
       />
 
       {editHost && (
@@ -315,6 +324,9 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           caCertificates={caCertificates}
           mtlsRoles={mtlsRoles ?? []}
           issuedClientCerts={issuedClientCerts ?? []}
+          forwardAuthUsers={forwardAuthUsers ?? []}
+          forwardAuthGroups={forwardAuthGroups ?? []}
+          forwardAuthAccess={forwardAuthAccessMap?.[editHost.id] ?? null}
         />
       )}
 

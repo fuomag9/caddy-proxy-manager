@@ -338,6 +338,98 @@ export const mtlsAccessRules = sqliteTable(
   })
 );
 
+// ── Forward Auth (IdP) ───────────────────────────────────────────────
+
+export const groups = sqliteTable(
+  "groups",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    description: text("description"),
+    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull()
+  },
+  (table) => ({
+    nameUnique: uniqueIndex("groups_name_unique").on(table.name)
+  })
+);
+
+export const groupMembers = sqliteTable(
+  "group_members",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    groupId: integer("group_id")
+      .references(() => groups.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: integer("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    createdAt: text("created_at").notNull()
+  },
+  (table) => ({
+    memberUnique: uniqueIndex("group_members_unique").on(table.groupId, table.userId),
+    userIdx: index("group_members_user_idx").on(table.userId)
+  })
+);
+
+export const forwardAuthAccess = sqliteTable(
+  "forward_auth_access",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    proxyHostId: integer("proxy_host_id")
+      .references(() => proxyHosts.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    groupId: integer("group_id").references(() => groups.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull()
+  },
+  (table) => ({
+    hostIdx: index("faa_host_idx").on(table.proxyHostId),
+    userUnique: uniqueIndex("faa_user_unique").on(table.proxyHostId, table.userId),
+    groupUnique: uniqueIndex("faa_group_unique").on(table.proxyHostId, table.groupId)
+  })
+);
+
+export const forwardAuthSessions = sqliteTable(
+  "forward_auth_sessions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull()
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex("fas_token_hash_unique").on(table.tokenHash),
+    userIdx: index("fas_user_idx").on(table.userId),
+    expiresIdx: index("fas_expires_idx").on(table.expiresAt)
+  })
+);
+
+export const forwardAuthExchanges = sqliteTable(
+  "forward_auth_exchanges",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sessionId: integer("session_id")
+      .references(() => forwardAuthSessions.id, { onDelete: "cascade" })
+      .notNull(),
+    codeHash: text("code_hash").notNull(),
+    sessionToken: text("session_token").notNull(), // raw session token (short-lived, single-use)
+    redirectUri: text("redirect_uri").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    used: integer("used", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull()
+  },
+  (table) => ({
+    codeHashUnique: uniqueIndex("fae_code_hash_unique").on(table.codeHash)
+  })
+);
+
+// ── L4 Proxy Hosts ───────────────────────────────────────────────────
+
 export const l4ProxyHosts = sqliteTable("l4_proxy_hosts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),

@@ -106,10 +106,16 @@ type UpstreamDnsResolutionMeta = {
   family?: UpstreamDnsAddressFamily;
 };
 
+type CpmForwardAuthMeta = {
+  enabled?: boolean;
+  protected_paths?: string[];
+};
+
 type ProxyHostMeta = {
   custom_reverse_proxy_json?: string;
   custom_pre_handlers_json?: string;
   authentik?: ProxyHostAuthentikMeta;
+  cpm_forward_auth?: CpmForwardAuthMeta;
   load_balancer?: LoadBalancerMeta;
   dns_resolver?: DnsResolverMeta;
   upstream_dns_resolution?: UpstreamDnsResolutionMeta;
@@ -698,6 +704,7 @@ async function buildProxyRoutes(
     const handlers: Record<string, unknown>[] = [];
     const meta = parseJson<ProxyHostMeta>(row.meta, {});
     const authentik = parseAuthentikConfig(meta.authentik);
+    const cpmForwardAuth = meta.cpm_forward_auth?.enabled ? meta.cpm_forward_auth : null;
     const hostRoutes: CaddyHttpRoute[] = [];
 
     const effectiveGeoBlock = resolveEffectiveGeoBlock(
@@ -1109,6 +1116,188 @@ async function buildProxyRoutes(
             terminal: true
           };
           hostRoutes.push(route);
+        }
+      }
+    } else if (cpmForwardAuth) {
+      // ── CPM Forward Auth ────────────────────────────────────────────
+      // Uses CPM itself as the auth provider (replaces Authentik)
+      const cpmDialAddress = getCpmDialAddress();
+      if (cpmDialAddress) {
+        const CPM_COPY_HEADERS = [
+          "X-CPM-User",
+          "X-CPM-Email",
+          "X-CPM-Groups",
+          "X-CPM-User-Id"
+        ];
+
+        // Build handle_response routes for copying user headers on 2xx
+        const cpmHandleResponseRoutes: Record<string, unknown>[] = [
+          { handle: [{ handler: "vars" }] }
+        ];
+        for (const headerName of CPM_COPY_HEADERS) {
+          cpmHandleResponseRoutes.push({
+            handle: [
+              {
+                handler: "headers",
+                request: {
+                  set: { [headerName]: [`{http.reverse_proxy.header.${headerName}}`] }
+                }
+              } as Record<string, unknown>
+            ],
+            match: [
+              {
+                not: [{ vars: { [`{http.reverse_proxy.header.${headerName}}`]: [""] } }]
+              }
+            ]
+          });
+        }
+
+        // Forward auth handler — subrequest to CPM verify endpoint
+        const cpmForwardAuthHandler: Record<string, unknown> = {
+          handler: "reverse_proxy",
+          upstreams: [{ dial: cpmDialAddress }],
+          rewrite: {
+            method: "GET",
+            uri: "/api/forward-auth/verify"
+          },
+          headers: {
+            request: {
+              set: {
+                "X-Forwarded-Method": ["{http.request.method}"],
+                "X-Forwarded-Uri": ["{http.request.uri}"],
+                "X-Forwarded-Host": ["{http.request.host}"],
+                "X-Forwarded-Proto": ["{http.request.scheme}"]
+              }
+            }
+          },
+          handle_response: [
+            {
+              match: { status_code: [2] },
+              routes: cpmHandleResponseRoutes
+            },
+            {
+              match: { status_code: [401, 403] },
+              routes: [
+                {
+                  handle: [
+                    {
+                      handler: "static_response",
+                      status_code: 302,
+                      headers: {
+                        Location: [
+                          `${config.baseUrl}/portal?rd={http.request.scheme}://{http.request.host}{http.request.uri}`
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          trusted_proxies: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8", "::1/128"]
+        };
+
+        // Callback route — unprotected, so it goes before forward_auth
+        const cpmCallbackRoute: CaddyHttpRoute = {
+          match: [{ path: ["/.cpm-auth/callback"] }],
+          handle: [
+            {
+              handler: "reverse_proxy",
+              upstreams: [{ dial: cpmDialAddress }],
+              rewrite: {
+                uri: "/api/forward-auth/callback?{http.request.uri.query}"
+              },
+              headers: {
+                request: {
+                  set: {
+                    "X-Forwarded-Host": ["{http.request.host}"],
+                    "X-Forwarded-Proto": ["{http.request.scheme}"]
+                  }
+                }
+              }
+            }
+          ],
+          terminal: true
+        };
+
+        const locationRules = meta.location_rules ?? [];
+
+        if (cpmForwardAuth.protected_paths && cpmForwardAuth.protected_paths.length > 0) {
+          // Path-specific authentication
+          for (const domainGroup of domainGroups) {
+            // Add callback route (unprotected)
+            hostRoutes.push({
+              ...cpmCallbackRoute,
+              match: [{ host: domainGroup, path: ["/.cpm-auth/callback"] }]
+            });
+
+            // Protected paths
+            for (const protectedPath of cpmForwardAuth.protected_paths) {
+              const protectedHandlers: Record<string, unknown>[] = [...handlers];
+              const protectedReverseProxy = JSON.parse(JSON.stringify(reverseProxyHandler));
+              protectedHandlers.push(cpmForwardAuthHandler);
+              protectedHandlers.push(protectedReverseProxy);
+
+              hostRoutes.push({
+                match: [{ host: domainGroup, path: [protectedPath] }],
+                handle: protectedHandlers,
+                terminal: true
+              });
+            }
+
+            // Location rules (unprotected)
+            for (const rule of locationRules) {
+              const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+                rule,
+                Boolean(row.skip_https_hostname_validation),
+                Boolean(row.preserve_host_header)
+              );
+              if (!safePath) continue;
+              hostRoutes.push({
+                match: [{ host: domainGroup, path: [safePath] }],
+                handle: [...handlers, locationProxy],
+                terminal: true
+              });
+            }
+
+            // Unprotected catch-all
+            hostRoutes.push({
+              match: [{ host: domainGroup }],
+              handle: [...handlers, reverseProxyHandler],
+              terminal: true
+            });
+          }
+        } else {
+          // Protect entire site
+          for (const domainGroup of domainGroups) {
+            // Callback route first (unprotected)
+            hostRoutes.push({
+              ...cpmCallbackRoute,
+              match: [{ host: domainGroup, path: ["/.cpm-auth/callback"] }]
+            });
+
+            // Location rules with forward auth
+            for (const rule of locationRules) {
+              const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+                rule,
+                Boolean(row.skip_https_hostname_validation),
+                Boolean(row.preserve_host_header)
+              );
+              if (!safePath) continue;
+              hostRoutes.push({
+                match: [{ host: domainGroup, path: [safePath] }],
+                handle: [...handlers, cpmForwardAuthHandler, locationProxy],
+                terminal: true
+              });
+            }
+
+            // Main route with forward auth
+            hostRoutes.push({
+              match: [{ host: domainGroup }],
+              handle: [...handlers, cpmForwardAuthHandler, reverseProxyHandler],
+              terminal: true
+            });
+          }
         }
       }
     } else {
@@ -1995,6 +2184,41 @@ export async function applyCaddyConfig() {
     }
 
     throw error;
+  }
+}
+
+/**
+ * Derives the dial address (host:port) for Caddy to reach CPM internally.
+ * Uses FORWARD_AUTH_INTERNAL_URL env var if set. Otherwise, if CADDY_API_URL
+ * points to a Docker service name (e.g. "caddy:2019"), assumes Docker networking
+ * and defaults to "web:3000". Falls back to deriving from BASE_URL.
+ */
+function getCpmDialAddress(): string | null {
+  const internalUrl = config.forwardAuthInternalUrl;
+  if (internalUrl) {
+    // Strip protocol, trailing slashes, and paths
+    return internalUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  }
+
+  // If CADDY_API_URL uses a Docker service name, assume Docker networking
+  // and use the web service name directly
+  try {
+    const caddyUrl = new URL(config.caddyApiUrl);
+    if (caddyUrl.hostname !== "localhost" && caddyUrl.hostname !== "127.0.0.1" && caddyUrl.hostname !== "::1") {
+      // Caddy is on a Docker network — CPM is the "web" service on port 3000
+      return "web:3000";
+    }
+  } catch {
+    // ignore
+  }
+
+  // Derive from BASE_URL (works for non-Docker setups)
+  try {
+    const url = new URL(config.baseUrl);
+    const port = url.port || (url.protocol === "https:" ? "443" : "80");
+    return `${url.hostname}:${port}`;
+  } catch {
+    return null;
   }
 }
 

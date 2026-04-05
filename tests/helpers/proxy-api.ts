@@ -101,13 +101,17 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
     await mtlsCard.scrollIntoViewIfNeeded();
     await mtlsCard.getByRole('switch').click();
 
-    await expect(page.getByText(/trusted client ca certificates/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/trusted certificates/i)).toBeVisible({ timeout: 10_000 });
 
-    // Check each CA certificate by label
+    // Click each CA group header to select all issued certs from that CA
     for (const caName of config.mtlsCaNames) {
-      await page.getByLabel(caName, { exact: true }).check();
+      const caLabel = page.locator('label').filter({ hasText: caName });
+      await caLabel.scrollIntoViewIfNeeded();
+      await caLabel.click();
     }
-    await expect(page.locator('input[name="mtls_ca_cert_id"]')).toHaveCount(config.mtlsCaNames.length);
+    // Verify at least one cert was selected (each CA group selects its certs)
+    const certInputs = page.locator('input[name="mtls_cert_id"]');
+    await expect(certInputs.first()).toBeAttached({ timeout: 5_000 });
   }
 
   // Inject hidden fields:

@@ -16,9 +16,11 @@ import {
   type WafHostConfig,
   type MtlsConfig,
   type RedirectRule,
-  type RewriteConfig
+  type RewriteConfig,
+  type CpmForwardAuthInput
 } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
+import { setForwardAuthAccess } from "@/src/lib/models/forward-auth";
 import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
 import {
   parseCsv,
@@ -103,6 +105,30 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
   }
   if (setHostHeader !== undefined) {
     result.setOutpostHostHeader = setHostHeader;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function parseCpmForwardAuthConfig(formData: FormData): CpmForwardAuthInput | undefined {
+  if (!formData.has("cpm_forward_auth_present")) {
+    return undefined;
+  }
+
+  const enabledIndicator = formData.has("cpm_forward_auth_enabled_present");
+  const enabledValue = enabledIndicator
+    ? formData.has("cpm_forward_auth_enabled")
+      ? parseCheckbox(formData.get("cpm_forward_auth_enabled"))
+      : false
+    : undefined;
+  const protectedPaths = parseCsv(formData.get("cpm_forward_auth_protected_paths"));
+
+  const result: CpmForwardAuthInput = {};
+  if (enabledValue !== undefined) {
+    result.enabled = enabledValue;
+  }
+  if (protectedPaths.length > 0 || formData.has("cpm_forward_auth_protected_paths")) {
+    result.protected_paths = protectedPaths.length > 0 ? protectedPaths : null;
   }
 
   return Object.keys(result).length > 0 ? result : undefined;
@@ -485,7 +511,7 @@ export async function createProxyHostAction(
       console.warn(`[createProxyHostAction] ${warning}`);
     }
 
-    await createProxyHost(
+    const host = await createProxyHost(
       {
         name: String(formData.get("name") ?? "Untitled"),
         domains: parseCsv(formData.get("domains")),
@@ -499,6 +525,7 @@ export async function createProxyHostAction(
         custom_pre_handlers_json: parseOptionalText(formData.get("custom_pre_handlers_json")),
         custom_reverse_proxy_json: parseOptionalText(formData.get("custom_reverse_proxy_json")),
         authentik: parseAuthentikConfig(formData),
+        cpm_forward_auth: parseCpmForwardAuthConfig(formData),
         load_balancer: parseLoadBalancerConfig(formData),
         dns_resolver: parseDnsResolverConfig(formData),
         upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
@@ -511,6 +538,14 @@ export async function createProxyHostAction(
       },
       userId
     );
+
+    // Save forward auth access if CPM forward auth is enabled
+    const faUserIds = formData.getAll("cpm_fa_user_id").map((v) => Number(v)).filter((n) => n > 0);
+    const faGroupIds = formData.getAll("cpm_fa_group_id").map((v) => Number(v)).filter((n) => n > 0);
+    if (host.cpm_forward_auth?.enabled && (faUserIds.length > 0 || faGroupIds.length > 0)) {
+      await setForwardAuthAccess(host.id, { userIds: faUserIds, groupIds: faGroupIds }, userId);
+    }
+
     revalidatePath("/proxy-hosts");
 
     // Return success with warning if applicable
@@ -576,6 +611,7 @@ export async function updateProxyHostAction(
           ? parseOptionalText(formData.get("custom_reverse_proxy_json"))
           : undefined,
         authentik: parseAuthentikConfig(formData),
+        cpm_forward_auth: parseCpmForwardAuthConfig(formData),
         load_balancer: parseLoadBalancerConfig(formData),
         dns_resolver: parseDnsResolverConfig(formData),
         upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
@@ -588,6 +624,14 @@ export async function updateProxyHostAction(
       },
       userId
     );
+
+    // Save forward auth access if the section is present in the form
+    if (formData.has("cpm_forward_auth_present")) {
+      const faUserIds = formData.getAll("cpm_fa_user_id").map((v) => Number(v)).filter((n) => n > 0);
+      const faGroupIds = formData.getAll("cpm_fa_group_id").map((v) => Number(v)).filter((n) => n > 0);
+      await setForwardAuthAccess(id, { userIds: faUserIds, groupIds: faGroupIds }, userId);
+    }
+
     revalidatePath("/proxy-hosts");
 
     // Return success with warning if applicable

@@ -6,6 +6,9 @@ import { listAccessLists } from "@/src/lib/models/access-lists";
 import { getAuthentikSettings } from "@/src/lib/settings";
 import { listMtlsRoles } from "@/src/lib/models/mtls-roles";
 import { listIssuedClientCertificates } from "@/src/lib/models/issued-client-certificates";
+import { listUsers } from "@/src/lib/models/user";
+import { listGroups } from "@/src/lib/models/groups";
+import { getForwardAuthAccessForHost } from "@/src/lib/models/forward-auth";
 import { requireAdmin } from "@/src/lib/auth";
 
 const PER_PAGE = 25;
@@ -32,10 +35,39 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
     getAuthentikSettings(),
   ]);
   // These are safe to fail if the RBAC migration hasn't been applied yet
-  const [mtlsRoles, issuedClientCerts] = await Promise.all([
+  const [mtlsRoles, issuedClientCerts, allUsers, allGroups] = await Promise.all([
     listMtlsRoles().catch(() => []),
     listIssuedClientCertificates().catch(() => []),
+    listUsers().catch(() => []),
+    listGroups().catch(() => []),
   ]);
+
+  // Build forward auth access map for hosts that have CPM forward auth enabled
+  const faHosts = hosts.filter((h) => h.cpm_forward_auth?.enabled);
+  const faAccessEntries = await Promise.all(
+    faHosts.map((h) => getForwardAuthAccessForHost(h.id).catch(() => []))
+  );
+  const forwardAuthAccessMap: Record<number, { userIds: number[]; groupIds: number[] }> = {};
+  faHosts.forEach((h, i) => {
+    const entries = faAccessEntries[i];
+    forwardAuthAccessMap[h.id] = {
+      userIds: entries.filter((e) => e.user_id !== null).map((e) => e.user_id!),
+      groupIds: entries.filter((e) => e.group_id !== null).map((e) => e.group_id!),
+    };
+  });
+
+  const forwardAuthUsers = allUsers.map((u) => ({
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+  }));
+  const forwardAuthGroups = allGroups.map((g) => ({
+    id: g.id,
+    name: g.name,
+    description: g.description,
+    member_count: g.members.length,
+  }));
 
   return (
     <ProxyHostsClient
@@ -49,6 +81,9 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
       initialSort={{ sortBy: sortBy ?? "created_at", sortDir }}
       mtlsRoles={mtlsRoles}
       issuedClientCerts={issuedClientCerts}
+      forwardAuthUsers={forwardAuthUsers}
+      forwardAuthGroups={forwardAuthGroups}
+      forwardAuthAccessMap={forwardAuthAccessMap}
     />
   );
 }

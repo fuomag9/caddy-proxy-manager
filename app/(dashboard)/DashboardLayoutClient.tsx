@@ -7,7 +7,7 @@ import { useTheme } from "next-themes";
 import {
   LayoutDashboard, ArrowLeftRight, Cable, KeyRound, ShieldCheck,
   ShieldOff, BarChart2, History, Settings, LogOut, Menu, Sun, Moon,
-  FileJson2,
+  FileJson2, Users,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { href: "/proxy-hosts",    label: "Proxy Hosts",    icon: ArrowLeftRight  },
   { href: "/l4-proxy-hosts", label: "L4 Proxy Hosts", icon: Cable           },
   { href: "/access-lists",   label: "Access Lists",   icon: KeyRound        },
+  { href: "/groups",          label: "Groups",          icon: Users           },
   { href: "/certificates",   label: "Certificates",   icon: ShieldCheck     },
   { href: "/waf",            label: "WAF",            icon: ShieldOff       },
   { href: "/analytics",      label: "Analytics",      icon: BarChart2       },
