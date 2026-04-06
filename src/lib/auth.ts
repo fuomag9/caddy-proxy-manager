@@ -322,7 +322,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           throw new Error(`LINKING_REQUIRED:${linkingId}`);
         }
 
-        // New OAuth user - create account (defaults to admin role)
+        // New OAuth user - create account
         const newUser = await createUser({
           email: user.email,
           name: user.name,

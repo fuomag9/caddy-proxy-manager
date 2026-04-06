@@ -6,6 +6,19 @@ import { asc, desc, eq, count, like, or } from "drizzle-orm";
 import { type GeoBlockSettings } from "../settings";
 import { normalizeProxyHostDomains } from "../proxy-host-domains";
 
+function validateUpstreamProtocol(upstream: string): void {
+  const trimmed = upstream.trim();
+  if (!trimmed) return;
+  // If upstream contains "://", enforce http or https scheme
+  const schemeMatch = trimmed.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//);
+  if (schemeMatch) {
+    const scheme = schemeMatch[1].toLowerCase();
+    if (scheme !== "http" && scheme !== "https") {
+      throw new Error(`Invalid upstream protocol "${scheme}://". Only http:// and https:// are allowed`);
+    }
+  }
+}
+
 const DEFAULT_AUTHENTIK_HEADERS = [
   "X-Authentik-Username",
   "X-Authentik-Groups",
@@ -1608,6 +1621,7 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
   if (!input.upstreams || input.upstreams.length === 0) {
     throw new Error("At least one upstream must be specified");
   }
+  input.upstreams.forEach(validateUpstreamProtocol);
 
   const now = nowIso();
   const meta = buildMeta({}, input);
@@ -1666,6 +1680,9 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
   const domains = JSON.stringify(
     input.domains ? normalizeProxyHostDomains(input.domains) : existing.domains
   );
+  if (input.upstreams) {
+    input.upstreams.forEach(validateUpstreamProtocol);
+  }
   const upstreams = input.upstreams ? JSON.stringify(Array.from(new Set(input.upstreams))) : JSON.stringify(existing.upstreams);
   const existingMeta: ProxyHostMeta = {
     custom_reverse_proxy_json: existing.custom_reverse_proxy_json ?? undefined,

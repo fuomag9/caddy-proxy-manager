@@ -30,7 +30,10 @@ export async function POST(request: NextRequest) {
     try {
       result = await createApiToken(body.name, userId, body.expires_at ?? undefined);
     } catch (e) {
-      if (e instanceof Error && (e.message.includes("expires_at") || e.message.includes("ISO 8601"))) {
+      if (e instanceof Error && (
+        e.message.includes("expires_at") || e.message.includes("ISO 8601") ||
+        e.message.includes("characters or fewer") || e.message.includes("Maximum of")
+      )) {
         return NextResponse.json({ error: e.message }, { status: 400 });
       }
       throw e;

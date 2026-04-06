@@ -11,6 +11,13 @@ export class ApiAuthError extends Error {
   }
 }
 
+export class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
 export type ApiAuthResult = {
   userId: number;
   role: string;
@@ -90,6 +97,12 @@ export async function requireApiAdmin(request: NextRequest): Promise<ApiAuthResu
 export function apiErrorResponse(error: unknown): NextResponse {
   if (error instanceof ApiAuthError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
+  }
+  if (error instanceof NotFoundError) {
+    return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+  if (error instanceof Error && error.message.toLowerCase().includes("not found")) {
+    return NextResponse.json({ error: error.message }, { status: 404 });
   }
   return NextResponse.json(
     { error: error instanceof Error ? error.message : "Internal server error" },

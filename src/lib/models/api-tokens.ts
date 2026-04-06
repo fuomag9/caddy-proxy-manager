@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import db, { nowIso, toIso } from "../db";
 import { apiTokens } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
+import { NotFoundError } from "../api-auth";
 
 export type ApiToken = {
   id: number;
@@ -29,11 +30,28 @@ function hashToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
 }
 
+const MAX_TOKENS_PER_USER = 10;
+const MAX_TOKEN_NAME_LENGTH = 100;
+
 export async function createApiToken(
   name: string,
   createdBy: number,
   expiresAt?: string
 ): Promise<{ token: ApiToken; rawToken: string }> {
+  const trimmedName = name.trim();
+  if (trimmedName.length > MAX_TOKEN_NAME_LENGTH) {
+    throw new Error(`Token name must be ${MAX_TOKEN_NAME_LENGTH} characters or fewer`);
+  }
+
+  // Enforce per-user token limit
+  const existingCount = await db
+    .select({ value: count() })
+    .from(apiTokens)
+    .where(eq(apiTokens.createdBy, createdBy));
+  if (existingCount[0] && existingCount[0].value >= MAX_TOKENS_PER_USER) {
+    throw new Error(`Maximum of ${MAX_TOKENS_PER_USER} API tokens per user`);
+  }
+
   // Validate expires_at is a valid ISO 8601 date in the future
   let validatedExpiresAt: string | null = null;
   if (expiresAt) {
@@ -91,7 +109,7 @@ export async function deleteApiToken(id: number, userId: number): Promise<void> 
   });
 
   if (!token) {
-    throw new Error("Token not found");
+    throw new NotFoundError("Token not found");
   }
 
   // Check if the user owns the token or is an admin
