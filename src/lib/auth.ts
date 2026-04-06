@@ -231,7 +231,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     action: "account_linked",
                     entityType: "user",
                     entityId: updatedUser.id,
-                    summary: `OAuth account linked while authenticated: ${account.provider}`,
+                    summary: `OAuth account linked via ${config.oauth.providerName}`,
                     data: JSON.stringify({ provider: account.provider, email: user.email })
                   });
 
@@ -262,7 +262,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             action: "oauth_signin",
             entityType: "user",
             entityId: existingOAuthUser.id,
-            summary: `User signed in via ${account.provider}`,
+            summary: `${existingOAuthUser.name || existingOAuthUser.email || "User"} signed in via ${config.oauth.providerName}`,
             data: JSON.stringify({ provider: account.provider })
           });
 
@@ -298,7 +298,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 action: "account_linked",
                 entityType: "user",
                 entityId: linkedUser.id,
-                summary: `OAuth account auto-linked: ${account.provider}`,
+                summary: `OAuth account auto-linked via ${config.oauth.providerName}`,
                 data: JSON.stringify({ provider: account.provider, email: user.email })
               });
 
@@ -341,7 +341,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           action: "oauth_signup",
           entityType: "user",
           entityId: newUser.id,
-          summary: `New user created via ${account.provider} OAuth`,
+          summary: `New user ${user.name || user.email || ""} created via ${config.oauth.providerName}`,
           data: JSON.stringify({ provider: account.provider, email: user.email })
         });
 
