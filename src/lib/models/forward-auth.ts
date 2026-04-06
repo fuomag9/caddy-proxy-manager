@@ -5,15 +5,73 @@ import {
   forwardAuthSessions,
   forwardAuthExchanges,
   forwardAuthAccess,
+  forwardAuthRedirectIntents,
   groupMembers,
 } from "../db/schema";
 import { and, eq, gt, inArray, lt } from "drizzle-orm";
 
 const DEFAULT_SESSION_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 const EXCHANGE_CODE_TTL = 60; // 60 seconds
+const REDIRECT_INTENT_TTL = 10 * 60; // 10 minutes — covers login + OAuth flow time
 
 function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
+}
+
+// ── Redirect Intents ────────────────────────────────────────────────
+// Store redirect URIs server-side so the client only holds an opaque ID.
+
+export async function createRedirectIntent(redirectUri: string): Promise<string> {
+  const rid = randomBytes(16).toString("hex");
+  const ridHash = hashToken(rid);
+  const now = nowIso();
+  const expiresAt = new Date(Date.now() + REDIRECT_INTENT_TTL * 1000).toISOString();
+
+  await db.insert(forwardAuthRedirectIntents).values({
+    ridHash,
+    redirectUri,
+    expiresAt,
+    consumed: false,
+    createdAt: now
+  });
+
+  // Opportunistic cleanup of expired intents
+  await db
+    .delete(forwardAuthRedirectIntents)
+    .where(lt(forwardAuthRedirectIntents.expiresAt, now));
+
+  return rid;
+}
+
+export async function consumeRedirectIntent(
+  rid: string
+): Promise<string | null> {
+  const ridHash = hashToken(rid);
+  const now = nowIso();
+
+  // Atomic claim: only succeeds if the intent exists, is unconsumed, and not expired
+  const claimed = await db
+    .update(forwardAuthRedirectIntents)
+    .set({ consumed: true })
+    .where(
+      and(
+        eq(forwardAuthRedirectIntents.ridHash, ridHash),
+        eq(forwardAuthRedirectIntents.consumed, false),
+        gt(forwardAuthRedirectIntents.expiresAt, now)
+      )
+    )
+    .returning();
+
+  if (claimed.length === 0) return null;
+
+  const redirectUri = claimed[0].redirectUri;
+
+  // Delete immediately after consumption
+  await db
+    .delete(forwardAuthRedirectIntents)
+    .where(eq(forwardAuthRedirectIntents.id, claimed[0].id));
+
+  return redirectUri;
 }
 
 // ── Sessions ─────────────────────────────────────────────────────────

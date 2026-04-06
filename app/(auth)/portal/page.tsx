@@ -1,29 +1,38 @@
 import { auth } from "@/src/lib/auth";
 import { getEnabledOAuthProviders } from "@/src/lib/config";
-import { isForwardAuthDomain } from "@/src/lib/models/forward-auth";
+import { isForwardAuthDomain, createRedirectIntent } from "@/src/lib/models/forward-auth";
 import PortalLoginForm from "./PortalLoginForm";
 
 interface PortalPageProps {
-  searchParams: Promise<{ rd?: string }>;
+  searchParams: Promise<{ rd?: string; rid?: string }>;
 }
 
 export default async function PortalPage({ searchParams }: PortalPageProps) {
   const params = await searchParams;
   const redirectUri = params.rd ?? "";
+  // After OAuth callback, the portal is loaded with ?rid= (the opaque ID we created earlier)
+  const existingRid = params.rid ?? "";
 
-  // Only display the target domain if it's a genuine forward-auth-protected host.
-  // This prevents attackers from using the portal to phish with arbitrary domain names
-  // and avoids leaking the list of configured proxies (we only confirm/deny a specific domain).
+  // Two entry modes:
+  // 1. Fresh from Caddy redirect: ?rd=<full-url> → validate, store server-side, create rid
+  // 2. Returning from OAuth: ?rid=<opaque-id> → reuse the existing rid (redirect already stored)
   let targetDomain = "";
-  try {
-    if (redirectUri) {
-      const hostname = new URL(redirectUri).hostname;
-      if (await isForwardAuthDomain(hostname)) {
-        targetDomain = hostname;
+  let rid = existingRid;
+  if (!rid && redirectUri) {
+    try {
+      const parsed = new URL(redirectUri);
+      if (
+        (parsed.protocol === "https:" || parsed.protocol === "http:") &&
+        await isForwardAuthDomain(parsed.hostname)
+      ) {
+        targetDomain = parsed.hostname;
+        // Store the redirect URI server-side. The client only gets an opaque ID,
+        // so a tampered ?rd= parameter cannot influence the final redirect target.
+        rid = await createRedirectIntent(redirectUri);
       }
+    } catch {
+      // invalid URL — portal will show a generic message
     }
-  } catch {
-    // invalid URL — will be caught by the login endpoint
   }
 
   const session = await auth();
@@ -31,7 +40,8 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
 
   return (
     <PortalLoginForm
-      redirectUri={redirectUri}
+      rid={rid}
+      hasRedirect={!!redirectUri || !!existingRid}
       targetDomain={targetDomain}
       enabledProviders={enabledProviders}
       existingSession={session ? { userId: session.user.id, name: session.user.name ?? null, email: session.user.email ?? null } : null}

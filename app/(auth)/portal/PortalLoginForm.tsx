@@ -11,14 +11,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 
 interface PortalLoginFormProps {
-  redirectUri: string;
+  rid: string;
+  hasRedirect: boolean;
   targetDomain: string;
   enabledProviders?: Array<{ id: string; name: string }>;
   existingSession?: { userId: string; name: string | null; email: string | null } | null;
 }
 
 export default function PortalLoginForm({
-  redirectUri,
+  rid,
+  hasRedirect,
   targetDomain,
   enabledProviders = [],
   existingSession,
@@ -29,12 +31,12 @@ export default function PortalLoginForm({
 
   // If user already has a NextAuth session (e.g. from OAuth), auto-create forward auth session
   useEffect(() => {
-    if (existingSession && redirectUri) {
+    if (existingSession && rid) {
       setPending(true);
       fetch("/api/forward-auth/session-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ redirectUri }),
+        body: JSON.stringify({ rid }),
       })
         .then((res) => res.json())
         .then((data) => {
@@ -50,7 +52,7 @@ export default function PortalLoginForm({
           setPending(false);
         });
     }
-  }, [existingSession, redirectUri]);
+  }, [existingSession, rid]);
 
   const handleCredentialSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -71,7 +73,7 @@ export default function PortalLoginForm({
       const response = await fetch("/api/forward-auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, redirectUri }),
+        body: JSON.stringify({ username, password, rid }),
       });
 
       const data = await response.json();
@@ -92,14 +94,15 @@ export default function PortalLoginForm({
   const handleOAuthSignIn = (providerId: string) => {
     setError(null);
     setOauthPending(providerId);
-    // Redirect back to this portal page after OAuth, with the rd param preserved
-    const callbackUrl = `/portal?rd=${encodeURIComponent(redirectUri)}`;
+    // Redirect back to this portal page after OAuth, with the rid param preserved.
+    // The rid is an opaque server-side ID — the actual redirect URI is never in the URL.
+    const callbackUrl = `/portal?rid=${encodeURIComponent(rid)}`;
     signIn(providerId, { callbackUrl });
   };
 
   const disabled = pending || !!oauthPending;
 
-  if (!redirectUri) {
+  if (!hasRedirect) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <Card className="w-full max-w-sm">

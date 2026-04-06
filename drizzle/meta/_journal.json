@@ -127,6 +127,13 @@
       "when": 1775500000000,
       "tag": "0017_forward_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1775600000000,
+      "tag": "0018_forward_auth_redirect_intents",
+      "breakpoints": true
     }
   ]
 }

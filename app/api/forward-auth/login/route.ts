@@ -5,14 +5,15 @@ import { config } from "@/src/lib/config";
 import {
   createForwardAuthSession,
   createExchangeCode,
-  checkHostAccessByDomain
+  checkHostAccessByDomain,
+  consumeRedirectIntent
 } from "@/src/lib/models/forward-auth";
 import { logAuditEvent } from "@/src/lib/audit";
 import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
 
 /**
  * Forward auth login endpoint — validates credentials and starts the exchange flow.
- * Called by the portal login form.
+ * Called by the portal login form with an opaque redirect intent ID (rid).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -26,24 +27,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const username = typeof body.username === "string" ? body.username.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
-    const redirectUri = typeof body.redirectUri === "string" ? body.redirectUri : "";
+    const rid = typeof body.rid === "string" ? body.rid : "";
 
     if (!username || !password) {
       return NextResponse.json({ error: "Username and password are required" }, { status: 400 });
     }
-    if (!redirectUri) {
-      return NextResponse.json({ error: "Redirect URI is required" }, { status: 400 });
-    }
-
-    // Validate redirect URI — only allow http/https schemes
-    let targetUrl: URL;
-    try {
-      targetUrl = new URL(redirectUri);
-    } catch {
-      return NextResponse.json({ error: "Invalid redirect URI" }, { status: 400 });
-    }
-    if (targetUrl.protocol !== "https:" && targetUrl.protocol !== "http:") {
-      return NextResponse.json({ error: "Invalid redirect URI scheme" }, { status: 400 });
+    if (!rid) {
+      return NextResponse.json({ error: "Missing redirect intent" }, { status: 400 });
     }
 
     // Rate limiting — prefer x-real-ip (set by reverse proxy) over x-forwarded-for
@@ -91,6 +81,15 @@ export async function POST(request: NextRequest) {
 
     // Successful credential check — reset rate limiter for this IP
     resetAttempts(ip);
+
+    // Consume the redirect intent — returns the server-stored redirect URI.
+    // This is a one-time operation: the intent is deleted after consumption.
+    const redirectUri = await consumeRedirectIntent(rid);
+    if (!redirectUri) {
+      return NextResponse.json({ error: "Invalid or expired redirect intent. Please try again." }, { status: 400 });
+    }
+
+    const targetUrl = new URL(redirectUri);
 
     // Check if user has access to the target host
     const { hasAccess } = await checkHostAccessByDomain(user.id, targetUrl.hostname);

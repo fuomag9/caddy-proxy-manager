@@ -4,13 +4,15 @@ import { config } from "@/src/lib/config";
 import {
   createForwardAuthSession,
   createExchangeCode,
-  checkHostAccessByDomain
+  checkHostAccessByDomain,
+  consumeRedirectIntent
 } from "@/src/lib/models/forward-auth";
 import { logAuditEvent } from "@/src/lib/audit";
 
 /**
- * Forward auth session login — creates a forward auth session from an existing
- * NextAuth session (used after OAuth login redirects back to the portal).
+ * Forward auth session login — uses an existing NextAuth session to create
+ * a forward auth session. Called automatically when the portal detects the
+ * user is already logged in (e.g. after OAuth).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -27,22 +29,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const redirectUri = typeof body.redirectUri === "string" ? body.redirectUri : "";
+    const rid = typeof body.rid === "string" ? body.rid : "";
 
+    if (!rid) {
+      return NextResponse.json({ error: "Missing redirect intent" }, { status: 400 });
+    }
+
+    // Consume the redirect intent — returns the server-stored redirect URI
+    const redirectUri = await consumeRedirectIntent(rid);
     if (!redirectUri) {
-      return NextResponse.json({ error: "Redirect URI is required" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid or expired redirect intent. Please try again." }, { status: 400 });
     }
 
-    let targetUrl: URL;
-    try {
-      targetUrl = new URL(redirectUri);
-    } catch {
-      return NextResponse.json({ error: "Invalid redirect URI" }, { status: 400 });
-    }
-    if (targetUrl.protocol !== "https:" && targetUrl.protocol !== "http:") {
-      return NextResponse.json({ error: "Invalid redirect URI scheme" }, { status: 400 });
-    }
-
+    const targetUrl = new URL(redirectUri);
     const userId = Number(session.user.id);
 
     // Check if user has access to the target host

@@ -428,6 +428,22 @@ export const forwardAuthExchanges = sqliteTable(
   })
 );
 
+export const forwardAuthRedirectIntents = sqliteTable(
+  "forward_auth_redirect_intents",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    ridHash: text("rid_hash").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    consumed: integer("consumed", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull()
+  },
+  (table) => ({
+    ridHashUnique: uniqueIndex("fari_rid_hash_unique").on(table.ridHash),
+    expiresIdx: index("fari_expires_idx").on(table.expiresAt)
+  })
+);
+
 // ── L4 Proxy Hosts ───────────────────────────────────────────────────
 
 export const l4ProxyHosts = sqliteTable("l4_proxy_hosts", {
