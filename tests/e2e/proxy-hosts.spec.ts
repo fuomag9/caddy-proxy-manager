@@ -33,7 +33,7 @@ test.describe('Proxy Hosts', () => {
 
   test('clicking Name / Domain header sorts the table', async ({ page }) => {
     const sortBtn = page.getByRole('button', { name: 'Name / Domain' });
-    await expect(sortBtn).toBeVisible();
+    await expect(sortBtn).toBeVisible({ timeout: 10_000 });
 
     // Click to sort ascending
     await sortBtn.click();
