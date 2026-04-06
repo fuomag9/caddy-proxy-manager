@@ -94,7 +94,6 @@ test.describe('Groups page', () => {
   test('shows empty state when no groups exist', async ({ page }) => {
     // If there are no groups, the empty state text should be visible
     // (This may or may not show depending on existing data)
-    const emptyText = page.getByText('No groups yet. Create one to organize user access.');
     const newGroupBtn = page.getByRole('button', { name: /new group/i });
     // At minimum the button should always be visible
     await expect(newGroupBtn).toBeVisible();

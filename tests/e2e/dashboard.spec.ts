@@ -16,7 +16,7 @@ test.describe('Dashboard home page', () => {
 
   test('shows stat cards for Proxy Hosts, Certificates, and Access Lists', async ({ page }) => {
     // Stat card labels are <p> inside link cards — match via the parent link
-    await expect(page.getByRole('link', { name: /\d+\s*Proxy Hosts/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^\d+\s+Proxy Hosts/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /\d+\s*Certificates/ })).toBeVisible();
     await expect(page.getByRole('link', { name: /\d+\s*Access Lists/ })).toBeVisible();
   });

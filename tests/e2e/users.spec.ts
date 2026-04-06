@@ -17,7 +17,7 @@ test.describe('Users page', () => {
   });
 
   test('displays at least one user (the admin)', async ({ page }) => {
-    await expect(page.getByText(/1 user/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/\d+ users?/)).toBeVisible({ timeout: 5000 });
   });
 
   test('search input filters users', async ({ page }) => {

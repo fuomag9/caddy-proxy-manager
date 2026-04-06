@@ -25,7 +25,7 @@ test.describe('Link Account page', () => {
     await expect(page).toHaveURL(/\/login/, { timeout: 10_000 });
   });
 
-  test('redirects authenticated users to /', async ({ page, context }) => {
+  test('redirects authenticated users to /', async ({ page }) => {
     // First log in
     await page.goto('http://localhost:3000/login');
     await page.getByRole('textbox', { name: /username/i }).fill('testadmin');

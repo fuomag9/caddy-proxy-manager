@@ -303,7 +303,7 @@ test.describe('Role-based access control', () => {
       const page = await adminContext.newPage();
       await page.goto('/');
       await expect(page.getByRole('link', { name: 'Overview' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Proxy Hosts' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Proxy Hosts', exact: true })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Users' })).toBeVisible();
       await page.close();
