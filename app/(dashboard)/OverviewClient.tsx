@@ -56,12 +56,14 @@ export default function OverviewClient({
   userName,
   stats,
   trafficSummary,
-  recentEvents
+  recentEvents,
+  isAdmin = true
 }: {
   userName: string;
   stats: StatCard[];
   trafficSummary: TrafficSummary;
   recentEvents: RecentEvent[];
+  isAdmin?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-8">
@@ -98,75 +100,79 @@ export default function OverviewClient({
           );
         })}
 
-        {/* Traffic (24h) card */}
-        <Link href="/analytics" className="block group">
-          <Card className={`border-l-2 ${TRAFFIC_ACCENT.border} hover:bg-muted/40 transition-colors`}>
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between gap-2">
-                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${TRAFFIC_ACCENT.icon} transition-transform group-hover:scale-110`}>
-                  <BarChart2 className="h-4 w-4" />
+        {/* Traffic (24h) card — admin only */}
+        {isAdmin && (
+          <Link href="/analytics" className="block group">
+            <Card className={`border-l-2 ${TRAFFIC_ACCENT.border} hover:bg-muted/40 transition-colors`}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${TRAFFIC_ACCENT.icon} transition-transform group-hover:scale-110`}>
+                    <BarChart2 className="h-4 w-4" />
+                  </div>
+                  <span className={`text-3xl font-bold tabular-nums ${TRAFFIC_ACCENT.count}`}>
+                    {trafficSummary ? trafficSummary.totalRequests.toLocaleString() : "—"}
+                  </span>
                 </div>
-                <span className={`text-3xl font-bold tabular-nums ${TRAFFIC_ACCENT.count}`}>
-                  {trafficSummary ? trafficSummary.totalRequests.toLocaleString() : "—"}
-                </span>
-              </div>
-              <p className="text-sm font-medium text-muted-foreground mt-3">Traffic (24h)</p>
-              {trafficSummary && trafficSummary.totalRequests > 0 && (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-muted-foreground">Blocked</span>
-                    <span className={`text-xs font-semibold tabular-nums ${trafficSummary.blockedPercent > 0 ? "text-rose-500" : "text-muted-foreground"}`}>
-                      {trafficSummary.blockedPercent}%
-                    </span>
+                <p className="text-sm font-medium text-muted-foreground mt-3">Traffic (24h)</p>
+                {trafficSummary && trafficSummary.totalRequests > 0 && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">Blocked</span>
+                      <span className={`text-xs font-semibold tabular-nums ${trafficSummary.blockedPercent > 0 ? "text-rose-500" : "text-muted-foreground"}`}>
+                        {trafficSummary.blockedPercent}%
+                      </span>
+                    </div>
+                    <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-rose-500 transition-all"
+                        style={{ width: `${Math.min(trafficSummary.blockedPercent, 100)}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1 w-full rounded-full bg-muted overflow-hidden">
+                )}
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+      </div>
+
+      {/* Recent Activity — admin only */}
+      {isAdmin && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+              <Activity className="h-3.5 w-3.5" />
+            </div>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent Activity</h2>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              {recentEvents.length === 0 ? (
+                <p className="px-5 py-6 text-sm text-muted-foreground">No activity recorded yet.</p>
+              ) : (
+                <div className="relative">
+                  {/* Vertical timeline line */}
+                  <div className="absolute left-[28px] top-4 bottom-4 w-px bg-border" />
+                  {recentEvents.map((event, index) => (
                     <div
-                      className="h-full rounded-full bg-rose-500 transition-all"
-                      style={{ width: `${Math.min(trafficSummary.blockedPercent, 100)}%` }}
-                    />
-                  </div>
+                      key={`${event.created_at}-${index}`}
+                      className="relative flex items-start gap-4 px-5 py-3 hover:bg-muted/30 transition-colors"
+                    >
+                      {/* Dot */}
+                      <div className={`relative z-10 mt-1 h-3 w-3 shrink-0 rounded-full ${getEventDotColor(event.summary)}`} />
+                      <span className="flex-1 text-sm leading-snug">{event.summary}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {formatRelativeTime(event.created_at)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
-        </Link>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
-            <Activity className="h-3.5 w-3.5" />
-          </div>
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent Activity</h2>
         </div>
-
-        <Card>
-          <CardContent className="p-0">
-            {recentEvents.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-muted-foreground">No activity recorded yet.</p>
-            ) : (
-              <div className="relative">
-                {/* Vertical timeline line */}
-                <div className="absolute left-[28px] top-4 bottom-4 w-px bg-border" />
-                {recentEvents.map((event, index) => (
-                  <div
-                    key={`${event.created_at}-${index}`}
-                    className="relative flex items-start gap-4 px-5 py-3 hover:bg-muted/30 transition-colors"
-                  >
-                    {/* Dot */}
-                    <div className={`relative z-10 mt-1 h-3 w-3 shrink-0 rounded-full ${getEventDotColor(event.summary)}`} />
-                    <span className="flex-1 text-sm leading-snug">{event.summary}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                      {formatRelativeTime(event.created_at)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      )}
     </div>
   );
 }

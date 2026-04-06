@@ -54,6 +54,7 @@ export default async function OverviewPage() {
         stats={[]}
         trafficSummary={null}
         recentEvents={[]}
+        isAdmin={false}
       />
     );
   }
@@ -78,6 +79,7 @@ export default async function OverviewPage() {
       userName={session.user.name ?? session.user.email ?? "Admin"}
       stats={stats}
       trafficSummary={trafficSummary}
+      isAdmin={true}
       recentEvents={recentEventsRaw.map((event) => ({
         summary: event.summary ?? `${event.action} on ${event.entityType}`,
         created_at: toIso(event.createdAt)!
