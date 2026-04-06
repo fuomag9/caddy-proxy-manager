@@ -38,12 +38,17 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 - **L4 Proxy Hosts** - TCP/UDP stream proxying with TLS SNI matching, proxy protocol (v1/v2), load balancing, health checks, and per-host geo blocking. Automatic Docker Compose port management via sidecar
 - **Location Rules** - Path-based routing to different upstreams per proxy host (e.g. `/api/*` to one backend, `/ws/*` to another)
 - **Redirect & Rewrite** - Per-host redirect rules (301/302/307/308) and path prefix rewriting
+- **Forward Auth Portal** - Built-in identity provider for protecting proxy hosts without an external IdP. Credential and OAuth login portal, user groups with membership management, and per-host access control by user or group
 - **WAF** - Web Application Firewall powered by Coraza with optional OWASP Core Rule Set (SQLi, XSS, LFI, RCE). Per-host enable/disable, global and per-host rule suppression, custom SecLang directives, and a searchable event log with severity and blocked/detected classification
 - **Analytics** - Live traffic charts, protocol breakdown, country map, top user agents, and blocked request log with configurable time ranges
 - **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host. Allow rules override block rules. Fail-closed mode, custom response codes/bodies, and trusted proxy support
 - **Access Lists** - Multi-account HTTP basic auth protection (bcrypt-hashed) assignable per proxy host
 - **Certificates** - Automatic HTTPS for every proxy host via Caddy ACME (Let's Encrypt / ZeroSSL), manual SSL/TLS import with expiry monitoring, and a built-in CA for issuing and revoking internal client certificates (mTLS)
-- **mTLS** - Mutual TLS per proxy host using built-in CA certificates. Issue, track, and revoke client certificates
+- **mTLS** - Mutual TLS per proxy host using built-in CA certificates. Issue, track, and revoke client certificates. Fail-closed revocation (all certs revoked = all connections rejected)
+- **mTLS RBAC** - Role-based access control for mTLS client certificates. Define roles, assign certs to roles, and create path-based access rules per proxy host (e.g. `/admin/*` requires the "ops" role)
+- **User Roles** - Three-tier role system (Viewer, User, Admin) controlling dashboard access, API permissions, and feature visibility
+- **User Management** - Admin page for managing users: edit roles, status, profiles; disable or delete accounts; search and filter
+- **Groups** - Organize users into groups for forward auth access control. Assign groups to proxy hosts to grant access to all members at once
 - **Authentik Integration** - Forward-auth SSO per proxy host with configurable header forwarding and protected paths
 - **DNS Controls** - Custom DNS resolvers per host, upstream DNS pinning with IPv4/IPv6/both address family selection
 - **REST API** - Full REST API under `/api/v1/` with Bearer token authentication, covering all resources. Interactive OpenAPI 3.1.0 docs at `/api-docs`
@@ -274,6 +279,27 @@ Examples:
 The `BASE_URL` environment variable must match exactly where users access your dashboard.
 
 OAuth login appears on the login page alongside credentials. Users can link OAuth to existing accounts from the Profile page.
+
+---
+
+## Forward Auth Portal
+
+CPM includes a built-in forward auth identity provider — no external IdP (Authentik, Authelia, etc.) required.
+
+### How it works
+
+1. Enable **Forward Auth** on a proxy host and choose which users or groups may access it.
+2. Unauthenticated visitors are redirected to the CPM login portal.
+3. After login, CPM issues a session cookie and redirects back to the protected app.
+4. Caddy's `forward_auth` directive validates every subsequent request against CPM.
+
+### Groups
+
+Create groups on the **Groups** page to organise users. When you grant a group access to a proxy host, all current and future members of that group gain access automatically.
+
+### Per-host access control
+
+Each forward-auth-protected host has its own access list of allowed users and/or groups. Access is separate from the user's role — even admins must be explicitly granted access.
 
 ---
 
