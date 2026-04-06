@@ -22,6 +22,9 @@ const spec = {
     { name: "Settings", description: "Application settings" },
     { name: "Instances", description: "Multi-instance management" },
     { name: "Users", description: "User management" },
+    { name: "Groups", description: "User groups for forward auth access control" },
+    { name: "mTLS Roles", description: "Role-based access control for mTLS client certificates" },
+    { name: "Forward Auth", description: "Forward auth sessions and per-host access control" },
     { name: "Audit Log", description: "Audit log" },
     { name: "Caddy", description: "Caddy server operations" },
   ],
@@ -1087,6 +1090,233 @@ const spec = {
       },
     },
 
+    // ── Groups ──────────────────────────────────────────────────────
+    "/api/v1/groups": {
+      get: {
+        tags: ["Groups"],
+        summary: "List groups",
+        operationId: "listGroups",
+        responses: {
+          "200": { description: "List of groups", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Group" } } } } },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+      post: {
+        tags: ["Groups"],
+        summary: "Create a group",
+        operationId: "createGroup",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["name"], properties: { name: { type: "string" }, description: { type: "string" } } } } } },
+        responses: {
+          "201": { description: "Group created", content: { "application/json": { schema: { $ref: "#/components/schemas/Group" } } } },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/groups/{id}": {
+      get: {
+        tags: ["Groups"],
+        summary: "Get a group",
+        operationId: "getGroup",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        responses: {
+          "200": { description: "Group details", content: { "application/json": { schema: { $ref: "#/components/schemas/Group" } } } },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+      patch: {
+        tags: ["Groups"],
+        summary: "Update a group",
+        operationId: "updateGroup",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" } } } } } },
+        responses: {
+          "200": { description: "Group updated", content: { "application/json": { schema: { $ref: "#/components/schemas/Group" } } } },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+      delete: {
+        tags: ["Groups"],
+        summary: "Delete a group",
+        operationId: "deleteGroup",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+    "/api/v1/groups/{id}/members": {
+      post: {
+        tags: ["Groups"],
+        summary: "Add a member to a group",
+        operationId: "addGroupMember",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["userId"], properties: { userId: { type: "integer" } } } } } },
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+    "/api/v1/groups/{id}/members/{userId}": {
+      delete: {
+        tags: ["Groups"],
+        summary: "Remove a member from a group",
+        operationId: "removeGroupMember",
+        parameters: [
+          { $ref: "#/components/parameters/IdPath" },
+          { name: "userId", in: "path", required: true, schema: { type: "integer" }, description: "User ID to remove" },
+        ],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+
+    // ── mTLS Roles ─────────────────────────────────────────────────
+    "/api/v1/mtls-roles": {
+      get: {
+        tags: ["mTLS Roles"],
+        summary: "List mTLS roles",
+        operationId: "listMtlsRoles",
+        responses: {
+          "200": { description: "List of roles", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/MtlsRole" } } } } },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+      post: {
+        tags: ["mTLS Roles"],
+        summary: "Create an mTLS role",
+        operationId: "createMtlsRole",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["name"], properties: { name: { type: "string" }, description: { type: "string" } } } } } },
+        responses: {
+          "201": { description: "Role created", content: { "application/json": { schema: { $ref: "#/components/schemas/MtlsRole" } } } },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/mtls-roles/{id}": {
+      get: {
+        tags: ["mTLS Roles"],
+        summary: "Get an mTLS role",
+        operationId: "getMtlsRole",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        responses: {
+          "200": { description: "Role details", content: { "application/json": { schema: { $ref: "#/components/schemas/MtlsRole" } } } },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+      put: {
+        tags: ["mTLS Roles"],
+        summary: "Update an mTLS role",
+        operationId: "updateMtlsRole",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { name: { type: "string" }, description: { type: "string" } } } } } },
+        responses: {
+          "200": { description: "Role updated", content: { "application/json": { schema: { $ref: "#/components/schemas/MtlsRole" } } } },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+      delete: {
+        tags: ["mTLS Roles"],
+        summary: "Delete an mTLS role",
+        operationId: "deleteMtlsRole",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+    "/api/v1/mtls-roles/{id}/certificates": {
+      post: {
+        tags: ["mTLS Roles"],
+        summary: "Assign a certificate to an mTLS role",
+        operationId: "assignMtlsRoleCertificate",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["certificateId"], properties: { certificateId: { type: "integer" } } } } } },
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+    "/api/v1/mtls-roles/{id}/certificates/{certId}": {
+      delete: {
+        tags: ["mTLS Roles"],
+        summary: "Remove a certificate from an mTLS role",
+        operationId: "removeMtlsRoleCertificate",
+        parameters: [
+          { $ref: "#/components/parameters/IdPath" },
+          { name: "certId", in: "path", required: true, schema: { type: "integer" }, description: "Client certificate ID" },
+        ],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+
+    // ── Forward Auth ───────────────────────────────────────────────
+    "/api/v1/proxy-hosts/{id}/forward-auth-access": {
+      get: {
+        tags: ["Forward Auth"],
+        summary: "Get forward auth access list for a proxy host",
+        operationId: "getForwardAuthAccess",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        responses: {
+          "200": { description: "Access list with user IDs and group IDs", content: { "application/json": { schema: { type: "object", properties: { userIds: { type: "array", items: { type: "integer" } }, groupIds: { type: "array", items: { type: "integer" } } } } } } },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+      put: {
+        tags: ["Forward Auth"],
+        summary: "Set forward auth access list for a proxy host",
+        operationId: "setForwardAuthAccess",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { userIds: { type: "array", items: { type: "integer" } }, groupIds: { type: "array", items: { type: "integer" } } } } } } },
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+    "/api/v1/forward-auth-sessions": {
+      get: {
+        tags: ["Forward Auth"],
+        summary: "List forward auth sessions",
+        operationId: "listForwardAuthSessions",
+        parameters: [{ name: "userId", in: "query", schema: { type: "integer" }, description: "Filter by user ID" }],
+        responses: {
+          "200": { description: "List of sessions", content: { "application/json": { schema: { type: "array", items: { type: "object" } } } } },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+      delete: {
+        tags: ["Forward Auth"],
+        summary: "Delete forward auth sessions",
+        operationId: "deleteForwardAuthSessions",
+        parameters: [{ name: "userId", in: "query", schema: { type: "integer" }, description: "Delete sessions for a specific user" }],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/forward-auth-sessions/{id}": {
+      delete: {
+        tags: ["Forward Auth"],
+        summary: "Delete a specific forward auth session",
+        operationId: "deleteForwardAuthSession",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+
     // ── Caddy ───────────────────────────────────────────────────────
     "/api/v1/caddy/apply": {
       post: {
@@ -1687,6 +1917,31 @@ const spec = {
           excluded_rule_ids: { type: "array", items: { type: "integer" } },
         },
         required: ["enabled", "mode", "load_owasp_crs", "custom_directives"],
+      },
+
+      // ── Groups & Roles ─────────────────────────────────────────
+      Group: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          name: { type: "string" },
+          description: { type: ["string", "null"] },
+          member_count: { type: "integer" },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: ["id", "name", "created_at", "updated_at"],
+      },
+      MtlsRole: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          name: { type: "string" },
+          description: { type: ["string", "null"] },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: ["id", "name", "created_at", "updated_at"],
       },
 
       // ── Other resources ─────────────────────────────────────────
