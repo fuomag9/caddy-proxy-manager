@@ -1185,7 +1185,10 @@ async function buildProxyRoutes(
                       status_code: 302,
                       headers: {
                         Location: [
-                          `${config.baseUrl}/portal?rd={http.request.scheme}://{http.request.host}{http.request.uri}`
+                          `${config.baseUrl}/portal`
+                        ],
+                        "Set-Cookie": [
+                          `_cpm_rd={http.request.scheme}://{http.request.host}{http.request.uri}; Path=/portal; HttpOnly; Secure; SameSite=Lax; Max-Age=600`
                         ]
                       }
                     }

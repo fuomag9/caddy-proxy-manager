@@ -1,20 +1,27 @@
+import { cookies } from "next/headers";
 import { auth } from "@/src/lib/auth";
 import { getEnabledOAuthProviders } from "@/src/lib/config";
 import { isForwardAuthDomain, createRedirectIntent } from "@/src/lib/models/forward-auth";
 import PortalLoginForm from "./PortalLoginForm";
 
 interface PortalPageProps {
-  searchParams: Promise<{ rd?: string; rid?: string }>;
+  searchParams: Promise<{ rid?: string }>;
 }
 
 export default async function PortalPage({ searchParams }: PortalPageProps) {
   const params = await searchParams;
-  const redirectUri = params.rd ?? "";
   // After OAuth callback, the portal is loaded with ?rid= (the opaque ID we created earlier)
   const existingRid = params.rid ?? "";
 
+  // Read redirect URI from HttpOnly cookie set by Caddy, then clear it
+  const cookieStore = await cookies();
+  const redirectUri = cookieStore.get("_cpm_rd")?.value ?? "";
+  if (redirectUri) {
+    cookieStore.delete("_cpm_rd");
+  }
+
   // Two entry modes:
-  // 1. Fresh from Caddy redirect: ?rd=<full-url> → validate, store server-side, create rid
+  // 1. Fresh from Caddy redirect: _cpm_rd cookie → validate, store server-side, create rid
   // 2. Returning from OAuth: ?rid=<opaque-id> → reuse the existing rid (redirect already stored)
   let targetDomain = "";
   let rid = existingRid;
@@ -27,7 +34,7 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
       ) {
         targetDomain = parsed.hostname;
         // Store the redirect URI server-side. The client only gets an opaque ID,
-        // so a tampered ?rd= parameter cannot influence the final redirect target.
+        // so a tampered cookie cannot influence the final redirect target.
         rid = await createRedirectIntent(redirectUri);
       }
     } catch {
