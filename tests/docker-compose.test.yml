@@ -6,6 +6,16 @@ services:
       ADMIN_PASSWORD: "TestPassword2026!"
       BASE_URL: http://localhost:3000
       NEXTAUTH_URL: http://localhost:3000
+      # OAuth via Dex OIDC provider
+      OAUTH_ENABLED: "true"
+      OAUTH_PROVIDER_NAME: "Dex"
+      OAUTH_CLIENT_ID: cpm-test-client
+      OAUTH_CLIENT_SECRET: cpm-test-secret
+      OAUTH_ISSUER: http://localhost:5556/dex
+      OAUTH_AUTHORIZATION_URL: http://localhost:5556/dex/auth
+      OAUTH_TOKEN_URL: http://dex:5556/dex/token
+      OAUTH_USERINFO_URL: http://dex:5556/dex/userinfo
+      OAUTH_ALLOW_AUTO_LINKING: "true"
   caddy:
     ports:
       - "80:80"
@@ -15,6 +25,16 @@ services:
       - "15433:15433"
       # L4 test ports (UDP)
       - "15353:15353/udp"
+  # Dex OIDC provider for OAuth E2E tests
+  dex:
+    image: dexidp/dex:v2.41.1
+    command: ["dex", "serve", "/etc/dex/config.yml"]
+    volumes:
+      - ./tests/dex/config.yml:/etc/dex/config.yml:ro
+    ports:
+      - "5556:5556"
+    networks:
+      - caddy-network
   # Lightweight echo server reachable by Caddy as "echo-server:8080".
   # Returns a fixed body so tests can assert the proxy routed the request.
   echo-server:

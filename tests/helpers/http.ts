@@ -58,6 +58,26 @@ export async function waitForRoute(domain: string, timeoutMs = 15_000): Promise<
   throw new Error(`Route for "${domain}" not ready after ${timeoutMs}ms (last status: ${lastStatus})`);
 }
 
+/**
+ * Poll until the route returns a specific expected status code.
+ * Useful for forward auth routes where you expect 302 (redirect to portal).
+ */
+export async function waitForStatus(domain: string, expectedStatus: number, timeoutMs = 20_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastStatus = 0;
+  while (Date.now() < deadline) {
+    try {
+      const res = await httpGet(domain);
+      lastStatus = res.status;
+      if (res.status === expectedStatus) return;
+    } catch {
+      // Connection refused — not ready yet
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error(`Route for "${domain}" did not return ${expectedStatus} after ${timeoutMs}ms (last status: ${lastStatus})`);
+}
+
 /** Inject hidden form fields into #create-host-form before submitting. */
 export async function injectFormFields(page: Page, fields: Record<string, string>): Promise<void> {
   await page.evaluate((f) => {

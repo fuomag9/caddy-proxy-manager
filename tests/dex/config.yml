@@ -1,0 +1,37 @@
+# Dex OIDC provider configuration for E2E tests.
+# Provides static test users and a pre-configured OAuth client.
+issuer: http://localhost:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  # Speed up tests — short-lived tokens
+  responseTypes: ["code"]
+  skipApprovalScreen: true
+
+staticClients:
+  - id: cpm-test-client
+    secret: cpm-test-secret
+    name: "CPM E2E Test"
+    redirectURIs:
+      - "http://localhost:3000/api/auth/callback/oauth2"
+
+enablePasswordDB: true
+
+staticPasswords:
+  # Primary test user — will be granted forward auth access
+  - email: "alice@test.local"
+    # password: "password"
+    hash: "$2a$10$95mdmT5F.icxrUmXEC9Jf.pX2RWgMO0FD6.yqrrVnRwTzA/UrT7g2"
+    username: "alice"
+    userID: "alice-001"
+  # Secondary test user — will NOT be granted forward auth access (for denial tests)
+  - email: "bob@test.local"
+    # password: "password"
+    hash: "$2a$10$95mdmT5F.icxrUmXEC9Jf.pX2RWgMO0FD6.yqrrVnRwTzA/UrT7g2"
+    username: "bob"
+    userID: "bob-002"
