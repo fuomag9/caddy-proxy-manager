@@ -4,6 +4,7 @@ services:
       SESSION_SECRET: "test-session-secret-32chars!xxxY"
       ADMIN_USERNAME: testadmin
       ADMIN_PASSWORD: "TestPassword2026!"
+      CLICKHOUSE_PASSWORD: "test-clickhouse-password-2026"
       BASE_URL: http://localhost:3000
       NEXTAUTH_URL: http://localhost:3000
       # OAuth via Dex OIDC provider
@@ -16,6 +17,9 @@ services:
       OAUTH_TOKEN_URL: http://dex:5556/dex/token
       OAUTH_USERINFO_URL: http://dex:5556/dex/userinfo
       OAUTH_ALLOW_AUTO_LINKING: "true"
+  clickhouse:
+    environment:
+      CLICKHOUSE_PASSWORD: "test-clickhouse-password-2026"
   caddy:
     ports:
       - "80:80"
@@ -84,3 +88,5 @@ volumes:
     name: caddy-logs-test
   geoip-data:
     name: geoip-data-test
+  clickhouse-data:
+    name: clickhouse-data-test

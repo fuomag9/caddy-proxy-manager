@@ -2,14 +2,14 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import maxmind, { CountryResponse } from 'maxmind';
 import db from './db';
-import { wafEvents, wafLogParseState } from './db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { wafLogParseState } from './db/schema';
+import { eq } from 'drizzle-orm';
+import { insertWafEvents, type WafEventRow } from './clickhouse/client';
 
 const AUDIT_LOG = '/logs/waf-audit.log';
 const RULES_LOG = '/logs/waf-rules.log';
 const GEOIP_DB = '/usr/share/GeoIP/GeoLite2-Country.mmdb';
 const BATCH_SIZE = 200;
-const RETENTION_DAYS = 90;
 
 let geoReader: Awaited<ReturnType<typeof maxmind.open<CountryResponse>>> | null = null;
 const geoCache = new Map<string, string | null>();
@@ -130,7 +130,7 @@ interface CorazaAuditEntry {
   };
 }
 
-function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEvents.$inferInsert | null {
+function parseLine(line: string, ruleMap: Map<string, RuleInfo>): WafEventRow | null {
   let entry: CorazaAuditEntry;
   try {
     entry = JSON.parse(line);
@@ -172,14 +172,14 @@ function parseLine(line: string, ruleMap: Map<string, RuleInfo>): typeof wafEven
   return {
     ts,
     host,
-    clientIp,
-    countryCode: lookupCountry(clientIp),
+    client_ip: clientIp,
+    country_code: lookupCountry(clientIp),
     method: req.method ?? '',
     uri: req.uri ?? '',
-    ruleId: ruleInfo?.ruleId ?? null,
-    ruleMessage: ruleInfo?.ruleMessage ?? null,
+    rule_id: ruleInfo?.ruleId ?? null,
+    rule_message: ruleInfo?.ruleMessage ?? null,
     severity: ruleInfo?.severity ?? null,
-    rawData: line,
+    raw_data: line,
     blocked,
   };
 }
@@ -205,16 +205,10 @@ async function readAuditLog(startOffset: number): Promise<{ lines: string[]; new
   });
 }
 
-function insertBatch(rows: typeof wafEvents.$inferInsert[]): void {
+async function insertBatch(rows: WafEventRow[]): Promise<void> {
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    db.insert(wafEvents).values(rows.slice(i, i + BATCH_SIZE)).run();
+    await insertWafEvents(rows.slice(i, i + BATCH_SIZE));
   }
-}
-
-function purgeOldEntries(): void {
-  const cutoff = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
-  // Use parameterized query instead of string interpolation
-  db.run(sql`DELETE FROM waf_events WHERE ts < ${cutoff}`);
 }
 
 // ── public API ────────────────────────────────────────────────────────────────
@@ -258,17 +252,15 @@ export async function parseNewWafLogEntries(): Promise<void> {
     const { lines, newOffset } = await readAuditLog(startOffset);
 
     if (lines.length > 0) {
-      const rows = lines.map(l => parseLine(l, ruleMap)).filter((r): r is typeof wafEvents.$inferInsert => r !== null);
+      const rows = lines.map(l => parseLine(l, ruleMap)).filter((r): r is WafEventRow => r !== null);
       if (rows.length > 0) {
-        insertBatch(rows);
+        await insertBatch(rows);
         console.log(`[waf-log-parser] inserted ${rows.length} WAF events`);
       }
     }
 
     setState('waf_audit_log_offset', String(newOffset));
     setState('waf_audit_log_size', String(currentSize));
-
-    purgeOldEntries();
   } catch (err) {
     console.error('[waf-log-parser] error during parse:', err);
   }

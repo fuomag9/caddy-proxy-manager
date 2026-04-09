@@ -2,13 +2,13 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import maxmind, { CountryResponse } from 'maxmind';
 import db from './db';
-import { trafficEvents, logParseState } from './db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { logParseState } from './db/schema';
+import { eq } from 'drizzle-orm';
+import { insertTrafficEvents, type TrafficEventRow } from './clickhouse/client';
 
 const LOG_FILE = '/logs/access.log';
 const GEOIP_DB = '/usr/share/GeoIP/GeoLite2-Country.mmdb';
 const BATCH_SIZE = 500;
-const RETENTION_DAYS = 90;
 
 // GeoIP reader — null if mmdb not available
 let geoReader: Awaited<ReturnType<typeof maxmind.open<CountryResponse>>> | null = null;
@@ -97,7 +97,7 @@ export function collectBlockedSignatures(lines: string[]): Set<string> {
   return blocked;
 }
 
-export function parseLine(line: string, blocked: Set<string>): typeof trafficEvents.$inferInsert | null {
+export function parseLine(line: string, blocked: Set<string>): TrafficEventRow | null {
   let entry: CaddyLogEntry;
   try {
     entry = JSON.parse(line);
@@ -119,16 +119,16 @@ export function parseLine(line: string, blocked: Set<string>): typeof trafficEve
 
   return {
     ts,
-    clientIp,
-    countryCode: clientIp ? lookupCountry(clientIp) : null,
+    client_ip: clientIp,
+    country_code: clientIp ? lookupCountry(clientIp) : null,
     host: req.host ?? '',
     method,
     uri,
     status,
     proto: req.proto ?? '',
-    bytesSent: entry.size ?? 0,
-    userAgent: req.headers?.['User-Agent']?.[0] ?? '',
-    isBlocked: blocked.has(key),
+    bytes_sent: entry.size ?? 0,
+    user_agent: req.headers?.['User-Agent']?.[0] ?? '',
+    is_blocked: blocked.has(key),
   };
 }
 
@@ -153,16 +153,10 @@ async function readLines(startOffset: number): Promise<{ lines: string[]; newOff
   });
 }
 
-function insertBatch(rows: typeof trafficEvents.$inferInsert[]): void {
+async function insertBatch(rows: TrafficEventRow[]): Promise<void> {
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    db.insert(trafficEvents).values(rows.slice(i, i + BATCH_SIZE)).run();
+    await insertTrafficEvents(rows.slice(i, i + BATCH_SIZE));
   }
-}
-
-function purgeOldEntries(): void {
-  const cutoff = Math.floor(Date.now() / 1000) - RETENTION_DAYS * 86400;
-  // Use parameterized query instead of string interpolation
-  db.run(sql`DELETE FROM traffic_events WHERE ts < ${cutoff}`);
 }
 
 // ── public API ───────────────────────────────────────────────────────────────
@@ -195,15 +189,12 @@ export async function parseNewLogEntries(): Promise<void> {
     if (lines.length > 0) {
       const blocked = collectBlockedSignatures(lines);
       const rows = lines.map(l => parseLine(l, blocked)).filter(r => r !== null);
-      insertBatch(rows);
+      await insertBatch(rows);
       console.log(`[log-parser] inserted ${rows.length} traffic events (${blocked.size} blocked)`);
     }
 
     setState('access_log_offset', String(newOffset));
     setState('access_log_size', String(currentSize));
-
-    // Purge old entries once per run (cheap since it's indexed)
-    purgeOldEntries();
   } catch (err) {
     console.error('[log-parser] error during parse:', err);
   }

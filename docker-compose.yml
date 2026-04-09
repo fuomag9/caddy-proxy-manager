@@ -52,6 +52,12 @@ services:
       OAUTH_TOKEN_URL: ${OAUTH_TOKEN_URL:-}
       OAUTH_USERINFO_URL: ${OAUTH_USERINFO_URL:-}
       OAUTH_ALLOW_AUTO_LINKING: ${OAUTH_ALLOW_AUTO_LINKING:-false}
+
+      # ClickHouse analytics database
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-cpm}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?ERROR - CLICKHOUSE_PASSWORD is required}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
     group_add:
       - "${CADDY_GID:-10000}"  # caddy's GID — lets the web user read /logs/access.log
     volumes:
@@ -60,6 +66,8 @@ services:
       - caddy-logs:/logs:ro
     depends_on:
       caddy:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
     networks:
       - caddy-network
@@ -159,6 +167,30 @@ services:
     networks:
       - caddy-network
 
+  clickhouse:
+    container_name: caddy-proxy-manager-clickhouse
+    image: clickhouse/clickhouse-server:latest-alpine
+    restart: always
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-cpm}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?ERROR - CLICKHOUSE_PASSWORD is required}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    networks:
+      - caddy-network
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user ${CLICKHOUSE_USER:-cpm} --password ${CLICKHOUSE_PASSWORD:?ERROR - CLICKHOUSE_PASSWORD is required} --query 'SELECT 1'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
   geoipupdate:
     container_name: geoipupdate-${HOSTNAME}
     image: ghcr.io/maxmind/geoipupdate
@@ -184,3 +216,4 @@ volumes:
   caddy-config:
   caddy-logs:
   geoip-data:
+  clickhouse-data:

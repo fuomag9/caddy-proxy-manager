@@ -14,6 +14,7 @@ export default async function globalTeardown() {
     execFileSync('docker', [...COMPOSE_ARGS, 'down', '-v', '--remove-orphans'], {
       stdio: 'inherit',
       cwd: process.cwd(),
+      env: { ...process.env, CLICKHOUSE_PASSWORD: 'test-clickhouse-password-2026' },
     });
   } catch (err) {
     console.warn('[global-teardown] docker compose down failed:', err);

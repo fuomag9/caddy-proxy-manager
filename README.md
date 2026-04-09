@@ -12,7 +12,7 @@ Web interface for managing [Caddy Server](https://caddyserver.com/) reverse prox
 
 ## Overview
 
-This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a shadcn/ui interface. Built with Next.js 16, React 19, shadcn/ui, Tailwind CSS, Drizzle ORM, and TypeScript.
+This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a shadcn/ui interface. Built with Next.js 16, React 19, shadcn/ui, Tailwind CSS, Drizzle ORM, and TypeScript. Analytics data (traffic events, WAF events) is stored in ClickHouse for fast aggregation queries, with automatic 90-day retention via TTL.
 
 ---
 
@@ -93,6 +93,10 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `INSTANCE_SLAVES` | JSON array of slave instances for the master to push to | None | No |
 | `INSTANCE_SYNC_INTERVAL` | Periodic sync interval in seconds (`0` = disabled) | `0` | No |
 | `INSTANCE_SYNC_ALLOW_HTTP` | Allow sync over HTTP (for internal Docker networks) | `false` | No |
+| `CLICKHOUSE_URL` | ClickHouse HTTP endpoint for analytics | `http://clickhouse:8123` | No |
+| `CLICKHOUSE_USER` | ClickHouse username | `cpm` | No |
+| `CLICKHOUSE_PASSWORD` | ClickHouse password (`openssl rand -base64 32`) | None | **Yes** |
+| `CLICKHOUSE_DB` | ClickHouse database name | `analytics` | No |
 
 **Production Requirements:**
 - `SESSION_SECRET`: 32+ characters (`openssl rand -base64 32`)

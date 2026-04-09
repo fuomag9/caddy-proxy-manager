@@ -48,6 +48,16 @@ export async function register() {
       // Don't throw - monitoring is a nice-to-have feature
     }
 
+    // Initialize ClickHouse analytics database
+    const { initClickHouse, closeClickHouse } = await import("./lib/clickhouse/client");
+    try {
+      await initClickHouse();
+      console.log("ClickHouse analytics initialized");
+    } catch (error) {
+      console.error("Failed to initialize ClickHouse:", error);
+      // Don't throw - analytics is non-critical
+    }
+
     // Start log parser for analytics
     const { initLogParser, parseNewLogEntries, stopLogParser } = await import("./lib/log-parser");
     try {
@@ -62,6 +72,7 @@ export async function register() {
       process.on("SIGTERM", () => {
         stopLogParser();
         clearInterval(logParserInterval);
+        closeClickHouse();
       });
       console.log("Log parser started");
     } catch (error) {

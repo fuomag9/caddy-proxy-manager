@@ -35,7 +35,7 @@ async function waitForHealth(): Promise<void> {
 
   console.error('[global-setup] Health check timed out. Container logs:');
   try {
-    execFileSync('docker', [...COMPOSE_ARGS, 'logs', '--tail=50'], { stdio: 'inherit', cwd: process.cwd() });
+    execFileSync('docker', [...COMPOSE_ARGS, 'logs', '--tail=50'], { stdio: 'inherit', cwd: process.cwd(), env: { ...process.env, CLICKHOUSE_PASSWORD: 'test-clickhouse-password-2026' } });
   } catch { /* ignore */ }
 
   throw new Error(`App did not become healthy within ${MAX_WAIT_MS}ms`);
@@ -74,6 +74,7 @@ export default async function globalSetup() {
   ], {
     stdio: 'inherit',
     cwd: process.cwd(),
+    env: { ...process.env, CLICKHOUSE_PASSWORD: 'test-clickhouse-password-2026' },
   });
 
   console.log('[global-setup] Containers up. Waiting for /api/health...');

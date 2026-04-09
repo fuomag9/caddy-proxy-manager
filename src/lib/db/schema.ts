@@ -220,54 +220,13 @@ export const linkingTokens = sqliteTable("linking_tokens", {
   expiresAt: text("expires_at").notNull()
 });
 
-export const trafficEvents = sqliteTable(
-  'traffic_events',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    ts: integer('ts').notNull(),
-    clientIp: text('client_ip').notNull(),
-    countryCode: text('country_code'),
-    host: text('host').notNull().default(''),
-    method: text('method').notNull().default(''),
-    uri: text('uri').notNull().default(''),
-    status: integer('status').notNull().default(0),
-    proto: text('proto').notNull().default(''),
-    bytesSent: integer('bytes_sent').notNull().default(0),
-    userAgent: text('user_agent').notNull().default(''),
-    isBlocked: integer('is_blocked', { mode: 'boolean' }).notNull().default(false),
-  },
-  (table) => ({
-    tsIdx: index('idx_traffic_events_ts').on(table.ts),
-    hostTsIdx: index('idx_traffic_events_host_ts').on(table.host, table.ts),
-  })
-);
+// traffic_events and waf_events have been migrated to ClickHouse.
+// See src/lib/clickhouse/client.ts for the ClickHouse schema.
 
 export const logParseState = sqliteTable('log_parse_state', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
 });
-
-export const wafEvents = sqliteTable(
-  'waf_events',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    ts: integer('ts').notNull(),
-    host: text('host').notNull().default(''),
-    clientIp: text('client_ip').notNull(),
-    countryCode: text('country_code'),
-    method: text('method').notNull().default(''),
-    uri: text('uri').notNull().default(''),
-    ruleId: integer('rule_id'),
-    ruleMessage: text('rule_message'),
-    severity: text('severity'),
-    rawData: text('raw_data'),
-    blocked: integer('blocked', { mode: 'boolean' }).notNull().default(true),
-  },
-  (table) => ({
-    tsIdx: index('idx_waf_events_ts').on(table.ts),
-    hostTsIdx: index('idx_waf_events_host_ts').on(table.host, table.ts),
-  })
-);
 
 export const wafLogParseState = sqliteTable('waf_log_parse_state', {
   key: text('key').primaryKey(),

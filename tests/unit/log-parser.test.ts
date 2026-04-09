@@ -24,6 +24,10 @@ vi.mock('node:fs', () => ({
   createReadStream: vi.fn(),
 }));
 
+vi.mock('@/src/lib/clickhouse/client', () => ({
+  insertTrafficEvents: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { parseLine, collectBlockedSignatures } from '@/src/lib/log-parser';
 
 describe('log-parser', () => {
@@ -112,15 +116,15 @@ describe('log-parser', () => {
       const result = parseLine(entry, emptyBlocked);
       expect(result).not.toBeNull();
       expect(result!.ts).toBe(1700000100);
-      expect(result!.clientIp).toBe('10.0.0.1');
+      expect(result!.client_ip).toBe('10.0.0.1');
       expect(result!.host).toBe('example.com');
       expect(result!.method).toBe('GET');
       expect(result!.uri).toBe('/path');
       expect(result!.status).toBe(200);
       expect(result!.proto).toBe('HTTP/1.1');
-      expect(result!.bytesSent).toBe(1234);
-      expect(result!.userAgent).toBe('Mozilla/5.0');
-      expect(result!.isBlocked).toBe(false);
+      expect(result!.bytes_sent).toBe(1234);
+      expect(result!.user_agent).toBe('Mozilla/5.0');
+      expect(result!.is_blocked).toBe(false);
     });
 
     it('returns null for entries with wrong msg field', () => {
@@ -136,11 +140,11 @@ describe('log-parser', () => {
       const entry = JSON.stringify({ ts: 1700000100, msg: 'handled request', status: 200 });
       const result = parseLine(entry, emptyBlocked);
       expect(result).not.toBeNull();
-      expect(result!.clientIp).toBe('');
+      expect(result!.client_ip).toBe('');
       expect(result!.host).toBe('');
       expect(result!.method).toBe('');
       expect(result!.uri).toBe('');
-      expect(result!.userAgent).toBe('');
+      expect(result!.user_agent).toBe('');
     });
 
     it('marks isBlocked true when signature matches blocked set', () => {
@@ -153,7 +157,7 @@ describe('log-parser', () => {
       });
       const blocked = new Set([`${ts}|1.2.3.4|GET|/evil`]);
       const result = parseLine(entry, blocked);
-      expect(result!.isBlocked).toBe(true);
+      expect(result!.is_blocked).toBe(true);
     });
 
     it('uses remote_ip as fallback when client_ip is missing', () => {
@@ -164,7 +168,7 @@ describe('log-parser', () => {
         request: { remote_ip: '9.8.7.6', host: 'test.com', method: 'GET', uri: '/' },
       });
       const result = parseLine(entry, emptyBlocked);
-      expect(result!.clientIp).toBe('9.8.7.6');
+      expect(result!.client_ip).toBe('9.8.7.6');
     });
 
     it('countryCode is null when GeoIP reader is not initialized', () => {
@@ -175,7 +179,7 @@ describe('log-parser', () => {
         request: { client_ip: '8.8.8.8', host: 'test.com', method: 'GET', uri: '/' },
       });
       const result = parseLine(entry, emptyBlocked);
-      expect(result!.countryCode).toBeNull();
+      expect(result!.country_code).toBeNull();
     });
   });
 });
