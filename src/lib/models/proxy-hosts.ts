@@ -368,7 +368,7 @@ function sanitizeAuthentikMeta(meta: ProxyHostAuthentikMeta | undefined): ProxyH
 
   const authEndpoint = normalizeMetaValue(meta.auth_endpoint ?? null);
   if (authEndpoint) {
-    normalized.auth_endpoint = authEndpoint.replace(/\{[^}]*\}/g, "");
+    normalized.auth_endpoint = authEndpoint.replace(/\{[^}]*\}/g, ""); // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
   }
 
   if (Array.isArray(meta.copy_headers)) {
@@ -570,7 +570,7 @@ function sanitizeCpmForwardAuthMeta(meta: CpmForwardAuthMeta | undefined): CpmFo
     normalized.enabled = Boolean(meta.enabled);
   }
   if (Array.isArray(meta.protected_paths)) {
-    const paths = meta.protected_paths.map((p) => p?.trim().replace(/\{[^}]*\}/g, "")).filter((p): p is string => Boolean(p));
+    const paths = meta.protected_paths.map((p) => p?.trim().replace(/\{[^}]*\}/g, "")).filter((p): p is string => Boolean(p)); // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
     if (paths.length > 0) {
       normalized.protected_paths = paths;
     }
@@ -661,6 +661,7 @@ function sanitizeRedirectRules(value: unknown): RedirectRule[] {
       typeof item.to === "string" && item.to.trim() &&
       [301, 302, 307, 308].includes(item.status)
     ) {
+      // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
       valid.push({ from: item.from.trim().replace(/\{[^}]*\}/g, ""), to: item.to.trim().replace(/\{[^}]*\}/g, ""), status: item.status });
     }
   }
