@@ -1,4 +1,7 @@
 {
+	# Bound to 0.0.0.0 within the Docker network so the web container can reach it.
+	# Port 2019 must NOT be published to the host in docker-compose.yml.
+	# The origins directive restricts which Host header values are accepted.
 	admin 0.0.0.0:2019 {
 		origins caddy:2019 localhost:2019 localhost
 	}

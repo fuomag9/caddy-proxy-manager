@@ -72,11 +72,25 @@ export async function PUT(
     const body = await request.json();
 
     if (group === "instance-mode") {
+      const validModes = ["standalone", "master", "slave"];
+      if (!validModes.includes(body.mode)) {
+        return NextResponse.json(
+          { error: `Invalid mode. Must be one of: ${validModes.join(", ")}` },
+          { status: 400 }
+        );
+      }
       await setInstanceMode(body.mode);
       return NextResponse.json({ ok: true });
     }
 
     if (group === "sync-token") {
+      if (body.token !== null && body.token !== undefined &&
+          (typeof body.token !== "string" || body.token.length < 32)) {
+        return NextResponse.json(
+          { error: "Token must be null or a string of at least 32 characters" },
+          { status: 400 }
+        );
+      }
       await setSlaveMasterToken(body.token ?? null);
       return NextResponse.json({ ok: true });
     }

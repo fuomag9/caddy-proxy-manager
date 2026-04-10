@@ -22,6 +22,20 @@ function hashToken(raw: string): string {
 // Store redirect URIs server-side so the client only holds an opaque ID.
 
 export async function createRedirectIntent(redirectUri: string): Promise<string> {
+  // Validate redirect URI to prevent open redirects
+  let parsed: URL;
+  try {
+    parsed = new URL(redirectUri);
+  } catch {
+    throw new Error("Invalid redirect URI");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Redirect URI must use http or https scheme");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("Redirect URI must not contain credentials");
+  }
+
   const rid = randomBytes(16).toString("hex");
   const ridHash = hashToken(rid);
   const now = nowIso();

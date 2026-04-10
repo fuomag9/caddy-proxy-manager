@@ -204,13 +204,14 @@ describe('PUT /api/v1/settings/[group]', () => {
   it('sets sync token', async () => {
     mockSetSlaveMasterToken.mockResolvedValue(undefined as any);
 
-    const body = { token: 'new-sync-token' };
+    const validToken = 'a]b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
+    const body = { token: validToken };
     const response = await PUT(createMockRequest({ method: 'PUT', body }), { params: Promise.resolve({ group: 'sync-token' }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
     expect(data).toEqual({ ok: true });
-    expect(mockSetSlaveMasterToken).toHaveBeenCalledWith('new-sync-token');
+    expect(mockSetSlaveMasterToken).toHaveBeenCalledWith(validToken);
   });
 
   it('clears sync token when null', async () => {

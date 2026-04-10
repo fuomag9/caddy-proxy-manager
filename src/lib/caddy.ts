@@ -916,6 +916,9 @@ async function buildProxyRoutes(
       }
     }
 
+    // Security: This field allows admins to inject arbitrary Caddy reverse_proxy config.
+    // This is intentional — admins have full control of the proxy configuration.
+    // Prototype pollution is prevented by mergeDeep blocking __proto__/constructor/prototype.
     const customReverseProxy = parseOptionalJson(meta.custom_reverse_proxy_json);
     if (customReverseProxy) {
       if (isPlainObject(customReverseProxy)) {
@@ -937,6 +940,9 @@ async function buildProxyRoutes(
       }
     }
 
+    // Security: This field allows admins to inject arbitrary Caddy HTTP handlers.
+    // This is intentional — admins can add any handler (file_server, rewrite, etc.)
+    // before the reverse_proxy handler in the chain.
     const customHandlers = parseCustomHandlers(meta.custom_pre_handlers_json);
     if (customHandlers.length > 0) {
       handlers.push(...customHandlers);

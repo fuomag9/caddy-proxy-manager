@@ -132,21 +132,39 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
     'SecResponseBodyAccess Off',
   );
 
-  // Block dangerous engine-level overrides in custom directives
+  // Allowlist approach: only permit known-safe directive prefixes in custom directives
   if (waf.custom_directives?.trim()) {
     const directives = waf.custom_directives.trim();
-    const forbiddenPatterns = [
-      /^\s*SecRuleEngine\s/im,
-      /^\s*SecAuditEngine\s/im,
-      /^\s*SecAuditLog\s/im,
-      /^\s*SecAuditLogFormat\s/im,
-      /^\s*SecResponseBodyAccess\s/im,
+    const allowedPrefixes = [
+      /^SecRule\s/,
+      /^SecAction\s/,
+      /^SecMarker\s/,
+      /^SecDefaultAction\s/,
+    ];
+    // SecRule* variants that are NOT plain SecRule (must be rejected)
+    const blockedSecRulePrefixes = [
+      /^SecRuleEngine\s/i,
+      /^SecRuleRemoveById\s/i,
+      /^SecRuleRemoveByTag\s/i,
+      /^SecRuleRemoveByMsg\s/i,
+      /^SecRuleUpdateActionById\s/i,
+      /^SecRuleUpdateTargetById\s/i,
     ];
     const lines = directives.split('\n');
     const safeLines = lines.filter(line => {
       const trimmed = line.trim();
+      // Allow empty lines and comments
       if (!trimmed || trimmed.startsWith('#')) return true;
-      return !forbiddenPatterns.some(pattern => pattern.test(trimmed));
+      // Reject Include directives (prevents file inclusion from container filesystem)
+      if (/^Include\s/i.test(trimmed)) return false;
+      // Check against allowlist
+      const matchesAllowed = allowedPrefixes.some(pattern => pattern.test(trimmed));
+      if (!matchesAllowed) return false;
+      // Reject blocked SecRule* variants (e.g. SecRuleEngine)
+      if (blockedSecRulePrefixes.some(pattern => pattern.test(trimmed))) return false;
+      // Reject ctl:ruleEngine inside allowed lines (can conditionally disable WAF)
+      if (/ctl:ruleEngine/i.test(trimmed)) return false;
+      return true;
     });
     if (safeLines.length > 0) {
       parts.push(safeLines.join('\n'));

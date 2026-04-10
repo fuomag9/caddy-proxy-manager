@@ -71,6 +71,9 @@ function _decryptWithKey(value: string, key: Buffer): string {
   }
   const iv = Buffer.from(ivB64, "base64");
   const tag = Buffer.from(tagB64, "base64");
+  if (tag.length !== 16) {
+    throw new Error("Invalid authentication tag length");
+  }
   const data = Buffer.from(dataB64, "base64");
   const decipher = createDecipheriv("aes-256-gcm", key, iv);
   decipher.setAuthTag(tag);

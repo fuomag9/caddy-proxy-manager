@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/src/lib/auth';
+import { requireApiAdmin, apiErrorResponse } from '@/src/lib/api-auth';
 import { getAnalyticsProtocols, INTERVAL_SECONDS } from '@/src/lib/analytics-db';
 
 export async function GET(req: NextRequest) {
-  await requireAdmin();
-  const { searchParams } = req.nextUrl;
-  const hostsParam = searchParams.get('hosts') ?? '';
-  const hosts = hostsParam ? hostsParam.split(',').filter(Boolean) : [];
-  const { from, to } = resolveRange(searchParams);
-  const data = await getAnalyticsProtocols(from, to, hosts);
-  return NextResponse.json(data);
+  try {
+    await requireApiAdmin(req);
+    const { searchParams } = req.nextUrl;
+    const hostsParam = searchParams.get('hosts') ?? '';
+    const hosts = hostsParam ? hostsParam.split(',').filter(Boolean) : [];
+    const { from, to } = resolveRange(searchParams);
+    const data = await getAnalyticsProtocols(from, to, hosts);
+    return NextResponse.json(data);
+  } catch (error) {
+    return apiErrorResponse(error);
+  }
 }
 
 function resolveRange(params: URLSearchParams): { from: number; to: number } {

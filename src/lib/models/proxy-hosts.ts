@@ -6,6 +6,9 @@ import { asc, desc, eq, count, like, or } from "drizzle-orm";
 import { type GeoBlockSettings } from "../settings";
 import { normalizeProxyHostDomains } from "../proxy-host-domains";
 
+// Security: Only the protocol scheme is validated (http/https). Host/IP targets are
+// not restricted — admins intentionally need to proxy to internal services.
+// The Caddy admin API (port 2019) is protected by origins checking, not network isolation.
 function validateUpstreamProtocol(upstream: string): void {
   const trimmed = upstream.trim();
   if (!trimmed) return;
@@ -365,7 +368,7 @@ function sanitizeAuthentikMeta(meta: ProxyHostAuthentikMeta | undefined): ProxyH
 
   const authEndpoint = normalizeMetaValue(meta.auth_endpoint ?? null);
   if (authEndpoint) {
-    normalized.auth_endpoint = authEndpoint;
+    normalized.auth_endpoint = authEndpoint.replace(/\{[^}]*\}/g, "");
   }
 
   if (Array.isArray(meta.copy_headers)) {
@@ -387,7 +390,7 @@ function sanitizeAuthentikMeta(meta: ProxyHostAuthentikMeta | undefined): ProxyH
   }
 
   if (Array.isArray(meta.protected_paths)) {
-    const paths = meta.protected_paths.map((path) => path?.trim()).filter((path): path is string => Boolean(path));
+    const paths = meta.protected_paths.map((path) => path?.trim().replace(/\{[^}]*\}/g, "")).filter((path): path is string => Boolean(path));
     if (paths.length > 0) {
       normalized.protected_paths = paths;
     }
@@ -567,7 +570,7 @@ function sanitizeCpmForwardAuthMeta(meta: CpmForwardAuthMeta | undefined): CpmFo
     normalized.enabled = Boolean(meta.enabled);
   }
   if (Array.isArray(meta.protected_paths)) {
-    const paths = meta.protected_paths.map((p) => p?.trim()).filter((p): p is string => Boolean(p));
+    const paths = meta.protected_paths.map((p) => p?.trim().replace(/\{[^}]*\}/g, "")).filter((p): p is string => Boolean(p));
     if (paths.length > 0) {
       normalized.protected_paths = paths;
     }
@@ -658,7 +661,7 @@ function sanitizeRedirectRules(value: unknown): RedirectRule[] {
       typeof item.to === "string" && item.to.trim() &&
       [301, 302, 307, 308].includes(item.status)
     ) {
-      valid.push({ from: item.from.trim(), to: item.to.trim(), status: item.status });
+      valid.push({ from: item.from.trim().replace(/\{[^}]*\}/g, ""), to: item.to.trim().replace(/\{[^}]*\}/g, ""), status: item.status });
     }
   }
   return valid;
