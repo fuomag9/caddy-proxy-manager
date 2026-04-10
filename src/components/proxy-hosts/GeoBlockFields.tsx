@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { Globe, X } from "lucide-react";
+import { Globe, Home, X } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { GeoBlockSettings } from "@/lib/settings";
 import { GeoBlockMode } from "@/lib/models/proxy-hosts";
@@ -490,9 +490,10 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
 type RulesPanelProps = {
   prefix: "block" | "allow";
   initial: GeoBlockSettings | null;
+  resetKey?: number;
 };
 
-function RulesPanel({ prefix, initial }: RulesPanelProps) {
+function RulesPanel({ prefix, initial, resetKey = 0 }: RulesPanelProps) {
   const accentColor = prefix === "block" ? "warning" : "success";
   const countries = prefix === "block" ? (initial?.block_countries ?? []) : (initial?.allow_countries ?? []);
   const continents = prefix === "block" ? (initial?.block_continents ?? []) : (initial?.allow_continents ?? []);
@@ -539,6 +540,7 @@ function RulesPanel({ prefix, initial }: RulesPanelProps) {
       {/* CIDRs + IPs */}
       <div className="grid grid-cols-2 gap-4">
         <TagInput
+          key={`${prefix}-cidrs-${resetKey}`}
           name={`geoblock_${prefix}_cidrs`}
           label="CIDRs"
           initialValues={cidrs}
@@ -546,6 +548,7 @@ function RulesPanel({ prefix, initial }: RulesPanelProps) {
           helperText="Press Enter or comma to add"
         />
         <TagInput
+          key={`${prefix}-ips-${resetKey}`}
           name={`geoblock_${prefix}_ips`}
           label="IP Addresses"
           initialValues={ips}
@@ -567,10 +570,39 @@ type GeoBlockFieldsProps = {
   showModeSelector?: boolean;
 };
 
+const RFC1918_CIDRS = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"];
+const BLOCK_ALL_CIDR = "0.0.0.0/0";
+
 export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBlockFieldsProps) {
-  const initial = initialValues?.geoblock ?? null;
-  const [enabled, setEnabled] = useState(initial?.enabled ?? false);
+  const rawInitial = initialValues?.geoblock ?? null;
+  const [enabled, setEnabled] = useState(rawInitial?.enabled ?? false);
   const [mode, setMode] = useState<GeoBlockMode>(initialValues?.geoblock_mode ?? "merge");
+  const [resetKey, setResetKey] = useState(0);
+  const [initial, setInitial] = useState<GeoBlockSettings | null>(rawInitial);
+
+  function applyLanOnlyPreset() {
+    setEnabled(true);
+    setInitial((prev) => ({
+      enabled: true,
+      block_countries: prev?.block_countries ?? [],
+      block_continents: prev?.block_continents ?? [],
+      block_asns: prev?.block_asns ?? [],
+      block_cidrs: [BLOCK_ALL_CIDR],
+      block_ips: prev?.block_ips ?? [],
+      allow_countries: prev?.allow_countries ?? [],
+      allow_continents: prev?.allow_continents ?? [],
+      allow_asns: prev?.allow_asns ?? [],
+      allow_cidrs: RFC1918_CIDRS,
+      allow_ips: prev?.allow_ips ?? [],
+      trusted_proxies: prev?.trusted_proxies ?? [],
+      fail_closed: prev?.fail_closed ?? false,
+      response_status: prev?.response_status ?? 403,
+      response_body: prev?.response_body ?? "Forbidden",
+      response_headers: prev?.response_headers ?? {},
+      redirect_url: prev?.redirect_url ?? "",
+    }));
+    setResetKey((k) => k + 1);
+  }
 
   return (
     <div className="rounded-lg border border-rose-500/60 bg-rose-500/5 p-4">
@@ -636,6 +668,21 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
         )}
         {!showModeSelector && <div className="border-t border-border mb-4" />}
 
+        {/* Presets */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-muted-foreground">Presets:</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1.5"
+            onClick={applyLanOnlyPreset}
+          >
+            <Home className="h-3 w-3" />
+            LAN Only (RFC1918)
+          </Button>
+        </div>
+
         {/* Block / Allow tabs */}
         <Tabs defaultValue="block">
           <TabsList className="w-full">
@@ -643,13 +690,13 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
             <TabsTrigger value="allow" className="flex-1">Allow Rules</TabsTrigger>
           </TabsList>
           <TabsContent value="block" className="mt-4">
-            <RulesPanel prefix="block" initial={initial} />
+            <RulesPanel prefix="block" initial={initial} resetKey={resetKey} />
           </TabsContent>
           <TabsContent value="allow" className="mt-4">
             <p className="text-xs text-muted-foreground mb-3">
               Allow rules take precedence over block rules.
             </p>
-            <RulesPanel prefix="allow" initial={initial} />
+            <RulesPanel prefix="allow" initial={initial} resetKey={resetKey} />
           </TabsContent>
         </Tabs>
 
