@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description"
-    content="Caddy Proxy Manager - A modern, secure, and intuitive web interface for Caddy Server." />
+    content="Caddy Proxy Manager - A modern web interface for Caddy Server with WAF, mTLS, forward auth, geo blocking, REST API, and traffic analytics." />
   <title>Caddy Proxy Manager</title>
 
   <!-- Open Graph / Facebook -->
@@ -13,7 +13,7 @@
   <meta property="og:url" content="https://caddyproxymanager.com/" />
   <meta property="og:title" content="Caddy Proxy Manager - Control Every Edge" />
   <meta property="og:description"
-    content="Caddy Proxy Manager – Modern Web UI for Caddy with WAF, automatic HTTPS, geo blocking, L4 TCP/UDP proxying, instance sync, and reverse proxy management." />
+    content="Caddy Proxy Manager – Modern Web UI for Caddy with WAF, automatic HTTPS, mTLS, forward auth, geo blocking, L4 TCP/UDP proxying, REST API, traffic analytics, and reverse proxy management." />
   <meta property="og:image" content="https://caddyproxymanager.com/assets/images/preview.png" />
 
   <!-- Fonts -->
@@ -53,7 +53,7 @@
     <section class="hero container">
       <div class="hero-eyebrow">Open Source &middot; Docker &middot; Next.js &middot; shadcn/ui</div>
       <h1>Control Every Edge.</h1>
-      <p>The modern web interface for Caddy Server. WAF protection, automatic HTTPS, geo blocking, L4 TCP/UDP proxying, traffic analytics, instance sync, and a full audit trail. All in one place.</p>
+      <p>The modern web interface for Caddy Server. WAF protection, automatic HTTPS, mTLS, forward auth, geo blocking, L4 TCP/UDP proxying, traffic analytics, a full REST API, and a complete audit trail. All in one place.</p>
 
       <div class="btn-group">
         <a href="#deployment" class="btn btn-primary">Get Started</a>
@@ -82,12 +82,17 @@
         <div class="card">
           <div class="card-icon">⇄</div>
           <h3>Reverse Proxy</h3>
-          <p>Configure multiple upstreams, load balancing, custom headers, and per-host enable/disable with a clean editor.</p>
+          <p>Multiple upstreams, load balancing (8 policies), health checks, custom headers, location rules, redirects, rewrites, and upstream DNS pinning.</p>
         </div>
         <div class="card">
           <div class="card-icon">🔌</div>
           <h3>L4 TCP/UDP Proxy</h3>
           <p>Layer 4 stream proxying for TCP and UDP. TLS SNI matching, proxy protocol, health checks, and geo blocking at the transport layer.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🚪</div>
+          <h3>Forward Auth Portal</h3>
+          <p>Built-in identity provider for protecting apps without an external IdP. Credential and OAuth login, user groups, and per-host access control.</p>
         </div>
         <div class="card">
           <div class="card-icon">🛡️</div>
@@ -96,23 +101,33 @@
         </div>
         <div class="card">
           <div class="card-icon">🔒</div>
-          <h3>Auto HTTPS &amp; CA</h3>
-          <p>Automatic TLS via Caddy ACME with Let&apos;s Encrypt and Cloudflare DNS-01. Built-in CA for issuing internal client certificates.</p>
+          <h3>Auto HTTPS &amp; mTLS</h3>
+          <p>Automatic TLS via ACME with Let&apos;s Encrypt and Cloudflare DNS-01. Built-in CA for mutual TLS with role-based path access control.</p>
         </div>
         <div class="card">
           <div class="card-icon">📈</div>
           <h3>Traffic Analytics</h3>
-          <p>Live request charts, country heatmap, top user agents, and blocked request log across any time range.</p>
+          <p>Live request charts, protocol breakdown, country heatmap, top user agents, and blocked request log powered by ClickHouse.</p>
         </div>
         <div class="card">
           <div class="card-icon">🌍</div>
           <h3>Geo Blocking</h3>
-          <p>Block or allow by country, continent, ASN, CIDR, or exact IP per host, with priority allow-override rules.</p>
+          <p>Block or allow by country, continent, ASN, CIDR, or exact IP per host, with priority allow-override rules and fail-closed mode.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔗</div>
+          <h3>REST API</h3>
+          <p>Full REST API under <code>/api/v1/</code> with Bearer token auth, API token management, and interactive OpenAPI 3.1.0 docs at <code>/api-docs</code>.</p>
         </div>
         <div class="card">
           <div class="card-icon">🔑</div>
           <h3>Access Control</h3>
-          <p>HTTP basic auth lists or full OAuth2/OIDC SSO via Authentik, Keycloak, Auth0, and any OIDC provider.</p>
+          <p>HTTP basic auth, forward auth with user groups, mTLS RBAC with path-based rules, and three-tier user roles (Viewer, User, Admin).</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🪪</div>
+          <h3>OAuth / SSO</h3>
+          <p>OAuth2/OIDC authentication with any compliant provider — Authentik, Keycloak, Auth0, and more. Account linking from the Profile page.</p>
         </div>
         <div class="card">
           <div class="card-icon">🔄</div>
@@ -122,7 +137,7 @@
         <div class="card">
           <div class="card-icon">📋</div>
           <h3>Audit Log</h3>
-          <p>Every configuration change is tracked and full-text searchable. See who did what and when.</p>
+          <p>Every configuration change is tracked with user attribution and full-text search. Dark mode, mobile UI, and search across all views.</p>
         </div>
       </div>
     </section>
@@ -135,7 +150,7 @@
           <div class="spotlight-text">
             <div class="eyebrow">Traffic Intelligence</div>
             <h2>See every request,<br>in real time.</h2>
-            <p>Charts, country heatmaps, user agent breakdowns, and a paginated blocked-request log. Filter by host or pick any time range from the last hour to 30 days.</p>
+            <p>Charts, protocol breakdown, country heatmaps, user agent breakdowns, and a paginated blocked-request log. Filter by host or pick any time range — all powered by ClickHouse with 90-day retention.</p>
           </div>
           <div class="spotlight-image">
             <img src="assets/screenshots/analytics-top.png" alt="Analytics dashboard" loading="lazy" />
@@ -174,7 +189,7 @@
           <div class="spotlight-text">
             <div class="eyebrow">Configuration</div>
             <h2>Every option,<br>without the YAML.</h2>
-            <p>The host editor exposes load balancing policies, Authentik forward auth, custom DNS resolvers, upstream DNS pinning, geo blocking rules, and HSTS all from a single form.</p>
+            <p>The host editor exposes load balancing policies, forward auth, location rules, redirects, DNS pinning, geo blocking, mTLS, and WAF settings all from a single form.</p>
           </div>
           <div class="spotlight-image">
             <img src="assets/screenshots/proxy-editor.png" alt="Proxy Editor" loading="lazy" />
@@ -191,6 +206,32 @@
           </div>
           <div class="spotlight-image">
             <img src="assets/screenshots/waf.png" alt="WAF Events" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <section class="spotlight-section spotlight-reverse">
+        <div class="spotlight container">
+          <div class="spotlight-text">
+            <div class="eyebrow">Authentication</div>
+            <h2>Protect any app,<br>no external IdP.</h2>
+            <p>The built-in forward auth portal redirects unauthenticated visitors to a login page, issues session cookies, and validates every request. Organise users into groups and control access per host — or bring your own OAuth provider.</p>
+          </div>
+          <div class="spotlight-image">
+            <img src="assets/screenshots/access-lists.png" alt="Access Control" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <section class="spotlight-section">
+        <div class="spotlight container">
+          <div class="spotlight-text">
+            <div class="eyebrow">Automation</div>
+            <h2>Full REST API,<br>fully documented.</h2>
+            <p>Manage every resource programmatically through <code>/api/v1/</code> with Bearer token authentication. Interactive OpenAPI 3.1.0 docs at <code>/api-docs</code>, API token management with optional expiration, and three-tier role-based access.</p>
+          </div>
+          <div class="spotlight-image">
+            <img src="assets/screenshots/api-docs.png" alt="API Documentation" loading="lazy" />
           </div>
         </div>
       </section>
