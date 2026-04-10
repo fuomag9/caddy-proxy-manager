@@ -21,10 +21,10 @@ function buildCsp(nonce: string): string {
   const directives = [
     "default-src 'self'",
     isDev
-      ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval'`
-      : `script-src 'self' 'nonce-${nonce}'`,
+      ? `script-src 'self' 'nonce-${nonce}' 'unsafe-eval' https://cdn.jsdelivr.net`
+      : `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net`,
     // style-src still needs 'unsafe-inline' for React JSX inline style props
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
     "worker-src blob:",
