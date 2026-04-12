@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 
 type EventRow = {
   id: number;
-  created_at: string;
+  createdAt: string;
   user: string;
   summary: string;
 };
@@ -61,7 +61,7 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
       width: 180,
       render: (r: EventRow) => (
         <span className="text-sm text-muted-foreground whitespace-nowrap">
-          {new Date(r.created_at).toLocaleString()}
+          {new Date(r.createdAt).toLocaleString()}
         </span>
       ),
     },
@@ -88,7 +88,7 @@ export default function AuditLogClient({ events, pagination, initialSearch }: Pr
         <div className="flex justify-between items-center">
           <Badge variant="outline">{r.user}</Badge>
           <span className="text-xs text-muted-foreground">
-            {new Date(r.created_at).toLocaleString()}
+            {new Date(r.createdAt).toLocaleString()}
           </span>
         </div>
         <p className="text-sm">{r.summary}</p>

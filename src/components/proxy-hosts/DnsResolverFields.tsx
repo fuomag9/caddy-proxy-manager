@@ -9,7 +9,7 @@ import { ProxyHost } from "@/lib/models/proxy-hosts";
 export function DnsResolverFields({
   dnsResolver
 }: {
-  dnsResolver?: ProxyHost["dns_resolver"] | null;
+  dnsResolver?: ProxyHost["dnsResolver"] | null;
 }) {
   const initial = dnsResolver ?? null;
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);

@@ -25,7 +25,7 @@ function toFamilyMode(family: "ipv6" | "ipv4" | "both" | null | undefined): Fami
 export function UpstreamDnsResolutionFields({
   upstreamDnsResolution
 }: {
-  upstreamDnsResolution?: ProxyHost["upstream_dns_resolution"] | null;
+  upstreamDnsResolution?: ProxyHost["upstreamDnsResolution"] | null;
 }) {
   const mode = toResolutionMode(upstreamDnsResolution?.enabled);
   const family = toFamilyMode(upstreamDnsResolution?.family);

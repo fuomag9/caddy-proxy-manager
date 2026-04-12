@@ -1,6 +1,8 @@
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { eq, ne, and, isNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import * as schema from "./db/schema";
@@ -58,7 +60,7 @@ function ensureDirectoryFor(pathname: string) {
 
 const globalForDrizzle = globalThis as GlobalForDrizzle;
 
-const sqlite =
+export const sqlite =
   globalForDrizzle.__SQLITE_CLIENT__ ??
   (() => {
     ensureDirectoryFor(sqlitePath);
@@ -70,7 +72,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export const db =
-  globalForDrizzle.__DRIZZLE_DB__ ?? drizzle(sqlite, { schema, casing: "snake_case" });
+  globalForDrizzle.__DRIZZLE_DB__ ?? drizzle(sqlite, { schema });
 
 if (process.env.NODE_ENV !== "production") {
   globalForDrizzle.__DRIZZLE_DB__ = db;
@@ -119,6 +121,142 @@ try {
   } else {
     throw error;
   }
+}
+
+/**
+ * One-time migration: populate `accounts` table from existing users' provider/subject fields.
+ * Also creates credential accounts for password users and syncs env OAuth providers.
+ * Idempotent — skips if already run (checked via settings flag).
+ */
+function runBetterAuthDataMigration() {
+  if (sqlitePath === ":memory:") return;
+
+  const { settings, users, accounts } = schema;
+
+  const flag = db.select().from(settings).where(eq(settings.key, "better_auth_migrated")).get();
+  if (flag) return;
+
+  const now = new Date().toISOString();
+
+  // Migrate OAuth users: create account rows from users.provider/subject
+  const oauthUsers = db.select().from(users).where(ne(users.provider, "credentials")).all();
+  for (const user of oauthUsers) {
+    if (!user.provider || !user.subject) continue;
+    const existing = db.select().from(accounts).where(
+      and(eq(accounts.userId, user.id), eq(accounts.providerId, user.provider), eq(accounts.accountId, user.subject))
+    ).get();
+    if (!existing) {
+      db.insert(accounts).values({
+        userId: user.id,
+        accountId: user.subject,
+        providerId: user.provider,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      }).run();
+    }
+  }
+
+  // Migrate credentials users: create credential account rows
+  const credentialUsers = db.select().from(users).where(eq(users.provider, "credentials")).all();
+  for (const user of credentialUsers) {
+    const existing = db.select().from(accounts).where(
+      and(eq(accounts.userId, user.id), eq(accounts.providerId, "credential"))
+    ).get();
+    if (!existing) {
+      db.insert(accounts).values({
+        userId: user.id,
+        accountId: user.id.toString(),
+        providerId: "credential",
+        password: user.passwordHash,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      }).run();
+    }
+  }
+
+  // Populate username field for all users (derived from email prefix)
+  const usersWithoutUsername = db.select().from(users).where(isNull(users.username)).all();
+  for (const user of usersWithoutUsername) {
+    const usernameFromEmail = user.email.split("@")[0] || user.email;
+    db.update(users).set({
+      username: usernameFromEmail.toLowerCase(),
+      displayUsername: usernameFromEmail,
+    }).where(eq(users.id, user.id)).run();
+  }
+
+  db.insert(settings).values({ key: "better_auth_migrated", value: "true", updatedAt: now }).run();
+  console.log("Better Auth data migration complete: populated accounts table");
+}
+
+/**
+ * Sync OAUTH_* env vars into the oauthProviders table (synchronous).
+ * Uses raw Drizzle queries since this runs at module load time.
+ */
+function runEnvProviderSync() {
+  if (sqlitePath === ":memory:") return;
+
+  // Lazy import to avoid circular dependency at module load
+  let config: { oauth: { enabled: boolean; providerName: string; clientId: string | null; clientSecret: string | null; issuer: string | null; authorizationUrl: string | null; tokenUrl: string | null; userinfoUrl: string | null; allowAutoLinking: boolean } };
+  try {
+    config = require("./config").config;
+  } catch {
+    return;
+  }
+
+  if (!config.oauth.enabled || !config.oauth.clientId || !config.oauth.clientSecret) return;
+
+  const { oauthProviders } = schema;
+  let encryptSecret: (v: string) => string;
+  try {
+    encryptSecret = require("./secret").encryptSecret;
+  } catch {
+    encryptSecret = (v) => v;
+  }
+
+  const name = config.oauth.providerName;
+  // Use a slug-based ID so the OAuth callback URL is predictable
+  const providerId = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "oauth";
+  const existing = db.select().from(oauthProviders).where(eq(oauthProviders.name, name)).get();
+
+  const now = new Date().toISOString();
+  if (existing && existing.source === "env") {
+    db.update(oauthProviders).set({
+      clientId: encryptSecret(config.oauth.clientId),
+      clientSecret: encryptSecret(config.oauth.clientSecret),
+      issuer: config.oauth.issuer ?? null,
+      authorizationUrl: config.oauth.authorizationUrl ?? null,
+      tokenUrl: config.oauth.tokenUrl ?? null,
+      userinfoUrl: config.oauth.userinfoUrl ?? null,
+      autoLink: config.oauth.allowAutoLinking,
+      updatedAt: now,
+    }).where(eq(oauthProviders.id, existing.id)).run();
+  } else if (!existing) {
+    db.insert(oauthProviders).values({
+      id: providerId,
+      name,
+      type: "oidc",
+      clientId: encryptSecret(config.oauth.clientId),
+      clientSecret: encryptSecret(config.oauth.clientSecret),
+      issuer: config.oauth.issuer ?? null,
+      authorizationUrl: config.oauth.authorizationUrl ?? null,
+      tokenUrl: config.oauth.tokenUrl ?? null,
+      userinfoUrl: config.oauth.userinfoUrl ?? null,
+      scopes: "openid email profile",
+      autoLink: config.oauth.allowAutoLinking,
+      enabled: true,
+      source: "env",
+      createdAt: now,
+      updatedAt: now,
+    }).run();
+    console.log(`Synced OAuth provider from env: ${name}`);
+  }
+}
+
+try {
+  runBetterAuthDataMigration();
+  runEnvProviderSync();
+} catch (error) {
+  console.warn("Better Auth data migration warning:", error);
 }
 
 export { schema };

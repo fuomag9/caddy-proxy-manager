@@ -53,8 +53,8 @@ const sampleUser = {
   name: 'Admin User',
   email: 'admin@example.com',
   role: 'admin',
-  password_hash: '$2b$10$hashedpassword',
-  created_at: '2026-01-01',
+  passwordHash: '$2b$10$hashedpassword',
+  createdAt: '2026-01-01',
 };
 
 beforeEach(() => {
@@ -64,7 +64,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/v1/users', () => {
-  it('returns list of users with password_hash stripped', async () => {
+  it('returns list of users with passwordHash stripped', async () => {
     mockListUsers.mockResolvedValue([sampleUser] as any);
 
     const response = await listGET(createMockRequest());
@@ -72,7 +72,7 @@ describe('GET /api/v1/users', () => {
 
     expect(response.status).toBe(200);
     expect(data).toHaveLength(1);
-    expect(data[0]).not.toHaveProperty('password_hash');
+    expect(data[0]).not.toHaveProperty('passwordHash');
     expect(data[0].name).toBe('Admin User');
     expect(data[0].email).toBe('admin@example.com');
   });
@@ -87,14 +87,14 @@ describe('GET /api/v1/users', () => {
 });
 
 describe('GET /api/v1/users/[id]', () => {
-  it('returns a user by id with password_hash stripped', async () => {
+  it('returns a user by id with passwordHash stripped', async () => {
     mockGetUserById.mockResolvedValue(sampleUser as any);
 
     const response = await getGET(createMockRequest(), { params: Promise.resolve({ id: '1' }) });
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data).not.toHaveProperty('password_hash');
+    expect(data).not.toHaveProperty('passwordHash');
     expect(data.name).toBe('Admin User');
   });
 
@@ -128,7 +128,7 @@ describe('GET /api/v1/users/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.id).toBe(5);
-    expect(data).not.toHaveProperty('password_hash');
+    expect(data).not.toHaveProperty('passwordHash');
   });
 });
 
@@ -144,7 +144,7 @@ describe('PUT /api/v1/users/[id]', () => {
 
     expect(response.status).toBe(200);
     expect(data.name).toBe('Updated Name');
-    expect(data).not.toHaveProperty('password_hash');
+    expect(data).not.toHaveProperty('passwordHash');
     expect(mockUpdateUserProfile).toHaveBeenCalledWith(1, { name: 'Updated Name' });
   });
 

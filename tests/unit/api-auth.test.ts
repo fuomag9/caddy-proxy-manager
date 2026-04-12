@@ -40,7 +40,7 @@ beforeEach(() => {
 describe('authenticateApiRequest', () => {
   it('authenticates via Bearer token', async () => {
     mockValidateToken.mockResolvedValue({
-      token: { id: 1, name: 'test', created_by: 42, created_at: '', last_used_at: null, expires_at: null },
+      token: { id: 1, name: 'test', createdBy: 42, createdAt: '', lastUsedAt: null, expiresAt: null },
       user: { id: 42, role: 'admin' },
     });
 
@@ -91,7 +91,7 @@ describe('authenticateApiRequest', () => {
 describe('requireApiAdmin', () => {
   it('allows admin users', async () => {
     mockValidateToken.mockResolvedValue({
-      token: { id: 1, name: 'test', created_by: 1, created_at: '', last_used_at: null, expires_at: null },
+      token: { id: 1, name: 'test', createdBy: 1, createdAt: '', lastUsedAt: null, expiresAt: null },
       user: { id: 1, role: 'admin' },
     });
 
@@ -101,7 +101,7 @@ describe('requireApiAdmin', () => {
 
   it('rejects non-admin users with 403', async () => {
     mockValidateToken.mockResolvedValue({
-      token: { id: 1, name: 'test', created_by: 2, created_at: '', last_used_at: null, expires_at: null },
+      token: { id: 1, name: 'test', createdBy: 2, createdAt: '', lastUsedAt: null, expiresAt: null },
       user: { id: 2, role: 'user' },
     });
 
@@ -154,7 +154,7 @@ describe('requireApiUser', () => {
 
   it('CSRF check skips for Bearer-authenticated POST', async () => {
     mockValidateToken.mockResolvedValue({
-      token: { id: 1, name: 'test', created_by: 42, created_at: '', last_used_at: null, expires_at: null },
+      token: { id: 1, name: 'test', createdBy: 42, createdAt: '', lastUsedAt: null, expiresAt: null },
       user: { id: 42, role: 'admin' },
     });
 

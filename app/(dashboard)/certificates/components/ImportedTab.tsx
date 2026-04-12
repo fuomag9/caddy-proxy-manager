@@ -254,7 +254,7 @@ function LegacyManagedTable({ managedCerts }: { managedCerts: ManagedCertView[] 
       id: "domains",
       label: "Domains",
       render: (c: ManagedCertView) => (
-        <p className="text-sm text-muted-foreground font-mono">{c.domain_names.join(", ")}</p>
+        <p className="text-sm text-muted-foreground font-mono">{c.domainNames.join(", ")}</p>
       ),
     },
     {

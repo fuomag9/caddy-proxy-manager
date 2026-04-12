@@ -4,12 +4,12 @@ import { desc, like, or, count } from "drizzle-orm";
 
 export type AuditEvent = {
   id: number;
-  user_id: number | null;
+  userId: number | null;
   action: string;
-  entity_type: string;
-  entity_id: number | null;
+  entityType: string;
+  entityId: number | null;
   summary: string | null;
-  created_at: string;
+  createdAt: string;
 };
 
 // Escape LIKE metacharacters so user input is treated as literal text
@@ -57,12 +57,12 @@ export async function listAuditEvents(
 
   return events.map((event) => ({
     id: event.id,
-    user_id: event.userId,
+    userId: event.userId,
     action: event.action,
-    entity_type: event.entityType,
-    entity_id: event.entityId,
+    entityType: event.entityType,
+    entityId: event.entityId,
     summary: event.summary,
-    created_at: toIso(event.createdAt)!,
+    createdAt: toIso(event.createdAt)!,
   }));
 }
 

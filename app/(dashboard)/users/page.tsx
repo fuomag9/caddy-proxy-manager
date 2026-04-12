@@ -7,6 +7,6 @@ export default async function UsersPage() {
   const allUsers = await listUsers();
   // Strip password hashes before sending to client
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const safeUsers = allUsers.map(({ password_hash, ...rest }) => rest);
+  const safeUsers = allUsers.map(({ passwordHash, ...rest }) => rest);
   return <UsersClient users={safeUsers} />;
 }

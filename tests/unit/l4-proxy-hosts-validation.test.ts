@@ -68,7 +68,7 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: '',
       protocol: 'tcp',
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: ['10.0.0.1:5432'],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('Name is required');
@@ -78,7 +78,7 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'sctp' as any,
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: ['10.0.0.1:5432'],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow("Protocol must be 'tcp' or 'udp'");
@@ -88,7 +88,7 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: '',
+      listenAddress: '',
       upstreams: ['10.0.0.1:5432'],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('Listen address is required');
@@ -98,7 +98,7 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: '10.0.0.1',
+      listenAddress: '10.0.0.1',
       upstreams: ['10.0.0.1:5432'],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow("Listen address must be in format ':PORT' or 'HOST:PORT'");
@@ -108,7 +108,7 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: ':0',
+      listenAddress: ':0',
       upstreams: ['10.0.0.1:5432'],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('Port must be between 1 and 65535');
@@ -118,7 +118,7 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: ':99999',
+      listenAddress: ':99999',
       upstreams: ['10.0.0.1:5432'],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('Port must be between 1 and 65535');
@@ -128,7 +128,7 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: [],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('At least one upstream must be specified');
@@ -138,7 +138,7 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: ['10.0.0.1'],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow("must be in 'host:port' format");
@@ -148,9 +148,9 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'udp',
-      listen_address: ':5353',
+      listenAddress: ':5353',
       upstreams: ['8.8.8.8:53'],
-      tls_termination: true,
+      tlsTermination: true,
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('TLS termination is only supported with TCP');
   });
@@ -159,10 +159,10 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: ['10.0.0.1:5432'],
-      matcher_type: 'tls_sni',
-      matcher_value: [],
+      matcherType: 'tls_sni',
+      matcherValue: [],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('Matcher value is required');
   });
@@ -171,10 +171,10 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: ':8080',
+      listenAddress: ':8080',
       upstreams: ['10.0.0.1:8080'],
-      matcher_type: 'http_host',
-      matcher_value: [],
+      matcherType: 'http_host',
+      matcherValue: [],
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('Matcher value is required');
   });
@@ -183,9 +183,9 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: ['10.0.0.1:5432'],
-      proxy_protocol_version: 'v3' as any,
+      proxyProtocolVersion: 'v3' as any,
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow("Proxy protocol version must be 'v1' or 'v2'");
   });
@@ -194,9 +194,9 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Test',
       protocol: 'tcp',
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: ['10.0.0.1:5432'],
-      matcher_type: 'invalid' as any,
+      matcherType: 'invalid' as any,
     };
     await expect(createL4ProxyHost(input, 1)).rejects.toThrow('Matcher type must be one of');
   });
@@ -205,33 +205,33 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Full Featured',
       protocol: 'tcp',
-      listen_address: ':993',
+      listenAddress: ':993',
       upstreams: ['localhost:143'],
-      matcher_type: 'tls_sni',
-      matcher_value: ['mail.example.com'],
-      tls_termination: true,
-      proxy_protocol_version: 'v1',
-      proxy_protocol_receive: true,
+      matcherType: 'tls_sni',
+      matcherValue: ['mail.example.com'],
+      tlsTermination: true,
+      proxyProtocolVersion: 'v1',
+      proxyProtocolReceive: true,
       enabled: true,
     };
     const result = await createL4ProxyHost(input, 1);
     expect(result).toBeDefined();
     expect(result.name).toBe('Full Featured');
     expect(result.protocol).toBe('tcp');
-    expect(result.listen_address).toBe(':993');
+    expect(result.listenAddress).toBe(':993');
     expect(result.upstreams).toEqual(['localhost:143']);
-    expect(result.matcher_type).toBe('tls_sni');
-    expect(result.matcher_value).toEqual(['mail.example.com']);
-    expect(result.tls_termination).toBe(true);
-    expect(result.proxy_protocol_version).toBe('v1');
-    expect(result.proxy_protocol_receive).toBe(true);
+    expect(result.matcherType).toBe('tls_sni');
+    expect(result.matcherValue).toEqual(['mail.example.com']);
+    expect(result.tlsTermination).toBe(true);
+    expect(result.proxyProtocolVersion).toBe('v1');
+    expect(result.proxyProtocolReceive).toBe(true);
   });
 
   it('accepts valid UDP proxy', async () => {
     const input: L4ProxyHostInput = {
       name: 'DNS',
       protocol: 'udp',
-      listen_address: ':5353',
+      listenAddress: ':5353',
       upstreams: ['8.8.8.8:53'],
     };
     const result = await createL4ProxyHost(input, 1);
@@ -243,54 +243,54 @@ describe('L4 proxy host create validation', () => {
     const input: L4ProxyHostInput = {
       name: 'Bound',
       protocol: 'tcp',
-      listen_address: '0.0.0.0:5432',
+      listenAddress: '0.0.0.0:5432',
       upstreams: ['10.0.0.1:5432'],
     };
     const result = await createL4ProxyHost(input, 1);
-    expect(result.listen_address).toBe('0.0.0.0:5432');
+    expect(result.listenAddress).toBe('0.0.0.0:5432');
   });
 
-  it('accepts none matcher without matcher_value', async () => {
+  it('accepts none matcher without matcherValue', async () => {
     const input: L4ProxyHostInput = {
       name: 'Catch All',
       protocol: 'tcp',
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: ['10.0.0.1:5432'],
-      matcher_type: 'none',
+      matcherType: 'none',
     };
     const result = await createL4ProxyHost(input, 1);
-    expect(result.matcher_type).toBe('none');
+    expect(result.matcherType).toBe('none');
   });
 
-  it('accepts proxy_protocol matcher without matcher_value', async () => {
+  it('accepts proxy_protocol matcher without matcherValue', async () => {
     const input: L4ProxyHostInput = {
       name: 'PP Detect',
       protocol: 'tcp',
-      listen_address: ':8443',
+      listenAddress: ':8443',
       upstreams: ['10.0.0.1:443'],
-      matcher_type: 'proxy_protocol',
+      matcherType: 'proxy_protocol',
     };
     const result = await createL4ProxyHost(input, 1);
-    expect(result.matcher_type).toBe('proxy_protocol');
+    expect(result.matcherType).toBe('proxy_protocol');
   });
 
-  it('trims whitespace from name and listen_address', async () => {
+  it('trims whitespace from name and listenAddress', async () => {
     const input: L4ProxyHostInput = {
       name: '  Spacey Name  ',
       protocol: 'tcp',
-      listen_address: '  :5432  ',
+      listenAddress: '  :5432  ',
       upstreams: ['10.0.0.1:5432'],
     };
     const result = await createL4ProxyHost(input, 1);
     expect(result.name).toBe('Spacey Name');
-    expect(result.listen_address).toBe(':5432');
+    expect(result.listenAddress).toBe(':5432');
   });
 
   it('deduplicates upstreams', async () => {
     const input: L4ProxyHostInput = {
       name: 'Dedup',
       protocol: 'tcp',
-      listen_address: ':5432',
+      listenAddress: ':5432',
       upstreams: ['10.0.0.1:5432', '10.0.0.1:5432', '10.0.0.2:5432'],
     };
     const result = await createL4ProxyHost(input, 1);

@@ -61,7 +61,7 @@ test.describe('L4 Proxy Hosts page', () => {
     await expect(sortBtn).toBeVisible();
 
     await sortBtn.click();
-    await expect(page).toHaveURL(/sortBy=listen_address/);
+    await expect(page).toHaveURL(/sortBy=listenAddress/);
   });
 
   test('creates a new L4 proxy host', async ({ page }) => {

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Shield } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { authClient } from "@/src/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,7 +97,7 @@ export default function PortalLoginForm({
     // Redirect back to this portal page after OAuth, with the rid param preserved.
     // The rid is an opaque server-side ID — the actual redirect URI is never in the URL.
     const callbackUrl = `/portal?rid=${encodeURIComponent(rid)}`;
-    signIn(providerId, { callbackUrl });
+    authClient.signIn.social({ provider: providerId, callbackURL: callbackUrl });
   };
 
   const disabled = pending || !!oauthPending;

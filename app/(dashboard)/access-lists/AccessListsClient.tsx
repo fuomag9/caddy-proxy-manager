@@ -161,7 +161,7 @@ export default function AccessListsClient({ lists, pagination }: Props) {
                             <div>
                               <p className="text-sm font-medium font-mono leading-tight">{entry.username}</p>
                               <p className="text-xs text-muted-foreground">
-                                Added {new Date(entry.created_at).toLocaleDateString()}
+                                Added {new Date(entry.createdAt).toLocaleDateString()}
                               </p>
                             </div>
                           </div>

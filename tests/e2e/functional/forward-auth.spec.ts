@@ -28,8 +28,8 @@ test.describe.serial('Forward Auth', () => {
         name: 'Functional Forward Auth Test',
         domains: [DOMAIN],
         upstreams: ['echo-server:8080'],
-        ssl_forced: false,
-        cpm_forward_auth: { enabled: true },
+        sslForced: false,
+        cpmForwardAuth: { enabled: true },
       },
       headers: { 'Content-Type': 'application/json', 'Origin': BASE_URL },
     });

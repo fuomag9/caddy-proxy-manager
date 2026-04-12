@@ -22,12 +22,12 @@ type UserEntry = {
   email: string;
   name: string | null;
   role: "admin" | "user" | "viewer";
-  provider: string;
-  subject: string;
-  avatar_url: string | null;
+  provider: string | null;
+  subject: string | null;
+  avatarUrl: string | null;
   status: string;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type Props = {

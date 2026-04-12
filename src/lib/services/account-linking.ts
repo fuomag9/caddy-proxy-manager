@@ -1,11 +1,11 @@
 import bcrypt from "bcryptjs";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { config } from "../config";
-import { findUserByEmail, findUserByProviderSubject, getUserById } from "../models/user";
+import { findUserByEmail, getUserById } from "../models/user";
 import db from "../db";
-import { users, linkingTokens } from "../db/schema";
-import { eq, lt } from "drizzle-orm";
+import { users, linkingTokens, accounts } from "../db/schema";
+import { and, eq, lt } from "drizzle-orm";
 import { nowIso } from "../db";
 
 const LINKING_TOKEN_EXPIRY = 5 * 60; // 5 minutes in seconds
@@ -32,14 +32,13 @@ export async function decideLinkingStrategy(
   providerAccountId: string,
   email: string
 ): Promise<LinkingDecision> {
-  // Check if OAuth account already exists
-  const existingOAuthUser = await findUserByProviderSubject(provider, providerAccountId);
-  if (existingOAuthUser) {
-    return {
-      action: "signin_existing",
-      userId: existingOAuthUser.id,
-      reason: "OAuth account already linked"
-    };
+  // Check accounts table for existing OAuth connection
+  const existingAccount = await db.select().from(accounts).where(
+    and(eq(accounts.providerId, provider), eq(accounts.accountId, providerAccountId))
+  ).limit(1);
+
+  if (existingAccount.length > 0) {
+    return { action: "signin_existing", userId: existingAccount[0].userId, reason: "OAuth account already linked" };
   }
 
   // Check if email matches existing user
@@ -52,7 +51,7 @@ export async function decideLinkingStrategy(
   }
 
   // User exists with this email
-  if (existingEmailUser.password_hash) {
+  if (existingEmailUser.passwordHash) {
     // Has password - require manual linking with password verification
     return {
       action: "require_manual_link",
@@ -188,25 +187,24 @@ export async function verifyAndLinkOAuth(
   providerAccountId: string
 ): Promise<boolean> {
   const user = await getUserById(userId);
-  if (!user || !user.password_hash) {
+  if (!user || !user.passwordHash) {
     return false;
   }
 
   // Verify password
-  const isValid = bcrypt.compareSync(password, user.password_hash);
+  const isValid = bcrypt.compareSync(password, user.passwordHash);
   if (!isValid) {
     return false;
   }
 
-  // Update user to link OAuth
-  await db
-    .update(users)
-    .set({
-      provider,
-      subject: providerAccountId,
-      updatedAt: nowIso()
-    })
-    .where(eq(users.id, userId));
+  // Insert OAuth account link
+  await db.insert(accounts).values({
+    userId,
+    accountId: providerAccountId,
+    providerId: provider,
+    createdAt: nowIso(),
+    updatedAt: nowIso()
+  });
 
   return true;
 }
@@ -227,20 +225,26 @@ export async function autoLinkOAuth(
 
   // Don't auto-link if user has a password (unless explicitly called for authenticated linking)
   // This check is bypassed when called from the authenticated linking flow
-  if (user.password_hash && !config.oauth.allowAutoLinking) {
+  if (user.passwordHash && !config.oauth.allowAutoLinking) {
     return false;
   }
 
-  // Update user to link OAuth
-  await db
-    .update(users)
-    .set({
-      provider,
-      subject: providerAccountId,
-      avatarUrl: avatarUrl ?? user.avatar_url,
-      updatedAt: nowIso()
-    })
-    .where(eq(users.id, userId));
+  // Insert OAuth account link
+  await db.insert(accounts).values({
+    userId,
+    accountId: providerAccountId,
+    providerId: provider,
+    createdAt: nowIso(),
+    updatedAt: nowIso()
+  });
+
+  // Update avatar if provided
+  if (avatarUrl) {
+    await db
+      .update(users)
+      .set({ avatarUrl, updatedAt: nowIso() })
+      .where(eq(users.id, userId));
+  }
 
   return true;
 }
@@ -260,16 +264,22 @@ export async function linkOAuthAuthenticated(
     return false;
   }
 
-  // Update user to link OAuth
-  await db
-    .update(users)
-    .set({
-      provider,
-      subject: providerAccountId,
-      avatarUrl: avatarUrl ?? user.avatar_url,
-      updatedAt: nowIso()
-    })
-    .where(eq(users.id, userId));
+  // Insert OAuth account link
+  await db.insert(accounts).values({
+    userId,
+    accountId: providerAccountId,
+    providerId: provider,
+    createdAt: nowIso(),
+    updatedAt: nowIso()
+  });
+
+  // Update avatar if provided
+  if (avatarUrl) {
+    await db
+      .update(users)
+      .set({ avatarUrl, updatedAt: nowIso() })
+      .where(eq(users.id, userId));
+  }
 
   return true;
 }

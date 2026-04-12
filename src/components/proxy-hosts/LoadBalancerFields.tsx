@@ -19,7 +19,7 @@ const LOAD_BALANCING_POLICIES = [
 export function LoadBalancerFields({
   loadBalancer
 }: {
-  loadBalancer?: ProxyHost["load_balancer"] | null;
+  loadBalancer?: ProxyHost["loadBalancer"] | null;
 }) {
   const initial = loadBalancer ?? null;
   const [enabled, setEnabled] = useState(initial?.enabled ?? false);

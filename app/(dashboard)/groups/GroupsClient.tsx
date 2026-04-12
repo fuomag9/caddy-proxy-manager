@@ -17,10 +17,10 @@ import {
 } from "./actions";
 
 type GroupMember = {
-  user_id: number;
+  userId: number;
   email: string;
   name: string | null;
-  created_at: string;
+  createdAt: string;
 };
 
 type Group = {
@@ -28,8 +28,8 @@ type Group = {
   name: string;
   description: string | null;
   members: GroupMember[];
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type UserEntry = {
@@ -50,7 +50,7 @@ export default function GroupsClient({ groups, users }: Props) {
   const [addMemberGroupId, setAddMemberGroupId] = useState<number | null>(null);
 
   function getAvailableUsers(group: Group): UserEntry[] {
-    const memberIds = new Set(group.members.map((m) => m.user_id));
+    const memberIds = new Set(group.members.map((m) => m.userId));
     return users.filter((u) => !memberIds.has(u.id));
   }
 
@@ -204,7 +204,7 @@ export default function GroupsClient({ groups, users }: Props) {
                     <div className="space-y-1">
                       {group.members.map((member) => (
                         <div
-                          key={member.user_id}
+                          key={member.userId}
                           className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/50"
                         >
                           <div className="flex items-center gap-2">
@@ -223,7 +223,7 @@ export default function GroupsClient({ groups, users }: Props) {
                             size="icon"
                             className="h-6 w-6 text-muted-foreground hover:text-destructive"
                             onClick={async () => {
-                              await removeGroupMemberAction(group.id, member.user_id);
+                              await removeGroupMemberAction(group.id, member.userId);
                               router.refresh();
                             }}
                             title="Remove member"

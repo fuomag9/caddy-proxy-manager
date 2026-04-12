@@ -68,20 +68,20 @@ function L4HostForm({
   const [enabled, setEnabled] = useState(initialData?.enabled ?? true);
   const [protocol, setProtocol] = useState(initialData?.protocol ?? "tcp");
   const [matcherType, setMatcherType] = useState(
-    initialData?.matcher_type ?? "none"
+    initialData?.matcherType ?? "none"
   );
 
-  const defaultLbAccordion = initialData?.load_balancer?.enabled
+  const defaultLbAccordion = initialData?.loadBalancer?.enabled
     ? "load-balancer"
     : undefined;
-  const defaultDnsAccordion = initialData?.dns_resolver?.enabled
+  const defaultDnsAccordion = initialData?.dnsResolver?.enabled
     ? "dns-resolver"
     : undefined;
   const defaultGeoblockAccordion = initialData?.geoblock?.enabled
     ? "geoblock"
     : undefined;
   const defaultUpstreamDnsAccordion =
-    initialData?.upstream_dns_resolution?.enabled === true
+    initialData?.upstreamDnsResolution?.enabled === true
       ? "upstream-dns"
       : undefined;
 
@@ -163,7 +163,7 @@ function L4HostForm({
           id="listen_address"
           name="listen_address"
           placeholder=":5432"
-          defaultValue={initialData?.listen_address ?? ""}
+          defaultValue={initialData?.listenAddress ?? ""}
           required
         />
       </FormField>
@@ -220,7 +220,7 @@ function L4HostForm({
             id="matcher_value"
             name="matcher_value"
             placeholder="db.example.com, api.example.com"
-            defaultValue={initialData?.matcher_value?.join(", ") ?? ""}
+            defaultValue={initialData?.matcherValue?.join(", ") ?? ""}
             required
           />
         </FormField>
@@ -231,7 +231,7 @@ function L4HostForm({
           <Switch
             id="tls_termination"
             name="tls_termination"
-            defaultChecked={initialData?.tls_termination ?? false}
+            defaultChecked={initialData?.tlsTermination ?? false}
           />
           <Label htmlFor="tls_termination">TLS Termination</Label>
         </div>
@@ -241,7 +241,7 @@ function L4HostForm({
         <Switch
           id="proxy_protocol_receive"
           name="proxy_protocol_receive"
-          defaultChecked={initialData?.proxy_protocol_receive ?? false}
+          defaultChecked={initialData?.proxyProtocolReceive ?? false}
         />
         <Label htmlFor="proxy_protocol_receive">
           Accept inbound PROXY protocol
@@ -254,7 +254,7 @@ function L4HostForm({
         </Label>
         <Select
           name="proxy_protocol_version"
-          defaultValue={initialData?.proxy_protocol_version ?? "__none__"}
+          defaultValue={initialData?.proxyProtocolVersion ?? "__none__"}
         >
           <SelectTrigger id="proxy_protocol_version">
             <SelectValue placeholder="None" />
@@ -292,7 +292,7 @@ function L4HostForm({
                   id="lb_enabled"
                   name="lb_enabled"
                   defaultChecked={
-                    initialData?.load_balancer?.enabled ?? false
+                    initialData?.loadBalancer?.enabled ?? false
                   }
                 />
                 <Label htmlFor="lb_enabled">Enable Load Balancing</Label>
@@ -302,7 +302,7 @@ function L4HostForm({
                 <Select
                   name="lb_policy"
                   defaultValue={
-                    initialData?.load_balancer?.policy ?? "random"
+                    initialData?.loadBalancer?.policy ?? "random"
                   }
                 >
                   <SelectTrigger id="lb_policy">
@@ -325,7 +325,7 @@ function L4HostForm({
                   name="lb_try_duration"
                   placeholder="5s"
                   defaultValue={
-                    initialData?.load_balancer?.tryDuration ?? ""
+                    initialData?.loadBalancer?.tryDuration ?? ""
                   }
                 />
               </FormField>
@@ -335,7 +335,7 @@ function L4HostForm({
                   name="lb_try_interval"
                   placeholder="250ms"
                   defaultValue={
-                    initialData?.load_balancer?.tryInterval ?? ""
+                    initialData?.loadBalancer?.tryInterval ?? ""
                   }
                 />
               </FormField>
@@ -344,7 +344,7 @@ function L4HostForm({
                   id="lb_retries"
                   name="lb_retries"
                   type="number"
-                  defaultValue={initialData?.load_balancer?.retries ?? ""}
+                  defaultValue={initialData?.loadBalancer?.retries ?? ""}
                 />
               </FormField>
 
@@ -361,7 +361,7 @@ function L4HostForm({
                   id="lb_active_health_enabled"
                   name="lb_active_health_enabled"
                   defaultChecked={
-                    initialData?.load_balancer?.activeHealthCheck?.enabled ??
+                    initialData?.loadBalancer?.activeHealthCheck?.enabled ??
                     false
                   }
                 />
@@ -378,7 +378,7 @@ function L4HostForm({
                   name="lb_active_health_port"
                   type="number"
                   defaultValue={
-                    initialData?.load_balancer?.activeHealthCheck?.port ?? ""
+                    initialData?.loadBalancer?.activeHealthCheck?.port ?? ""
                   }
                 />
               </FormField>
@@ -388,7 +388,7 @@ function L4HostForm({
                   name="lb_active_health_interval"
                   placeholder="30s"
                   defaultValue={
-                    initialData?.load_balancer?.activeHealthCheck?.interval ??
+                    initialData?.loadBalancer?.activeHealthCheck?.interval ??
                     ""
                   }
                 />
@@ -399,7 +399,7 @@ function L4HostForm({
                   name="lb_active_health_timeout"
                   placeholder="5s"
                   defaultValue={
-                    initialData?.load_balancer?.activeHealthCheck?.timeout ?? ""
+                    initialData?.loadBalancer?.activeHealthCheck?.timeout ?? ""
                   }
                 />
               </FormField>
@@ -417,7 +417,7 @@ function L4HostForm({
                   id="lb_passive_health_enabled"
                   name="lb_passive_health_enabled"
                   defaultChecked={
-                    initialData?.load_balancer?.passiveHealthCheck?.enabled ??
+                    initialData?.loadBalancer?.passiveHealthCheck?.enabled ??
                     false
                   }
                 />
@@ -434,7 +434,7 @@ function L4HostForm({
                   name="lb_passive_health_fail_duration"
                   placeholder="30s"
                   defaultValue={
-                    initialData?.load_balancer?.passiveHealthCheck
+                    initialData?.loadBalancer?.passiveHealthCheck
                       ?.failDuration ?? ""
                   }
                 />
@@ -445,7 +445,7 @@ function L4HostForm({
                   name="lb_passive_health_max_fails"
                   type="number"
                   defaultValue={
-                    initialData?.load_balancer?.passiveHealthCheck?.maxFails ??
+                    initialData?.loadBalancer?.passiveHealthCheck?.maxFails ??
                     ""
                   }
                 />
@@ -459,7 +459,7 @@ function L4HostForm({
                   name="lb_passive_health_unhealthy_latency"
                   placeholder="5s"
                   defaultValue={
-                    initialData?.load_balancer?.passiveHealthCheck
+                    initialData?.loadBalancer?.passiveHealthCheck
                       ?.unhealthyLatency ?? ""
                   }
                 />
@@ -493,7 +493,7 @@ function L4HostForm({
                 <Switch
                   id="dns_enabled"
                   name="dns_enabled"
-                  defaultChecked={initialData?.dns_resolver?.enabled ?? false}
+                  defaultChecked={initialData?.dnsResolver?.enabled ?? false}
                 />
                 <Label htmlFor="dns_enabled">Enable Custom DNS</Label>
               </div>
@@ -507,7 +507,7 @@ function L4HostForm({
                   name="dns_resolvers"
                   placeholder={"1.1.1.1\n8.8.8.8"}
                   defaultValue={
-                    initialData?.dns_resolver?.resolvers?.join("\n") ?? ""
+                    initialData?.dnsResolver?.resolvers?.join("\n") ?? ""
                   }
                   rows={2}
                 />
@@ -522,7 +522,7 @@ function L4HostForm({
                   name="dns_fallbacks"
                   placeholder="8.8.4.4"
                   defaultValue={
-                    initialData?.dns_resolver?.fallbacks?.join("\n") ?? ""
+                    initialData?.dnsResolver?.fallbacks?.join("\n") ?? ""
                   }
                   rows={1}
                 />
@@ -532,7 +532,7 @@ function L4HostForm({
                   id="dns_timeout"
                   name="dns_timeout"
                   placeholder="5s"
-                  defaultValue={initialData?.dns_resolver?.timeout ?? ""}
+                  defaultValue={initialData?.dnsResolver?.timeout ?? ""}
                 />
               </FormField>
             </div>
@@ -571,7 +571,7 @@ function L4HostForm({
                 <Label htmlFor="geoblock_mode">Mode</Label>
                 <Select
                   name="geoblock_mode"
-                  defaultValue={initialData?.geoblock_mode ?? "merge"}
+                  defaultValue={initialData?.geoblockMode ?? "merge"}
                 >
                   <SelectTrigger id="geoblock_mode">
                     <SelectValue />
@@ -752,9 +752,9 @@ function L4HostForm({
                 <Select
                   name="upstream_dns_resolution_mode"
                   defaultValue={
-                    initialData?.upstream_dns_resolution?.enabled === true
+                    initialData?.upstreamDnsResolution?.enabled === true
                       ? "enabled"
-                      : initialData?.upstream_dns_resolution?.enabled === false
+                      : initialData?.upstreamDnsResolution?.enabled === false
                       ? "disabled"
                       : "inherit"
                   }
@@ -778,7 +778,7 @@ function L4HostForm({
                 <Select
                   name="upstream_dns_resolution_family"
                   defaultValue={
-                    initialData?.upstream_dns_resolution?.family ?? "inherit"
+                    initialData?.upstreamDnsResolution?.family ?? "inherit"
                   }
                 >
                   <SelectTrigger id="upstream_dns_resolution_family">
@@ -948,7 +948,7 @@ export function DeleteL4HostDialog({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground w-20 shrink-0">Listen</span>
-            <span className="font-mono text-xs">{host.listen_address}</span>
+            <span className="font-mono text-xs">{host.listenAddress}</span>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-muted-foreground w-20 shrink-0">Upstreams</span>

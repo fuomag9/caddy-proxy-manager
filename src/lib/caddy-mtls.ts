@@ -21,10 +21,10 @@ export function normalizeFingerprint(fp: string): string {
  * Defined here to avoid importing from models (which pulls in db.ts).
  */
 export type MtlsAccessRuleLike = {
-  path_pattern: string;
-  allowed_role_ids: number[];
-  allowed_cert_ids: number[];
-  deny_all: boolean;
+  pathPattern: string;
+  allowedRoleIds: number[];
+  allowedCertIds: number[];
+  denyAll: boolean;
 };
 
 /**
@@ -177,14 +177,14 @@ export function resolveAllowedFingerprints(
 ): Set<string> {
   const allowed = new Set<string>();
 
-  for (const roleId of rule.allowed_role_ids) {
+  for (const roleId of rule.allowedRoleIds) {
     const fps = roleFingerprintMap.get(roleId);
     if (fps) {
       for (const fp of fps) allowed.add(fp);
     }
   }
 
-  for (const certId of rule.allowed_cert_ids) {
+  for (const certId of rule.allowedCertIds) {
     const fp = certFingerprintMap.get(certId);
     if (fp) allowed.add(fp);
   }
@@ -229,10 +229,10 @@ export function buildMtlsRbacSubroutes(
 
   // Rules are already sorted by priority desc, path asc
   for (const rule of accessRules) {
-    if (rule.deny_all) {
+    if (rule.denyAll) {
       // Explicit deny: any request matching this path gets 403
       subroutes.push({
-        match: [{ path: [rule.path_pattern] }],
+        match: [{ path: [rule.pathPattern] }],
         handle: [{
           handler: "static_response",
           status_code: "403",
@@ -248,7 +248,7 @@ export function buildMtlsRbacSubroutes(
     if (allowedFps.size === 0) {
       // Rule exists but no certs match → deny all for this path
       subroutes.push({
-        match: [{ path: [rule.path_pattern] }],
+        match: [{ path: [rule.pathPattern] }],
         handle: [{
           handler: "static_response",
           status_code: "403",
@@ -262,14 +262,14 @@ export function buildMtlsRbacSubroutes(
     // Allow route: path + fingerprint CEL match
     const celExpr = buildFingerprintCelExpression(allowedFps);
     subroutes.push({
-      match: [{ path: [rule.path_pattern], expression: celExpr }],
+      match: [{ path: [rule.pathPattern], expression: celExpr }],
       handle: [...baseHandlers, reverseProxyHandler],
       terminal: true,
     });
 
     // Deny route: path matches but fingerprint didn't → 403
     subroutes.push({
-      match: [{ path: [rule.path_pattern] }],
+      match: [{ path: [rule.pathPattern] }],
       handle: [{
         handler: "static_response",
         status_code: "403",

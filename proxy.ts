@@ -1,6 +1,7 @@
-import { auth } from "@/src/lib/auth";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 import crypto from "node:crypto";
+import { auth } from "@/src/lib/auth";
 
 /**
  * Next.js Proxy for route protection.
@@ -34,8 +35,7 @@ function buildCsp(nonce: string): string {
   return directives.join("; ");
 }
 
-export default auth((req) => {
-  const isAuthenticated = !!req.auth;
+export default async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   // Allow public routes
@@ -50,6 +50,10 @@ export default auth((req) => {
   ) {
     return NextResponse.next();
   }
+
+  // Check authentication for protected routes
+  const session = await auth(req);
+  const isAuthenticated = !!session?.user;
 
   // Redirect unauthenticated users to login
   if (!isAuthenticated && !pathname.startsWith("/login")) {
@@ -77,7 +81,7 @@ export default auth((req) => {
   response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()");
 
   return response;
-});
+}
 
 export const config = {
   matcher: [

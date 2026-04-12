@@ -676,6 +676,76 @@ export async function suppressWafRuleGloballyAction(ruleId: number): Promise<Act
   }
 }
 
+export async function getOAuthProvidersAction() {
+  await requireAdmin();
+  const { listOAuthProviders } = await import("@/src/lib/models/oauth-providers");
+  return listOAuthProviders();
+}
+
+export async function createOAuthProviderAction(data: {
+  name: string;
+  type: string;
+  clientId: string;
+  clientSecret: string;
+  issuer?: string;
+  authorizationUrl?: string;
+  tokenUrl?: string;
+  userinfoUrl?: string;
+  scopes?: string;
+  autoLink?: boolean;
+}) {
+  const session = await requireAdmin();
+  const { createOAuthProvider } = await import("@/src/lib/models/oauth-providers");
+  const { invalidateProviderCache } = await import("@/src/lib/auth-server");
+  const provider = await createOAuthProvider({ ...data, source: "ui" });
+  invalidateProviderCache();
+  const { createAuditEvent } = await import("@/src/lib/models/audit");
+  await createAuditEvent({
+    userId: Number(session.user.id),
+    action: "oauth_provider_created",
+    entityType: "oauth_provider",
+    entityId: null,
+    summary: `OAuth provider "${data.name}" created`,
+    data: JSON.stringify({ providerId: provider.id }),
+  });
+  revalidatePath("/settings");
+  return provider;
+}
+
+export async function updateOAuthProviderAction(
+  id: string,
+  data: Partial<{
+    name: string;
+    type: string;
+    clientId: string;
+    clientSecret: string;
+    issuer: string | null;
+    authorizationUrl: string | null;
+    tokenUrl: string | null;
+    userinfoUrl: string | null;
+    scopes: string;
+    autoLink: boolean;
+    enabled: boolean;
+  }>
+) {
+  await requireAdmin();
+  const { updateOAuthProvider } = await import("@/src/lib/models/oauth-providers");
+  const { invalidateProviderCache } = await import("@/src/lib/auth-server");
+  const updated = await updateOAuthProvider(id, data);
+  invalidateProviderCache();
+  revalidatePath("/settings");
+  return updated;
+}
+
+export async function deleteOAuthProviderAction(id: string) {
+  await requireAdmin();
+  const { deleteOAuthProvider } = await import("@/src/lib/models/oauth-providers");
+  const { invalidateProviderCache } = await import("@/src/lib/auth-server");
+  await deleteOAuthProvider(id);
+  invalidateProviderCache();
+  revalidatePath("/settings");
+}
+
 export async function suppressWafRuleForHostAction(ruleId: number, hostname: string): Promise<ActionResult> {
   try {
     const session = await requireAdmin();

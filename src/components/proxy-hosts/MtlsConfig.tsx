@@ -37,13 +37,13 @@ export function MtlsFields({ value, caCertificates, issuedClientCerts = [], prox
   const [editRule, setEditRule] = useState<MtlsAccessRule | null>(null);
 
   const isEditMode = !!proxyHostId;
-  const activeCerts = issuedClientCerts.filter(c => !c.revoked_at);
+  const activeCerts = issuedClientCerts.filter(c => !c.revokedAt);
 
   const certsByCA = new Map<number, IssuedClientCertificate[]>();
   for (const cert of activeCerts) {
-    const list = certsByCA.get(cert.ca_certificate_id) ?? [];
+    const list = certsByCA.get(cert.caCertificateId) ?? [];
     list.push(cert);
-    certsByCA.set(cert.ca_certificate_id, list);
+    certsByCA.set(cert.caCertificateId, list);
   }
 
   const loadRules = useCallback(() => {
@@ -143,7 +143,7 @@ export function MtlsFields({ value, caCertificates, issuedClientCerts = [], prox
                     <span className="text-sm font-medium">{role.name}</span>
                     {role.description && <span className="text-xs text-muted-foreground ml-2">— {role.description}</span>}
                   </label>
-                  <Badge variant="outline" className="text-xs shrink-0">{role.certificate_count} certs</Badge>
+                  <Badge variant="outline" className="text-xs shrink-0">{role.certificateCount} certs</Badge>
                 </div>
               ))}
             </div>
@@ -201,10 +201,10 @@ export function MtlsFields({ value, caCertificates, issuedClientCerts = [], prox
                           className="ml-4"
                         />
                         <label className="min-w-0 flex-1 cursor-pointer" onClick={() => toggleCert(cert.id)}>
-                          <span className="text-sm">{cert.common_name}</span>
+                          <span className="text-sm">{cert.commonName}</span>
                         </label>
                         <span className="text-xs text-muted-foreground shrink-0">
-                          expires {new Date(cert.valid_to).toLocaleDateString()}
+                          expires {new Date(cert.validTo).toLocaleDateString()}
                         </span>
                       </div>
                     ))}
@@ -249,20 +249,20 @@ export function MtlsFields({ value, caCertificates, issuedClientCerts = [], prox
               <div className="flex flex-col gap-1.5">
                 {rules.map(rule => (
                   <div key={rule.id} className="group flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm">
-                    <code className="shrink-0 text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{rule.path_pattern}</code>
-                    {rule.deny_all ? (
+                    <code className="shrink-0 text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{rule.pathPattern}</code>
+                    {rule.denyAll ? (
                       <Badge variant="destructive" className="text-xs gap-1"><Ban className="h-3 w-3" /> Deny</Badge>
                     ) : (
                       <div className="flex flex-wrap gap-1 flex-1 min-w-0">
-                        {rule.allowed_role_ids.map(roleId => {
+                        {rule.allowedRoleIds.map(roleId => {
                           const role = mtlsRoles.find(r => r.id === roleId);
                           return <Badge key={`r-${roleId}`} variant="secondary" className="text-xs">{role?.name ?? `#${roleId}`}</Badge>;
                         })}
-                        {rule.allowed_cert_ids.map(certId => {
+                        {rule.allowedCertIds.map(certId => {
                           const cert = issuedClientCerts.find(c => c.id === certId);
-                          return <Badge key={`c-${certId}`} variant="outline" className="text-xs">{cert?.common_name ?? `#${certId}`}</Badge>;
+                          return <Badge key={`c-${certId}`} variant="outline" className="text-xs">{cert?.commonName ?? `#${certId}`}</Badge>;
                         })}
-                        {rule.allowed_role_ids.length === 0 && rule.allowed_cert_ids.length === 0 && (
+                        {rule.allowedRoleIds.length === 0 && rule.allowedCertIds.length === 0 && (
                           <span className="text-xs text-destructive italic">No roles/certs — effectively denied</span>
                         )}
                       </div>
@@ -297,12 +297,12 @@ function RuleDialog({ onClose, proxyHostId, roles, activeCerts, title, submitLab
   onClose: () => void; proxyHostId: number; roles: MtlsRole[]; activeCerts: IssuedClientCertificate[];
   title: string; submitLabel: string; existing?: MtlsAccessRule; onSaved: () => void;
 }) {
-  const [pathPattern, setPathPattern] = useState(existing?.path_pattern ?? "*");
+  const [pathPattern, setPathPattern] = useState(existing?.pathPattern ?? "*");
   const [priority, setPriority] = useState(String(existing?.priority ?? 0));
   const [description, setDescription] = useState(existing?.description ?? "");
-  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>(existing?.allowed_role_ids ?? []);
-  const [selectedCertIds, setSelectedCertIds] = useState<number[]>(existing?.allowed_cert_ids ?? []);
-  const [denyAll, setDenyAll] = useState(existing?.deny_all ?? false);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<number[]>(existing?.allowedRoleIds ?? []);
+  const [selectedCertIds, setSelectedCertIds] = useState<number[]>(existing?.allowedCertIds ?? []);
+  const [denyAll, setDenyAll] = useState(existing?.denyAll ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -373,7 +373,7 @@ function RuleDialog({ onClose, proxyHostId, roles, activeCerts, title, submitLab
                 {activeCerts.map(cert => (
                   <div key={cert.id} className="flex items-center gap-2 py-1 rounded hover:bg-muted/50 px-1">
                     <Checkbox checked={selectedCertIds.includes(cert.id)} onCheckedChange={() => setSelectedCertIds(prev => prev.includes(cert.id) ? prev.filter(i => i !== cert.id) : [...prev, cert.id])} />
-                    <label className="text-sm cursor-pointer flex-1" onClick={() => setSelectedCertIds(prev => prev.includes(cert.id) ? prev.filter(i => i !== cert.id) : [...prev, cert.id])}>{cert.common_name}</label>
+                    <label className="text-sm cursor-pointer flex-1" onClick={() => setSelectedCertIds(prev => prev.includes(cert.id) ? prev.filter(i => i !== cert.id) : [...prev, cert.id])}>{cert.commonName}</label>
                   </div>
                 ))}
               </div>

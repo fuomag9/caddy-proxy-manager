@@ -279,60 +279,60 @@ export type ProxyHost = {
   name: string;
   domains: string[];
   upstreams: string[];
-  certificate_id: number | null;
-  access_list_id: number | null;
-  ssl_forced: boolean;
-  hsts_enabled: boolean;
-  hsts_subdomains: boolean;
-  allow_websocket: boolean;
-  preserve_host_header: boolean;
-  skip_https_hostname_validation: boolean;
+  certificateId: number | null;
+  accessListId: number | null;
+  sslForced: boolean;
+  hstsEnabled: boolean;
+  hstsSubdomains: boolean;
+  allowWebsocket: boolean;
+  preserveHostHeader: boolean;
+  skipHttpsHostnameValidation: boolean;
   enabled: boolean;
-  created_at: string;
-  updated_at: string;
-  custom_reverse_proxy_json: string | null;
-  custom_pre_handlers_json: string | null;
+  createdAt: string;
+  updatedAt: string;
+  customReverseProxyJson: string | null;
+  customPreHandlersJson: string | null;
   authentik: ProxyHostAuthentikConfig | null;
-  load_balancer: LoadBalancerConfig | null;
-  dns_resolver: DnsResolverConfig | null;
-  upstream_dns_resolution: UpstreamDnsResolutionConfig | null;
+  loadBalancer: LoadBalancerConfig | null;
+  dnsResolver: DnsResolverConfig | null;
+  upstreamDnsResolution: UpstreamDnsResolutionConfig | null;
   geoblock: GeoBlockSettings | null;
-  geoblock_mode: GeoBlockMode;
+  geoblockMode: GeoBlockMode;
   waf: WafHostConfig | null;
   mtls: MtlsConfig | null;
-  cpm_forward_auth: CpmForwardAuthConfig | null;
+  cpmForwardAuth: CpmForwardAuthConfig | null;
   redirects: RedirectRule[];
   rewrite: RewriteConfig | null;
-  location_rules: LocationRule[];
+  locationRules: LocationRule[];
 };
 
 export type ProxyHostInput = {
   name: string;
   domains: string[];
   upstreams: string[];
-  certificate_id?: number | null;
-  access_list_id?: number | null;
-  ssl_forced?: boolean;
-  hsts_enabled?: boolean;
-  hsts_subdomains?: boolean;
-  allow_websocket?: boolean;
-  preserve_host_header?: boolean;
-  skip_https_hostname_validation?: boolean;
+  certificateId?: number | null;
+  accessListId?: number | null;
+  sslForced?: boolean;
+  hstsEnabled?: boolean;
+  hstsSubdomains?: boolean;
+  allowWebsocket?: boolean;
+  preserveHostHeader?: boolean;
+  skipHttpsHostnameValidation?: boolean;
   enabled?: boolean;
-  custom_reverse_proxy_json?: string | null;
-  custom_pre_handlers_json?: string | null;
+  customReverseProxyJson?: string | null;
+  customPreHandlersJson?: string | null;
   authentik?: ProxyHostAuthentikInput | null;
-  load_balancer?: LoadBalancerInput | null;
-  dns_resolver?: DnsResolverInput | null;
-  upstream_dns_resolution?: UpstreamDnsResolutionInput | null;
+  loadBalancer?: LoadBalancerInput | null;
+  dnsResolver?: DnsResolverInput | null;
+  upstreamDnsResolution?: UpstreamDnsResolutionInput | null;
   geoblock?: GeoBlockSettings | null;
-  geoblock_mode?: GeoBlockMode;
+  geoblockMode?: GeoBlockMode;
   waf?: WafHostConfig | null;
   mtls?: MtlsConfig | null;
-  cpm_forward_auth?: CpmForwardAuthInput | null;
+  cpmForwardAuth?: CpmForwardAuthInput | null;
   redirects?: RedirectRule[] | null;
   rewrite?: RewriteConfig | null;
-  location_rules?: LocationRule[] | null;
+  locationRules?: LocationRule[] | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -1105,8 +1105,8 @@ function normalizeUpstreamDnsResolutionInput(
 function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): string | null {
   const next: ProxyHostMeta = { ...existing };
 
-  if (input.custom_reverse_proxy_json !== undefined) {
-    const reverse = normalizeMetaValue(input.custom_reverse_proxy_json ?? null);
+  if (input.customReverseProxyJson !== undefined) {
+    const reverse = normalizeMetaValue(input.customReverseProxyJson ?? null);
     if (reverse) {
       next.custom_reverse_proxy_json = reverse;
     } else {
@@ -1114,8 +1114,8 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
-  if (input.custom_pre_handlers_json !== undefined) {
-    const pre = normalizeMetaValue(input.custom_pre_handlers_json ?? null);
+  if (input.customPreHandlersJson !== undefined) {
+    const pre = normalizeMetaValue(input.customPreHandlersJson ?? null);
     if (pre) {
       next.custom_pre_handlers_json = pre;
     } else {
@@ -1132,8 +1132,8 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
-  if (input.load_balancer !== undefined) {
-    const loadBalancer = normalizeLoadBalancerInput(input.load_balancer, existing.load_balancer);
+  if (input.loadBalancer !== undefined) {
+    const loadBalancer = normalizeLoadBalancerInput(input.loadBalancer, existing.load_balancer);
     if (loadBalancer) {
       next.load_balancer = loadBalancer;
     } else {
@@ -1141,8 +1141,8 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
-  if (input.dns_resolver !== undefined) {
-    const dnsResolver = normalizeDnsResolverInput(input.dns_resolver, existing.dns_resolver);
+  if (input.dnsResolver !== undefined) {
+    const dnsResolver = normalizeDnsResolverInput(input.dnsResolver, existing.dns_resolver);
     if (dnsResolver) {
       next.dns_resolver = dnsResolver;
     } else {
@@ -1150,9 +1150,9 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
-  if (input.upstream_dns_resolution !== undefined) {
+  if (input.upstreamDnsResolution !== undefined) {
     const upstreamDnsResolution = normalizeUpstreamDnsResolutionInput(
-      input.upstream_dns_resolution,
+      input.upstreamDnsResolution,
       existing.upstream_dns_resolution
     );
     if (upstreamDnsResolution) {
@@ -1172,8 +1172,8 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
-  if (input.geoblock_mode !== undefined) {
-    next.geoblock_mode = input.geoblock_mode;
+  if (input.geoblockMode !== undefined) {
+    next.geoblock_mode = input.geoblockMode;
   }
 
   if (input.waf !== undefined) {
@@ -1192,11 +1192,11 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
-  if (input.cpm_forward_auth !== undefined) {
-    if (input.cpm_forward_auth && input.cpm_forward_auth.enabled) {
+  if (input.cpmForwardAuth !== undefined) {
+    if (input.cpmForwardAuth && input.cpmForwardAuth.enabled) {
       const cfa: CpmForwardAuthMeta = { enabled: true };
-      if (input.cpm_forward_auth.protected_paths && input.cpm_forward_auth.protected_paths.length > 0) {
-        cfa.protected_paths = input.cpm_forward_auth.protected_paths;
+      if (input.cpmForwardAuth.protected_paths && input.cpmForwardAuth.protected_paths.length > 0) {
+        cfa.protected_paths = input.cpmForwardAuth.protected_paths;
       }
       next.cpm_forward_auth = cfa;
     } else {
@@ -1222,8 +1222,8 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
-  if (input.location_rules !== undefined) {
-    const rules = sanitizeLocationRules(input.location_rules ?? []);
+  if (input.locationRules !== undefined) {
+    const rules = sanitizeLocationRules(input.locationRules ?? []);
     if (rules.length > 0) {
       next.location_rules = rules;
     } else {
@@ -1537,33 +1537,33 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     name: row.name,
     domains: JSON.parse(row.domains),
     upstreams: JSON.parse(row.upstreams),
-    certificate_id: row.certificateId ?? null,
-    access_list_id: row.accessListId ?? null,
-    ssl_forced: row.sslForced,
-    hsts_enabled: row.hstsEnabled,
-    hsts_subdomains: row.hstsSubdomains,
-    allow_websocket: row.allowWebsocket,
-    preserve_host_header: row.preserveHostHeader,
-    skip_https_hostname_validation: row.skipHttpsHostnameValidation,
+    certificateId: row.certificateId ?? null,
+    accessListId: row.accessListId ?? null,
+    sslForced: row.sslForced,
+    hstsEnabled: row.hstsEnabled,
+    hstsSubdomains: row.hstsSubdomains,
+    allowWebsocket: row.allowWebsocket,
+    preserveHostHeader: row.preserveHostHeader,
+    skipHttpsHostnameValidation: row.skipHttpsHostnameValidation,
     enabled: row.enabled,
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!,
-    custom_reverse_proxy_json: meta.custom_reverse_proxy_json ?? null,
-    custom_pre_handlers_json: meta.custom_pre_handlers_json ?? null,
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!,
+    customReverseProxyJson: meta.custom_reverse_proxy_json ?? null,
+    customPreHandlersJson: meta.custom_pre_handlers_json ?? null,
     authentik: hydrateAuthentik(meta.authentik),
-    load_balancer: hydrateLoadBalancer(meta.load_balancer),
-    dns_resolver: hydrateDnsResolver(meta.dns_resolver),
-    upstream_dns_resolution: hydrateUpstreamDnsResolution(meta.upstream_dns_resolution),
+    loadBalancer: hydrateLoadBalancer(meta.load_balancer),
+    dnsResolver: hydrateDnsResolver(meta.dns_resolver),
+    upstreamDnsResolution: hydrateUpstreamDnsResolution(meta.upstream_dns_resolution),
     geoblock: hydrateGeoBlock(meta.geoblock),
-    geoblock_mode: meta.geoblock_mode ?? "merge",
+    geoblockMode: meta.geoblock_mode ?? "merge",
     waf: meta.waf ?? null,
     mtls: meta.mtls ?? null,
-    cpm_forward_auth: meta.cpm_forward_auth?.enabled
+    cpmForwardAuth: meta.cpm_forward_auth?.enabled
       ? { enabled: true, protected_paths: meta.cpm_forward_auth.protected_paths ?? null }
       : null,
     redirects: meta.redirects ?? [],
     rewrite: meta.rewrite ?? null,
-    location_rules: meta.location_rules ?? [],
+    locationRules: meta.location_rules ?? [],
   };
 }
 
@@ -1590,7 +1590,7 @@ const PROXY_HOST_SORT_COLUMNS: Record<string, any> = {
   domains: proxyHosts.domains,
   upstreams: proxyHosts.upstreams,
   enabled: proxyHosts.enabled,
-  created_at: proxyHosts.createdAt,
+  createdAt: proxyHosts.createdAt,
 };
 
 export async function listProxyHostsPaginated(
@@ -1635,16 +1635,16 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
       name: input.name.trim(),
       domains: JSON.stringify(domains),
       upstreams: JSON.stringify(Array.from(new Set(input.upstreams.map((u) => u.trim())))),
-      certificateId: input.certificate_id ?? null,
-      accessListId: input.access_list_id ?? null,
+      certificateId: input.certificateId ?? null,
+      accessListId: input.accessListId ?? null,
       ownerUserId: actorUserId,
-      sslForced: input.ssl_forced ?? true,
-      hstsEnabled: input.hsts_enabled ?? true,
-      hstsSubdomains: input.hsts_subdomains ?? false,
-      allowWebsocket: input.allow_websocket ?? true,
-      preserveHostHeader: input.preserve_host_header ?? true,
+      sslForced: input.sslForced ?? true,
+      hstsEnabled: input.hstsEnabled ?? true,
+      hstsSubdomains: input.hstsSubdomains ?? false,
+      allowWebsocket: input.allowWebsocket ?? true,
+      preserveHostHeader: input.preserveHostHeader ?? true,
       meta,
-      skipHttpsHostnameValidation: input.skip_https_hostname_validation ?? false,
+      skipHttpsHostnameValidation: input.skipHttpsHostnameValidation ?? false,
       enabled: input.enabled ?? true,
       createdAt: now,
       updatedAt: now
@@ -1689,20 +1689,20 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
   }
   const upstreams = input.upstreams ? JSON.stringify(Array.from(new Set(input.upstreams))) : JSON.stringify(existing.upstreams);
   const existingMeta: ProxyHostMeta = {
-    custom_reverse_proxy_json: existing.custom_reverse_proxy_json ?? undefined,
-    custom_pre_handlers_json: existing.custom_pre_handlers_json ?? undefined,
+    custom_reverse_proxy_json: existing.customReverseProxyJson ?? undefined,
+    custom_pre_handlers_json: existing.customPreHandlersJson ?? undefined,
     authentik: dehydrateAuthentik(existing.authentik),
-    load_balancer: dehydrateLoadBalancer(existing.load_balancer),
-    dns_resolver: dehydrateDnsResolver(existing.dns_resolver),
-    upstream_dns_resolution: dehydrateUpstreamDnsResolution(existing.upstream_dns_resolution),
+    load_balancer: dehydrateLoadBalancer(existing.loadBalancer),
+    dns_resolver: dehydrateDnsResolver(existing.dnsResolver),
+    upstream_dns_resolution: dehydrateUpstreamDnsResolution(existing.upstreamDnsResolution),
     geoblock: dehydrateGeoBlock(existing.geoblock),
-    ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {}),
+    ...(existing.geoblockMode !== "merge" ? { geoblock_mode: existing.geoblockMode } : {}),
     ...(existing.waf ? { waf: existing.waf } : {}),
     ...(existing.mtls ? { mtls: existing.mtls } : {}),
-    ...(existing.cpm_forward_auth?.enabled ? {
+    ...(existing.cpmForwardAuth?.enabled ? {
       cpm_forward_auth: {
         enabled: true,
-        ...(existing.cpm_forward_auth.protected_paths ? { protected_paths: existing.cpm_forward_auth.protected_paths } : {})
+        ...(existing.cpmForwardAuth.protected_paths ? { protected_paths: existing.cpmForwardAuth.protected_paths } : {})
       }
     } : {}),
   };
@@ -1715,15 +1715,15 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
       name: input.name ?? existing.name,
       domains,
       upstreams,
-      certificateId: input.certificate_id !== undefined ? input.certificate_id : existing.certificate_id,
-      accessListId: input.access_list_id !== undefined ? input.access_list_id : existing.access_list_id,
-      sslForced: input.ssl_forced ?? existing.ssl_forced,
-      hstsEnabled: input.hsts_enabled ?? existing.hsts_enabled,
-      hstsSubdomains: input.hsts_subdomains ?? existing.hsts_subdomains,
-      allowWebsocket: input.allow_websocket ?? existing.allow_websocket,
-      preserveHostHeader: input.preserve_host_header ?? existing.preserve_host_header,
+      certificateId: input.certificateId !== undefined ? input.certificateId : existing.certificateId,
+      accessListId: input.accessListId !== undefined ? input.accessListId : existing.accessListId,
+      sslForced: input.sslForced ?? existing.sslForced,
+      hstsEnabled: input.hstsEnabled ?? existing.hstsEnabled,
+      hstsSubdomains: input.hstsSubdomains ?? existing.hstsSubdomains,
+      allowWebsocket: input.allowWebsocket ?? existing.allowWebsocket,
+      preserveHostHeader: input.preserveHostHeader ?? existing.preserveHostHeader,
       meta,
-      skipHttpsHostnameValidation: input.skip_https_hostname_validation ?? existing.skip_https_hostname_validation,
+      skipHttpsHostnameValidation: input.skipHttpsHostnameValidation ?? existing.skipHttpsHostnameValidation,
       enabled: input.enabled ?? existing.enabled,
       updatedAt: now
     })

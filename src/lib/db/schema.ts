@@ -6,34 +6,102 @@ export const users = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     email: text("email").notNull(),
     name: text("name"),
-    passwordHash: text("password_hash"),
+    passwordHash: text("passwordHash"),
     role: text("role").notNull().default("user"),
-    provider: text("provider").notNull(),
-    subject: text("subject").notNull(),
-    avatarUrl: text("avatar_url"),
+    provider: text("provider"),
+    subject: text("subject"),
+    avatarUrl: text("avatarUrl"),
     status: text("status").notNull().default("active"),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull()
+    username: text("username"),
+    displayUsername: text("displayUsername"),
+    emailVerified: integer("emailVerified", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
   },
   (table) => ({
-    emailUnique: uniqueIndex("users_email_unique").on(table.email),
-    providerSubjectIdx: uniqueIndex("users_provider_subject_idx").on(table.provider, table.subject)
+    emailUnique: uniqueIndex("users_email_unique").on(table.email)
   })
 );
 
+// Auth tables use camelCase DB columns to match Better Auth's Kysely adapter.
 export const sessions = sqliteTable(
   "sessions",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    userId: integer("user_id")
+    userId: integer("userId")
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
     token: text("token").notNull(),
-    expiresAt: text("expires_at").notNull(),
-    createdAt: text("created_at").notNull()
+    expiresAt: text("expiresAt").notNull(),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
   },
   (table) => ({
-    tokenUnique: uniqueIndex("sessions_token_unique").on(table.token)
+    tokenUnique: uniqueIndex("sessions_token_unique").on(table.token),
+    userIdx: index("sessions_user_idx").on(table.userId)
+  })
+);
+
+export const accounts = sqliteTable(
+  "accounts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("userId")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    accountId: text("accountId").notNull(),
+    providerId: text("providerId").notNull(),
+    accessToken: text("accessToken"),
+    refreshToken: text("refreshToken"),
+    idToken: text("idToken"),
+    accessTokenExpiresAt: text("accessTokenExpiresAt"),
+    refreshTokenExpiresAt: text("refreshTokenExpiresAt"),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
+  },
+  (table) => ({
+    providerAccountIdx: uniqueIndex("accounts_provider_account_idx").on(table.providerId, table.accountId),
+    userIdx: index("accounts_user_idx").on(table.userId)
+  })
+);
+
+export const verifications = sqliteTable(
+  "verifications",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: text("expiresAt").notNull(),
+    createdAt: text("createdAt"),
+    updatedAt: text("updatedAt")
+  }
+);
+
+export const oauthProviders = sqliteTable(
+  "oauth_providers",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    type: text("type").notNull().default("oidc"),
+    clientId: text("clientId").notNull(),
+    clientSecret: text("clientSecret").notNull(),
+    issuer: text("issuer"),
+    authorizationUrl: text("authorizationUrl"),
+    tokenUrl: text("tokenUrl"),
+    userinfoUrl: text("userinfoUrl"),
+    scopes: text("scopes").notNull().default("openid email profile"),
+    autoLink: integer("autoLink", { mode: "boolean" }).notNull().default(false),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    source: text("source").notNull().default("ui"),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
+  },
+  (table) => ({
+    nameUnique: uniqueIndex("oauth_providers_name_unique").on(table.name)
   })
 );
 
@@ -42,10 +110,10 @@ export const oauthStates = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     state: text("state").notNull(),
-    codeVerifier: text("code_verifier").notNull(),
-    redirectTo: text("redirect_to"),
-    createdAt: text("created_at").notNull(),
-    expiresAt: text("expires_at").notNull()
+    codeVerifier: text("codeVerifier").notNull(),
+    redirectTo: text("redirectTo"),
+    createdAt: text("createdAt").notNull(),
+    expiresAt: text("expiresAt").notNull()
   },
   (table) => ({
     stateUnique: uniqueIndex("oauth_state_unique").on(table.state)
@@ -54,11 +122,11 @@ export const oauthStates = sqliteTable(
 
 export const pendingOAuthLinks = sqliteTable("pending_oauth_links", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   provider: text("provider", { length: 50 }).notNull(),
-  userEmail: text("user_email").notNull(), // Email of the user who initiated linking
-  createdAt: text("created_at").notNull(),
-  expiresAt: text("expires_at").notNull()
+  userEmail: text("userEmail").notNull(), // Email of the user who initiated linking
+  createdAt: text("createdAt").notNull(),
+  expiresAt: text("expiresAt").notNull()
 }, (table) => ({
   // Ensure only one pending link per user per provider (prevents race conditions)
   userProviderUnique: uniqueIndex("pending_oauth_user_provider_unique").on(table.userId, table.provider)
@@ -67,7 +135,7 @@ export const pendingOAuthLinks = sqliteTable("pending_oauth_links", {
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
-  updatedAt: text("updated_at").notNull()
+  updatedAt: text("updatedAt").notNull()
 });
 
 export const instances = sqliteTable(
@@ -75,13 +143,13 @@ export const instances = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
-    baseUrl: text("base_url").notNull(),
-    apiToken: text("api_token").notNull(),
+    baseUrl: text("baseUrl").notNull(),
+    apiToken: text("apiToken").notNull(),
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-    lastSyncAt: text("last_sync_at"),
-    lastSyncError: text("last_sync_error"),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull()
+    lastSyncAt: text("lastSyncAt"),
+    lastSyncError: text("lastSyncError"),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
   },
   (table) => ({
     baseUrlUnique: uniqueIndex("instances_base_url_unique").on(table.baseUrl)
@@ -92,22 +160,22 @@ export const accessLists = sqliteTable("access_lists", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   description: text("description"),
-  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull()
+  createdBy: integer("createdBy").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("createdAt").notNull(),
+  updatedAt: text("updatedAt").notNull()
 });
 
 export const accessListEntries = sqliteTable(
   "access_list_entries",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    accessListId: integer("access_list_id")
+    accessListId: integer("accessListId")
       .references(() => accessLists.id, { onDelete: "cascade" })
       .notNull(),
     username: text("username").notNull(),
-    passwordHash: text("password_hash").notNull(),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull()
+    passwordHash: text("passwordHash").notNull(),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
   },
   (table) => ({
     accessListIdIdx: index("access_list_entries_list_idx").on(table.accessListId)
@@ -118,43 +186,43 @@ export const certificates = sqliteTable("certificates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   type: text("type").notNull(),
-  domainNames: text("domain_names").notNull(),
-  autoRenew: integer("auto_renew", { mode: "boolean" }).notNull().default(true),
-  providerOptions: text("provider_options"),
-  certificatePem: text("certificate_pem"),
-  privateKeyPem: text("private_key_pem"),
-  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull()
+  domainNames: text("domainNames").notNull(),
+  autoRenew: integer("autoRenew", { mode: "boolean" }).notNull().default(true),
+  providerOptions: text("providerOptions"),
+  certificatePem: text("certificatePem"),
+  privateKeyPem: text("privateKeyPem"),
+  createdBy: integer("createdBy").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("createdAt").notNull(),
+  updatedAt: text("updatedAt").notNull()
 });
 
 export const caCertificates = sqliteTable("ca_certificates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  certificatePem: text("certificate_pem").notNull(),
-  privateKeyPem: text("private_key_pem"),
-  createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull()
+  certificatePem: text("certificatePem").notNull(),
+  privateKeyPem: text("privateKeyPem"),
+  createdBy: integer("createdBy").references(() => users.id, { onDelete: "set null" }),
+  createdAt: text("createdAt").notNull(),
+  updatedAt: text("updatedAt").notNull()
 });
 
 export const issuedClientCertificates = sqliteTable(
   "issued_client_certificates",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    caCertificateId: integer("ca_certificate_id")
+    caCertificateId: integer("caCertificateId")
       .references(() => caCertificates.id, { onDelete: "cascade" })
       .notNull(),
-    commonName: text("common_name").notNull(),
-    serialNumber: text("serial_number").notNull(),
-    fingerprintSha256: text("fingerprint_sha256").notNull(),
-    certificatePem: text("certificate_pem").notNull(),
-    validFrom: text("valid_from").notNull(),
-    validTo: text("valid_to").notNull(),
-    revokedAt: text("revoked_at"),
-    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull()
+    commonName: text("commonName").notNull(),
+    serialNumber: text("serialNumber").notNull(),
+    fingerprintSha256: text("fingerprintSha256").notNull(),
+    certificatePem: text("certificatePem").notNull(),
+    validFrom: text("validFrom").notNull(),
+    validTo: text("validTo").notNull(),
+    revokedAt: text("revokedAt"),
+    createdBy: integer("createdBy").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
   },
   (table) => ({
     caCertificateIdx: index("issued_client_certificates_ca_idx").on(table.caCertificateId),
@@ -167,19 +235,19 @@ export const proxyHosts = sqliteTable("proxy_hosts", {
   name: text("name").notNull(),
   domains: text("domains").notNull(),
   upstreams: text("upstreams").notNull(),
-  certificateId: integer("certificate_id").references(() => certificates.id, { onDelete: "set null" }),
-  accessListId: integer("access_list_id").references(() => accessLists.id, { onDelete: "set null" }),
-  ownerUserId: integer("owner_user_id").references(() => users.id, { onDelete: "set null" }),
-  sslForced: integer("ssl_forced", { mode: "boolean" }).notNull().default(true),
-  hstsEnabled: integer("hsts_enabled", { mode: "boolean" }).notNull().default(true),
-  hstsSubdomains: integer("hsts_subdomains", { mode: "boolean" }).notNull().default(false),
-  allowWebsocket: integer("allow_websocket", { mode: "boolean" }).notNull().default(true),
-  preserveHostHeader: integer("preserve_host_header", { mode: "boolean" }).notNull().default(true),
+  certificateId: integer("certificateId").references(() => certificates.id, { onDelete: "set null" }),
+  accessListId: integer("accessListId").references(() => accessLists.id, { onDelete: "set null" }),
+  ownerUserId: integer("ownerUserId").references(() => users.id, { onDelete: "set null" }),
+  sslForced: integer("sslForced", { mode: "boolean" }).notNull().default(true),
+  hstsEnabled: integer("hstsEnabled", { mode: "boolean" }).notNull().default(true),
+  hstsSubdomains: integer("hstsSubdomains", { mode: "boolean" }).notNull().default(false),
+  allowWebsocket: integer("allowWebsocket", { mode: "boolean" }).notNull().default(true),
+  preserveHostHeader: integer("preserveHostHeader", { mode: "boolean" }).notNull().default(true),
   meta: text("meta"),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
-  skipHttpsHostnameValidation: integer("skip_https_hostname_validation", { mode: "boolean" })
+  createdAt: text("createdAt").notNull(),
+  updatedAt: text("updatedAt").notNull(),
+  skipHttpsHostnameValidation: integer("skipHttpsHostnameValidation", { mode: "boolean" })
     .notNull()
     .default(false)
 });
@@ -189,13 +257,13 @@ export const apiTokens = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
-    tokenHash: text("token_hash").notNull(),
-    createdBy: integer("created_by")
+    tokenHash: text("tokenHash").notNull(),
+    createdBy: integer("createdBy")
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
-    createdAt: text("created_at").notNull(),
-    lastUsedAt: text("last_used_at"),
-    expiresAt: text("expires_at")
+    createdAt: text("createdAt").notNull(),
+    lastUsedAt: text("lastUsedAt"),
+    expiresAt: text("expiresAt")
   },
   (table) => ({
     tokenHashUnique: uniqueIndex("api_tokens_token_hash_unique").on(table.tokenHash)
@@ -204,20 +272,20 @@ export const apiTokens = sqliteTable(
 
 export const auditEvents = sqliteTable("audit_events", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  userId: integer("userId").references(() => users.id, { onDelete: "set null" }),
   action: text("action").notNull(),
-  entityType: text("entity_type").notNull(),
-  entityId: integer("entity_id"),
+  entityType: text("entityType").notNull(),
+  entityId: integer("entityId"),
   summary: text("summary"),
   data: text("data"),
-  createdAt: text("created_at").notNull()
+  createdAt: text("createdAt").notNull()
 });
 
 export const linkingTokens = sqliteTable("linking_tokens", {
   id: text("id").primaryKey(),
   token: text("token").notNull(),
-  createdAt: text("created_at").notNull(),
-  expiresAt: text("expires_at").notNull()
+  createdAt: text("createdAt").notNull(),
+  expiresAt: text("expiresAt").notNull()
 });
 
 // traffic_events and waf_events have been migrated to ClickHouse.
@@ -241,9 +309,9 @@ export const mtlsRoles = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     description: text("description"),
-    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull()
+    createdBy: integer("createdBy").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
   },
   (table) => ({
     nameUnique: uniqueIndex("mtls_roles_name_unique").on(table.name)
@@ -254,13 +322,13 @@ export const mtlsCertificateRoles = sqliteTable(
   "mtls_certificate_roles",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    issuedClientCertificateId: integer("issued_client_certificate_id")
+    issuedClientCertificateId: integer("issuedClientCertificateId")
       .references(() => issuedClientCertificates.id, { onDelete: "cascade" })
       .notNull(),
-    mtlsRoleId: integer("mtls_role_id")
+    mtlsRoleId: integer("mtlsRoleId")
       .references(() => mtlsRoles.id, { onDelete: "cascade" })
       .notNull(),
-    createdAt: text("created_at").notNull()
+    createdAt: text("createdAt").notNull()
   },
   (table) => ({
     certRoleUnique: uniqueIndex("mtls_cert_role_unique").on(
@@ -275,18 +343,18 @@ export const mtlsAccessRules = sqliteTable(
   "mtls_access_rules",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    proxyHostId: integer("proxy_host_id")
+    proxyHostId: integer("proxyHostId")
       .references(() => proxyHosts.id, { onDelete: "cascade" })
       .notNull(),
-    pathPattern: text("path_pattern").notNull(),
-    allowedRoleIds: text("allowed_role_ids").notNull().default("[]"),
-    allowedCertIds: text("allowed_cert_ids").notNull().default("[]"),
-    denyAll: integer("deny_all", { mode: "boolean" }).notNull().default(false),
+    pathPattern: text("pathPattern").notNull(),
+    allowedRoleIds: text("allowedRoleIds").notNull().default("[]"),
+    allowedCertIds: text("allowedCertIds").notNull().default("[]"),
+    denyAll: integer("denyAll", { mode: "boolean" }).notNull().default(false),
     priority: integer("priority").notNull().default(0),
     description: text("description"),
-    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull()
+    createdBy: integer("createdBy").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
   },
   (table) => ({
     proxyHostIdx: index("mtls_access_rules_proxy_host_idx").on(table.proxyHostId),
@@ -305,9 +373,9 @@ export const groups = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     description: text("description"),
-    createdBy: integer("created_by").references(() => users.id, { onDelete: "set null" }),
-    createdAt: text("created_at").notNull(),
-    updatedAt: text("updated_at").notNull()
+    createdBy: integer("createdBy").references(() => users.id, { onDelete: "set null" }),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull()
   },
   (table) => ({
     nameUnique: uniqueIndex("groups_name_unique").on(table.name)
@@ -318,13 +386,13 @@ export const groupMembers = sqliteTable(
   "group_members",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    groupId: integer("group_id")
+    groupId: integer("groupId")
       .references(() => groups.id, { onDelete: "cascade" })
       .notNull(),
-    userId: integer("user_id")
+    userId: integer("userId")
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
-    createdAt: text("created_at").notNull()
+    createdAt: text("createdAt").notNull()
   },
   (table) => ({
     memberUnique: uniqueIndex("group_members_unique").on(table.groupId, table.userId),
@@ -336,12 +404,12 @@ export const forwardAuthAccess = sqliteTable(
   "forward_auth_access",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    proxyHostId: integer("proxy_host_id")
+    proxyHostId: integer("proxyHostId")
       .references(() => proxyHosts.id, { onDelete: "cascade" })
       .notNull(),
-    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
-    groupId: integer("group_id").references(() => groups.id, { onDelete: "cascade" }),
-    createdAt: text("created_at").notNull()
+    userId: integer("userId").references(() => users.id, { onDelete: "cascade" }),
+    groupId: integer("groupId").references(() => groups.id, { onDelete: "cascade" }),
+    createdAt: text("createdAt").notNull()
   },
   (table) => ({
     hostIdx: index("faa_host_idx").on(table.proxyHostId),
@@ -354,12 +422,12 @@ export const forwardAuthSessions = sqliteTable(
   "forward_auth_sessions",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    userId: integer("user_id")
+    userId: integer("userId")
       .references(() => users.id, { onDelete: "cascade" })
       .notNull(),
-    tokenHash: text("token_hash").notNull(),
-    expiresAt: text("expires_at").notNull(),
-    createdAt: text("created_at").notNull()
+    tokenHash: text("tokenHash").notNull(),
+    expiresAt: text("expiresAt").notNull(),
+    createdAt: text("createdAt").notNull()
   },
   (table) => ({
     tokenHashUnique: uniqueIndex("fas_token_hash_unique").on(table.tokenHash),
@@ -372,15 +440,15 @@ export const forwardAuthExchanges = sqliteTable(
   "forward_auth_exchanges",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    sessionId: integer("session_id")
+    sessionId: integer("sessionId")
       .references(() => forwardAuthSessions.id, { onDelete: "cascade" })
       .notNull(),
-    codeHash: text("code_hash").notNull(),
-    sessionToken: text("session_token").notNull(), // raw session token (short-lived, single-use)
-    redirectUri: text("redirect_uri").notNull(),
-    expiresAt: text("expires_at").notNull(),
+    codeHash: text("codeHash").notNull(),
+    sessionToken: text("sessionToken").notNull(), // raw session token (short-lived, single-use)
+    redirectUri: text("redirectUri").notNull(),
+    expiresAt: text("expiresAt").notNull(),
     used: integer("used", { mode: "boolean" }).notNull().default(false),
-    createdAt: text("created_at").notNull()
+    createdAt: text("createdAt").notNull()
   },
   (table) => ({
     codeHashUnique: uniqueIndex("fae_code_hash_unique").on(table.codeHash)
@@ -391,11 +459,11 @@ export const forwardAuthRedirectIntents = sqliteTable(
   "forward_auth_redirect_intents",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    ridHash: text("rid_hash").notNull(),
-    redirectUri: text("redirect_uri").notNull(),
-    expiresAt: text("expires_at").notNull(),
+    ridHash: text("ridHash").notNull(),
+    redirectUri: text("redirectUri").notNull(),
+    expiresAt: text("expiresAt").notNull(),
     consumed: integer("consumed", { mode: "boolean" }).notNull().default(false),
-    createdAt: text("created_at").notNull()
+    createdAt: text("createdAt").notNull()
   },
   (table) => ({
     ridHashUnique: uniqueIndex("fari_rid_hash_unique").on(table.ridHash),
@@ -409,16 +477,16 @@ export const l4ProxyHosts = sqliteTable("l4_proxy_hosts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   protocol: text("protocol").notNull(),
-  listenAddress: text("listen_address").notNull(),
+  listenAddress: text("listenAddress").notNull(),
   upstreams: text("upstreams").notNull(),
-  matcherType: text("matcher_type").notNull().default("none"),
-  matcherValue: text("matcher_value"),
-  tlsTermination: integer("tls_termination", { mode: "boolean" }).notNull().default(false),
-  proxyProtocolVersion: text("proxy_protocol_version"),
-  proxyProtocolReceive: integer("proxy_protocol_receive", { mode: "boolean" }).notNull().default(false),
-  ownerUserId: integer("owner_user_id").references(() => users.id, { onDelete: "set null" }),
+  matcherType: text("matcherType").notNull().default("none"),
+  matcherValue: text("matcherValue"),
+  tlsTermination: integer("tlsTermination", { mode: "boolean" }).notNull().default(false),
+  proxyProtocolVersion: text("proxyProtocolVersion"),
+  proxyProtocolReceive: integer("proxyProtocolReceive", { mode: "boolean" }).notNull().default(false),
+  ownerUserId: integer("ownerUserId").references(() => users.id, { onDelete: "set null" }),
   meta: text("meta"),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
+  createdAt: text("createdAt").notNull(),
+  updatedAt: text("updatedAt").notNull(),
 });

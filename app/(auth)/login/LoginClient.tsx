@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { signIn } from "next-auth/react";
+import { authClient } from "@/src/lib/auth-client";
 import { LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,28 +36,24 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
       return;
     }
 
-    const result = await signIn("credentials", {
-      redirect: false,
-      callbackUrl: "/",
+    const { data, error } = await authClient.signIn.username({
       username,
       password,
     });
 
-    if (!result || result.error || result.ok === false) {
+    if (error) {
       let message: string | null = null;
-      if (result?.status === 429) {
-        message = result.error && result.error !== "CredentialsSignin"
-          ? result.error
-          : "Too many login attempts. Try again in a few minutes.";
-      } else if (result?.error && result.error !== "CredentialsSignin") {
-        message = result.error;
+      if (error.status === 429) {
+        message = error.message || "Too many login attempts. Try again in a few minutes.";
+      } else if (error.message) {
+        message = error.message;
       }
       setLoginError(message ?? "Invalid username or password.");
       setLoginPending(false);
       return;
     }
 
-    router.replace(result.url ?? "/");
+    router.replace("/");
     router.refresh();
   };
 
@@ -65,7 +61,7 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
     setLoginError(null);
     setOauthPending(providerId);
     try {
-      await signIn(providerId, { callbackUrl: "/" });
+      await authClient.signIn.social({ provider: providerId, callbackURL: "/" });
     } catch {
       setLoginError("Failed to sign in with OAuth");
       setOauthPending(null);

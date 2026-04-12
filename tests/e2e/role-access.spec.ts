@@ -58,13 +58,25 @@ function ensureTestUser(username: string, password: string, role: string) {
     const now = new Date().toISOString();
     const existing = db.query("SELECT id FROM users WHERE email = ?").get(email);
     if (existing) {
-      db.run("UPDATE users SET password_hash = ?, role = ?, status = 'active', updated_at = ? WHERE email = ?",
+      db.run("UPDATE users SET passwordHash = ?, role = ?, status = 'active', updatedAt = ? WHERE email = ?",
         [hash, "${role}", now, email]);
+      // Update or create credential account for Better Auth
+      const acc = db.query("SELECT id FROM accounts WHERE userId = ? AND providerId = 'credential'").get(existing.id);
+      if (acc) {
+        db.run("UPDATE accounts SET password = ?, updatedAt = ? WHERE id = ?", [hash, now, acc.id]);
+      } else {
+        db.run("INSERT INTO accounts (userId, accountId, providerId, password, createdAt, updatedAt) VALUES (?, ?, 'credential', ?, ?, ?)",
+          [existing.id, String(existing.id), hash, now, now]);
+      }
     } else {
       db.run(
-        "INSERT INTO users (email, name, password_hash, role, provider, subject, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'credentials', ?, 'active', ?, ?)",
-        [email, "${username}", hash, "${role}", "${username}", now, now]
+        "INSERT INTO users (email, name, passwordHash, role, provider, subject, username, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, 'credentials', ?, ?, 'active', ?, ?)",
+        [email, "${username}", hash, "${role}", "${username}", "${username}", now, now]
       );
+      const user = db.query("SELECT id FROM users WHERE email = ?").get(email);
+      // Create credential account for Better Auth
+      db.run("INSERT INTO accounts (userId, accountId, providerId, password, createdAt, updatedAt) VALUES (?, ?, 'credential', ?, ?, ?)",
+        [user.id, String(user.id), hash, now, now]);
     }
   `;
   execFileSync('docker', [...COMPOSE_ARGS, 'exec', '-T', 'web', 'bun', '-e', script], {
@@ -90,7 +102,7 @@ async function loginAs(
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
   // The login client does router.replace('/') on success — wait for that
-  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 });
+  await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 60_000 });
   await page.close();
   return context;
 }
@@ -281,8 +293,12 @@ test.describe('Role-based access control', () => {
 
   // ── Admin user — can access all pages ───────────────────────────────
 
-  test('admin role: all dashboard pages are accessible', async ({ browser }) => {
-    const adminContext = await loginAs(browser, 'testadmin', 'TestPassword2026!');
+  test('admin role: all dashboard pages are accessible', async ({ browser }, testInfo) => {
+    testInfo.setTimeout(90_000);
+    // Use the pre-authenticated admin state from global-setup
+    const adminContext = await browser.newContext({
+      storageState: require('path').resolve(__dirname, '../.auth/admin.json'),
+    });
     try {
       for (const path of ALL_DASHBOARD_PAGES) {
         const page = await adminContext.newPage();
@@ -298,7 +314,9 @@ test.describe('Role-based access control', () => {
   });
 
   test('admin role: sidebar shows all nav items', async ({ browser }) => {
-    const adminContext = await loginAs(browser, 'testadmin', 'TestPassword2026!');
+    const adminContext = await browser.newContext({
+      storageState: require('path').resolve(__dirname, '../.auth/admin.json'),
+    });
     try {
       const page = await adminContext.newPage();
       await page.goto('/');

@@ -49,7 +49,7 @@ function IssuedCertsPanel({ ca }: { ca: CaCertificateView }) {
   const [issueCaOpen, setIssueCaOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
 
-  const active = ca.issuedCerts.filter((c) => !c.revoked_at);
+  const active = ca.issuedCerts.filter((c) => !c.revokedAt);
 
   return (
     <div className="px-5 py-4 bg-muted/30 border-t">
@@ -62,7 +62,7 @@ function IssuedCertsPanel({ ca }: { ca: CaCertificateView }) {
             </span>
           </span>
           <div className="flex gap-2">
-            {ca.has_private_key && (
+            {ca.hasPrivateKey && (
               <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setIssueCaOpen(true)}>
                 Issue Cert
               </Button>
@@ -80,10 +80,10 @@ function IssuedCertsPanel({ ca }: { ca: CaCertificateView }) {
         ) : (
           <div className="flex flex-col divide-y divide-border rounded-md border overflow-hidden">
             {active.slice(0, 5).map((issued) => {
-              const expired = new Date(issued.valid_to).getTime() < Date.now();
+              const expired = new Date(issued.validTo).getTime() < Date.now();
               return (
                 <div key={issued.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-background/60">
-                  <span className="text-sm font-mono">{issued.common_name}</span>
+                  <span className="text-sm font-mono">{issued.commonName}</span>
                   <Badge variant={expired ? "destructive" : "success"} className="text-[10px] px-1.5 py-0">
                     {expired ? "Expired" : "Active"}
                   </Badge>
@@ -135,7 +135,7 @@ function CaActionsMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {ca.has_private_key && (
+          {ca.hasPrivateKey && (
             <DropdownMenuItem onClick={() => { setOpen(false); setIssuedOpen(true); }}>
               Issue Client Cert
             </DropdownMenuItem>
@@ -186,7 +186,7 @@ export function CaTab({ caCertificates, search, statusFilter }: Props) {
           </Card>
         ) : (
           filtered.map((ca) => {
-            const activeCount = ca.issuedCerts.filter((c) => !c.revoked_at).length;
+            const activeCount = ca.issuedCerts.filter((c) => !c.revokedAt).length;
             return (
               <Card key={ca.id} className="border-l-2 border-l-violet-500">
                 <CardContent className="p-4 flex flex-col gap-2">
@@ -200,7 +200,7 @@ export function CaTab({ caCertificates, search, statusFilter }: Props) {
                     <CaActionsMenu ca={ca} onEdit={() => setDrawerCert(ca)} onDelete={() => setDeleteCert(ca)} />
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {ca.has_private_key && (
+                    {ca.hasPrivateKey && (
                       <Badge variant="success" className="text-[10px] px-1.5 py-0">
                         <KeyRound className="h-2.5 w-2.5 mr-0.5" />Key stored
                       </Badge>
@@ -210,7 +210,7 @@ export function CaTab({ caCertificates, search, statusFilter }: Props) {
                         {activeCount}/{ca.issuedCerts.length} active
                       </Badge>
                     )}
-                    <span className="text-xs text-muted-foreground">{formatRelativeDate(ca.created_at)}</span>
+                    <span className="text-xs text-muted-foreground">{formatRelativeDate(ca.createdAt)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -241,7 +241,7 @@ export function CaTab({ caCertificates, search, statusFilter }: Props) {
               </TableRow>
             ) : (
               filtered.map((ca) => {
-                const activeCount = ca.issuedCerts.filter((c) => !c.revoked_at).length;
+                const activeCount = ca.issuedCerts.filter((c) => !c.revokedAt).length;
                 const expanded = expandedId === ca.id;
                 return (
                   <React.Fragment key={ca.id}>
@@ -267,7 +267,7 @@ export function CaTab({ caCertificates, search, statusFilter }: Props) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {ca.has_private_key ? (
+                        {ca.hasPrivateKey ? (
                           <Badge variant="success" className="text-[10px] px-1.5 py-0">
                             <KeyRound className="h-2.5 w-2.5 mr-0.5" />Stored
                           </Badge>
@@ -285,7 +285,7 @@ export function CaTab({ caCertificates, search, statusFilter }: Props) {
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-muted-foreground">{formatRelativeDate(ca.created_at)}</span>
+                        <span className="text-sm text-muted-foreground">{formatRelativeDate(ca.createdAt)}</span>
                       </TableCell>
                       <TableCell className="text-right">
                         <CaActionsMenu

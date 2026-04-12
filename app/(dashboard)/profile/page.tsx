@@ -1,6 +1,6 @@
 import { requireUser } from "@/src/lib/auth";
 import { getUserById } from "@/src/lib/models/user";
-import { getEnabledOAuthProviders } from "@/src/lib/config";
+import { getProviderDisplayList } from "@/src/lib/models/oauth-providers";
 import { listApiTokens } from "@/src/lib/models/api-tokens";
 import ProfileClient from "./ProfileClient";
 import { redirect } from "next/navigation";
@@ -15,7 +15,7 @@ export default async function ProfilePage() {
   }
 
   const [enabledProviders, apiTokens] = await Promise.all([
-    Promise.resolve(getEnabledOAuthProviders()),
+    getProviderDisplayList(),
     listApiTokens(userId),
   ]);
 

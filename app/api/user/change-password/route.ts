@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     }
 
     // If user has a password, verify current password
-    if (user.password_hash) {
+    if (user.passwordHash) {
       if (!currentPassword) {
         return NextResponse.json(
           { error: "Current password is required" },
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const isValid = bcrypt.compareSync(currentPassword, user.password_hash);
+      const isValid = bcrypt.compareSync(currentPassword, user.passwordHash);
       if (!isValid) {
         registerFailedAttempt(rateLimitKey);
         return NextResponse.json(
@@ -90,10 +90,10 @@ export async function POST(request: NextRequest) {
     // Audit log
     await createAuditEvent({
       userId,
-      action: user.password_hash ? "password_changed" : "password_set",
+      action: user.passwordHash ? "password_changed" : "password_set",
       entityType: "user",
       entityId: userId,
-      summary: user.password_hash ? "User changed their password" : "User set a password",
+      summary: user.passwordHash ? "User changed their password" : "User set a password",
     });
 
     return NextResponse.json({

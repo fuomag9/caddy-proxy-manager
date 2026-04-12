@@ -25,7 +25,7 @@ export async function createCaCertificateAction(formData: FormData) {
   if (!certificatePem) throw new Error("Certificate PEM is required");
   validatePem(certificatePem);
 
-  await createCaCertificate({ name, certificate_pem: certificatePem }, userId);
+  await createCaCertificate({ name, certificatePem: certificatePem }, userId);
   revalidatePath("/certificates");
 }
 
@@ -41,7 +41,7 @@ export async function updateCaCertificateAction(id: number, formData: FormData) 
 
   await updateCaCertificate(id, {
     ...(name ? { name } : {}),
-    ...(certificatePem ? { certificate_pem: certificatePem } : {})
+    ...(certificatePem ? { certificatePem: certificatePem } : {})
   }, userId);
   revalidatePath("/certificates");
 }
@@ -92,7 +92,7 @@ export async function generateCaCertificateAction(formData: FormData): Promise<{
   const certificatePem = forge.pki.certificateToPem(cert);
   const privateKeyPem = forge.pki.privateKeyToPem(keypair.privateKey);
 
-  const record = await createCaCertificate({ name, certificate_pem: certificatePem, private_key_pem: privateKeyPem }, userId);
+  const record = await createCaCertificate({ name, certificatePem: certificatePem, privateKeyPem: privateKeyPem }, userId);
   revalidatePath("/certificates");
   return { id: record.id };
 }
@@ -125,7 +125,7 @@ export async function issueClientCertificateAction(
   if (!caCertRecord) throw new Error("CA certificate not found");
 
   const caKey = forge.pki.privateKeyFromPem(caPrivateKeyPem);
-  const caCert = forge.pki.certificateFromPem(caCertRecord.certificate_pem);
+  const caCert = forge.pki.certificateFromPem(caCertRecord.certificatePem);
 
   const keypair = forge.pki.rsa.generateKeyPair({ bits: 2048 });
   const cert = forge.pki.createCertificate();
@@ -149,13 +149,13 @@ export async function issueClientCertificateAction(
 
   await createIssuedClientCertificate(
     {
-      ca_certificate_id: caCertId,
-      common_name: commonName,
-      serial_number: cert.serialNumber.toUpperCase(),
-      fingerprint_sha256: certificate.fingerprint256,
-      certificate_pem: certificatePem,
-      valid_from: new Date(certificate.validFrom).toISOString(),
-      valid_to: new Date(certificate.validTo).toISOString()
+      caCertificateId: caCertId,
+      commonName: commonName,
+      serialNumber: cert.serialNumber.toUpperCase(),
+      fingerprintSha256: certificate.fingerprint256,
+      certificatePem: certificatePem,
+      validFrom: new Date(certificate.validFrom).toISOString(),
+      validTo: new Date(certificate.validTo).toISOString()
     },
     userId
   );
@@ -184,5 +184,5 @@ export async function revokeIssuedClientCertificateAction(id: number): Promise<{
   const userId = Number(session.user.id);
   const record = await revokeIssuedClientCertificate(id, userId);
   revalidatePath("/certificates");
-  return { revokedAt: record.revoked_at! };
+  return { revokedAt: record.revokedAt! };
 }

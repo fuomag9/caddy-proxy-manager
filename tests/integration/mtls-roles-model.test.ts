@@ -91,7 +91,7 @@ describe('mtls-roles model CRUD', () => {
     const role = await createMtlsRole({ name: 'admin', description: 'Admin role' }, userId);
     expect(role.name).toBe('admin');
     expect(role.description).toBe('Admin role');
-    expect(role.certificate_count).toBe(0);
+    expect(role.certificateCount).toBe(0);
     expect(role.id).toBeGreaterThan(0);
   });
 
@@ -115,7 +115,7 @@ describe('mtls-roles model CRUD', () => {
     await assignRoleToCertificate(role.id, cert1.id, 1);
 
     const roles = await listMtlsRoles();
-    expect(roles[0].certificate_count).toBe(1);
+    expect(roles[0].certificateCount).toBe(1);
   });
 
   it('listMtlsRoles returns empty array when no roles', async () => {
@@ -123,7 +123,7 @@ describe('mtls-roles model CRUD', () => {
     expect(roles).toEqual([]);
   });
 
-  it('getMtlsRole returns role with certificate_ids', async () => {
+  it('getMtlsRole returns role with certificateIds', async () => {
     const { cert1, cert2 } = await seedCaAndCerts();
     const role = await createMtlsRole({ name: 'admin' }, userId);
     await assignRoleToCertificate(role.id, cert1.id, 1);
@@ -131,9 +131,9 @@ describe('mtls-roles model CRUD', () => {
 
     const fetched = await getMtlsRole(role.id);
     expect(fetched).not.toBeNull();
-    expect(fetched!.certificate_ids).toHaveLength(2);
-    expect(fetched!.certificate_ids).toContain(cert1.id);
-    expect(fetched!.certificate_ids).toContain(cert2.id);
+    expect(fetched!.certificateIds).toHaveLength(2);
+    expect(fetched!.certificateIds).toContain(cert1.id);
+    expect(fetched!.certificateIds).toContain(cert2.id);
   });
 
   it('getMtlsRole returns null for non-existent role', async () => {
@@ -177,7 +177,7 @@ describe('mtls-roles certificate assignments', () => {
     await assignRoleToCertificate(role.id, cert1.id, 1);
 
     const fetched = await getMtlsRole(role.id);
-    expect(fetched!.certificate_ids).toContain(cert1.id);
+    expect(fetched!.certificateIds).toContain(cert1.id);
   });
 
   it('assignRoleToCertificate throws for non-existent role', async () => {
@@ -204,7 +204,7 @@ describe('mtls-roles certificate assignments', () => {
     await removeRoleFromCertificate(role.id, cert1.id, 1);
 
     const fetched = await getMtlsRole(role.id);
-    expect(fetched!.certificate_ids).toEqual([]);
+    expect(fetched!.certificateIds).toEqual([]);
   });
 
   it('removeRoleFromCertificate throws for non-existent role', async () => {
@@ -247,7 +247,7 @@ describe('mtls-roles certificate assignments', () => {
     await assignRoleToCertificate(role.id, cert1.id, 1);
     await assignRoleToCertificate(role.id, cert2.id, 1);
     const fetched = await getMtlsRole(role.id);
-    expect(fetched!.certificate_ids).toHaveLength(2);
+    expect(fetched!.certificateIds).toHaveLength(2);
   });
 });
 

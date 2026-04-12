@@ -141,6 +141,27 @@
       "when": 1775700000000,
       "tag": "0019_drop_analytics_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1776000000000,
+      "tag": "0020_better_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1776100000000,
+      "tag": "0021_camelcase_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1776200000000,
+      "tag": "0022_nullable_provider_subject",
+      "breakpoints": true
     }
   ]
 }

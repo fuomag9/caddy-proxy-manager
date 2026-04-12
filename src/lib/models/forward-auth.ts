@@ -92,9 +92,9 @@ export async function consumeRedirectIntent(
 
 export type ForwardAuthSession = {
   id: number;
-  user_id: number;
-  expires_at: string;
-  created_at: string;
+  userId: number;
+  expiresAt: string;
+  createdAt: string;
 };
 
 export async function createForwardAuthSession(
@@ -118,9 +118,9 @@ export async function createForwardAuthSession(
     rawToken,
     session: {
       id: row.id,
-      user_id: row.userId,
-      expires_at: toIso(row.expiresAt)!,
-      created_at: toIso(row.createdAt)!
+      userId: row.userId,
+      expiresAt: toIso(row.expiresAt)!,
+      createdAt: toIso(row.createdAt)!
     }
   };
 }
@@ -145,9 +145,9 @@ export async function listForwardAuthSessions(): Promise<ForwardAuthSession[]> {
   });
   return rows.map((r) => ({
     id: r.id,
-    user_id: r.userId,
-    expires_at: toIso(r.expiresAt)!,
-    created_at: toIso(r.createdAt)!
+    userId: r.userId,
+    expiresAt: toIso(r.expiresAt)!,
+    createdAt: toIso(r.createdAt)!
   }));
 }
 
@@ -232,10 +232,10 @@ export async function redeemExchangeCode(
 
 export type ForwardAuthAccessEntry = {
   id: number;
-  proxy_host_id: number;
-  user_id: number | null;
-  group_id: number | null;
-  created_at: string;
+  proxyHostId: number;
+  userId: number | null;
+  groupId: number | null;
+  createdAt: string;
 };
 
 export async function checkHostAccess(
@@ -313,10 +313,10 @@ export async function getForwardAuthAccessForHost(
 
   return rows.map((r) => ({
     id: r.id,
-    proxy_host_id: r.proxyHostId,
-    user_id: r.userId,
-    group_id: r.groupId,
-    created_at: toIso(r.createdAt)!
+    proxyHostId: r.proxyHostId,
+    userId: r.userId,
+    groupId: r.groupId,
+    createdAt: toIso(r.createdAt)!
   }));
 }
 

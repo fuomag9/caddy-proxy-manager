@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useFormState } from "react-dom";
 import {
   Cloud, Globe, Network, Pin, Activity,
-  ScrollText, Settings2, UserCheck, MapPin,
+  ScrollText, Settings2, UserCheck, MapPin, KeyRound,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ import type {
   GeoBlockSettings,
 } from "@/lib/settings";
 import { GeoBlockFields } from "@/components/proxy-hosts/GeoBlockFields";
+import OAuthProvidersSection from "./OAuthProvidersSection";
+import type { OAuthProvider } from "@/src/lib/models/oauth-providers";
 import {
   updateCloudflareSettingsAction,
   updateGeneralSettingsAction,
@@ -117,6 +119,7 @@ const A: Record<string, AccentConfig> = {
   metrics:    { border: "border-l-rose-500",     icon: "border-rose-500/30 bg-rose-500/10 text-rose-500"        },
   logging:    { border: "border-l-amber-500",    icon: "border-amber-500/30 bg-amber-500/10 text-amber-500"     },
   geoblock:   { border: "border-l-teal-500",     icon: "border-teal-500/30 bg-teal-500/10 text-teal-500"        },
+  oauth:      { border: "border-l-indigo-500",   icon: "border-indigo-500/30 bg-indigo-500/10 text-indigo-500" },
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -134,6 +137,8 @@ type Props = {
   dns: DnsSettings | null;
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
+  oauthProviders: OAuthProvider[];
+  baseUrl: string;
   instanceSync: {
     mode: "standalone" | "master" | "slave";
     modeFromEnv: boolean;
@@ -156,10 +161,10 @@ type Props = {
       instances: Array<{
         id: number;
         name: string;
-        base_url: string;
+        baseUrl: string;
         enabled: boolean;
-        last_sync_at: string | null;
-        last_sync_error: string | null;
+        lastSyncAt: string | null;
+        lastSyncError: string | null;
       }>;
       envInstances: Array<{
         name: string;
@@ -180,6 +185,8 @@ export default function SettingsClient({
   dns,
   upstreamDnsResolution,
   globalGeoBlock,
+  oauthProviders,
+  baseUrl,
   instanceSync
 }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
@@ -376,12 +383,12 @@ export default function SettingsClient({
               >
                 <div>
                   <p className="text-sm font-semibold">{instance.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">{instance.base_url}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{instance.baseUrl}</p>
                   <span className="text-xs text-muted-foreground">
-                    {instance.last_sync_at ? `Last sync: ${instance.last_sync_at}` : "No sync yet"}
+                    {instance.lastSyncAt ? `Last sync: ${instance.lastSyncAt}` : "No sync yet"}
                   </span>
-                  {instance.last_sync_error && (
-                    <span className="block text-xs text-destructive">{instance.last_sync_error}</span>
+                  {instance.lastSyncError && (
+                    <span className="block text-xs text-destructive">{instance.lastSyncError}</span>
                   )}
                 </div>
                 <div className="flex gap-2">
@@ -852,6 +859,16 @@ export default function SettingsClient({
             <Button type="submit" size="sm">Save geoblocking settings</Button>
           </div>
         </form>
+      </SettingSection>
+
+      {/* ── OAuth Providers ── */}
+      <SettingSection
+        icon={<KeyRound className="h-4 w-4" />}
+        title="OAuth Providers"
+        description="Configure OAuth/OIDC providers for single sign-on. Users can log in via these providers in addition to local credentials."
+        accent={A.oauth}
+      >
+        <OAuthProvidersSection initialProviders={oauthProviders} baseUrl={baseUrl} />
       </SettingSection>
     </div>
   );

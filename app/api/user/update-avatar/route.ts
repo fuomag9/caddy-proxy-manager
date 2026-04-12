@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     // Update user avatar
     const updatedUser = await updateUserProfile(userId, {
-      avatar_url: avatarUrl
+      avatarUrl: avatarUrl
     });
 
     if (!updatedUser) {
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      avatarUrl: updatedUser.avatar_url
+      avatarUrl: updatedUser.avatarUrl
     });
   } catch (error) {
     console.error("Avatar update error:", error);

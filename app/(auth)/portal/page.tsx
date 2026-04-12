@@ -1,5 +1,5 @@
 import { auth } from "@/src/lib/auth";
-import { getEnabledOAuthProviders } from "@/src/lib/config";
+import { getProviderDisplayList } from "@/src/lib/models/oauth-providers";
 import { isForwardAuthDomain, createRedirectIntent } from "@/src/lib/models/forward-auth";
 import PortalLoginForm from "./PortalLoginForm";
 
@@ -36,7 +36,7 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
   }
 
   const session = await auth();
-  const enabledProviders = getEnabledOAuthProviders();
+  const enabledProviders = await getProviderDisplayList();
 
   return (
     <PortalLoginForm

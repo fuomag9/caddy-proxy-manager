@@ -43,7 +43,7 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
   ]);
 
   // Build forward auth access map for hosts that have CPM forward auth enabled
-  const faHosts = hosts.filter((h) => h.cpm_forward_auth?.enabled);
+  const faHosts = hosts.filter((h) => h.cpmForwardAuth?.enabled);
   const faAccessEntries = await Promise.all(
     faHosts.map((h) => getForwardAuthAccessForHost(h.id).catch(() => []))
   );
@@ -51,8 +51,8 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
   faHosts.forEach((h, i) => {
     const entries = faAccessEntries[i];
     forwardAuthAccessMap[h.id] = {
-      userIds: entries.filter((e) => e.user_id !== null).map((e) => e.user_id!),
-      groupIds: entries.filter((e) => e.group_id !== null).map((e) => e.group_id!),
+      userIds: entries.filter((e) => e.userId !== null).map((e) => e.userId!),
+      groupIds: entries.filter((e) => e.groupId !== null).map((e) => e.groupId!),
     };
   });
 
@@ -78,7 +78,7 @@ export default async function ProxyHostsPage({ searchParams }: PageProps) {
       authentikDefaults={authentikDefaults}
       pagination={{ total, page, perPage: PER_PAGE }}
       initialSearch={search ?? ""}
-      initialSort={{ sortBy: sortBy ?? "created_at", sortDir }}
+      initialSort={{ sortBy: sortBy ?? "createdAt", sortDir }}
       mtlsRoles={mtlsRoles}
       issuedClientCerts={issuedClientCerts}
       forwardAuthUsers={forwardAuthUsers}

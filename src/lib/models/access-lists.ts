@@ -8,8 +8,8 @@ import { asc, eq, inArray, count } from "drizzle-orm";
 export type AccessListEntry = {
   id: number;
   username: string;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AccessList = {
@@ -17,8 +17,8 @@ export type AccessList = {
   name: string;
   description: string | null;
   entries: AccessListEntry[];
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AccessListInput = {
@@ -34,8 +34,8 @@ function buildEntry(row: AccessListEntryRow): AccessListEntry {
   return {
     id: row.id,
     username: row.username,
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!
   };
 }
 
@@ -48,8 +48,8 @@ function toAccessList(row: AccessListRow, entries: AccessListEntryRow[]): Access
       .slice()
       .sort((a, b) => a.username.localeCompare(b.username))
       .map(buildEntry),
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!
   };
 }
 

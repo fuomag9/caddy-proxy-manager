@@ -15,9 +15,9 @@ export type MtlsRole = {
   id: number;
   name: string;
   description: string | null;
-  certificate_count: number;
-  created_at: string;
-  updated_at: string;
+  certificateCount: number;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type MtlsRoleInput = {
@@ -26,7 +26,7 @@ export type MtlsRoleInput = {
 };
 
 export type MtlsRoleWithCertificates = MtlsRole & {
-  certificate_ids: number[];
+  certificateIds: number[];
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -46,9 +46,9 @@ function toMtlsRole(row: RoleRow, certCount: number): MtlsRole {
     id: row.id,
     name: row.name,
     description: row.description,
-    certificate_count: certCount,
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!,
+    certificateCount: certCount,
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!,
   };
 }
 
@@ -87,7 +87,7 @@ export async function getMtlsRole(id: number): Promise<MtlsRoleWithCertificates 
 
   return {
     ...toMtlsRole(row, assignments.length),
-    certificate_ids: assignments.map((a) => a.certId),
+    certificateIds: assignments.map((a) => a.certId),
   };
 }
 

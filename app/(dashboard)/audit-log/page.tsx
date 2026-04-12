@@ -28,11 +28,11 @@ export default async function AuditLogPage({ searchParams }: PageProps) {
     <AuditLogClient
       events={events.map((event) => ({
         id: event.id,
-        created_at: event.created_at,
-        summary: event.summary ?? `${event.action} on ${event.entity_type}`,
-        user: event.user_id
-          ? userMap.get(event.user_id)?.name ??
-            userMap.get(event.user_id)?.email ??
+        createdAt: event.createdAt,
+        summary: event.summary ?? `${event.action} on ${event.entityType}`,
+        user: event.userId
+          ? userMap.get(event.userId)?.name ??
+            userMap.get(event.userId)?.email ??
             "System"
           : "System",
       }))}

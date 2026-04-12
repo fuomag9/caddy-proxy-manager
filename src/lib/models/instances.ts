@@ -6,13 +6,13 @@ import { encryptSecret } from "../secret";
 export type Instance = {
   id: number;
   name: string;
-  base_url: string;
+  baseUrl: string;
   enabled: boolean;
-  has_token: boolean;
-  last_sync_at: string | null;
-  last_sync_error: string | null;
-  created_at: string;
-  updated_at: string;
+  hasToken: boolean;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type InstanceInput = {
@@ -28,13 +28,13 @@ function toInstance(row: InstanceRow): Instance {
   return {
     id: row.id,
     name: row.name,
-    base_url: row.baseUrl,
+    baseUrl: row.baseUrl,
     enabled: Boolean(row.enabled),
-    has_token: row.apiToken.length > 0,
-    last_sync_at: row.lastSyncAt ? toIso(row.lastSyncAt) : null,
-    last_sync_error: row.lastSyncError ?? null,
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!
+    hasToken: row.apiToken.length > 0,
+    lastSyncAt: row.lastSyncAt ? toIso(row.lastSyncAt) : null,
+    lastSyncError: row.lastSyncError ?? null,
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!
   };
 }
 

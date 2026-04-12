@@ -22,7 +22,7 @@ export type AcmeHost = {
   id: number;
   name: string;
   domains: string[];
-  ssl_forced: boolean;
+  sslForced: boolean;
   enabled: boolean;
 };
 
@@ -37,7 +37,7 @@ export type ImportedCertView = {
   usedBy: { id: number; name: string; domains: string[] }[];
 };
 
-export type ManagedCertView = { id: number; name: string; domain_names: string[] };
+export type ManagedCertView = { id: number; name: string; domainNames: string[] };
 
 const PER_PAGE = 25;
 
@@ -124,7 +124,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
     id: r.id,
     name: r.name,
     domains: JSON.parse(r.domains) as string[],
-    ssl_forced: r.sslForced,
+    sslForced: r.sslForced,
     enabled: r.enabled,
   }));
 
@@ -143,9 +143,9 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
   const importedCerts: ImportedCertView[] = [];
   const managedCerts: ManagedCertView[] = [];
   const issuedByCa = issuedClientCerts.reduce<Map<number, IssuedClientCertificate[]>>((map, cert) => {
-    const current = map.get(cert.ca_certificate_id) ?? [];
+    const current = map.get(cert.caCertificateId) ?? [];
     current.push(cert);
-    map.set(cert.ca_certificate_id, current);
+    map.set(cert.caCertificateId, current);
     return map;
   }, new Map());
   const caCertificateViews: CaCertificateView[] = caCerts.map((cert) => ({
@@ -168,7 +168,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
         usedBy: usageMap.get(cert.id) ?? [],
       });
     } else {
-      managedCerts.push({ id: cert.id, name: cert.name, domain_names: domainNames });
+      managedCerts.push({ id: cert.id, name: cert.name, domainNames: domainNames });
     }
   }
 

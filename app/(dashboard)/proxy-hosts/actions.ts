@@ -497,7 +497,7 @@ export async function createProxyHostAction(
     const session = await requireAdmin();
     const userId = Number(session.user.id);
 
-    // Parse certificate_id safely
+    // Parse certificateId safely
     const parsedCertificateId = parseCertificateId(formData.get("certificate_id"));
 
     // Validate certificate exists and get sanitized value
@@ -516,25 +516,25 @@ export async function createProxyHostAction(
         name: String(formData.get("name") ?? "Untitled"),
         domains: parseCsv(formData.get("domains")),
         upstreams: parseUpstreams(formData.get("upstreams")),
-        certificate_id: certificateId,
-        access_list_id: parseAccessListId(formData.get("access_list_id")),
-        ssl_forced: formData.has("ssl_forced_present") ? parseCheckbox(formData.get("ssl_forced")) : undefined,
-        hsts_subdomains: parseCheckbox(formData.get("hsts_subdomains")),
-        skip_https_hostname_validation: parseCheckbox(formData.get("skip_https_hostname_validation")),
+        certificateId: certificateId,
+        accessListId: parseAccessListId(formData.get("access_list_id")),
+        sslForced: formData.has("ssl_forced_present") ? parseCheckbox(formData.get("ssl_forced")) : undefined,
+        hstsSubdomains: parseCheckbox(formData.get("hsts_subdomains")),
+        skipHttpsHostnameValidation: parseCheckbox(formData.get("skip_https_hostname_validation")),
         enabled: parseCheckbox(formData.get("enabled")),
-        custom_pre_handlers_json: parseOptionalText(formData.get("custom_pre_handlers_json")),
-        custom_reverse_proxy_json: parseOptionalText(formData.get("custom_reverse_proxy_json")),
+        customPreHandlersJson: parseOptionalText(formData.get("custom_pre_handlers_json")),
+        customReverseProxyJson: parseOptionalText(formData.get("custom_reverse_proxy_json")),
         authentik: parseAuthentikConfig(formData),
-        cpm_forward_auth: parseCpmForwardAuthConfig(formData),
-        load_balancer: parseLoadBalancerConfig(formData),
-        dns_resolver: parseDnsResolverConfig(formData),
-        upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
+        cpmForwardAuth: parseCpmForwardAuthConfig(formData),
+        loadBalancer: parseLoadBalancerConfig(formData),
+        dnsResolver: parseDnsResolverConfig(formData),
+        upstreamDnsResolution: parseUpstreamDnsResolutionConfig(formData),
         ...parseGeoBlockConfig(formData),
         ...parseWafConfig(formData),
         mtls: parseMtlsConfig(formData),
         redirects: parseRedirectsConfig(formData),
         rewrite: parseRewriteConfig(formData),
-        location_rules: parseLocationRulesConfig(formData),
+        locationRules: parseLocationRulesConfig(formData),
       },
       userId
     );
@@ -542,7 +542,7 @@ export async function createProxyHostAction(
     // Save forward auth access if CPM forward auth is enabled
     const faUserIds = formData.getAll("cpm_fa_user_id").map((v) => Number(v)).filter((n) => n > 0);
     const faGroupIds = formData.getAll("cpm_fa_group_id").map((v) => Number(v)).filter((n) => n > 0);
-    if (host.cpm_forward_auth?.enabled && (faUserIds.length > 0 || faGroupIds.length > 0)) {
+    if (host.cpmForwardAuth?.enabled && (faUserIds.length > 0 || faGroupIds.length > 0)) {
       await setForwardAuthAccess(host.id, { userIds: faUserIds, groupIds: faGroupIds }, userId);
     }
 
@@ -597,30 +597,30 @@ export async function updateProxyHostAction(
         name: formData.get("name") ? String(formData.get("name")) : undefined,
         domains: formData.get("domains") ? parseCsv(formData.get("domains")) : undefined,
         upstreams: formData.get("upstreams") ? parseUpstreams(formData.get("upstreams")) : undefined,
-        certificate_id: certificateId,
-        access_list_id: formData.has("access_list_id")
+        certificateId: certificateId,
+        accessListId: formData.has("access_list_id")
           ? parseAccessListId(formData.get("access_list_id"))
           : undefined,
-        hsts_subdomains: boolField("hsts_subdomains"),
-        skip_https_hostname_validation: boolField("skip_https_hostname_validation"),
+        hstsSubdomains: boolField("hsts_subdomains"),
+        skipHttpsHostnameValidation: boolField("skip_https_hostname_validation"),
         enabled: boolField("enabled"),
-        custom_pre_handlers_json: formData.has("custom_pre_handlers_json")
+        customPreHandlersJson: formData.has("custom_pre_handlers_json")
           ? parseOptionalText(formData.get("custom_pre_handlers_json"))
           : undefined,
-        custom_reverse_proxy_json: formData.has("custom_reverse_proxy_json")
+        customReverseProxyJson: formData.has("custom_reverse_proxy_json")
           ? parseOptionalText(formData.get("custom_reverse_proxy_json"))
           : undefined,
         authentik: parseAuthentikConfig(formData),
-        cpm_forward_auth: parseCpmForwardAuthConfig(formData),
-        load_balancer: parseLoadBalancerConfig(formData),
-        dns_resolver: parseDnsResolverConfig(formData),
-        upstream_dns_resolution: parseUpstreamDnsResolutionConfig(formData),
+        cpmForwardAuth: parseCpmForwardAuthConfig(formData),
+        loadBalancer: parseLoadBalancerConfig(formData),
+        dnsResolver: parseDnsResolverConfig(formData),
+        upstreamDnsResolution: parseUpstreamDnsResolutionConfig(formData),
         ...parseGeoBlockConfig(formData),
         ...parseWafConfig(formData),
         mtls: formData.has("mtls_present") ? parseMtlsConfig(formData) : undefined,
         redirects: formData.has("redirects_json") ? parseRedirectsConfig(formData) : undefined,
         rewrite: formData.has("rewrite_path_prefix") ? parseRewriteConfig(formData) : undefined,
-        location_rules: formData.has("location_rules_json") ? parseLocationRulesConfig(formData) : undefined,
+        locationRules: formData.has("location_rules_json") ? parseLocationRulesConfig(formData) : undefined,
       },
       userId
     );

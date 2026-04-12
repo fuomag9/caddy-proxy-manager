@@ -1,5 +1,5 @@
 import db, { nowIso, toIso } from "../db";
-import { users } from "../db/schema";
+import { users, accounts } from "../db/schema";
 import { and, count, eq } from "drizzle-orm";
 import { deleteUserForwardAuthSessions } from "./forward-auth";
 
@@ -7,14 +7,14 @@ export type User = {
   id: number;
   email: string;
   name: string | null;
-  password_hash: string | null;
+  passwordHash: string | null;
   role: "admin" | "user" | "viewer";
-  provider: string;
-  subject: string;
-  avatar_url: string | null;
+  provider: string | null;
+  subject: string | null;
+  avatarUrl: string | null;
   status: string;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 type DbUser = typeof users.$inferSelect;
@@ -24,14 +24,14 @@ function parseDbUser(user: DbUser): User {
     id: user.id,
     email: user.email,
     name: user.name,
-    password_hash: user.passwordHash,
+    passwordHash: user.passwordHash,
     role: user.role as "admin" | "user" | "viewer",
     provider: user.provider,
     subject: user.subject,
-    avatar_url: user.avatarUrl,
+    avatarUrl: user.avatarUrl,
     status: user.status,
-    created_at: toIso(user.createdAt)!,
-    updated_at: toIso(user.updatedAt)!
+    createdAt: toIso(user.createdAt)!,
+    updatedAt: toIso(user.updatedAt)!
   };
 }
 
@@ -48,8 +48,14 @@ export async function getUserCount(): Promise<number> {
 }
 
 export async function findUserByProviderSubject(provider: string, subject: string): Promise<User | null> {
+  const account = await db.select().from(accounts).where(
+    and(eq(accounts.providerId, provider), eq(accounts.accountId, subject))
+  ).limit(1);
+
+  if (account.length === 0) return null;
+
   const user = await db.query.users.findFirst({
-    where: (table, operators) => and(operators.eq(table.provider, provider), operators.eq(table.subject, subject))
+    where: (table, { eq }) => eq(table.id, account[0].userId)
   });
   return user ? parseDbUser(user) : null;
 }
@@ -68,7 +74,7 @@ export async function createUser(data: {
   role?: User["role"];
   provider: string;
   subject: string;
-  avatar_url?: string | null;
+  avatarUrl?: string | null;
   passwordHash?: string | null;
 }): Promise<User> {
   const now = nowIso();
@@ -84,7 +90,7 @@ export async function createUser(data: {
       role,
       provider: data.provider,
       subject: data.subject,
-      avatarUrl: data.avatar_url ?? null,
+      avatarUrl: data.avatarUrl ?? null,
       status: "active",
       createdAt: now,
       updatedAt: now
@@ -94,7 +100,7 @@ export async function createUser(data: {
   return parseDbUser(user);
 }
 
-export async function updateUserProfile(userId: number, data: { email?: string; name?: string | null; avatar_url?: string | null }): Promise<User | null> {
+export async function updateUserProfile(userId: number, data: { email?: string; name?: string | null; avatarUrl?: string | null }): Promise<User | null> {
   const current = await getUserById(userId);
   if (!current) {
     return null;
@@ -106,7 +112,7 @@ export async function updateUserProfile(userId: number, data: { email?: string; 
     .set({
       email: data.email ?? current.email,
       name: data.name ?? current.name,
-      avatarUrl: data.avatar_url ?? current.avatar_url,
+      avatarUrl: data.avatarUrl ?? current.avatarUrl,
       updatedAt: now
     })
     .where(eq(users.id, userId))

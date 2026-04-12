@@ -3,9 +3,8 @@ import { auth, checkSameOrigin } from "@/src/lib/auth";
 import { getUserById } from "@/src/lib/models/user";
 import { createAuditEvent } from "@/src/lib/models/audit";
 import db from "@/src/lib/db";
-import { users } from "@/src/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { nowIso } from "@/src/lib/db";
+import { accounts } from "@/src/lib/db/schema";
+import { and, eq, ne } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   const originCheck = checkSameOrigin(request);
@@ -25,35 +24,37 @@ export async function POST(request: NextRequest) {
     }
 
     // Must have a password before unlinking OAuth
-    if (!user.password_hash) {
+    if (!user.passwordHash) {
       return NextResponse.json(
         { error: "Cannot unlink OAuth: You must set a password first" },
         { status: 400 }
       );
     }
 
-    // Must be using OAuth to unlink
-    if (user.provider === "credentials") {
+    // Check if user has any OAuth account links
+    const oauthAccounts = await db.select().from(accounts).where(
+      and(
+        eq(accounts.userId, userId),
+        ne(accounts.providerId, "credential")
+      )
+    );
+
+    if (oauthAccounts.length === 0) {
       return NextResponse.json(
         { error: "No OAuth account to unlink" },
         { status: 400 }
       );
     }
 
-    const previousProvider = user.provider;
+    const previousProvider = oauthAccounts[0].providerId;
 
-    // Revert to credentials-only
-    const email = user.email;
-    const username = email.replace(/@localhost$/, "") || email.split("@")[0];
-
-    await db
-      .update(users)
-      .set({
-        provider: "credentials",
-        subject: `${username}@localhost`,
-        updatedAt: nowIso()
-      })
-      .where(eq(users.id, userId));
+    // Delete the OAuth account link(s)
+    await db.delete(accounts).where(
+      and(
+        eq(accounts.userId, userId),
+        ne(accounts.providerId, "credential")
+      )
+    );
 
     // Audit log
     await createAuditEvent({

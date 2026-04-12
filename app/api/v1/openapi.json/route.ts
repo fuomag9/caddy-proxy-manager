@@ -1982,7 +1982,7 @@ const spec = {
       },
       User: {
         type: "object",
-        description: "User account (password_hash is never exposed)",
+        description: "User account (passwordHash is never exposed)",
         properties: {
           id: { type: "integer" },
           email: { type: "string" },
@@ -1990,12 +1990,12 @@ const spec = {
           role: { type: "string", enum: ["admin", "user", "viewer"] },
           provider: { type: "string", example: "credentials" },
           subject: { type: "string" },
-          avatar_url: { type: ["string", "null"] },
+          avatarUrl: { type: ["string", "null"] },
           status: { type: "string", enum: ["active", "inactive"] },
-          created_at: { type: "string", format: "date-time" },
-          updated_at: { type: "string", format: "date-time" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
         },
-        required: ["id", "email", "role", "provider", "subject", "status", "created_at", "updated_at"],
+        required: ["id", "email", "role", "provider", "subject", "status", "createdAt", "updatedAt"],
       },
       AuditLogEvent: {
         type: "object",

@@ -10,23 +10,23 @@ export type Certificate = {
   id: number;
   name: string;
   type: CertificateType;
-  domain_names: string[];
-  auto_renew: boolean;
-  provider_options: Record<string, unknown> | null;
-  certificate_pem: string | null;
-  private_key_pem: string | null;
-  created_at: string;
-  updated_at: string;
+  domainNames: string[];
+  autoRenew: boolean;
+  providerOptions: Record<string, unknown> | null;
+  certificatePem: string | null;
+  privateKeyPem: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CertificateInput = {
   name: string;
   type: CertificateType;
-  domain_names: string[];
-  auto_renew?: boolean;
-  provider_options?: Record<string, unknown> | null;
-  certificate_pem?: string | null;
-  private_key_pem?: string | null;
+  domainNames: string[];
+  autoRenew?: boolean;
+  providerOptions?: Record<string, unknown> | null;
+  certificatePem?: string | null;
+  privateKeyPem?: string | null;
 };
 
 type CertificateRow = typeof certificates.$inferSelect;
@@ -36,13 +36,13 @@ function parseCertificate(row: CertificateRow): Certificate {
     id: row.id,
     name: row.name,
     type: row.type as CertificateType,
-    domain_names: JSON.parse(row.domainNames),
-    auto_renew: row.autoRenew,
-    provider_options: row.providerOptions ? JSON.parse(row.providerOptions) : null,
-    certificate_pem: row.certificatePem,
-    private_key_pem: row.privateKeyPem,
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!
+    domainNames: JSON.parse(row.domainNames),
+    autoRenew: row.autoRenew,
+    providerOptions: row.providerOptions ? JSON.parse(row.providerOptions) : null,
+    certificatePem: row.certificatePem,
+    privateKeyPem: row.privateKeyPem,
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!
   };
 }
 
@@ -59,11 +59,11 @@ export async function getCertificate(id: number): Promise<Certificate | null> {
 }
 
 function validateCertificateInput(input: CertificateInput) {
-  if (!input.domain_names || input.domain_names.length === 0) {
+  if (!input.domainNames || input.domainNames.length === 0) {
     throw new Error("At least one domain is required for a certificate");
   }
   if (input.type === "imported") {
-    if (!input.certificate_pem || !input.private_key_pem) {
+    if (!input.certificatePem || !input.privateKeyPem) {
       throw new Error("Imported certificates require certificate and key PEM data");
     }
   }
@@ -78,12 +78,12 @@ export async function createCertificate(input: CertificateInput, actorUserId: nu
       name: input.name.trim(),
       type: input.type,
       domainNames: JSON.stringify(
-        Array.from(new Set(input.domain_names.map((domain) => domain.trim().toLowerCase())))
+        Array.from(new Set(input.domainNames.map((domain) => domain.trim().toLowerCase())))
       ),
-      autoRenew: input.auto_renew ?? true,
-      providerOptions: input.provider_options ? JSON.stringify(input.provider_options) : null,
-      certificatePem: input.certificate_pem ?? null,
-      privateKeyPem: input.private_key_pem ?? null,
+      autoRenew: input.autoRenew ?? true,
+      providerOptions: input.providerOptions ? JSON.stringify(input.providerOptions) : null,
+      certificatePem: input.certificatePem ?? null,
+      privateKeyPem: input.privateKeyPem ?? null,
       createdAt: now,
       updatedAt: now,
       createdBy: actorUserId
@@ -114,11 +114,11 @@ export async function updateCertificate(id: number, input: Partial<CertificateIn
   const merged: CertificateInput = {
     name: input.name ?? existing.name,
     type: input.type ?? existing.type,
-    domain_names: input.domain_names ?? existing.domain_names,
-    auto_renew: input.auto_renew ?? existing.auto_renew,
-    provider_options: input.provider_options ?? existing.provider_options,
-    certificate_pem: input.certificate_pem ?? existing.certificate_pem,
-    private_key_pem: input.private_key_pem ?? existing.private_key_pem
+    domainNames: input.domainNames ?? existing.domainNames,
+    autoRenew: input.autoRenew ?? existing.autoRenew,
+    providerOptions: input.providerOptions ?? existing.providerOptions,
+    certificatePem: input.certificatePem ?? existing.certificatePem,
+    privateKeyPem: input.privateKeyPem ?? existing.privateKeyPem
   };
 
   validateCertificateInput(merged);
@@ -129,11 +129,11 @@ export async function updateCertificate(id: number, input: Partial<CertificateIn
     .set({
       name: merged.name.trim(),
       type: merged.type,
-      domainNames: JSON.stringify(Array.from(new Set(merged.domain_names))),
-      autoRenew: merged.auto_renew,
-      providerOptions: merged.provider_options ? JSON.stringify(merged.provider_options) : null,
-      certificatePem: merged.certificate_pem ?? null,
-      privateKeyPem: merged.private_key_pem ?? null,
+      domainNames: JSON.stringify(Array.from(new Set(merged.domainNames))),
+      autoRenew: merged.autoRenew,
+      providerOptions: merged.providerOptions ? JSON.stringify(merged.providerOptions) : null,
+      certificatePem: merged.certificatePem ?? null,
+      privateKeyPem: merged.privateKeyPem ?? null,
       updatedAt: now
     })
     .where(eq(certificates.id, id));

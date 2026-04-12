@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 type ToggleSetting = {
-    name: "hsts_subdomains" | "skip_https_hostname_validation";
+    name: "hstsSubdomains" | "skipHttpsHostnameValidation";
     label: string;
     description: string;
     defaultChecked: boolean;
@@ -21,8 +21,8 @@ export function SettingsToggles({
     enabled = true
 }: SettingsTogglesProps) {
     const [values, setValues] = useState({
-        hsts_subdomains: hstsSubdomains,
-        skip_https_hostname_validation: skipHttpsValidation,
+        hstsSubdomains: hstsSubdomains,
+        skipHttpsHostnameValidation: skipHttpsValidation,
         enabled: enabled
     });
 
@@ -32,16 +32,16 @@ export function SettingsToggles({
 
     const settings: ToggleSetting[] = [
         {
-            name: "hsts_subdomains",
+            name: "hstsSubdomains",
             label: "HSTS Subdomains",
             description: "Include subdomains in the Strict-Transport-Security header",
-            defaultChecked: values.hsts_subdomains,
+            defaultChecked: values.hstsSubdomains,
         },
         {
-            name: "skip_https_hostname_validation",
+            name: "skipHttpsHostnameValidation",
             label: "Skip HTTPS Validation",
             description: "Skip SSL certificate hostname verification for backend connections",
-            defaultChecked: values.skip_https_hostname_validation,
+            defaultChecked: values.skipHttpsHostnameValidation,
         }
     ];
 

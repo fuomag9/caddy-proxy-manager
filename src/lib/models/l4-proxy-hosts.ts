@@ -113,41 +113,41 @@ export type L4ProxyHost = {
   id: number;
   name: string;
   protocol: L4Protocol;
-  listen_address: string;
+  listenAddress: string;
   upstreams: string[];
-  matcher_type: L4MatcherType;
-  matcher_value: string[];
-  tls_termination: boolean;
-  proxy_protocol_version: L4ProxyProtocolVersion | null;
-  proxy_protocol_receive: boolean;
+  matcherType: L4MatcherType;
+  matcherValue: string[];
+  tlsTermination: boolean;
+  proxyProtocolVersion: L4ProxyProtocolVersion | null;
+  proxyProtocolReceive: boolean;
   enabled: boolean;
   meta: L4ProxyHostMeta | null;
-  load_balancer: L4LoadBalancerConfig | null;
-  dns_resolver: L4DnsResolverConfig | null;
-  upstream_dns_resolution: L4UpstreamDnsResolutionConfig | null;
+  loadBalancer: L4LoadBalancerConfig | null;
+  dnsResolver: L4DnsResolverConfig | null;
+  upstreamDnsResolution: L4UpstreamDnsResolutionConfig | null;
   geoblock: L4GeoBlockConfig | null;
-  geoblock_mode: L4GeoBlockMode;
-  created_at: string;
-  updated_at: string;
+  geoblockMode: L4GeoBlockMode;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type L4ProxyHostInput = {
   name: string;
   protocol: L4Protocol;
-  listen_address: string;
+  listenAddress: string;
   upstreams: string[];
-  matcher_type?: L4MatcherType;
-  matcher_value?: string[];
-  tls_termination?: boolean;
-  proxy_protocol_version?: L4ProxyProtocolVersion | null;
-  proxy_protocol_receive?: boolean;
+  matcherType?: L4MatcherType;
+  matcherValue?: string[];
+  tlsTermination?: boolean;
+  proxyProtocolVersion?: L4ProxyProtocolVersion | null;
+  proxyProtocolReceive?: boolean;
   enabled?: boolean;
   meta?: L4ProxyHostMeta | null;
-  load_balancer?: Partial<L4LoadBalancerConfig> | null;
-  dns_resolver?: Partial<L4DnsResolverConfig> | null;
-  upstream_dns_resolution?: Partial<L4UpstreamDnsResolutionConfig> | null;
+  loadBalancer?: Partial<L4LoadBalancerConfig> | null;
+  dnsResolver?: Partial<L4DnsResolverConfig> | null;
+  upstreamDnsResolution?: Partial<L4UpstreamDnsResolutionConfig> | null;
   geoblock?: L4GeoBlockConfig | null;
-  geoblock_mode?: L4GeoBlockMode;
+  geoblockMode?: L4GeoBlockMode;
 };
 
 const VALID_PROTOCOLS: L4Protocol[] = ["tcp", "udp"];
@@ -363,22 +363,22 @@ function parseL4ProxyHost(row: L4ProxyHostRow): L4ProxyHost {
     id: row.id,
     name: row.name,
     protocol: row.protocol as L4Protocol,
-    listen_address: row.listenAddress,
+    listenAddress: row.listenAddress,
     upstreams: safeJsonParse<string[]>(row.upstreams, []),
-    matcher_type: (row.matcherType as L4MatcherType) || "none",
-    matcher_value: safeJsonParse<string[]>(row.matcherValue, []),
-    tls_termination: row.tlsTermination,
-    proxy_protocol_version: row.proxyProtocolVersion as L4ProxyProtocolVersion | null,
-    proxy_protocol_receive: row.proxyProtocolReceive,
+    matcherType: (row.matcherType as L4MatcherType) || "none",
+    matcherValue: safeJsonParse<string[]>(row.matcherValue, []),
+    tlsTermination: row.tlsTermination,
+    proxyProtocolVersion: row.proxyProtocolVersion as L4ProxyProtocolVersion | null,
+    proxyProtocolReceive: row.proxyProtocolReceive,
     enabled: row.enabled,
     meta: Object.keys(meta).length > 0 ? meta : null,
-    load_balancer: hydrateL4LoadBalancer(meta.load_balancer),
-    dns_resolver: hydrateL4DnsResolver(meta.dns_resolver),
-    upstream_dns_resolution: hydrateL4UpstreamDnsResolution(meta.upstream_dns_resolution),
+    loadBalancer: hydrateL4LoadBalancer(meta.load_balancer),
+    dnsResolver: hydrateL4DnsResolver(meta.dns_resolver),
+    upstreamDnsResolution: hydrateL4UpstreamDnsResolution(meta.upstream_dns_resolution),
     geoblock: meta.geoblock?.enabled ? meta.geoblock : null,
-    geoblock_mode: meta.geoblock_mode ?? "merge",
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!,
+    geoblockMode: meta.geoblock_mode ?? "merge",
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!,
   };
 }
 
@@ -390,7 +390,7 @@ function validateL4Input(input: L4ProxyHostInput | Partial<L4ProxyHostInput>, is
     if (!input.protocol || !VALID_PROTOCOLS.includes(input.protocol)) {
       throw new Error("Protocol must be 'tcp' or 'udp'");
     }
-    if (!input.listen_address?.trim()) {
+    if (!input.listenAddress?.trim()) {
       throw new Error("Listen address is required");
     }
     if (!input.upstreams || input.upstreams.length === 0) {
@@ -398,8 +398,8 @@ function validateL4Input(input: L4ProxyHostInput | Partial<L4ProxyHostInput>, is
     }
   }
 
-  if (input.listen_address !== undefined) {
-    const addr = input.listen_address.trim();
+  if (input.listenAddress !== undefined) {
+    const addr = input.listenAddress.trim();
     // Must be :PORT or HOST:PORT
     const portMatch = addr.match(/:(\d+)$/);
     if (!portMatch) {
@@ -415,22 +415,22 @@ function validateL4Input(input: L4ProxyHostInput | Partial<L4ProxyHostInput>, is
     throw new Error("Protocol must be 'tcp' or 'udp'");
   }
 
-  if (input.matcher_type !== undefined && !VALID_MATCHER_TYPES.includes(input.matcher_type)) {
+  if (input.matcherType !== undefined && !VALID_MATCHER_TYPES.includes(input.matcherType)) {
     throw new Error(`Matcher type must be one of: ${VALID_MATCHER_TYPES.join(", ")}`);
   }
 
-  if (input.matcher_type === "tls_sni" || input.matcher_type === "http_host") {
-    if (!input.matcher_value || input.matcher_value.length === 0) {
+  if (input.matcherType === "tls_sni" || input.matcherType === "http_host") {
+    if (!input.matcherValue || input.matcherValue.length === 0) {
       throw new Error("Matcher value is required for TLS SNI and HTTP Host matchers");
     }
   }
 
-  if (input.tls_termination && input.protocol === "udp") {
+  if (input.tlsTermination && input.protocol === "udp") {
     throw new Error("TLS termination is only supported with TCP protocol");
   }
 
-  if (input.proxy_protocol_version !== undefined && input.proxy_protocol_version !== null) {
-    if (!VALID_PROXY_PROTOCOL_VERSIONS.includes(input.proxy_protocol_version)) {
+  if (input.proxyProtocolVersion !== undefined && input.proxyProtocolVersion !== null) {
+    if (!VALID_PROXY_PROTOCOL_VERSIONS.includes(input.proxyProtocolVersion)) {
       throw new Error("Proxy protocol version must be 'v1' or 'v2'");
     }
   }
@@ -465,10 +465,10 @@ export async function countL4ProxyHosts(search?: string): Promise<number> {
 const L4_SORT_COLUMNS: Record<string, any> = {
   name: l4ProxyHosts.name,
   protocol: l4ProxyHosts.protocol,
-  listen_address: l4ProxyHosts.listenAddress,
+  listenAddress: l4ProxyHosts.listenAddress,
   upstreams: l4ProxyHosts.upstreams,
   enabled: l4ProxyHosts.enabled,
-  created_at: l4ProxyHosts.createdAt,
+  createdAt: l4ProxyHosts.createdAt,
 };
 
 export async function listL4ProxyHostsPaginated(
@@ -506,21 +506,21 @@ export async function createL4ProxyHost(input: L4ProxyHostInput, actorUserId: nu
     .values({
       name: input.name.trim(),
       protocol: input.protocol,
-      listenAddress: input.listen_address.trim(),
+      listenAddress: input.listenAddress.trim(),
       upstreams: JSON.stringify(Array.from(new Set(input.upstreams.map((u) => u.trim())))),
-      matcherType: input.matcher_type ?? "none",
-      matcherValue: input.matcher_value ? JSON.stringify(input.matcher_value.map((v) => v.trim()).filter(Boolean)) : null,
-      tlsTermination: input.tls_termination ?? false,
-      proxyProtocolVersion: input.proxy_protocol_version ?? null,
-      proxyProtocolReceive: input.proxy_protocol_receive ?? false,
+      matcherType: input.matcherType ?? "none",
+      matcherValue: input.matcherValue ? JSON.stringify(input.matcherValue.map((v) => v.trim()).filter(Boolean)) : null,
+      tlsTermination: input.tlsTermination ?? false,
+      proxyProtocolVersion: input.proxyProtocolVersion ?? null,
+      proxyProtocolReceive: input.proxyProtocolReceive ?? false,
       ownerUserId: actorUserId,
       meta: (() => {
         const meta: L4ProxyHostMeta = { ...(input.meta ?? {}) };
-        if (input.load_balancer) meta.load_balancer = dehydrateL4LoadBalancer(input.load_balancer);
-        if (input.dns_resolver) meta.dns_resolver = dehydrateL4DnsResolver(input.dns_resolver);
-        if (input.upstream_dns_resolution) meta.upstream_dns_resolution = dehydrateL4UpstreamDnsResolution(input.upstream_dns_resolution);
+        if (input.loadBalancer) meta.load_balancer = dehydrateL4LoadBalancer(input.loadBalancer);
+        if (input.dnsResolver) meta.dns_resolver = dehydrateL4DnsResolver(input.dnsResolver);
+        if (input.upstreamDnsResolution) meta.upstream_dns_resolution = dehydrateL4UpstreamDnsResolution(input.upstreamDnsResolution);
         if (input.geoblock) meta.geoblock = input.geoblock;
-        if (input.geoblock_mode && input.geoblock_mode !== "merge") meta.geoblock_mode = input.geoblock_mode;
+        if (input.geoblockMode && input.geoblockMode !== "merge") meta.geoblock_mode = input.geoblockMode;
         return Object.keys(meta).length > 0 ? JSON.stringify(meta) : null;
       })(),
       enabled: input.enabled ?? true,
@@ -562,14 +562,14 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
   // For validation, merge with existing to check cross-field constraints
   const merged = {
     protocol: input.protocol ?? existing.protocol,
-    tls_termination: input.tls_termination ?? existing.tls_termination,
-    matcher_type: input.matcher_type ?? existing.matcher_type,
-    matcher_value: input.matcher_value ?? existing.matcher_value,
+    tlsTermination: input.tlsTermination ?? existing.tlsTermination,
+    matcherType: input.matcherType ?? existing.matcherType,
+    matcherValue: input.matcherValue ?? existing.matcherValue,
   };
-  if (merged.tls_termination && merged.protocol === "udp") {
+  if (merged.tlsTermination && merged.protocol === "udp") {
     throw new Error("TLS termination is only supported with TCP protocol");
   }
-  if ((merged.matcher_type === "tls_sni" || merged.matcher_type === "http_host") && merged.matcher_value.length === 0) {
+  if ((merged.matcherType === "tls_sni" || merged.matcherType === "http_host") && merged.matcherValue.length === 0) {
     throw new Error("Matcher value is required for TLS SNI and HTTP Host matchers");
   }
 
@@ -581,57 +581,57 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
     .set({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
       ...(input.protocol !== undefined ? { protocol: input.protocol } : {}),
-      ...(input.listen_address !== undefined ? { listenAddress: input.listen_address.trim() } : {}),
+      ...(input.listenAddress !== undefined ? { listenAddress: input.listenAddress.trim() } : {}),
       ...(input.upstreams !== undefined
         ? { upstreams: JSON.stringify(Array.from(new Set(input.upstreams.map((u) => u.trim())))) }
         : {}),
-      ...(input.matcher_type !== undefined ? { matcherType: input.matcher_type } : {}),
-      ...(input.matcher_value !== undefined
-        ? { matcherValue: JSON.stringify(input.matcher_value.map((v) => v.trim()).filter(Boolean)) }
+      ...(input.matcherType !== undefined ? { matcherType: input.matcherType } : {}),
+      ...(input.matcherValue !== undefined
+        ? { matcherValue: JSON.stringify(input.matcherValue.map((v) => v.trim()).filter(Boolean)) }
         : {}),
-      ...(input.tls_termination !== undefined ? { tlsTermination: input.tls_termination } : {}),
-      ...(input.proxy_protocol_version !== undefined ? { proxyProtocolVersion: input.proxy_protocol_version } : {}),
-      ...(input.proxy_protocol_receive !== undefined ? { proxyProtocolReceive: input.proxy_protocol_receive } : {}),
+      ...(input.tlsTermination !== undefined ? { tlsTermination: input.tlsTermination } : {}),
+      ...(input.proxyProtocolVersion !== undefined ? { proxyProtocolVersion: input.proxyProtocolVersion } : {}),
+      ...(input.proxyProtocolReceive !== undefined ? { proxyProtocolReceive: input.proxyProtocolReceive } : {}),
       ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
       ...(() => {
         const hasMetaChanges =
           input.meta !== undefined ||
-          input.load_balancer !== undefined ||
-          input.dns_resolver !== undefined ||
-          input.upstream_dns_resolution !== undefined;
+          input.loadBalancer !== undefined ||
+          input.dnsResolver !== undefined ||
+          input.upstreamDnsResolution !== undefined;
         if (!hasMetaChanges) return {};
 
         // Start from existing meta
         const existingMeta: L4ProxyHostMeta = {
-          ...(existing.load_balancer ? { load_balancer: dehydrateL4LoadBalancer(existing.load_balancer) } : {}),
-          ...(existing.dns_resolver ? { dns_resolver: dehydrateL4DnsResolver(existing.dns_resolver) } : {}),
-          ...(existing.upstream_dns_resolution ? { upstream_dns_resolution: dehydrateL4UpstreamDnsResolution(existing.upstream_dns_resolution) } : {}),
+          ...(existing.loadBalancer ? { load_balancer: dehydrateL4LoadBalancer(existing.loadBalancer) } : {}),
+          ...(existing.dnsResolver ? { dns_resolver: dehydrateL4DnsResolver(existing.dnsResolver) } : {}),
+          ...(existing.upstreamDnsResolution ? { upstream_dns_resolution: dehydrateL4UpstreamDnsResolution(existing.upstreamDnsResolution) } : {}),
           ...(existing.geoblock ? { geoblock: existing.geoblock } : {}),
-          ...(existing.geoblock_mode !== "merge" ? { geoblock_mode: existing.geoblock_mode } : {}),
+          ...(existing.geoblockMode !== "merge" ? { geoblock_mode: existing.geoblockMode } : {}),
         };
 
         // Apply direct meta override if provided
         const meta: L4ProxyHostMeta = input.meta !== undefined ? { ...(input.meta ?? {}) } : { ...existingMeta };
 
         // Apply structured field overrides
-        if (input.load_balancer !== undefined) {
-          const lb = dehydrateL4LoadBalancer(input.load_balancer);
+        if (input.loadBalancer !== undefined) {
+          const lb = dehydrateL4LoadBalancer(input.loadBalancer);
           if (lb) {
             meta.load_balancer = lb;
           } else {
             delete meta.load_balancer;
           }
         }
-        if (input.dns_resolver !== undefined) {
-          const dr = dehydrateL4DnsResolver(input.dns_resolver);
+        if (input.dnsResolver !== undefined) {
+          const dr = dehydrateL4DnsResolver(input.dnsResolver);
           if (dr) {
             meta.dns_resolver = dr;
           } else {
             delete meta.dns_resolver;
           }
         }
-        if (input.upstream_dns_resolution !== undefined) {
-          const udr = dehydrateL4UpstreamDnsResolution(input.upstream_dns_resolution);
+        if (input.upstreamDnsResolution !== undefined) {
+          const udr = dehydrateL4UpstreamDnsResolution(input.upstreamDnsResolution);
           if (udr) {
             meta.upstream_dns_resolution = udr;
           } else {
@@ -645,9 +645,9 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
             delete meta.geoblock;
           }
         }
-        if (input.geoblock_mode !== undefined) {
-          if (input.geoblock_mode !== "merge") {
-            meta.geoblock_mode = input.geoblock_mode;
+        if (input.geoblockMode !== undefined) {
+          if (input.geoblockMode !== "merge") {
+            meta.geoblock_mode = input.geoblockMode;
           } else {
             delete meta.geoblock_mode;
           }

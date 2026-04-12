@@ -3,7 +3,7 @@ import { requireApiUser, requireApiAdmin, apiErrorResponse, ApiAuthError } from 
 import { getUserById, updateUserProfile, updateUserRole, updateUserStatus, deleteUser } from "@/src/lib/models/user";
 
 function stripPasswordHash(user: Record<string, unknown>) {
-  const { password_hash: _, ...rest } = user;
+  const { passwordHash: _, ...rest } = user;
   void _;
   return rest;
 }
@@ -62,9 +62,9 @@ export async function PUT(
     const profileFields: Record<string, unknown> = {};
     if (body.email !== undefined) profileFields.email = body.email;
     if (body.name !== undefined) profileFields.name = body.name;
-    if (body.avatar_url !== undefined) profileFields.avatar_url = body.avatar_url;
+    if (body.avatarUrl !== undefined) profileFields.avatarUrl = body.avatarUrl;
     if (Object.keys(profileFields).length > 0) {
-      await updateUserProfile(targetId, profileFields as { email?: string; name?: string | null; avatar_url?: string | null });
+      await updateUserProfile(targetId, profileFields as { email?: string; name?: string | null; avatarUrl?: string | null });
     }
 
     const user = await getUserById(targetId);

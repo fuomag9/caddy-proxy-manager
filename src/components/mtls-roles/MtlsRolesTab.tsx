@@ -29,7 +29,7 @@ type Props = {
 
 export function MtlsRolesTab({ roles, issuedCerts, search }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
-  const activeCerts = issuedCerts.filter(c => !c.revoked_at);
+  const activeCerts = issuedCerts.filter(c => !c.revokedAt);
 
   const filtered = roles.filter(r =>
     !search ||
@@ -128,7 +128,7 @@ function RoleCard({ role, accent, activeCerts }: { role: MtlsRole; accent: typeo
   const loadAssignments = useCallback(() => {
     fetch(`/api/v1/mtls-roles/${role.id}`)
       .then(r => r.ok ? r.json() : { certificate_ids: [] })
-      .then((data: MtlsRoleWithCertificates) => { setAssignedIds(new Set(data.certificate_ids)); setLoaded(true); })
+      .then((data: MtlsRoleWithCertificates) => { setAssignedIds(new Set(data.certificateIds)); setLoaded(true); })
       .catch(() => setLoaded(true));
   }, [role.id]);
 
@@ -143,7 +143,7 @@ function RoleCard({ role, accent, activeCerts }: { role: MtlsRole; accent: typeo
         setAssignedIds(prev => { const next = new Set(prev); next.delete(certId); return next; });
       } else {
         await fetch(`/api/v1/mtls-roles/${role.id}/certificates`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ certificate_id: certId }),
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ certificateId: certId }),
         });
         setAssignedIds(prev => new Set(prev).add(certId));
       }
@@ -234,9 +234,9 @@ function RoleCard({ role, accent, activeCerts }: { role: MtlsRole; accent: typeo
                     <div className="flex items-center gap-2.5">
                       <Checkbox checked={isAssigned} disabled={isLoading} onCheckedChange={() => handleToggle(cert.id)} />
                       <div>
-                        <p className="text-sm font-medium leading-tight">{cert.common_name}</p>
+                        <p className="text-sm font-medium leading-tight">{cert.commonName}</p>
                         <p className="text-xs text-muted-foreground">
-                          expires {new Date(cert.valid_to).toLocaleDateString()}
+                          expires {new Date(cert.validTo).toLocaleDateString()}
                         </p>
                       </div>
                     </div>

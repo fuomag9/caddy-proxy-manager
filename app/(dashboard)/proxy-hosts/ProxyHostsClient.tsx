@@ -133,10 +133,10 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
       label: "Features",
       render: (host: ProxyHost) => {
         const badges = [
-          host.certificate_id && (
+          host.certificateId && (
             <Badge key="tls" variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>
           ),
-          host.access_list_id && (
+          host.accessListId && (
             <Badge key="auth" variant="warning" className="text-[10px] px-1.5 py-0">
               <Shield className="h-2.5 w-2.5 mr-0.5" />Auth
             </Badge>
@@ -156,7 +156,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
               <MapPin className="h-2.5 w-2.5 mr-0.5" />Geo
             </Badge>
           ),
-          host.load_balancer?.enabled && (
+          host.loadBalancer?.enabled && (
             <Badge key="lb" variant="secondary" className="text-[10px] px-1.5 py-0">
               <Scale className="h-2.5 w-2.5 mr-0.5" />LB
             </Badge>
@@ -244,7 +244,7 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
             </p>
             <div className="flex items-center gap-1.5 mt-1">
               <StatusChip status={host.enabled ? "active" : "inactive"} />
-              {host.certificate_id && <Badge variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>}
+              {host.certificateId && <Badge variant="info" className="text-[10px] px-1.5 py-0">TLS</Badge>}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">

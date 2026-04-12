@@ -27,7 +27,7 @@ export default async function L4ProxyHostsPage({ searchParams }: PageProps) {
       hosts={hosts}
       pagination={{ total, page, perPage: PER_PAGE }}
       initialSearch={search ?? ""}
-      initialSort={{ sortBy: sortBy ?? "created_at", sortDir }}
+      initialSort={{ sortBy: sortBy ?? "createdAt", sortDir }}
     />
   );
 }

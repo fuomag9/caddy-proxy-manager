@@ -90,7 +90,7 @@ export function CaCertDrawer({ open, cert, onClose }: Props) {
                 id="edit-cert-pem"
                 name="certificate_pem"
                 required
-                defaultValue={cert.certificate_pem}
+                defaultValue={cert.certificatePem}
                 rows={8}
                 className="font-mono text-xs"
               />

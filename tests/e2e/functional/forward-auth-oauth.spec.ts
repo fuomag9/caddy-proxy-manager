@@ -54,17 +54,30 @@ async function apiGet(page: Page, path: string) {
   return page.request.get(`${API}${path}`);
 }
 
-/** Log into Dex with email/password. Handles the Dex login form. */
+/** Log into Dex with email/password. Handles the Dex login form.
+ * If Dex has an existing session and auto-redirects, this is a no-op. */
 async function dexLogin(page: Page, email: string, password: string) {
+  // Wait for either Dex login form OR auto-redirect back to our app.
+  // Dex may auto-redirect if it has an active session from a prior login.
+  try {
+    await page.waitForURL((url) => url.toString().includes('localhost:5556'), { timeout: 15_000 });
+  } catch {
+    // Already redirected back — no Dex login needed (Dex has existing session)
+    return;
+  }
+
   // Dex shows a "Log in to dex" page with a link to the local (password) connector
   // or goes straight to the login form
   const loginLink = page.getByRole('link', { name: /log in with email/i });
   if (await loginLink.isVisible({ timeout: 5_000 }).catch(() => false)) {
     await loginLink.click();
   }
+
+  // If Dex auto-redirected during the wait above, skip the form
+  if (!page.url().includes('localhost:5556')) return;
+
   // Wait for the Dex login form to appear
   await expect(page.getByRole('button', { name: /login/i })).toBeVisible({ timeout: 10_000 });
-  // Dex uses "email address" and "Password" as accessible names
   await page.getByRole('textbox', { name: /email/i }).fill(email);
   await page.getByRole('textbox', { name: /password/i }).fill(password);
   await page.getByRole('button', { name: /login/i }).click();
@@ -73,6 +86,46 @@ async function dexLogin(page: Page, email: string, password: string) {
 /** Create a fresh browser context with no auth state for OAuth flows. */
 async function freshContext(page: Page): Promise<BrowserContext> {
   return page.context().browser()!.newContext({ storageState: { cookies: [], origins: [] } });
+}
+
+/**
+ * Perform an OAuth login through the /login page and verify the user was created.
+ * Uses a fresh browser context to avoid session conflicts between users.
+ * Retries once on failure (Better Auth OAuth state can race between rapid logins).
+ */
+async function doOAuthLogin(page: Page, user: { email: string; password: string }) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctx = await freshContext(page);
+    const p = await ctx.newPage();
+    try {
+      await p.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
+      console.log(`[doOAuthLogin] ${user.email} on: ${p.url()}`);
+      const oauthButton = p.getByRole('button', { name: /continue with|sign in with/i });
+      await expect(oauthButton).toBeVisible({ timeout: 10_000 });
+      await oauthButton.click();
+      // Wait for navigation to Dex
+      await p.waitForURL((url) => url.toString().includes('localhost:5556'), { timeout: 15_000 });
+      console.log(`[doOAuthLogin] ${user.email} after nav: ${p.url()}`);
+      await dexLogin(p, user.email, user.password);
+      // Wait for redirect back to the app
+      await p.waitForURL((url) => {
+        try {
+          const u = new URL(url);
+          return u.origin === BASE_URL && !u.pathname.startsWith('/api/auth');
+        } catch { return false; }
+      }, { timeout: 30_000 });
+
+      // Verify the URL doesn't indicate an error
+      const finalUrl = p.url();
+      if (finalUrl.includes('error=') || finalUrl.includes('/login')) {
+        if (attempt === 0) continue; // retry
+        throw new Error(`OAuth login failed for ${user.email}: ${finalUrl}`);
+      }
+      return; // success
+    } finally {
+      await ctx.close();
+    }
+  }
 }
 
 /**
@@ -149,8 +202,8 @@ test.describe.serial('Forward Auth with OAuth (Dex)', () => {
       name: 'OAuth Forward Auth Test',
       domains: [DOMAIN],
       upstreams: ['echo-server:8080'],
-      ssl_forced: false,
-      cpm_forward_auth: { enabled: true },
+      sslForced: false,
+      cpmForwardAuth: { enabled: true },
     });
     expect(res.status()).toBe(201);
     const host = await res.json();
@@ -159,43 +212,11 @@ test.describe.serial('Forward Auth with OAuth (Dex)', () => {
   });
 
   test('setup: trigger OAuth login for alice to create her user account', async ({ page }) => {
-    const ctx = await freshContext(page);
-    const p = await ctx.newPage();
-    try {
-      await p.goto(`${BASE_URL}/login`);
-      const oauthButton = p.getByRole('button', { name: /continue with|sign in with/i });
-      await expect(oauthButton).toBeVisible({ timeout: 10_000 });
-      await oauthButton.click();
-      await dexLogin(p, ALICE.email, ALICE.password);
-      await p.waitForURL((url) => {
-        try {
-          const u = new URL(url);
-          return u.origin === BASE_URL && !u.pathname.startsWith('/api/auth');
-        } catch { return false; }
-      }, { timeout: 30_000 });
-    } finally {
-      await ctx.close();
-    }
+    await doOAuthLogin(page, ALICE);
   });
 
   test('setup: trigger OAuth login for bob to create his user account', async ({ page }) => {
-    const ctx = await freshContext(page);
-    const p = await ctx.newPage();
-    try {
-      await p.goto(`${BASE_URL}/login`);
-      const oauthButton = p.getByRole('button', { name: /continue with|sign in with/i });
-      await expect(oauthButton).toBeVisible({ timeout: 10_000 });
-      await oauthButton.click();
-      await dexLogin(p, BOB.email, BOB.password);
-      await p.waitForURL((url) => {
-        try {
-          const u = new URL(url);
-          return u.origin === BASE_URL && !u.pathname.startsWith('/api/auth');
-        } catch { return false; }
-      }, { timeout: 30_000 });
-    } finally {
-      await ctx.close();
-    }
+    await doOAuthLogin(page, BOB);
   });
 
   test('setup: find alice and bob user IDs', async ({ page }) => {

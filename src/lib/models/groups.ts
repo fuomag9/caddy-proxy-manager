@@ -8,15 +8,15 @@ export type Group = {
   name: string;
   description: string | null;
   members: GroupMember[];
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type GroupMember = {
-  user_id: number;
+  userId: number;
   email: string;
   name: string | null;
-  created_at: string;
+  createdAt: string;
 };
 
 export type GroupInput = {
@@ -32,8 +32,8 @@ function toGroup(row: GroupRow, members: GroupMember[]): Group {
     name: row.name,
     description: row.description,
     members,
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!
   };
 }
 
@@ -61,10 +61,10 @@ export async function listGroups(): Promise<Group[]> {
   for (const m of allMembers) {
     const bucket = membersByGroup.get(m.groupId) ?? [];
     bucket.push({
-      user_id: m.userId,
+      userId: m.userId,
       email: m.email,
       name: m.name,
-      created_at: toIso(m.createdAt)!
+      createdAt: toIso(m.createdAt)!
     });
     membersByGroup.set(m.groupId, bucket);
   }
@@ -97,10 +97,10 @@ export async function getGroup(id: number): Promise<Group | null> {
   return toGroup(
     group,
     members.map((m) => ({
-      user_id: m.userId,
+      userId: m.userId,
       email: m.email,
       name: m.name,
-      created_at: toIso(m.createdAt)!
+      createdAt: toIso(m.createdAt)!
     }))
   );
 }

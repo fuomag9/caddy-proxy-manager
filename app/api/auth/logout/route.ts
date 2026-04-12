@@ -1,10 +1,14 @@
-import { NextRequest } from "next/server";
-import { signOut, checkSameOrigin } from "@/src/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { getAuth } from "@/src/lib/auth-server";
+import { checkSameOrigin } from "@/src/lib/auth";
+import { headers } from "next/headers";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   const originCheck = checkSameOrigin(request);
   if (originCheck) return originCheck;
-  await signOut({ redirectTo: "/login" });
+
+  await getAuth().api.signOut({ headers: await headers() });
+  return NextResponse.redirect(new URL("/login", request.url));
 }

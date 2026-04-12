@@ -14,7 +14,7 @@ type StatCard = {
 
 type RecentEvent = {
   summary: string;
-  created_at: string;
+  createdAt: string;
 };
 
 type TrafficSummary = {
@@ -156,14 +156,14 @@ export default function OverviewClient({
                   <div className="absolute left-[28px] top-4 bottom-4 w-px bg-border" />
                   {recentEvents.map((event, index) => (
                     <div
-                      key={`${event.created_at}-${index}`}
+                      key={`${event.createdAt}-${index}`}
                       className="relative flex items-start gap-4 px-5 py-3 hover:bg-muted/30 transition-colors"
                     >
                       {/* Dot */}
                       <div className={`relative z-10 mt-1 h-3 w-3 shrink-0 rounded-full ${getEventDotColor(event.summary)}`} />
                       <span className="flex-1 text-sm leading-snug">{event.summary}</span>
                       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {formatRelativeTime(event.created_at)}
+                        {formatRelativeTime(event.createdAt)}
                       </span>
                     </div>
                   ))}

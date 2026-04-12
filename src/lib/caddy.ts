@@ -82,14 +82,14 @@ type ProxyHostRow = {
   name: string;
   domains: string;
   upstreams: string;
-  certificate_id: number | null;
-  access_list_id: number | null;
-  ssl_forced: number;
-  hsts_enabled: number;
-  hsts_subdomains: number;
-  allow_websocket: number;
-  preserve_host_header: number;
-  skip_https_hostname_validation: number;
+  certificateId: number | null;
+  accessListId: number | null;
+  sslForced: number;
+  hstsEnabled: number;
+  hstsSubdomains: number;
+  allowWebsocket: number;
+  preserveHostHeader: number;
+  skipHttpsHostnameValidation: number;
   meta: string | null;
   enabled: number;
 };
@@ -216,20 +216,20 @@ type LoadBalancerRouteConfig = {
 };
 
 type AccessListEntryRow = {
-  access_list_id: number;
+  accessListId: number;
   username: string;
-  password_hash: string;
+  passwordHash: string;
 };
 
 type CertificateRow = {
   id: number;
   name: string;
   type: string;
-  domain_names: string;
-  certificate_pem: string | null;
-  private_key_pem: string | null;
-  auto_renew: number;
-  provider_options: string | null;
+  domainNames: string;
+  certificatePem: string | null;
+  privateKeyPem: string | null;
+  autoRenew: number;
+  providerOptions: string | null;
 };
 
 type CaddyHttpRoute = Record<string, unknown>;
@@ -507,15 +507,15 @@ function collectCertificateUsage(rows: ProxyHostRow[], certificates: Map<number,
       continue;
     }
 
-    // Handle auto-managed certificates (certificate_id is null)
-    if (!row.certificate_id) {
+    // Handle auto-managed certificates (certificateId is null)
+    if (!row.certificateId) {
       for (const domain of filteredDomains) {
         autoManagedDomains.add(domain);
       }
       continue;
     }
 
-    const cert = certificates.get(row.certificate_id);
+    const cert = certificates.get(row.certificateId);
     if (!cert) {
       continue;
     }
@@ -681,9 +681,9 @@ async function buildProxyRoutes(
       continue;
     }
 
-    // Allow hosts with certificate_id = null (Caddy Auto) or with valid certificate IDs
-    const isAutoManaged = !row.certificate_id;
-    const hasValidCertificate = row.certificate_id && tlsReadyCertificates.has(row.certificate_id);
+    // Allow hosts with certificateId = null (Caddy Auto) or with valid certificate IDs
+    const isAutoManaged = !row.certificateId;
+    const hasValidCertificate = row.certificateId && tlsReadyCertificates.has(row.certificateId);
 
     if (!isAutoManaged && !hasValidCertificate) {
       continue;
@@ -720,11 +720,11 @@ async function buildProxyRoutes(
       meta.waf
     );
     if (effectiveWaf?.enabled && effectiveWaf.mode !== 'Off') {
-      handlers.unshift(buildWafHandler(effectiveWaf, Boolean(row.allow_websocket)));
+      handlers.unshift(buildWafHandler(effectiveWaf, Boolean(row.allowWebsocket)));
     }
 
-    if (row.hsts_enabled) {
-      const value = row.hsts_subdomains ? "max-age=63072000; includeSubDomains" : "max-age=63072000";
+    if (row.hstsEnabled) {
+      const value = row.hstsSubdomains ? "max-age=63072000; includeSubDomains" : "max-age=63072000";
       handlers.push({
         handler: "headers",
         response: {
@@ -735,7 +735,7 @@ async function buildProxyRoutes(
       });
     }
 
-    if (row.ssl_forced) {
+    if (row.sslForced) {
       for (const domainGroup of domainGroups) {
         hostRoutes.push({
           match: [
@@ -774,8 +774,8 @@ async function buildProxyRoutes(
       });
     }
 
-    if (row.access_list_id) {
-      const accounts = accessAccounts.get(row.access_list_id) ?? [];
+    if (row.accessListId) {
+      const accounts = accessAccounts.get(row.accessListId) ?? [];
       if (accounts.length > 0) {
         handlers.push({
           handler: "authentication",
@@ -783,7 +783,7 @@ async function buildProxyRoutes(
             http_basic: {
               accounts: accounts.map((entry) => ({
                 username: entry.username,
-                password: entry.password_hash
+                password: entry.passwordHash
               }))
             }
           }
@@ -856,7 +856,7 @@ async function buildProxyRoutes(
       };
     }
 
-    if (row.preserve_host_header) {
+    if (row.preserveHostHeader) {
       reverseProxyHandler.headers = {
         request: {
           set: {
@@ -868,7 +868,7 @@ async function buildProxyRoutes(
 
     // Configure TLS transport for HTTPS upstreams
     if (resolvedUpstreams.hasHttpsUpstream) {
-      const tlsTransport: Record<string, unknown> = row.skip_https_hostname_validation
+      const tlsTransport: Record<string, unknown> = row.skipHttpsHostnameValidation
         ? {
             insecure_skip_verify: true
           }
@@ -1068,8 +1068,8 @@ async function buildProxyRoutes(
           for (const rule of locationRules) {
             const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
               rule,
-              Boolean(row.skip_https_hostname_validation),
-              Boolean(row.preserve_host_header)
+              Boolean(row.skipHttpsHostnameValidation),
+              Boolean(row.preserveHostHeader)
             );
             if (!safePath) continue;
             hostRoutes.push({
@@ -1104,8 +1104,8 @@ async function buildProxyRoutes(
           for (const rule of locationRules) {
             const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
               rule,
-              Boolean(row.skip_https_hostname_validation),
-              Boolean(row.preserve_host_header)
+              Boolean(row.skipHttpsHostnameValidation),
+              Boolean(row.preserveHostHeader)
             );
             if (!safePath) continue;
             hostRoutes.push({
@@ -1255,8 +1255,8 @@ async function buildProxyRoutes(
             for (const rule of locationRules) {
               const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
                 rule,
-                Boolean(row.skip_https_hostname_validation),
-                Boolean(row.preserve_host_header)
+                Boolean(row.skipHttpsHostnameValidation),
+                Boolean(row.preserveHostHeader)
               );
               if (!safePath) continue;
               hostRoutes.push({
@@ -1286,8 +1286,8 @@ async function buildProxyRoutes(
             for (const rule of locationRules) {
               const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
                 rule,
-                Boolean(row.skip_https_hostname_validation),
-                Boolean(row.preserve_host_header)
+                Boolean(row.skipHttpsHostnameValidation),
+                Boolean(row.preserveHostHeader)
               );
               if (!safePath) continue;
               hostRoutes.push({
@@ -1318,8 +1318,8 @@ async function buildProxyRoutes(
         for (const rule of locationRules) {
           const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
             rule,
-            Boolean(row.skip_https_hostname_validation),
-            Boolean(row.preserve_host_header)
+            Boolean(row.skipHttpsHostnameValidation),
+            Boolean(row.preserveHostHeader)
           );
           if (!safePath) continue;
           hostRoutes.push({
@@ -1410,7 +1410,7 @@ function buildTlsConnectionPolicies(
     }
   };
 
-  // Add policy for auto-managed domains (certificate_id = null)
+  // Add policy for auto-managed domains (certificateId = null)
   if (autoManagedDomains.size > 0) {
     const domains = Array.from(autoManagedDomains);
     // Split first so mTLS domains always get their own policy, regardless of auth result.
@@ -1432,14 +1432,14 @@ function buildTlsConnectionPolicies(
     }
 
     if (entry.certificate.type === "imported") {
-      if (!entry.certificate.certificate_pem || !entry.certificate.private_key_pem) {
+      if (!entry.certificate.certificatePem || !entry.certificate.privateKeyPem) {
         continue;
       }
 
       // Collect PEMs for tls.certificates.load_pem (inline, no shared filesystem needed)
       importedCertPems.push({
-        certificate: entry.certificate.certificate_pem.trim(),
-        key: entry.certificate.private_key_pem.trim()
+        certificate: entry.certificate.certificatePem.trim(),
+        key: entry.certificate.privateKeyPem.trim()
       });
 
       const mTlsDomains = domains.filter(d => mTlsDomainMap.has(d));
@@ -1488,7 +1488,7 @@ async function buildTlsAutomation(
   options: { acmeEmail?: string; dnsSettings?: DnsSettings | null }
 ) {
   const managedEntries = Array.from(usage.values()).filter(
-    (entry) => entry.certificate.type === "managed" && Boolean(entry.certificate.auto_renew)
+    (entry) => entry.certificate.type === "managed" && Boolean(entry.certificate.autoRenew)
   );
 
   const hasAutoManagedDomains = autoManagedDomains.size > 0;
@@ -1517,7 +1517,7 @@ async function buildTlsAutomation(
   const managedCertificateIds = new Set<number>();
   const policies: Record<string, unknown>[] = [];
 
-  // Add policy for auto-managed domains (certificate_id = null)
+  // Add policy for auto-managed domains (certificateId = null)
   if (hasAutoManagedDomains) {
     for (const subjects of groupHostPatternsByPriority(Array.from(autoManagedDomains))) {
       const issuer: Record<string, unknown> = {
@@ -1894,14 +1894,14 @@ async function buildCaddyDocument() {
     name: h.name,
     domains: h.domains,
     upstreams: h.upstreams,
-    certificate_id: h.certificateId,
-    access_list_id: h.accessListId,
-    ssl_forced: h.sslForced ? 1 : 0,
-    hsts_enabled: h.hstsEnabled ? 1 : 0,
-    hsts_subdomains: h.hstsSubdomains ? 1 : 0,
-    allow_websocket: h.allowWebsocket ? 1 : 0,
-    preserve_host_header: h.preserveHostHeader ? 1 : 0,
-    skip_https_hostname_validation: h.skipHttpsHostnameValidation ? 1 : 0,
+    certificateId: h.certificateId,
+    accessListId: h.accessListId,
+    sslForced: h.sslForced ? 1 : 0,
+    hstsEnabled: h.hstsEnabled ? 1 : 0,
+    hstsSubdomains: h.hstsSubdomains ? 1 : 0,
+    allowWebsocket: h.allowWebsocket ? 1 : 0,
+    preserveHostHeader: h.preserveHostHeader ? 1 : 0,
+    skipHttpsHostnameValidation: h.skipHttpsHostnameValidation ? 1 : 0,
     meta: h.meta,
     enabled: h.enabled ? 1 : 0
   }));
@@ -1910,17 +1910,17 @@ async function buildCaddyDocument() {
     id: c.id,
     name: c.name,
     type: c.type as "managed" | "imported",
-    domain_names: c.domainNames,
-    certificate_pem: c.certificatePem,
-    private_key_pem: c.privateKeyPem,
-    auto_renew: c.autoRenew ? 1 : 0,
-    provider_options: c.providerOptions
+    domainNames: c.domainNames,
+    certificatePem: c.certificatePem,
+    privateKeyPem: c.privateKeyPem,
+    autoRenew: c.autoRenew ? 1 : 0,
+    providerOptions: c.providerOptions
   }));
 
   const accessListEntryRows: AccessListEntryRow[] = accessListEntryRecords.map((entry) => ({
-    access_list_id: entry.accessListId,
+    accessListId: entry.accessListId,
     username: entry.username,
-    password_hash: entry.passwordHash
+    passwordHash: entry.passwordHash
   }));
 
   const certificateMap = new Map(certRowsMapped.map((cert) => [cert.id, cert]));
@@ -1933,10 +1933,10 @@ async function buildCaddyDocument() {
   }, new Map());
   const cAsWithAnyIssuedCerts = new Set(allIssuedCaCertIds.map(r => r.caCertificateId));
   const accessMap = accessListEntryRows.reduce<Map<number, AccessListEntryRow[]>>((map, entry) => {
-    if (!map.has(entry.access_list_id)) {
-      map.set(entry.access_list_id, []);
+    if (!map.has(entry.accessListId)) {
+      map.set(entry.accessListId, []);
     }
-    map.get(entry.access_list_id)!.push(entry);
+    map.get(entry.accessListId)!.push(entry);
     return map;
   }, new Map());
 
@@ -2187,7 +2187,7 @@ export async function applyCaddyConfig() {
   const document = await buildCaddyDocument();
   const payload = JSON.stringify(document);
   const hash = crypto.createHash("sha256").update(payload).digest("hex");
-  setSetting("caddy_config_hash", { hash, updated_at: nowIso() });
+  setSetting("caddy_config_hash", { hash, updatedAt: nowIso() });
 
   try {
     const response = await caddyRequest(`${config.caddyApiUrl}/load`, "POST", payload);

@@ -31,9 +31,9 @@ type Props = {
 };
 
 function formatMatcher(host: L4ProxyHost): string {
-  switch (host.matcher_type) {
-    case "tls_sni":    return `SNI: ${host.matcher_value.join(", ")}`;
-    case "http_host":  return `Host: ${host.matcher_value.join(", ")}`;
+  switch (host.matcherType) {
+    case "tls_sni":    return `SNI: ${host.matcherValue.join(", ")}`;
+    case "http_host":  return `Host: ${host.matcherValue.join(", ")}`;
     case "proxy_protocol": return "Proxy Protocol";
     default:           return "None";
   }
@@ -111,10 +111,10 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
     {
       id: "listen",
       label: "Listen",
-      sortKey: "listen_address",
+      sortKey: "listenAddress",
       render: (host: L4ProxyHost) => (
         <span className="text-sm font-mono font-medium tabular-nums text-foreground/80">
-          {host.listen_address}
+          {host.listenAddress}
         </span>
       ),
     },
@@ -190,7 +190,7 @@ export default function L4ProxyHostsClient({ hosts, pagination, initialSearch, i
               <ProtocolBadge protocol={host.protocol} />
             </div>
             <p className="text-xs text-muted-foreground font-mono truncate">
-              {host.listen_address}
+              {host.listenAddress}
               <span className="mx-1 text-muted-foreground">→</span>
               {host.upstreams[0]}{host.upstreams.length > 1 ? ` +${host.upstreams.length - 1}` : ""}
             </p>

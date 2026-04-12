@@ -234,7 +234,7 @@ export function ManageIssuedClientCertsDialog({
         const result = await revokeIssuedClientCertificateAction(id);
         setItems((current) =>
           current.map((item) =>
-            item.id === id ? { ...item, revoked_at: result.revokedAt, updated_at: result.revokedAt } : item
+            item.id === id ? { ...item, revokedAt: result.revokedAt, updatedAt: result.revokedAt } : item
           )
         );
         router.refresh();
@@ -244,8 +244,8 @@ export function ManageIssuedClientCertsDialog({
     });
   }
 
-  const visibleItems = showRevoked ? items : items.filter((i) => !i.revoked_at);
-  const revokedCount = items.filter((i) => i.revoked_at).length;
+  const visibleItems = showRevoked ? items : items.filter((i) => !i.revokedAt);
+  const revokedCount = items.filter((i) => i.revokedAt).length;
 
   return (
     <AppDialog
@@ -285,31 +285,31 @@ export function ManageIssuedClientCertsDialog({
           </p>
         ) : (
           visibleItems.map((item) => {
-            const expired = new Date(item.valid_to).getTime() < Date.now();
+            const expired = new Date(item.validTo).getTime() < Date.now();
             return (
               <div key={item.id} className="rounded-lg border p-4 flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-base">{item.common_name}</p>
-                    <p className="text-sm text-muted-foreground">Serial {item.serial_number}</p>
+                    <p className="font-semibold text-base">{item.commonName}</p>
+                    <p className="text-sm text-muted-foreground">Serial {item.serialNumber}</p>
                   </div>
                   <div className="flex flex-wrap gap-1 justify-end">
-                    <Badge variant={item.revoked_at ? "secondary" : "default"}>
-                      {item.revoked_at ? "Revoked" : "Active"}
+                    <Badge variant={item.revokedAt ? "secondary" : "default"}>
+                      {item.revokedAt ? "Revoked" : "Active"}
                     </Badge>
                     <Badge variant={expired ? "destructive" : "outline"}>
                       {expired
-                        ? `Expired ${formatDateTime(item.valid_to)}`
-                        : `Expires ${formatDateTime(item.valid_to)}`}
+                        ? `Expired ${formatDateTime(item.validTo)}`
+                        : `Expires ${formatDateTime(item.validTo)}`}
                     </Badge>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">Issued {formatDateTime(item.created_at)}</p>
+                <p className="text-sm text-muted-foreground">Issued {formatDateTime(item.createdAt)}</p>
                 <p className="text-sm text-muted-foreground font-mono break-all">
-                  SHA-256 {formatFingerprint(item.fingerprint_sha256)}
+                  SHA-256 {formatFingerprint(item.fingerprintSha256)}
                 </p>
-                {item.revoked_at ? (
-                  <p className="text-sm text-muted-foreground">Revoked {formatDateTime(item.revoked_at)}</p>
+                {item.revokedAt ? (
+                  <p className="text-sm text-muted-foreground">Revoked {formatDateTime(item.revokedAt)}</p>
                 ) : (
                   <div className="flex justify-end">
                     <Button

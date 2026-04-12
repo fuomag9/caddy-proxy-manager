@@ -7,10 +7,10 @@ import { NotFoundError } from "../api-auth";
 export type ApiToken = {
   id: number;
   name: string;
-  created_by: number;
-  created_at: string;
-  last_used_at: string | null;
-  expires_at: string | null;
+  createdBy: number;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
 };
 
 type ApiTokenRow = typeof apiTokens.$inferSelect;
@@ -19,10 +19,10 @@ function toApiToken(row: ApiTokenRow): ApiToken {
   return {
     id: row.id,
     name: row.name,
-    created_by: row.createdBy,
-    created_at: toIso(row.createdAt)!,
-    last_used_at: row.lastUsedAt ? toIso(row.lastUsedAt) : null,
-    expires_at: row.expiresAt ? toIso(row.expiresAt) : null,
+    createdBy: row.createdBy,
+    createdAt: toIso(row.createdAt)!,
+    lastUsedAt: row.lastUsedAt ? toIso(row.lastUsedAt) : null,
+    expiresAt: row.expiresAt ? toIso(row.expiresAt) : null,
   };
 }
 

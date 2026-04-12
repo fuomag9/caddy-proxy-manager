@@ -32,7 +32,7 @@ export function CpmForwardAuthFields({
     groups = [],
     currentAccess,
 }: {
-    cpmForwardAuth?: ProxyHost["cpm_forward_auth"] | null;
+    cpmForwardAuth?: ProxyHost["cpmForwardAuth"] | null;
     users?: UserEntry[];
     groups?: GroupEntry[];
     currentAccess?: ForwardAuthAccessData | null;

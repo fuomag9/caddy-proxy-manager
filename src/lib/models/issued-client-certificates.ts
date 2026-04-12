@@ -6,26 +6,26 @@ import { desc, eq } from "drizzle-orm";
 
 export type IssuedClientCertificate = {
   id: number;
-  ca_certificate_id: number;
-  common_name: string;
-  serial_number: string;
-  fingerprint_sha256: string;
-  certificate_pem: string;
-  valid_from: string;
-  valid_to: string;
-  revoked_at: string | null;
-  created_at: string;
-  updated_at: string;
+  caCertificateId: number;
+  commonName: string;
+  serialNumber: string;
+  fingerprintSha256: string;
+  certificatePem: string;
+  validFrom: string;
+  validTo: string;
+  revokedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type IssuedClientCertificateInput = {
-  ca_certificate_id: number;
-  common_name: string;
-  serial_number: string;
-  fingerprint_sha256: string;
-  certificate_pem: string;
-  valid_from: string;
-  valid_to: string;
+  caCertificateId: number;
+  commonName: string;
+  serialNumber: string;
+  fingerprintSha256: string;
+  certificatePem: string;
+  validFrom: string;
+  validTo: string;
 };
 
 type IssuedClientCertificateRow = typeof issuedClientCertificates.$inferSelect;
@@ -33,16 +33,16 @@ type IssuedClientCertificateRow = typeof issuedClientCertificates.$inferSelect;
 function parseIssuedClientCertificate(row: IssuedClientCertificateRow): IssuedClientCertificate {
   return {
     id: row.id,
-    ca_certificate_id: row.caCertificateId,
-    common_name: row.commonName,
-    serial_number: row.serialNumber,
-    fingerprint_sha256: row.fingerprintSha256,
-    certificate_pem: row.certificatePem,
-    valid_from: toIso(row.validFrom)!,
-    valid_to: toIso(row.validTo)!,
-    revoked_at: toIso(row.revokedAt),
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!
+    caCertificateId: row.caCertificateId,
+    commonName: row.commonName,
+    serialNumber: row.serialNumber,
+    fingerprintSha256: row.fingerprintSha256,
+    certificatePem: row.certificatePem,
+    validFrom: toIso(row.validFrom)!,
+    validTo: toIso(row.validTo)!,
+    revokedAt: toIso(row.revokedAt),
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!
   };
 }
 
@@ -69,13 +69,13 @@ export async function createIssuedClientCertificate(
   const [record] = await db
     .insert(issuedClientCertificates)
     .values({
-      caCertificateId: input.ca_certificate_id,
-      commonName: input.common_name.trim(),
-      serialNumber: input.serial_number.trim(),
-      fingerprintSha256: input.fingerprint_sha256.trim(),
-      certificatePem: input.certificate_pem.trim(),
-      validFrom: input.valid_from,
-      validTo: input.valid_to,
+      caCertificateId: input.caCertificateId,
+      commonName: input.commonName.trim(),
+      serialNumber: input.serialNumber.trim(),
+      fingerprintSha256: input.fingerprintSha256.trim(),
+      certificatePem: input.certificatePem.trim(),
+      validFrom: input.validFrom,
+      validTo: input.validTo,
       createdBy: actorUserId,
       createdAt: now,
       updatedAt: now
@@ -91,10 +91,10 @@ export async function createIssuedClientCertificate(
     action: "create",
     entityType: "issued_client_certificate",
     entityId: record.id,
-    summary: `Issued client certificate ${input.common_name}`,
+    summary: `Issued client certificate ${input.commonName}`,
     data: {
-      caCertificateId: input.ca_certificate_id,
-      serialNumber: input.serial_number
+      caCertificateId: input.caCertificateId,
+      serialNumber: input.serialNumber
     }
   });
   await applyCaddyConfig();
@@ -109,7 +109,7 @@ export async function revokeIssuedClientCertificate(
   if (!existing) {
     throw new Error("Issued client certificate not found");
   }
-  if (existing.revoked_at) {
+  if (existing.revokedAt) {
     throw new Error("Issued client certificate is already revoked");
   }
 
@@ -127,10 +127,10 @@ export async function revokeIssuedClientCertificate(
     action: "revoke",
     entityType: "issued_client_certificate",
     entityId: id,
-    summary: `Revoked client certificate ${existing.common_name}`,
+    summary: `Revoked client certificate ${existing.commonName}`,
     data: {
-      caCertificateId: existing.ca_certificate_id,
-      serialNumber: existing.serial_number
+      caCertificateId: existing.caCertificateId,
+      serialNumber: existing.serialNumber
     }
   });
   await applyCaddyConfig();

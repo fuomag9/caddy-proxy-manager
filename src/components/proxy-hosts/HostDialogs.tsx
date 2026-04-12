@@ -87,8 +87,8 @@ export function CreateHostDialog({
                     </Alert>
                 )}
                 <SettingsToggles
-                    hstsSubdomains={initialData?.hsts_subdomains}
-                    skipHttpsValidation={initialData?.skip_https_hostname_validation}
+                    hstsSubdomains={initialData?.hstsSubdomains}
+                    skipHttpsValidation={initialData?.skipHttpsHostnameValidation}
                     enabled={true}
                 />
                 <div>
@@ -118,7 +118,7 @@ export function CreateHostDialog({
                 <UpstreamInput defaultUpstreams={initialData?.upstreams} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Certificate</label>
-                    <Select name="certificate_id" defaultValue={String(initialData?.certificate_id ?? "__none__")}>
+                    <Select name="certificate_id" defaultValue={String(initialData?.certificateId ?? "__none__")}>
                         <SelectTrigger aria-label="Certificate">
                             <SelectValue placeholder="Managed by Caddy (Auto)" />
                         </SelectTrigger>
@@ -134,7 +134,7 @@ export function CreateHostDialog({
                 </div>
                 <div>
                     <label className="text-sm font-medium mb-1 block">Access List</label>
-                    <Select name="access_list_id" defaultValue={String(initialData?.access_list_id ?? "__none__")}>
+                    <Select name="access_list_id" defaultValue={String(initialData?.accessListId ?? "__none__")}>
                         <SelectTrigger aria-label="Access List">
                             <SelectValue placeholder="None" />
                         </SelectTrigger>
@@ -149,14 +149,14 @@ export function CreateHostDialog({
                     </Select>
                 </div>
                 <RedirectsFields initialData={initialData?.redirects} />
-                <LocationRulesFields initialData={initialData?.location_rules} />
+                <LocationRulesFields initialData={initialData?.locationRules} />
                 <RewriteFields initialData={initialData?.rewrite} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
                     <Textarea
                         name="custom_pre_handlers_json"
                         placeholder='[{"handler": "headers", ...}]'
-                        defaultValue={initialData?.custom_pre_handlers_json ?? ""}
+                        defaultValue={initialData?.customPreHandlersJson ?? ""}
                         rows={3}
                     />
                     <p className="text-xs text-muted-foreground mt-1">Optional JSON array of Caddy handlers</p>
@@ -166,7 +166,7 @@ export function CreateHostDialog({
                     <Textarea
                         name="custom_reverse_proxy_json"
                         placeholder='{"headers": {"request": {...}}}'
-                        defaultValue={initialData?.custom_reverse_proxy_json ?? ""}
+                        defaultValue={initialData?.customReverseProxyJson ?? ""}
                         rows={3}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
@@ -175,13 +175,13 @@ export function CreateHostDialog({
                 </div>
                 <AuthentikFields defaults={authentikDefaults} authentik={initialData?.authentik} />
                 <CpmForwardAuthFields
-                    cpmForwardAuth={initialData?.cpm_forward_auth}
+                    cpmForwardAuth={initialData?.cpmForwardAuth}
                     users={forwardAuthUsers}
                     groups={forwardAuthGroups}
                 />
-                <LoadBalancerFields loadBalancer={initialData?.load_balancer} />
-                <DnsResolverFields dnsResolver={initialData?.dns_resolver} />
-                <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstream_dns_resolution} />
+                <LoadBalancerFields loadBalancer={initialData?.loadBalancer} />
+                <DnsResolverFields dnsResolver={initialData?.dnsResolver} />
+                <UpstreamDnsResolutionFields upstreamDnsResolution={initialData?.upstreamDnsResolution} />
                 <GeoBlockFields />
                 <WafFields value={initialData?.waf} />
                 <MtlsFields
@@ -246,8 +246,8 @@ export function EditHostDialog({
                     </Alert>
                 )}
                 <SettingsToggles
-                    hstsSubdomains={host.hsts_subdomains}
-                    skipHttpsValidation={host.skip_https_hostname_validation}
+                    hstsSubdomains={host.hstsSubdomains}
+                    skipHttpsValidation={host.skipHttpsHostnameValidation}
                     enabled={host.enabled}
                 />
                 <div>
@@ -269,7 +269,7 @@ export function EditHostDialog({
                 <UpstreamInput defaultUpstreams={host.upstreams} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Certificate</label>
-                    <Select name="certificate_id" defaultValue={String(host.certificate_id ?? "__none__")}>
+                    <Select name="certificate_id" defaultValue={String(host.certificateId ?? "__none__")}>
                         <SelectTrigger aria-label="Certificate">
                             <SelectValue placeholder="Managed by Caddy (Auto)" />
                         </SelectTrigger>
@@ -285,7 +285,7 @@ export function EditHostDialog({
                 </div>
                 <div>
                     <label className="text-sm font-medium mb-1 block">Access List</label>
-                    <Select name="access_list_id" defaultValue={String(host.access_list_id ?? "__none__")}>
+                    <Select name="access_list_id" defaultValue={String(host.accessListId ?? "__none__")}>
                         <SelectTrigger aria-label="Access List">
                             <SelectValue placeholder="None" />
                         </SelectTrigger>
@@ -300,13 +300,13 @@ export function EditHostDialog({
                     </Select>
                 </div>
                 <RedirectsFields initialData={host.redirects} />
-                <LocationRulesFields initialData={host.location_rules} />
+                <LocationRulesFields initialData={host.locationRules} />
                 <RewriteFields initialData={host.rewrite} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
                     <Textarea
                         name="custom_pre_handlers_json"
-                        defaultValue={host.custom_pre_handlers_json ?? ""}
+                        defaultValue={host.customPreHandlersJson ?? ""}
                         rows={3}
                     />
                     <p className="text-xs text-muted-foreground mt-1">Optional JSON array of Caddy handlers</p>
@@ -315,7 +315,7 @@ export function EditHostDialog({
                     <label className="text-sm font-medium mb-1 block">Custom Reverse Proxy (JSON)</label>
                     <Textarea
                         name="custom_reverse_proxy_json"
-                        defaultValue={host.custom_reverse_proxy_json ?? ""}
+                        defaultValue={host.customReverseProxyJson ?? ""}
                         rows={3}
                     />
                     <p className="text-xs text-muted-foreground mt-1">
@@ -324,18 +324,18 @@ export function EditHostDialog({
                 </div>
                 <AuthentikFields authentik={host.authentik} />
                 <CpmForwardAuthFields
-                    cpmForwardAuth={host.cpm_forward_auth}
+                    cpmForwardAuth={host.cpmForwardAuth}
                     users={forwardAuthUsers}
                     groups={forwardAuthGroups}
                     currentAccess={forwardAuthAccess}
                 />
-                <LoadBalancerFields loadBalancer={host.load_balancer} />
-                <DnsResolverFields dnsResolver={host.dns_resolver} />
-                <UpstreamDnsResolutionFields upstreamDnsResolution={host.upstream_dns_resolution} />
+                <LoadBalancerFields loadBalancer={host.loadBalancer} />
+                <DnsResolverFields dnsResolver={host.dnsResolver} />
+                <UpstreamDnsResolutionFields upstreamDnsResolution={host.upstreamDnsResolution} />
                 <GeoBlockFields
                     initialValues={{
                         geoblock: host.geoblock,
-                        geoblock_mode: host.geoblock_mode,
+                        geoblock_mode: host.geoblockMode,
                     }}
                 />
                 <WafFields value={host.waf} />

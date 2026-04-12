@@ -8,23 +8,23 @@ import { asc, desc, eq, inArray } from "drizzle-orm";
 
 export type MtlsAccessRule = {
   id: number;
-  proxy_host_id: number;
-  path_pattern: string;
-  allowed_role_ids: number[];
-  allowed_cert_ids: number[];
-  deny_all: boolean;
+  proxyHostId: number;
+  pathPattern: string;
+  allowedRoleIds: number[];
+  allowedCertIds: number[];
+  denyAll: boolean;
   priority: number;
   description: string | null;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type MtlsAccessRuleInput = {
-  proxy_host_id: number;
-  path_pattern: string;
-  allowed_role_ids?: number[];
-  allowed_cert_ids?: number[];
-  deny_all?: boolean;
+  proxyHostId: number;
+  pathPattern: string;
+  allowedRoleIds?: number[];
+  allowedCertIds?: number[];
+  denyAll?: boolean;
   priority?: number;
   description?: string | null;
 };
@@ -44,15 +44,15 @@ function parseJsonIds(raw: string): number[] {
 function toMtlsAccessRule(row: RuleRow): MtlsAccessRule {
   return {
     id: row.id,
-    proxy_host_id: row.proxyHostId,
-    path_pattern: row.pathPattern,
-    allowed_role_ids: parseJsonIds(row.allowedRoleIds),
-    allowed_cert_ids: parseJsonIds(row.allowedCertIds),
-    deny_all: row.denyAll,
+    proxyHostId: row.proxyHostId,
+    pathPattern: row.pathPattern,
+    allowedRoleIds: parseJsonIds(row.allowedRoleIds),
+    allowedCertIds: parseJsonIds(row.allowedCertIds),
+    denyAll: row.denyAll,
     priority: row.priority,
     description: row.description,
-    created_at: toIso(row.createdAt)!,
-    updated_at: toIso(row.updatedAt)!,
+    createdAt: toIso(row.createdAt)!,
+    updatedAt: toIso(row.updatedAt)!,
   };
 }
 
@@ -82,11 +82,11 @@ export async function createMtlsAccessRule(
   const [record] = await db
     .insert(mtlsAccessRules)
     .values({
-      proxyHostId: input.proxy_host_id,
-      pathPattern: input.path_pattern.trim(),
-      allowedRoleIds: JSON.stringify(input.allowed_role_ids ?? []),
-      allowedCertIds: JSON.stringify(input.allowed_cert_ids ?? []),
-      denyAll: input.deny_all ?? false,
+      proxyHostId: input.proxyHostId,
+      pathPattern: input.pathPattern.trim(),
+      allowedRoleIds: JSON.stringify(input.allowedRoleIds ?? []),
+      allowedCertIds: JSON.stringify(input.allowedCertIds ?? []),
+      denyAll: input.denyAll ?? false,
       priority: input.priority ?? 0,
       description: input.description ?? null,
       createdBy: actorUserId,
@@ -102,7 +102,7 @@ export async function createMtlsAccessRule(
     action: "create",
     entityType: "mtls_access_rule",
     entityId: record.id,
-    summary: `Created mTLS access rule for path ${input.path_pattern} on proxy host ${input.proxy_host_id}`,
+    summary: `Created mTLS access rule for path ${input.pathPattern} on proxy host ${input.proxyHostId}`,
   });
 
   await applyCaddyConfig();
@@ -111,7 +111,7 @@ export async function createMtlsAccessRule(
 
 export async function updateMtlsAccessRule(
   id: number,
-  input: Partial<Omit<MtlsAccessRuleInput, "proxy_host_id">>,
+  input: Partial<Omit<MtlsAccessRuleInput, "proxyHostId">>,
   actorUserId: number
 ): Promise<MtlsAccessRule> {
   const existing = await db.query.mtlsAccessRules.findFirst({
@@ -122,10 +122,10 @@ export async function updateMtlsAccessRule(
   const now = nowIso();
   const updates: Partial<typeof mtlsAccessRules.$inferInsert> = { updatedAt: now };
 
-  if (input.path_pattern !== undefined) updates.pathPattern = input.path_pattern.trim();
-  if (input.allowed_role_ids !== undefined) updates.allowedRoleIds = JSON.stringify(input.allowed_role_ids);
-  if (input.allowed_cert_ids !== undefined) updates.allowedCertIds = JSON.stringify(input.allowed_cert_ids);
-  if (input.deny_all !== undefined) updates.denyAll = input.deny_all;
+  if (input.pathPattern !== undefined) updates.pathPattern = input.pathPattern.trim();
+  if (input.allowedRoleIds !== undefined) updates.allowedRoleIds = JSON.stringify(input.allowedRoleIds);
+  if (input.allowedCertIds !== undefined) updates.allowedCertIds = JSON.stringify(input.allowedCertIds);
+  if (input.denyAll !== undefined) updates.denyAll = input.denyAll;
   if (input.priority !== undefined) updates.priority = input.priority;
   if (input.description !== undefined) updates.description = input.description ?? null;
 
@@ -136,7 +136,7 @@ export async function updateMtlsAccessRule(
     action: "update",
     entityType: "mtls_access_rule",
     entityId: id,
-    summary: `Updated mTLS access rule for path ${input.path_pattern ?? existing.pathPattern}`,
+    summary: `Updated mTLS access rule for path ${input.pathPattern ?? existing.pathPattern}`,
   });
 
   await applyCaddyConfig();
@@ -183,10 +183,10 @@ export async function getAccessRulesForHosts(
   const map = new Map<number, MtlsAccessRule[]>();
   for (const row of rows) {
     const parsed = toMtlsAccessRule(row);
-    let bucket = map.get(parsed.proxy_host_id);
+    let bucket = map.get(parsed.proxyHostId);
     if (!bucket) {
       bucket = [];
-      map.set(parsed.proxy_host_id, bucket);
+      map.set(parsed.proxyHostId, bucket);
     }
     bucket.push(parsed);
   }

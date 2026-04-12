@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { signIn } from "next-auth/react";
+import { authClient } from "@/src/lib/auth-client";
 import { Camera, Check, Clock, Copy, Key, Link, LogIn, Lock, Plus, Trash2, Unlink, User, AlertTriangle } from "lucide-react";
 import type { ApiToken } from "@/lib/models/api-tokens";
 import { createApiTokenAction, deleteApiTokenAction } from "../api-tokens/actions";
@@ -26,11 +26,11 @@ interface UserData {
   id: number;
   email: string;
   name: string | null;
-  provider: string;
-  subject: string;
-  password_hash: string | null;
+  provider: string | null;
+  subject: string | null;
+  passwordHash: string | null;
   role: string;
-  avatar_url: string | null;
+  avatarUrl: string | null;
 }
 
 interface ProfileClientProps {
@@ -48,11 +48,11 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatarUrl);
   const [newToken, setNewToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const hasPassword = !!user.password_hash;
+  const hasPassword = !!user.passwordHash;
   const hasOAuth = user.provider !== "credentials";
 
   const handlePasswordChange = async () => {
@@ -158,9 +158,7 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
       }
 
       // Now initiate OAuth flow
-      await signIn(providerId, {
-        callbackUrl: "/profile"
-      });
+      await authClient.signIn.social({ provider: providerId, callbackURL: "/profile" });
     } catch {
       setError("An error occurred while linking OAuth");
       setLoading(false);
@@ -382,7 +380,7 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
             <div>
               <p className="text-sm text-muted-foreground">Authentication Method</p>
               <Badge variant={user.provider === "credentials" ? "secondary" : "default"}>
-                {getProviderName(user.provider)}
+                {getProviderName(user.provider ?? "")}
               </Badge>
             </div>
 
@@ -442,7 +440,7 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
               {hasOAuth ? (
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">
-                    Your account is linked to {getProviderName(user.provider)}
+                    Your account is linked to {getProviderName(user.provider ?? "")}
                   </p>
 
                   {hasPassword ? (
@@ -523,7 +521,7 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
             {apiTokens.length > 0 && (
               <div className="flex flex-col divide-y divide-border rounded-md border overflow-hidden">
                 {apiTokens.map((token) => {
-                  const expired = isExpired(token.expires_at);
+                  const expired = isExpired(token.expiresAt);
                   return (
                     <div
                       key={token.id}
@@ -543,15 +541,15 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
                           </div>
                           <div className="flex flex-wrap gap-x-3 gap-y-0">
                             <p className="text-xs text-muted-foreground">
-                              Created {formatDate(token.created_at)}
+                              Created {formatDate(token.createdAt)}
                             </p>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              Used {formatDate(token.last_used_at)}
+                              Used {formatDate(token.lastUsedAt)}
                             </p>
-                            {token.expires_at && (
+                            {token.expiresAt && (
                               <p className="text-xs text-muted-foreground">
-                                {expired ? "Expired" : "Expires"} {formatDate(token.expires_at)}
+                                {expired ? "Expired" : "Expires"} {formatDate(token.expiresAt)}
                               </p>
                             )}
                           </div>
@@ -656,7 +654,7 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
           <DialogHeader>
             <DialogTitle>Unlink OAuth Account</DialogTitle>
             <DialogDescription>
-              Are you sure you want to unlink your {getProviderName(user.provider)} account?
+              Are you sure you want to unlink your {getProviderName(user.provider ?? "")} account?
               You will only be able to sign in with your username and password after this.
             </DialogDescription>
           </DialogHeader>

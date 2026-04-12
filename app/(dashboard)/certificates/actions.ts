@@ -23,10 +23,10 @@ export async function createCertificateAction(formData: FormData) {
     {
       name: String(formData.get("name") ?? "Certificate"),
       type,
-      domain_names: parseDomains(formData.get("domain_names")),
-      auto_renew: type === "managed" ? formData.get("auto_renew") === "on" : false,
-      certificate_pem: type === "imported" ? String(formData.get("certificate_pem") ?? "") : null,
-      private_key_pem: type === "imported" ? String(formData.get("private_key_pem") ?? "") : null
+      domainNames: parseDomains(formData.get("domain_names")),
+      autoRenew: type === "managed" ? formData.get("auto_renew") === "on" : false,
+      certificatePem: type === "imported" ? String(formData.get("certificate_pem") ?? "") : null,
+      privateKeyPem: type === "imported" ? String(formData.get("private_key_pem") ?? "") : null
     },
     userId
   );
@@ -42,10 +42,10 @@ export async function updateCertificateAction(id: number, formData: FormData) {
     {
       name: formData.get("name") ? String(formData.get("name")) : undefined,
       type,
-      domain_names: formData.get("domain_names") ? parseDomains(formData.get("domain_names")) : undefined,
-      auto_renew: formData.has("auto_renew_present") ? formData.get("auto_renew") === "on" : undefined,
-      certificate_pem: formData.get("certificate_pem") ? String(formData.get("certificate_pem")) : undefined,
-      private_key_pem: formData.get("private_key_pem") ? String(formData.get("private_key_pem")) : undefined
+      domainNames: formData.get("domain_names") ? parseDomains(formData.get("domain_names")) : undefined,
+      autoRenew: formData.has("auto_renew_present") ? formData.get("auto_renew") === "on" : undefined,
+      certificatePem: formData.get("certificate_pem") ? String(formData.get("certificate_pem")) : undefined,
+      privateKeyPem: formData.get("private_key_pem") ? String(formData.get("private_key_pem")) : undefined
     },
     userId
   );
