@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
 import { genericOAuth, username } from "better-auth/plugins";
-import { randomUUID } from "node:crypto";
 import db, { sqlite } from "./db";
 import * as schema from "./db/schema";
 import { eq } from "drizzle-orm";
@@ -87,12 +86,11 @@ function createAuth(): any {
     // behind reverse proxies that rewrite Host without setting X-Forwarded-Host.
     trustHost: process.env.AUTH_TRUST_HOST === "true",
     trustedOrigins: [config.baseUrl],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     advanced: {
       database: {
         generateId: "serial",
       },
-    } as any,
+    } as Record<string, unknown>,
     rateLimit: {
       enabled: process.env.AUTH_RATE_LIMIT_ENABLED !== "false",
       window: Number(process.env.AUTH_RATE_LIMIT_WINDOW ?? 60),

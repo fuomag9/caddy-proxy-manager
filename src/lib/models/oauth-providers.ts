@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import db, { nowIso } from "../db";
 import { oauthProviders } from "../db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { encryptSecret, decryptSecret } from "../secret";
 
 export type OAuthProvider = {

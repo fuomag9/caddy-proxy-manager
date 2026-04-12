@@ -31,8 +31,7 @@ export async function auth(req?: NextRequest): Promise<Session | null> {
   const resolvedHeaders = hdrs instanceof Promise ? await hdrs : hdrs;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let betterAuthSession: any = null;
-
+  let betterAuthSession: any;
   try {
     betterAuthSession = await getAuth().api.getSession({
       headers: resolvedHeaders,

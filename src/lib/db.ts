@@ -2,7 +2,6 @@ import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { eq, ne, and, isNull } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import * as schema from "./db/schema";
@@ -198,7 +197,7 @@ function runEnvProviderSync() {
   // Lazy import to avoid circular dependency at module load
   let config: { oauth: { enabled: boolean; providerName: string; clientId: string | null; clientSecret: string | null; issuer: string | null; authorizationUrl: string | null; tokenUrl: string | null; userinfoUrl: string | null; allowAutoLinking: boolean } };
   try {
-    config = require("./config").config;
+    config = require("./config").config; // eslint-disable-line @typescript-eslint/no-require-imports
   } catch {
     return;
   }
@@ -208,7 +207,7 @@ function runEnvProviderSync() {
   const { oauthProviders } = schema;
   let encryptSecret: (v: string) => string;
   try {
-    encryptSecret = require("./secret").encryptSecret;
+    encryptSecret = require("./secret").encryptSecret; // eslint-disable-line @typescript-eslint/no-require-imports
   } catch (e) {
     console.error("CRITICAL: Failed to load encryption module, refusing to store plaintext secrets:", e);
     return;

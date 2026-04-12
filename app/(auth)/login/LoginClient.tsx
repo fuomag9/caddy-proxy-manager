@@ -36,7 +36,7 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
       return;
     }
 
-    const { data, error } = await authClient.signIn.username({
+    const { error } = await authClient.signIn.username({
       username,
       password,
     });

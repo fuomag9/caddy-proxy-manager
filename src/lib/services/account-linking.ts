@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { randomBytes, randomUUID } from "crypto";
+import { randomBytes } from "crypto";
 import { SignJWT, jwtVerify } from "jose";
 import { config } from "../config";
 import { findUserByEmail, getUserById } from "../models/user";

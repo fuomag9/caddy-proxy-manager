@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import { randomUUID } from "node:crypto";
 import db, { nowIso } from "./db";
 import { config } from "./config";
 import { users, accounts } from "./db/schema";
