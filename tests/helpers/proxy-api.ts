@@ -257,6 +257,6 @@ export async function createAccessList(
 
   await page.getByRole('button', { name: /create access list/i }).click();
 
-  // Wait for the card to appear
-  await expect(page.getByRole('button', { name: /delete list/i })).toBeVisible({ timeout: 10_000 });
+  // Wait for the newly created card to appear (match by name to avoid strict-mode violations)
+  await expect(page.getByText(name).first()).toBeVisible({ timeout: 10_000 });
 }

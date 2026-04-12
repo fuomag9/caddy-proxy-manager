@@ -6,7 +6,7 @@ export default defineConfig({
   globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   fullyParallel: false,
-  workers: 2,
+  workers: 1,
   retries: 0,
   timeout: 60_000, // functional tests need time for Caddy reloads
   reporter: 'list',

@@ -99,13 +99,19 @@ async function doOAuthLogin(page: Page, user: { email: string; password: string 
     const p = await ctx.newPage();
     try {
       await p.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-      console.log(`[doOAuthLogin] ${user.email} on: ${p.url()}`);
-      const oauthButton = p.getByRole('button', { name: /continue with|sign in with/i });
+      const oauthButton = p.getByRole('button', { name: /continue with dex|sign in with dex/i });
       await expect(oauthButton).toBeVisible({ timeout: 10_000 });
       await oauthButton.click();
-      // Wait for navigation to Dex
-      await p.waitForURL((url) => url.toString().includes('localhost:5556'), { timeout: 15_000 });
-      console.log(`[doOAuthLogin] ${user.email} after nav: ${p.url()}`);
+      // Better Auth does fetch then window.location.href — wait for Dex or error redirect
+      try {
+        await p.waitForURL((url) => {
+          const s = url.toString();
+          return s.includes('localhost:5556') || (!s.includes('localhost:3000/login'));
+        }, { timeout: 15_000 });
+      } catch {
+        if (attempt === 0) continue;
+        throw new Error(`OAuth redirect failed for ${user.email}: stuck on ${p.url()}`);
+      }
       await dexLogin(p, user.email, user.password);
       // Wait for redirect back to the app
       await p.waitForURL((url) => {

@@ -48,7 +48,7 @@ test.describe('Groups page', () => {
     // Group should appear in the list
     await expect(page.getByText('E2E Test Group')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('Created by E2E test')).toBeVisible();
-    await expect(page.getByText('0 members')).toBeVisible();
+    await expect(page.getByText('0 members').first()).toBeVisible();
   });
 
   test('add member to group', async ({ page }) => {
