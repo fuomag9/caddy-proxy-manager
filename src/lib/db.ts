@@ -215,11 +215,8 @@ function runEnvProviderSync() {
   }
 
   const name = config.oauth.providerName;
-  // Use a slug-based ID so the OAuth callback URL is predictable, with hash suffix to avoid collisions
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "oauth";
-  // Append a short hash of the exact name to avoid collisions (e.g. "Google!" vs "Google?")
-  const nameHash = Buffer.from(name).toString("base64url").slice(0, 6);
-  const providerId = `${slug}-${nameHash}`;
+  // Use a slug-based ID so the OAuth callback URL is predictable
+  const providerId = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "oauth";
   const existing = db.select().from(oauthProviders).where(eq(oauthProviders.name, name)).get();
 
   const now = new Date().toISOString();
