@@ -676,10 +676,20 @@ export async function suppressWafRuleGloballyAction(ruleId: number): Promise<Act
   }
 }
 
+function redactProviderSecrets<T extends { clientId: string; clientSecret: string }>(provider: T): T {
+  const clientId = provider.clientId;
+  return {
+    ...provider,
+    clientId: clientId.length > 4 ? "••••" + clientId.slice(-4) : "••••",
+    clientSecret: "••••••••",
+  };
+}
+
 export async function getOAuthProvidersAction() {
   await requireAdmin();
   const { listOAuthProviders } = await import("@/src/lib/models/oauth-providers");
-  return listOAuthProviders();
+  const providers = await listOAuthProviders();
+  return providers.map(redactProviderSecrets);
 }
 
 export async function createOAuthProviderAction(data: {
@@ -709,7 +719,7 @@ export async function createOAuthProviderAction(data: {
     data: JSON.stringify({ providerId: provider.id }),
   });
   revalidatePath("/settings");
-  return provider;
+  return redactProviderSecrets(provider);
 }
 
 export async function updateOAuthProviderAction(
@@ -728,21 +738,40 @@ export async function updateOAuthProviderAction(
     enabled: boolean;
   }>
 ) {
-  await requireAdmin();
+  const session = await requireAdmin();
   const { updateOAuthProvider } = await import("@/src/lib/models/oauth-providers");
   const { invalidateProviderCache } = await import("@/src/lib/auth-server");
   const updated = await updateOAuthProvider(id, data);
   invalidateProviderCache();
+  const { createAuditEvent } = await import("@/src/lib/models/audit");
+  await createAuditEvent({
+    userId: Number(session.user.id),
+    action: "oauth_provider_updated",
+    entityType: "oauth_provider",
+    entityId: null,
+    summary: `Updated OAuth provider "${id}"`,
+    data: JSON.stringify({ providerId: id, fields: Object.keys(data) }),
+  });
   revalidatePath("/settings");
-  return updated;
+  return updated ? redactProviderSecrets(updated) : null;
 }
 
 export async function deleteOAuthProviderAction(id: string) {
-  await requireAdmin();
-  const { deleteOAuthProvider } = await import("@/src/lib/models/oauth-providers");
+  const session = await requireAdmin();
+  const { getOAuthProvider, deleteOAuthProvider } = await import("@/src/lib/models/oauth-providers");
   const { invalidateProviderCache } = await import("@/src/lib/auth-server");
+  const existing = await getOAuthProvider(id);
   await deleteOAuthProvider(id);
   invalidateProviderCache();
+  const { createAuditEvent } = await import("@/src/lib/models/audit");
+  await createAuditEvent({
+    userId: Number(session.user.id),
+    action: "oauth_provider_deleted",
+    entityType: "oauth_provider",
+    entityId: null,
+    summary: `Deleted OAuth provider "${existing?.name ?? id}"`,
+    data: JSON.stringify({ providerId: id }),
+  });
   revalidatePath("/settings");
 }
 

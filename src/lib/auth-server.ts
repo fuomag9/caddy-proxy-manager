@@ -5,7 +5,7 @@ import db, { sqlite } from "./db";
 import * as schema from "./db/schema";
 import { eq } from "drizzle-orm";
 import { config } from "./config";
-import { decryptSecret } from "./secret";
+import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
 import type { OAuthProvider } from "./models/oauth-providers";
 import type { GenericOAuthConfig } from "better-auth/plugins";
 
@@ -82,6 +82,10 @@ function createAuth(): any {
     secret: config.sessionSecret,
     baseURL: config.baseUrl,
     basePath: "/api/auth",
+    // Only trust the Host header when the operator explicitly opts in.
+    // baseURL already pins the canonical origin; trustHost is only needed
+    // behind reverse proxies that rewrite Host without setting X-Forwarded-Host.
+    trustHost: process.env.AUTH_TRUST_HOST === "true",
     trustedOrigins: [config.baseUrl],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     advanced: {
@@ -91,8 +95,8 @@ function createAuth(): any {
     } as any,
     rateLimit: {
       enabled: process.env.AUTH_RATE_LIMIT_ENABLED !== "false",
-      window: Number(process.env.AUTH_RATE_LIMIT_WINDOW ?? 10),
-      max: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 200),
+      window: Number(process.env.AUTH_RATE_LIMIT_WINDOW ?? 60),
+      max: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 5),
     },
     user: {
       modelName: "users",
@@ -123,6 +127,46 @@ function createAuth(): any {
         async verify({ hash, password }: { hash: string; password: string }) {
           const bcrypt = await import("bcryptjs");
           return bcrypt.default.compareSync(password, hash);
+        },
+      },
+    },
+    databaseHooks: {
+      account: {
+        create: {
+          before: async (account) => {
+            const data = { ...account };
+            if (data.accessToken) data.accessToken = encryptSecret(data.accessToken);
+            if (data.refreshToken) data.refreshToken = encryptSecret(data.refreshToken);
+            if (data.idToken) data.idToken = encryptSecret(data.idToken);
+            return { data };
+          },
+        },
+        update: {
+          before: async (account) => {
+            const data = { ...account };
+            if (data.accessToken && !isEncryptedSecret(data.accessToken)) data.accessToken = encryptSecret(data.accessToken);
+            if (data.refreshToken && !isEncryptedSecret(data.refreshToken)) data.refreshToken = encryptSecret(data.refreshToken);
+            if (data.idToken && !isEncryptedSecret(data.idToken)) data.idToken = encryptSecret(data.idToken);
+            return { data };
+          },
+        },
+      },
+      session: {
+        create: {
+          after: async (session) => {
+            try {
+              const { createAuditEvent } = await import("./models/audit");
+              await createAuditEvent({
+                userId: typeof session.userId === "string" ? Number(session.userId) : session.userId,
+                action: "login_success",
+                entityType: "session",
+                entityId: null,
+                summary: "User signed in",
+              });
+            } catch {
+              // Don't break auth flow if audit logging fails
+            }
+          },
         },
       },
     },

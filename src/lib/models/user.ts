@@ -130,6 +130,15 @@ export async function updateUserPassword(userId: number, passwordHash: string): 
       updatedAt: now
     })
     .where(eq(users.id, userId));
+
+  // Also update the Better Auth credential account so the new password takes effect there too
+  await db
+    .update(accounts)
+    .set({
+      password: passwordHash,
+      updatedAt: now,
+    })
+    .where(and(eq(accounts.userId, userId), eq(accounts.providerId, "credential")));
 }
 
 export async function listUsers(): Promise<User[]> {

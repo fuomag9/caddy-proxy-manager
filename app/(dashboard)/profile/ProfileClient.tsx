@@ -53,7 +53,7 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
   const [copied, setCopied] = useState(false);
 
   const hasPassword = !!user.passwordHash;
-  const hasOAuth = user.provider !== "credentials";
+  const hasOAuth = !!user.provider && user.provider !== "credentials";
 
   const handlePasswordChange = async () => {
     setError(null);
