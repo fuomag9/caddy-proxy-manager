@@ -88,6 +88,10 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `OAUTH_TOKEN_URL` | Optional OAuth token endpoint override | Auto-discovered from `OAUTH_ISSUER` | No |
 | `OAUTH_USERINFO_URL` | Optional OAuth userinfo endpoint override | Auto-discovered from `OAUTH_ISSUER` | No |
 | `OAUTH_ALLOW_AUTO_LINKING` | Allow auto-linking OAuth identities to existing users | `false` | No |
+| `AUTH_TRUST_HOST` | Trust the Host header for URL construction (only behind proxies that rewrite Host) | `false` | No |
+| `AUTH_RATE_LIMIT_ENABLED` | Enable Better Auth rate limiting | `true` | No |
+| `AUTH_RATE_LIMIT_WINDOW` | Rate limit window in seconds | `60` | No |
+| `AUTH_RATE_LIMIT_MAX` | Max requests per window | `5` | No |
 | `INSTANCE_MODE` | Instance role: `standalone`, `master`, or `slave` | `standalone` | No |
 | `INSTANCE_SYNC_TOKEN` | Bearer token slaves use to authenticate sync requests | None | No (required if `slave`) |
 | `INSTANCE_SLAVES` | JSON array of slave instances for the master to push to | None | No |
@@ -111,7 +115,7 @@ Development mode (`NODE_ENV=development`) allows default `admin`/`admin` credent
 
 - Production enforces strong passwords (12+ chars, mixed case, numbers, special characters)
 - 32+ character session secrets required
-- Login rate limiting: 5 attempts per 5 minutes
+- Login rate limiting: 5 attempts per 60 seconds
 - Audit trail for all configuration changes
 - Supports OAuth2/OIDC for SSO
 
@@ -256,7 +260,15 @@ HTTP upstreams in the same handler are still eligible for pinning.
 
 ## OAuth Authentication
 
-Supports any OIDC-compliant provider (Authentik, Keycloak, Auth0, etc.).
+Supports any OIDC-compliant provider (Authentik, Keycloak, Auth0, etc.). Providers can be configured via environment variables or the **Settings → OAuth Providers** UI.
+
+### Option A: Configure via UI (Recommended)
+
+1. Log in as admin and navigate to **Settings → OAuth Providers**
+2. Click **Add Provider** and fill in the details
+3. Copy the displayed **Callback URL** and add it to your OAuth provider's allowed redirect URIs
+
+### Option B: Configure via Environment Variables
 
 ```bash
 # Set your public URL (REQUIRED for OAuth to work)
@@ -271,16 +283,20 @@ OAUTH_ISSUER=https://auth.example.com/application/o/app/
 
 **Redirect URI Configuration:**
 
-You must configure this redirect URI in your OAuth provider:
+The callback URL format is:
 ```
-{BASE_URL}/api/auth/callback/oauth2
+{BASE_URL}/api/auth/oauth2/callback/{provider-id}
 ```
+
+For environment-configured providers, the provider ID is derived from `OAUTH_PROVIDER_NAME` (lowercased, non-alphanumeric replaced with `-`). The exact callback URL is shown in **Settings → OAuth Providers** after the provider is synced.
 
 Examples:
-- `http://localhost:3000/api/auth/callback/oauth2` (development)
-- `https://caddy-manager.example.com/api/auth/callback/oauth2` (production)
+- `https://caddy-manager.example.com/api/auth/oauth2/callback/authentik-QXV0aG` (production)
+- `http://localhost:3000/api/auth/oauth2/callback/authentik-QXV0aG` (development)
 
 The `BASE_URL` environment variable must match exactly where users access your dashboard.
+
+> **Upgrading from < 1.0-RC:** The old callback URL (`/api/auth/callback/oauth2`) no longer works. Update your OAuth provider's redirect URI to the new format shown in **Settings → OAuth Providers**.
 
 OAuth login appears on the login page alongside credentials. Users can link OAuth to existing accounts from the Profile page.
 
