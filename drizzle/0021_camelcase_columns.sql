@@ -106,7 +106,13 @@ ALTER TABLE "audit_events" RENAME COLUMN "entity_type" TO "entityType";--> state
 ALTER TABLE "audit_events" RENAME COLUMN "entity_id" TO "entityId";--> statement-breakpoint
 ALTER TABLE "audit_events" RENAME COLUMN "created_at" TO "createdAt";--> statement-breakpoint
 
--- linking_tokens
+-- linking_tokens (create with old column names if missing — some deployments never ran migration 0007)
+CREATE TABLE IF NOT EXISTS "linking_tokens" (
+  "id" text PRIMARY KEY NOT NULL,
+  "token" text NOT NULL,
+  "created_at" text NOT NULL,
+  "expires_at" text NOT NULL
+);--> statement-breakpoint
 ALTER TABLE "linking_tokens" RENAME COLUMN "created_at" TO "createdAt";--> statement-breakpoint
 ALTER TABLE "linking_tokens" RENAME COLUMN "expires_at" TO "expiresAt";--> statement-breakpoint
 
