@@ -17,8 +17,8 @@ updates:
       prefix: "ci"
       include: "scope"
 
-  # NPM dependencies updates
-  - package-ecosystem: "npm"
+  # Bun dependencies updates
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
