@@ -370,7 +370,7 @@ test.describe('Cross-user isolation', () => {
 
   test('user can GET their own profile', async ({ request }) => {
     // First find the user's own ID
-    const res = await request.get(`${ORIGIN}/api/auth/get-session`, {
+    await request.get(`${ORIGIN}/api/auth/get-session`, {
       headers: { 'Authorization': `Bearer ${userToken}` },
     });
     // Bearer tokens go through our api-auth, not Better Auth session — use a different approach
