@@ -162,6 +162,19 @@ export function AuthentikFields({
                                 Leave empty to protect entire domain. Specify paths to protect specific routes only.
                             </p>
                         </div>
+                        <div>
+                            <label className="text-sm font-medium mb-1 block">Excluded Paths (Optional)</label>
+                            <Textarea
+                                name="authentik_excluded_paths"
+                                placeholder="/share/*, /rest/*"
+                                defaultValue={initial?.excludedPaths?.join(", ") ?? ""}
+                                disabled={!enabled}
+                                rows={2}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Paths to exclude from authentication. These paths will bypass forward auth while all other paths remain protected. Ignored if Protected Paths is set.
+                            </p>
+                        </div>
                         <HiddenCheckboxField
                             name="authentik_set_host_header"
                             defaultChecked={setHostHeaderDefault}

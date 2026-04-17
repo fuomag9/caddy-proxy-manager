@@ -1448,6 +1448,7 @@ const spec = {
           trustedProxies: { type: "array", items: { type: "string" }, example: ["private_ranges"] },
           setOutpostHostHeader: { type: "boolean" },
           protectedPaths: { type: ["array", "null"], items: { type: "string" }, description: "Paths to protect (null = all)" },
+          excludedPaths: { type: ["array", "null"], items: { type: "string" }, description: "Paths to exclude from auth (bypassed while rest is protected)" },
         },
       },
       LoadBalancerConfig: {

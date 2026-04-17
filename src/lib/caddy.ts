@@ -109,6 +109,7 @@ type UpstreamDnsResolutionMeta = {
 type CpmForwardAuthMeta = {
   enabled?: boolean;
   protected_paths?: string[];
+  excluded_paths?: string[];
 };
 
 type ProxyHostMeta = {
@@ -144,6 +145,7 @@ type ProxyHostAuthentikMeta = {
   trusted_proxies?: string[];
   set_outpost_host_header?: boolean;
   protected_paths?: string[];
+  excluded_paths?: string[];
 };
 
 type AuthentikRouteConfig = {
@@ -155,6 +157,7 @@ type AuthentikRouteConfig = {
   trustedProxies: string[];
   setOutpostHostHeader: boolean;
   protectedPaths: string[] | null;
+  excludedPaths: string[] | null;
 };
 
 type LoadBalancerActiveHealthCheckMeta = {
@@ -1030,6 +1033,7 @@ async function buildProxyRoutes(
 
       // Path-based authentication support
       if (authentik.protectedPaths && authentik.protectedPaths.length > 0) {
+        // Whitelist mode: only specified paths get auth
         for (const domainGroup of domainGroups) {
           // Create separate routes for each protected path
           for (const protectedPath of authentik.protectedPaths) {
@@ -1087,7 +1091,54 @@ async function buildProxyRoutes(
             terminal: true
           });
         }
+      } else if (authentik.excludedPaths && authentik.excludedPaths.length > 0) {
+        // Exclusion mode: protect everything EXCEPT specified paths
+        const locationRules = meta.location_rules ?? [];
+        for (const domainGroup of domainGroups) {
+          if (outpostRoute) {
+            const outpostMatches = (outpostRoute.match as Array<Record<string, unknown>> | undefined) ?? [];
+            hostRoutes.push({
+              ...outpostRoute,
+              match: outpostMatches.map((match) => ({
+                ...match,
+                host: domainGroup
+              }))
+            });
+          }
+
+          // Create unprotected routes for each excluded path (before the catch-all)
+          for (const excludedPath of authentik.excludedPaths) {
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [excludedPath] }],
+              handle: [...handlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
+              terminal: true
+            });
+          }
+
+          // Location rules get auth (same as full-site mode)
+          for (const rule of locationRules) {
+            const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+              rule,
+              Boolean(row.skipHttpsHostnameValidation),
+              Boolean(row.preserveHostHeader)
+            );
+            if (!safePath) continue;
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [safePath] }],
+              handle: [...handlers, forwardAuthHandler, locationProxy],
+              terminal: true,
+            });
+          }
+
+          // Catch-all with auth (everything not excluded)
+          hostRoutes.push({
+            match: [{ host: domainGroup }],
+            handle: [...handlers, forwardAuthHandler, reverseProxyHandler],
+            terminal: true
+          });
+        }
       } else {
+        // Full-site mode: protect everything
         const locationRules = meta.location_rules ?? [];
         for (const domainGroup of domainGroups) {
           if (outpostRoute) {
@@ -1229,7 +1280,7 @@ async function buildProxyRoutes(
         const locationRules = meta.location_rules ?? [];
 
         if (cpmForwardAuth.protected_paths && cpmForwardAuth.protected_paths.length > 0) {
-          // Path-specific authentication
+          // Whitelist mode: only specified paths get auth
           for (const domainGroup of domainGroups) {
             // Add callback route (unprotected)
             hostRoutes.push({
@@ -1273,8 +1324,48 @@ async function buildProxyRoutes(
               terminal: true
             });
           }
+        } else if (cpmForwardAuth.excluded_paths && cpmForwardAuth.excluded_paths.length > 0) {
+          // Exclusion mode: protect everything EXCEPT specified paths
+          for (const domainGroup of domainGroups) {
+            // Callback route first (unprotected)
+            hostRoutes.push({
+              ...cpmCallbackRoute,
+              match: [{ host: domainGroup, path: ["/.cpm-auth/callback"] }]
+            });
+
+            // Excluded paths — unprotected, before the catch-all
+            for (const excludedPath of cpmForwardAuth.excluded_paths) {
+              hostRoutes.push({
+                match: [{ host: domainGroup, path: [excludedPath] }],
+                handle: [...handlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
+                terminal: true
+              });
+            }
+
+            // Location rules with forward auth
+            for (const rule of locationRules) {
+              const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+                rule,
+                Boolean(row.skipHttpsHostnameValidation),
+                Boolean(row.preserveHostHeader)
+              );
+              if (!safePath) continue;
+              hostRoutes.push({
+                match: [{ host: domainGroup, path: [safePath] }],
+                handle: [...handlers, cpmForwardAuthHandler, locationProxy],
+                terminal: true
+              });
+            }
+
+            // Catch-all with auth (everything not excluded)
+            hostRoutes.push({
+              match: [{ host: domainGroup }],
+              handle: [...handlers, cpmForwardAuthHandler, reverseProxyHandler],
+              terminal: true
+            });
+          }
         } else {
-          // Protect entire site
+          // Full-site mode: protect everything
           for (const domainGroup of domainGroups) {
             // Callback route first (unprotected)
             hostRoutes.push({
@@ -2282,6 +2373,11 @@ function parseAuthentikConfig(meta: ProxyHostAuthentikMeta | undefined | null): 
       ? meta.protected_paths.map((path) => path?.trim()).filter((path): path is string => Boolean(path))
       : null;
 
+  const excludedPaths =
+    Array.isArray(meta.excluded_paths) && meta.excluded_paths.length > 0
+      ? meta.excluded_paths.map((path) => path?.trim()).filter((path): path is string => Boolean(path))
+      : null;
+
   return {
     enabled: true,
     outpostDomain,
@@ -2290,7 +2386,8 @@ function parseAuthentikConfig(meta: ProxyHostAuthentikMeta | undefined | null): 
     copyHeaders,
     trustedProxies,
     setOutpostHostHeader,
-    protectedPaths
+    protectedPaths,
+    excludedPaths
   };
 }
 

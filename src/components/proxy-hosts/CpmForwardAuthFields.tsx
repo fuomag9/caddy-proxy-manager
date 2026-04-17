@@ -99,6 +99,19 @@ export function CpmForwardAuthFields({
                                 Leave empty to protect entire domain. Comma-separated paths to protect specific routes only.
                             </p>
                         </div>
+                        <div>
+                            <label className="text-sm font-medium mb-1 block">Excluded Paths (Optional)</label>
+                            <Textarea
+                                name="cpm_forward_auth_excluded_paths"
+                                placeholder="/share/*, /rest/*"
+                                defaultValue={initial?.excluded_paths?.join(", ") ?? ""}
+                                disabled={!enabled}
+                                rows={2}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Paths to exclude from authentication. These paths will bypass forward auth while all other paths remain protected. Ignored if Protected Paths is set.
+                            </p>
+                        </div>
 
                         {/* Allowed Groups */}
                         {groups.length > 0 && (

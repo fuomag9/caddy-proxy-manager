@@ -77,6 +77,7 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
   const copyHeaders = parseCsv(formData.get("authentik_copy_headers"));
   const trustedProxies = parseCsv(formData.get("authentik_trusted_proxies"));
   const protectedPaths = parseCsv(formData.get("authentik_protected_paths"));
+  const excludedPaths = parseCsv(formData.get("authentik_excluded_paths"));
   const setHostHeader = formData.has("authentik_set_host_header_present")
     ? parseCheckbox(formData.get("authentik_set_host_header"))
     : undefined;
@@ -103,6 +104,9 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
   if (protectedPaths.length > 0 || formData.has("authentik_protected_paths")) {
     result.protectedPaths = protectedPaths;
   }
+  if (excludedPaths.length > 0 || formData.has("authentik_excluded_paths")) {
+    result.excludedPaths = excludedPaths;
+  }
   if (setHostHeader !== undefined) {
     result.setOutpostHostHeader = setHostHeader;
   }
@@ -122,6 +126,7 @@ function parseCpmForwardAuthConfig(formData: FormData): CpmForwardAuthInput | un
       : false
     : undefined;
   const protectedPaths = parseCsv(formData.get("cpm_forward_auth_protected_paths"));
+  const excludedPaths = parseCsv(formData.get("cpm_forward_auth_excluded_paths"));
 
   const result: CpmForwardAuthInput = {};
   if (enabledValue !== undefined) {
@@ -129,6 +134,9 @@ function parseCpmForwardAuthConfig(formData: FormData): CpmForwardAuthInput | un
   }
   if (protectedPaths.length > 0 || formData.has("cpm_forward_auth_protected_paths")) {
     result.protected_paths = protectedPaths.length > 0 ? protectedPaths : null;
+  }
+  if (excludedPaths.length > 0 || formData.has("cpm_forward_auth_excluded_paths")) {
+    result.excluded_paths = excludedPaths.length > 0 ? excludedPaths : null;
   }
 
   return Object.keys(result).length > 0 ? result : undefined;

@@ -208,6 +208,7 @@ export type ProxyHostAuthentikConfig = {
   trustedProxies: string[];
   setOutpostHostHeader: boolean;
   protectedPaths: string[] | null;
+  excludedPaths: string[] | null;
 };
 
 export type ProxyHostAuthentikInput = {
@@ -219,6 +220,7 @@ export type ProxyHostAuthentikInput = {
   trustedProxies?: string[] | null;
   setOutpostHostHeader?: boolean | null;
   protectedPaths?: string[] | null;
+  excludedPaths?: string[] | null;
 };
 
 type ProxyHostAuthentikMeta = {
@@ -230,6 +232,7 @@ type ProxyHostAuthentikMeta = {
   trusted_proxies?: string[];
   set_outpost_host_header?: boolean;
   protected_paths?: string[];
+  excluded_paths?: string[];
 };
 
 export type MtlsConfig = {
@@ -245,16 +248,19 @@ export type MtlsConfig = {
 export type CpmForwardAuthConfig = {
   enabled: boolean;
   protected_paths: string[] | null;
+  excluded_paths: string[] | null;
 };
 
 export type CpmForwardAuthInput = {
   enabled?: boolean;
   protected_paths?: string[] | null;
+  excluded_paths?: string[] | null;
 };
 
 type CpmForwardAuthMeta = {
   enabled?: boolean;
   protected_paths?: string[];
+  excluded_paths?: string[];
 };
 
 type ProxyHostMeta = {
@@ -806,6 +812,17 @@ function normalizeAuthentikInput(
     }
   }
 
+  if (input.excludedPaths !== undefined) {
+    const paths = (input.excludedPaths ?? [])
+      .map((path) => path?.trim())
+      .filter((path): path is string => Boolean(path));
+    if (paths.length > 0) {
+      next.excluded_paths = paths;
+    } else {
+      delete next.excluded_paths;
+    }
+  }
+
   if ((next.enabled ?? false) && next.outpost_domain && !next.auth_endpoint) {
     next.auth_endpoint = `/${next.outpost_domain}/auth/caddy`;
   }
@@ -1198,6 +1215,9 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
       if (input.cpmForwardAuth.protected_paths && input.cpmForwardAuth.protected_paths.length > 0) {
         cfa.protected_paths = input.cpmForwardAuth.protected_paths;
       }
+      if (input.cpmForwardAuth.excluded_paths && input.cpmForwardAuth.excluded_paths.length > 0) {
+        cfa.excluded_paths = input.cpmForwardAuth.excluded_paths;
+      }
       next.cpm_forward_auth = cfa;
     } else {
       delete next.cpm_forward_auth;
@@ -1254,6 +1274,8 @@ function hydrateAuthentik(meta: ProxyHostAuthentikMeta | undefined): ProxyHostAu
     meta.set_outpost_host_header !== undefined ? Boolean(meta.set_outpost_host_header) : true;
   const protectedPaths =
     Array.isArray(meta.protected_paths) && meta.protected_paths.length > 0 ? meta.protected_paths : null;
+  const excludedPaths =
+    Array.isArray(meta.excluded_paths) && meta.excluded_paths.length > 0 ? meta.excluded_paths : null;
 
   return {
     enabled,
@@ -1263,7 +1285,8 @@ function hydrateAuthentik(meta: ProxyHostAuthentikMeta | undefined): ProxyHostAu
     copyHeaders,
     trustedProxies,
     setOutpostHostHeader,
-    protectedPaths
+    protectedPaths,
+    excludedPaths
   };
 }
 
@@ -1294,6 +1317,9 @@ function dehydrateAuthentik(config: ProxyHostAuthentikConfig | null): ProxyHostA
   meta.set_outpost_host_header = config.setOutpostHostHeader;
   if (config.protectedPaths && config.protectedPaths.length > 0) {
     meta.protected_paths = [...config.protectedPaths];
+  }
+  if (config.excludedPaths && config.excludedPaths.length > 0) {
+    meta.excluded_paths = [...config.excludedPaths];
   }
 
   return meta;
@@ -1559,7 +1585,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     waf: meta.waf ?? null,
     mtls: meta.mtls ?? null,
     cpmForwardAuth: meta.cpm_forward_auth?.enabled
-      ? { enabled: true, protected_paths: meta.cpm_forward_auth.protected_paths ?? null }
+      ? { enabled: true, protected_paths: meta.cpm_forward_auth.protected_paths ?? null, excluded_paths: meta.cpm_forward_auth.excluded_paths ?? null }
       : null,
     redirects: meta.redirects ?? [],
     rewrite: meta.rewrite ?? null,
@@ -1702,7 +1728,8 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     ...(existing.cpmForwardAuth?.enabled ? {
       cpm_forward_auth: {
         enabled: true,
-        ...(existing.cpmForwardAuth.protected_paths ? { protected_paths: existing.cpmForwardAuth.protected_paths } : {})
+        ...(existing.cpmForwardAuth.protected_paths ? { protected_paths: existing.cpmForwardAuth.protected_paths } : {}),
+        ...(existing.cpmForwardAuth.excluded_paths ? { excluded_paths: existing.cpmForwardAuth.excluded_paths } : {})
       }
     } : {}),
   };

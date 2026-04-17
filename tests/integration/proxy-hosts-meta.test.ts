@@ -218,6 +218,78 @@ describe('proxy-hosts boolean fields', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Authentik forward auth meta round-trip
+// ---------------------------------------------------------------------------
+
+describe('proxy-hosts authentik meta', () => {
+  it('stores and retrieves authentik config with excluded_paths', async () => {
+    const meta = {
+      authentik: {
+        enabled: true,
+        outpost_domain: 'outpost.goauthentik.io',
+        outpost_upstream: 'http://authentik:9000',
+        excluded_paths: ['/share/*', '/rest/*'],
+      },
+    };
+    const host = await insertHost({ meta: JSON.stringify(meta) });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const parsed = JSON.parse(row!.meta!);
+    expect(parsed.authentik.enabled).toBe(true);
+    expect(parsed.authentik.excluded_paths).toEqual(['/share/*', '/rest/*']);
+  });
+
+  it('stores authentik config with protected_paths (no excluded_paths)', async () => {
+    const meta = {
+      authentik: {
+        enabled: true,
+        outpost_domain: 'outpost.goauthentik.io',
+        outpost_upstream: 'http://authentik:9000',
+        protected_paths: ['/admin/*', '/secret/*'],
+      },
+    };
+    const host = await insertHost({ meta: JSON.stringify(meta) });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const parsed = JSON.parse(row!.meta!);
+    expect(parsed.authentik.protected_paths).toEqual(['/admin/*', '/secret/*']);
+    expect(parsed.authentik.excluded_paths).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CPM forward auth meta round-trip
+// ---------------------------------------------------------------------------
+
+describe('proxy-hosts CPM forward auth meta', () => {
+  it('stores and retrieves cpm_forward_auth config with excluded_paths', async () => {
+    const meta = {
+      cpm_forward_auth: {
+        enabled: true,
+        excluded_paths: ['/api/public/*', '/health'],
+      },
+    };
+    const host = await insertHost({ meta: JSON.stringify(meta) });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const parsed = JSON.parse(row!.meta!);
+    expect(parsed.cpm_forward_auth.enabled).toBe(true);
+    expect(parsed.cpm_forward_auth.excluded_paths).toEqual(['/api/public/*', '/health']);
+  });
+
+  it('stores cpm_forward_auth config with protected_paths (no excluded_paths)', async () => {
+    const meta = {
+      cpm_forward_auth: {
+        enabled: true,
+        protected_paths: ['/admin/*'],
+      },
+    };
+    const host = await insertHost({ meta: JSON.stringify(meta) });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const parsed = JSON.parse(row!.meta!);
+    expect(parsed.cpm_forward_auth.protected_paths).toEqual(['/admin/*']);
+    expect(parsed.cpm_forward_auth.excluded_paths).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Null meta field
 // ---------------------------------------------------------------------------
 
