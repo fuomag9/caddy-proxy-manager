@@ -13,6 +13,8 @@ vi.mock('@/src/lib/settings', () => ({
   saveLoggingSettings: vi.fn(),
   getDnsSettings: vi.fn(),
   saveDnsSettings: vi.fn(),
+  getDnsProviderSettings: vi.fn(),
+  saveDnsProviderSettings: vi.fn(),
   getUpstreamDnsResolutionSettings: vi.fn(),
   saveUpstreamDnsResolutionSettings: vi.fn(),
   getGeoBlockSettings: vi.fn(),

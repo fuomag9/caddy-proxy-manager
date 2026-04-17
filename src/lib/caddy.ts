@@ -26,11 +26,11 @@ import db, { nowIso } from "./db";
 import { eq, isNull } from "drizzle-orm";
 import { config } from "./config";
 import {
-  getCloudflareSettings,
   getGeneralSettings,
   getMetricsSettings,
   getLoggingSettings,
   getDnsSettings,
+  getDnsProviderSettings,
   getUpstreamDnsResolutionSettings,
   getGeoBlockSettings,
   getWafSettings,
@@ -41,6 +41,7 @@ import {
   type GeoBlockSettings,
   type WafSettings
 } from "./settings";
+import { buildDnsChallengeConfig, type DnsProviderCredentials } from "./dns-providers";
 import { syncInstances } from "./instance-sync";
 import {
   accessListEntries,
@@ -1590,8 +1591,11 @@ async function buildTlsAutomation(
     };
   }
 
-  const cloudflare = await getCloudflareSettings();
-  const hasCloudflare = cloudflare && cloudflare.apiToken;
+  const dnsProviderSettings = await getDnsProviderSettings();
+  const globalDnsProvider: DnsProviderCredentials | null =
+    dnsProviderSettings?.default && dnsProviderSettings.providers[dnsProviderSettings.default]
+      ? { provider: dnsProviderSettings.default, credentials: dnsProviderSettings.providers[dnsProviderSettings.default] }
+      : null;
 
   const dnsSettings = options.dnsSettings ?? await getDnsSettings();
   const hasDnsResolvers = dnsSettings && dnsSettings.enabled && dnsSettings.resolvers && dnsSettings.resolvers.length > 0;
@@ -1619,23 +1623,15 @@ async function buildTlsAutomation(
         issuer.email = options.acmeEmail;
       }
 
-      if (hasCloudflare) {
-        const providerConfig: Record<string, string> = {
-          name: "cloudflare",
-          api_token: cloudflare.apiToken
-        };
-
-        const dnsChallenge: Record<string, unknown> = {
-          provider: providerConfig
-        };
-
-        if (dnsResolvers.length > 0) {
-          dnsChallenge.resolvers = dnsResolvers;
+      if (globalDnsProvider) {
+        const dnsChallenge = buildDnsChallengeConfig(
+          globalDnsProvider.provider,
+          globalDnsProvider.credentials,
+          dnsResolvers
+        );
+        if (dnsChallenge) {
+          issuer.challenges = { dns: dnsChallenge };
         }
-
-        issuer.challenges = {
-          dns: dnsChallenge
-        };
       }
 
       policies.push({
@@ -1654,6 +1650,16 @@ async function buildTlsAutomation(
 
     managedCertificateIds.add(entry.certificate.id);
 
+    // Per-certificate provider override, falling back to global default
+    let effectiveProvider = globalDnsProvider;
+    const certOptions = entry.certificate.providerOptions as { provider?: string } | null;
+    if (certOptions?.provider && dnsProviderSettings?.providers[certOptions.provider]) {
+      effectiveProvider = {
+        provider: certOptions.provider,
+        credentials: dnsProviderSettings.providers[certOptions.provider],
+      };
+    }
+
     for (const subjectGroup of groupHostPatternsByPriority(subjects)) {
       const issuer: Record<string, unknown> = {
         module: "acme"
@@ -1663,23 +1669,15 @@ async function buildTlsAutomation(
         issuer.email = options.acmeEmail;
       }
 
-      if (hasCloudflare) {
-        const providerConfig: Record<string, string> = {
-          name: "cloudflare",
-          api_token: cloudflare.apiToken
-        };
-
-        const dnsChallenge: Record<string, unknown> = {
-          provider: providerConfig
-        };
-
-        if (dnsResolvers.length > 0) {
-          dnsChallenge.resolvers = dnsResolvers;
+      if (effectiveProvider) {
+        const dnsChallenge = buildDnsChallengeConfig(
+          effectiveProvider.provider,
+          effectiveProvider.credentials,
+          dnsResolvers
+        );
+        if (dnsChallenge) {
+          issuer.challenges = { dns: dnsChallenge };
         }
-
-        issuer.challenges = {
-          dns: dnsChallenge
-        };
       }
 
       policies.push({

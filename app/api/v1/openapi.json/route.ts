@@ -784,6 +784,7 @@ const spec = {
               enum: [
                 "general",
                 "cloudflare",
+                "dns-provider",
                 "authentik",
                 "metrics",
                 "logging",
@@ -807,6 +808,7 @@ const spec = {
                   oneOf: [
                     { $ref: "#/components/schemas/GeneralSettings" },
                     { $ref: "#/components/schemas/CloudflareSettings" },
+                    { $ref: "#/components/schemas/DnsProviderSettings" },
                     { $ref: "#/components/schemas/AuthentikSettings" },
                     { $ref: "#/components/schemas/MetricsSettings" },
                     { $ref: "#/components/schemas/LoggingSettings" },
@@ -836,6 +838,7 @@ const spec = {
               enum: [
                 "general",
                 "cloudflare",
+                "dns-provider",
                 "authentik",
                 "metrics",
                 "logging",
@@ -1863,6 +1866,27 @@ const spec = {
           accountId: { type: "string" },
         },
         required: ["apiToken"],
+      },
+      DnsProviderSettings: {
+        type: "object",
+        description: "DNS provider configuration for ACME DNS-01 challenges. Supports multiple configured providers with a default.",
+        properties: {
+          providers: {
+            type: "object",
+            additionalProperties: {
+              type: "object",
+              additionalProperties: { type: "string" },
+              description: "Credential key-value pairs for this provider",
+            },
+            description: "Configured providers keyed by name (e.g. { cloudflare: { api_token: '...' }, route53: { ... } })",
+          },
+          default: {
+            type: "string",
+            nullable: true,
+            description: "Name of the default provider used for DNS-01 challenges (null = HTTP-01 only)",
+          },
+        },
+        required: ["providers", "default"],
       },
       AuthentikSettings: {
         type: "object",

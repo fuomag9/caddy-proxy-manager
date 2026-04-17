@@ -266,6 +266,7 @@ describe('applySyncPayload', () => {
       settings: {
         general: null,
         cloudflare: null,
+        dns_provider: null,
         authentik: null,
         metrics: null,
         logging: null,

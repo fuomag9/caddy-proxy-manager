@@ -20,14 +20,16 @@ import type {
   MetricsSettings,
   LoggingSettings,
   DnsSettings,
+  DnsProviderSettings,
   UpstreamDnsResolutionSettings,
   GeoBlockSettings,
 } from "@/lib/settings";
+import type { DnsProviderDefinition } from "@/src/lib/dns-providers";
 import { GeoBlockFields } from "@/components/proxy-hosts/GeoBlockFields";
 import OAuthProvidersSection from "./OAuthProvidersSection";
 import type { OAuthProvider } from "@/src/lib/models/oauth-providers";
 import {
-  updateCloudflareSettingsAction,
+  updateDnsProviderSettingsAction,
   updateGeneralSettingsAction,
   updateAuthentikSettingsAction,
   updateMetricsSettingsAction,
@@ -112,7 +114,7 @@ function SettingSection({
 const A: Record<string, AccentConfig> = {
   sync:       { border: "border-l-violet-500",  icon: "border-violet-500/30 bg-violet-500/10 text-violet-500"  },
   general:    { border: "border-l-zinc-400",     icon: "border-zinc-500/30 bg-zinc-500/10 text-zinc-500"        },
-  cloudflare: { border: "border-l-orange-500",   icon: "border-orange-500/30 bg-orange-500/10 text-orange-500" },
+  dnsProvider:{ border: "border-l-orange-500",   icon: "border-orange-500/30 bg-orange-500/10 text-orange-500" },
   dns:        { border: "border-l-cyan-500",     icon: "border-cyan-500/30 bg-cyan-500/10 text-cyan-500"        },
   upstreamDns:{ border: "border-l-emerald-500",  icon: "border-emerald-500/30 bg-emerald-500/10 text-emerald-500" },
   authentik:  { border: "border-l-purple-500",   icon: "border-purple-500/30 bg-purple-500/10 text-purple-500" },
@@ -126,11 +128,8 @@ const A: Record<string, AccentConfig> = {
 
 type Props = {
   general: GeneralSettings | null;
-  cloudflare: {
-    hasToken: boolean;
-    zoneId?: string;
-    accountId?: string;
-  };
+  dnsProvider: DnsProviderSettings | null;
+  dnsProviderDefinitions: DnsProviderDefinition[];
   authentik: AuthentikSettings | null;
   metrics: MetricsSettings | null;
   logging: LoggingSettings | null;
@@ -145,7 +144,7 @@ type Props = {
     tokenFromEnv: boolean;
     overrides: {
       general: boolean;
-      cloudflare: boolean;
+      dnsProvider: boolean;
       authentik: boolean;
       metrics: boolean;
       logging: boolean;
@@ -178,7 +177,8 @@ type Props = {
 
 export default function SettingsClient({
   general,
-  cloudflare,
+  dnsProvider,
+  dnsProviderDefinitions,
   authentik,
   metrics,
   logging,
@@ -190,7 +190,9 @@ export default function SettingsClient({
   instanceSync
 }: Props) {
   const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
-  const [cloudflareState, cloudflareFormAction] = useFormState(updateCloudflareSettingsAction, null);
+  const [dnsProviderState, dnsProviderFormAction] = useFormState(updateDnsProviderSettingsAction, null);
+  const [selectedProvider, setSelectedProvider] = useState("none");
+  const configuredProviders = dnsProvider?.providers ? Object.keys(dnsProvider.providers) : [];
   const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
   const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
   const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
@@ -207,7 +209,7 @@ export default function SettingsClient({
   const isSlave = instanceSync.mode === "slave";
   const isMaster = instanceSync.mode === "master";
   const [generalOverride, setGeneralOverride] = useState(instanceSync.overrides.general);
-  const [cloudflareOverride, setCloudflareOverride] = useState(instanceSync.overrides.cloudflare);
+  const [dnsProviderOverride, setDnsProviderOverride] = useState(instanceSync.overrides.dnsProvider);
   const [authentikOverride, setAuthentikOverride] = useState(instanceSync.overrides.authentik);
   const [metricsOverride, setMetricsOverride] = useState(instanceSync.overrides.metrics);
   const [loggingOverride, setLoggingOverride] = useState(instanceSync.overrides.logging);
@@ -463,65 +465,159 @@ export default function SettingsClient({
         </form>
       </SettingSection>
 
-      {/* ── Cloudflare DNS ── */}
+      {/* ── DNS Providers ── */}
       <SettingSection
         icon={<Cloud className="h-4 w-4" />}
-        title="Cloudflare DNS"
-        description="Configure a Cloudflare API token with Zone.DNS Edit permissions to enable DNS-01 challenges for wildcard certificates."
-        accent={A.cloudflare}
+        title="DNS Providers"
+        description="Configure DNS providers for ACME DNS-01 challenges (required for wildcard certificates). You can add multiple providers and select a default."
+        accent={A.dnsProvider}
       >
-        {cloudflare.hasToken && (
-          <InfoAlert>
-            A Cloudflare API token is already configured. Leave the token field blank to keep it, or select &ldquo;Remove existing token&rdquo; to delete it.
-          </InfoAlert>
+        {dnsProviderState?.message && (
+          <StatusAlert message={dnsProviderState.message} success={dnsProviderState.success} />
         )}
-        <form action={cloudflareFormAction} className="flex flex-col gap-3">
-          {cloudflareState?.message && (
-            <StatusAlert message={cloudflareState.message} success={cloudflareState.success} />
-          )}
-          {isSlave && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="cloudflare-override"
-                name="overrideEnabled"
-                checked={cloudflareOverride}
-                onCheckedChange={(v) => setCloudflareOverride(!!v)}
-              />
-              <Label htmlFor="cloudflare-override">Override master settings</Label>
-            </div>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cf-apiToken">API token</Label>
-            <Input
-              id="cf-apiToken"
-              name="apiToken"
-              type="password"
-              autoComplete="new-password"
-              placeholder="Enter new token"
-              disabled={isSlave && !cloudflareOverride}
-              className="h-8 text-sm"
-            />
-          </div>
+        {isSlave && (
           <div className="flex items-center gap-2">
             <Checkbox
-              id="cf-clearToken"
-              name="clearToken"
-              disabled={!cloudflare.hasToken || (isSlave && !cloudflareOverride)}
+              id="dnsprovider-override"
+              name="overrideEnabled"
+              form="dnsp-add-form"
+              checked={dnsProviderOverride}
+              onCheckedChange={(v) => setDnsProviderOverride(!!v)}
             />
-            <Label htmlFor="cf-clearToken">Remove existing token</Label>
+            <Label htmlFor="dnsprovider-override">Override master settings</Label>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cf-zoneId">Zone ID</Label>
-              <Input id="cf-zoneId" name="zoneId" defaultValue={cloudflare.zoneId ?? ""} disabled={isSlave && !cloudflareOverride} className="h-8 text-sm font-mono" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="cf-accountId">Account ID</Label>
-              <Input id="cf-accountId" name="accountId" defaultValue={cloudflare.accountId ?? ""} disabled={isSlave && !cloudflareOverride} className="h-8 text-sm font-mono" />
-            </div>
+        )}
+
+        {/* Configured providers list */}
+        {configuredProviders.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Configured providers</Label>
+            {configuredProviders.map((name) => {
+              const def = dnsProviderDefinitions.find((p) => p.name === name);
+              const isDefault = dnsProvider?.default === name;
+              return (
+                <div
+                  key={name}
+                  className="flex items-center justify-between gap-3 rounded-md border px-4 py-2.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{def?.displayName ?? name}</span>
+                    {isDefault && <StatusChip status="active" label="Default" />}
+                  </div>
+                  <div className="flex gap-2">
+                    {!isDefault && (
+                      <form action={dnsProviderFormAction}>
+                        <input type="hidden" name="action" value="set-default" />
+                        <input type="hidden" name="provider" value={name} />
+                        {isSlave && <input type="hidden" name="overrideEnabled" value={dnsProviderOverride ? "on" : ""} />}
+                        <Button type="submit" variant="outline" size="sm" className="text-emerald-600 border-emerald-500/50">
+                          Set default
+                        </Button>
+                      </form>
+                    )}
+                    <form action={dnsProviderFormAction}>
+                      <input type="hidden" name="action" value="remove" />
+                      <input type="hidden" name="provider" value={name} />
+                      {isSlave && <input type="hidden" name="overrideEnabled" value={dnsProviderOverride ? "on" : ""} />}
+                      <Button type="submit" variant="outline" size="sm" className="text-destructive border-destructive/50">
+                        Remove
+                      </Button>
+                    </form>
+                  </div>
+                </div>
+              );
+            })}
+            {dnsProvider?.default && (
+              <form action={dnsProviderFormAction}>
+                <input type="hidden" name="action" value="set-default" />
+                <input type="hidden" name="provider" value="none" />
+                {isSlave && <input type="hidden" name="overrideEnabled" value={dnsProviderOverride ? "on" : ""} />}
+                <Button type="submit" variant="ghost" size="sm" className="text-xs text-muted-foreground">
+                  Clear default (HTTP-01 only)
+                </Button>
+              </form>
+            )}
           </div>
+        )}
+
+        {/* Add / update provider form */}
+        <form id="dnsp-add-form" action={dnsProviderFormAction} className="flex flex-col gap-3">
+          <input type="hidden" name="action" value="save" />
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {configuredProviders.length > 0 ? "Add or update provider" : "Add a provider"}
+          </Label>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="dns-provider-select">Provider</Label>
+            <Select
+              name="provider"
+              value={selectedProvider}
+              onValueChange={setSelectedProvider}
+              disabled={isSlave && !dnsProviderOverride}
+            >
+              <SelectTrigger id="dns-provider-select">
+                <SelectValue placeholder="Select a DNS provider..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Select...</SelectItem>
+                {dnsProviderDefinitions.map((p) => (
+                  <SelectItem key={p.name} value={p.name}>
+                    {p.displayName}{configuredProviders.includes(p.name) ? " (update)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Dynamic credential fields */}
+          {selectedProvider && selectedProvider !== "none" && (() => {
+            const providerDef = dnsProviderDefinitions.find((p) => p.name === selectedProvider);
+            if (!providerDef) return null;
+            const isUpdate = configuredProviders.includes(selectedProvider);
+            return (
+              <div className="flex flex-col gap-3">
+                {providerDef.description && (
+                  <p className="text-xs text-muted-foreground">{providerDef.description}</p>
+                )}
+                {providerDef.fields.map((field) => (
+                  <div key={field.key} className="flex flex-col gap-1.5">
+                    <Label htmlFor={`dnsp-${field.key}`} className="text-xs">
+                      {field.label}{field.required ? "" : " (optional)"}
+                    </Label>
+                    <Input
+                      id={`dnsp-${field.key}`}
+                      name={`credential_${field.key}`}
+                      type={field.type === "password" ? "password" : "text"}
+                      autoComplete={field.type === "password" ? "new-password" : "off"}
+                      placeholder={field.placeholder ?? ""}
+                      disabled={isSlave && !dnsProviderOverride}
+                      className="h-8 text-sm"
+                    />
+                    {field.description && (
+                      <p className="text-xs text-muted-foreground">{field.description}</p>
+                    )}
+                  </div>
+                ))}
+                {isUpdate && (
+                  <InfoAlert>
+                    Credentials are already configured. Leave fields blank to keep existing values.
+                  </InfoAlert>
+                )}
+                {providerDef.docsUrl && (
+                  <p className="text-xs text-muted-foreground">
+                    <a href={providerDef.docsUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                      Provider documentation
+                    </a>
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+
+          {isSlave && <input type="hidden" name="overrideEnabled" value={dnsProviderOverride ? "on" : ""} />}
           <div className="flex justify-end">
-            <Button type="submit" size="sm">Save Cloudflare settings</Button>
+            <Button type="submit" size="sm" disabled={!selectedProvider || selectedProvider === "none"}>
+              {selectedProvider && selectedProvider !== "none" && configuredProviders.includes(selectedProvider) ? "Update provider" : "Add provider"}
+            </Button>
           </div>
         </form>
       </SettingSection>

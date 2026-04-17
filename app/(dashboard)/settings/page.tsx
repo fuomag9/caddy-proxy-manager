@@ -1,8 +1,9 @@
 import SettingsClient from "./SettingsClient";
-import { getCloudflareSettings, getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings } from "@/src/lib/settings";
+import { getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getDnsProviderSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings } from "@/src/lib/settings";
 import { getInstanceMode, getSlaveLastSync, getSlaveMasterToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvSlaveInstances } from "@/src/lib/instance-sync";
 import { listInstances } from "@/src/lib/models/instances";
 import { listOAuthProviders } from "@/src/lib/models/oauth-providers";
+import { DNS_PROVIDERS } from "@/src/lib/dns-providers";
 import { config } from "@/src/lib/config";
 import { requireAdmin } from "@/src/lib/auth";
 
@@ -13,9 +14,9 @@ export default async function SettingsPage() {
   const modeFromEnv = isInstanceModeFromEnv();
   const tokenFromEnv = isSyncTokenFromEnv();
 
-  const [general, cloudflare, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode, globalGeoBlock, oauthProviders] = await Promise.all([
+  const [general, dnsProvider, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode, globalGeoBlock, oauthProviders] = await Promise.all([
     getGeneralSettings(),
-    getCloudflareSettings(),
+    getDnsProviderSettings(),
     getAuthentikSettings(),
     getMetricsSettings(),
     getLoggingSettings(),
@@ -26,11 +27,11 @@ export default async function SettingsPage() {
     listOAuthProviders(),
   ]);
 
-  const [overrideGeneral, overrideCloudflare, overrideAuthentik, overrideMetrics, overrideLogging, overrideDns, overrideUpstreamDnsResolution] =
+  const [overrideGeneral, overrideDnsProvider, overrideAuthentik, overrideMetrics, overrideLogging, overrideDns, overrideUpstreamDnsResolution] =
     instanceMode === "slave"
       ? await Promise.all([
           getSetting("general"),
-          getSetting("cloudflare"),
+          getSetting("dns_provider"),
           getSetting("authentik"),
           getSetting("metrics"),
           getSetting("logging"),
@@ -49,11 +50,8 @@ export default async function SettingsPage() {
   return (
     <SettingsClient
       general={general}
-      cloudflare={{
-        hasToken: Boolean(cloudflare?.apiToken),
-        zoneId: cloudflare?.zoneId,
-        accountId: cloudflare?.accountId
-      }}
+      dnsProvider={dnsProvider}
+      dnsProviderDefinitions={DNS_PROVIDERS}
       authentik={authentik}
       metrics={metrics}
       logging={logging}
@@ -68,7 +66,7 @@ export default async function SettingsPage() {
         tokenFromEnv,
         overrides: {
           general: overrideGeneral !== null,
-          cloudflare: overrideCloudflare !== null,
+          dnsProvider: overrideDnsProvider !== null,
           authentik: overrideAuthentik !== null,
           metrics: overrideMetrics !== null,
           logging: overrideLogging !== null,

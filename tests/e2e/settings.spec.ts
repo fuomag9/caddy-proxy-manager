@@ -9,7 +9,7 @@ test.describe('Settings', () => {
 
   test('settings page renders content', async ({ page }) => {
     await page.goto('/settings');
-    const hasContent = await page.locator('text=/settings|general|cloudflare|dns|logging/i').count() > 0;
+    const hasContent = await page.locator('text=/settings|general|dns provider|dns|logging/i').count() > 0;
     expect(hasContent).toBe(true);
   });
 
@@ -30,9 +30,9 @@ test.describe('Settings', () => {
     await expect(page.getByRole('button', { name: /save general settings/i })).toBeEnabled({ timeout: 10000 });
   });
 
-  test('settings page has Cloudflare and DNS sections', async ({ page }) => {
+  test('settings page has DNS Provider and DNS sections', async ({ page }) => {
     await page.goto('/settings');
-    await expect(page.getByRole('button', { name: /save cloudflare settings/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'DNS Providers' })).toBeVisible();
     await expect(page.getByRole('button', { name: /save dns settings/i })).toBeVisible();
   });
 });

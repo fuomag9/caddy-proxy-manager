@@ -252,9 +252,59 @@ function runEnvProviderSync() {
   }
 }
 
+/**
+ * One-time migration: convert legacy Cloudflare DNS settings to the new
+ * generic dns_provider format.  Idempotent — skips if already run or if
+ * the new setting already exists.
+ */
+function runCloudflareToProviderMigration() {
+  if (sqlitePath === ":memory:") return;
+
+  const { settings: settingsTable } = schema;
+
+  // Skip if migration already ran
+  const flag = db.select().from(settingsTable).where(eq(settingsTable.key, "dns_provider_migrated")).get();
+  if (flag) return;
+
+  // Skip if new dns_provider setting already exists (user already configured it)
+  const existing = db.select().from(settingsTable).where(eq(settingsTable.key, "dns_provider")).get();
+  if (existing) {
+    const now = new Date().toISOString();
+    db.insert(settingsTable).values({ key: "dns_provider_migrated", value: "true", updatedAt: now }).run();
+    return;
+  }
+
+  // Check for legacy cloudflare setting
+  const cfRow = db.select().from(settingsTable).where(eq(settingsTable.key, "cloudflare")).get();
+  if (!cfRow) {
+    const now = new Date().toISOString();
+    db.insert(settingsTable).values({ key: "dns_provider_migrated", value: "true", updatedAt: now }).run();
+    return;
+  }
+
+  try {
+    const cf = JSON.parse(cfRow.value) as { apiToken?: string; zoneId?: string; accountId?: string };
+    if (cf.apiToken) {
+      const now = new Date().toISOString();
+      const newSetting = {
+        providers: { cloudflare: { api_token: cf.apiToken } },
+        default: "cloudflare",
+      };
+      db.insert(settingsTable).values({ key: "dns_provider", value: JSON.stringify(newSetting), updatedAt: now }).run();
+      console.log("Migrated legacy Cloudflare DNS settings to dns_provider format");
+    }
+  } catch (e) {
+    console.warn("Failed to parse legacy cloudflare setting during migration:", e);
+  }
+
+  const now = new Date().toISOString();
+  db.insert(settingsTable).values({ key: "dns_provider_migrated", value: "true", updatedAt: now }).run();
+}
+
 try {
   runBetterAuthDataMigration();
   runEnvProviderSync();
+  runCloudflareToProviderMigration();
 } catch (error) {
   console.warn("Better Auth data migration warning:", error);
 }

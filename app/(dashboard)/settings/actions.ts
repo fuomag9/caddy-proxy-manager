@@ -5,10 +5,11 @@ import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, getDnsProviderSettings, saveDnsProviderSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost } from "@/src/lib/models/proxy-hosts";
 import { getWafRuleMessages } from "@/src/lib/models/waf-events";
-import type { CloudflareSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
+import type { CloudflareSettings, DnsProviderSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
+import { getProviderDefinition, encryptProviderCredentials } from "@/src/lib/dns-providers";
 
 type ActionResult = {
   success: boolean;
@@ -110,6 +111,122 @@ export async function updateCloudflareSettingsAction(_prevState: ActionResult | 
   } catch (error) {
     console.error("Failed to save Cloudflare settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save Cloudflare settings" };
+  }
+}
+
+export async function updateDnsProviderSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("dns_provider");
+      try {
+        await applyCaddyConfig();
+        revalidatePath("/settings");
+        return { success: true, message: "DNS provider settings reset to master defaults" };
+      } catch (error) {
+        console.error("Failed to apply Caddy config:", error);
+        revalidatePath("/settings");
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        await syncInstances();
+        return { success: true, message: `Settings reset, but could not apply to Caddy: ${errorMsg}` };
+      }
+    }
+
+    const action = String(formData.get("action") ?? "save").trim();
+    const providerName = String(formData.get("provider") ?? "").trim();
+    const current = await getDnsProviderSettings();
+    const settings: DnsProviderSettings = current ?? { providers: {}, default: null };
+
+    if (action === "remove") {
+      if (!providerName || !settings.providers[providerName]) {
+        return { success: false, message: "No provider to remove" };
+      }
+      const def = getProviderDefinition(providerName);
+      delete settings.providers[providerName];
+      if (settings.default === providerName) {
+        // Pick next configured provider, or null
+        const remaining = Object.keys(settings.providers);
+        settings.default = remaining.length > 0 ? remaining[0] : null;
+      }
+      await saveDnsProviderSettings(settings);
+      await syncInstances();
+      try { await applyCaddyConfig(); } catch { /* non-fatal */ }
+      revalidatePath("/settings");
+      return { success: true, message: `${def?.displayName ?? providerName} removed${settings.default ? `. Default is now ${settings.default}.` : "."}` };
+    }
+
+    if (action === "set-default") {
+      const newDefault = providerName === "none" ? null : providerName;
+      if (newDefault && !settings.providers[newDefault]) {
+        return { success: false, message: `Cannot set default: ${providerName} is not configured` };
+      }
+      settings.default = newDefault;
+      await saveDnsProviderSettings(settings);
+      await syncInstances();
+      try { await applyCaddyConfig(); } catch { /* non-fatal */ }
+      revalidatePath("/settings");
+      const label = newDefault ? (getProviderDefinition(newDefault)?.displayName ?? newDefault) : "None";
+      return { success: true, message: `Default DNS provider set to ${label}` };
+    }
+
+    // action === "save": add or update a provider's credentials
+    if (!providerName || providerName === "none") {
+      return { success: false, message: "Select a provider to configure" };
+    }
+
+    const def = getProviderDefinition(providerName);
+    if (!def) {
+      return { success: false, message: `Unknown DNS provider: ${providerName}` };
+    }
+
+    const existingCreds = settings.providers[providerName];
+
+    // Collect credentials from form
+    const credentials: Record<string, string> = {};
+    for (const field of def.fields) {
+      const rawValue = formData.get(`credential_${field.key}`);
+      const value = rawValue ? String(rawValue).trim() : "";
+      if (value) {
+        credentials[field.key] = value;
+      } else if (existingCreds?.[field.key]) {
+        credentials[field.key] = existingCreds[field.key];
+      }
+    }
+
+    // Validate required fields
+    for (const field of def.fields) {
+      if (field.required && !credentials[field.key]) {
+        return { success: false, message: `${field.label} is required for ${def.displayName}` };
+      }
+    }
+
+    // Encrypt password fields before storing
+    settings.providers[providerName] = encryptProviderCredentials(providerName, credentials);
+
+    // If this is the first provider, make it the default
+    if (!settings.default) {
+      settings.default = providerName;
+    }
+
+    await saveDnsProviderSettings(settings);
+    await syncInstances();
+
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      const isDefault = settings.default === providerName;
+      return { success: true, message: `${def.displayName} saved${isDefault ? " (default)" : ""}` };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      return { success: true, message: `Settings saved, but could not apply to Caddy: ${errorMsg}` };
+    }
+  } catch (error) {
+    console.error("Failed to save DNS provider settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save DNS provider settings" };
   }
 }
 

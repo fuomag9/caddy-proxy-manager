@@ -10,6 +10,7 @@ export type InstanceMode = "standalone" | "master" | "slave";
 export type SyncSettings = {
   general: unknown | null;
   cloudflare: unknown | null;
+  dns_provider: unknown | null;
   authentik: unknown | null;
   metrics: unknown | null;
   logging: unknown | null;
@@ -249,6 +250,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
   const settings = {
     general: await getSetting("general"),
     cloudflare: await getSetting("cloudflare"),
+    dns_provider: await getSetting("dns_provider"),
     authentik: await getSetting("authentik"),
     metrics: await getSetting("metrics"),
     logging: await getSetting("logging"),
@@ -422,6 +424,7 @@ export async function syncInstances(): Promise<{ total: number; success: number;
 export async function applySyncPayload(payload: SyncPayload) {
   await setSyncedSetting("general", payload.settings.general);
   await setSyncedSetting("cloudflare", payload.settings.cloudflare);
+  await setSyncedSetting("dns_provider", payload.settings.dns_provider ?? null);
   await setSyncedSetting("authentik", payload.settings.authentik);
   await setSyncedSetting("metrics", payload.settings.metrics);
   await setSyncedSetting("logging", payload.settings.logging);

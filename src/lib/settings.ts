@@ -38,6 +38,13 @@ export type DnsSettings = {
   timeout?: string; // DNS query timeout (e.g., "5s")
 };
 
+export type DnsProviderSettings = {
+  /** Configured providers: keyed by provider name, value is credential map */
+  providers: Record<string, Record<string, string>>;
+  /** Name of the default provider (null = no DNS-01 challenges) */
+  default: string | null;
+};
+
 export type UpstreamDnsAddressFamily = "ipv6" | "ipv4" | "both";
 
 export type UpstreamDnsResolutionSettings = {
@@ -193,6 +200,25 @@ export async function getDnsSettings(): Promise<DnsSettings | null> {
 
 export async function saveDnsSettings(settings: DnsSettings): Promise<void> {
   await setSetting("dns", settings);
+}
+
+export async function getDnsProviderSettings(): Promise<DnsProviderSettings | null> {
+  const raw = await getEffectiveSetting<Record<string, unknown>>("dns_provider");
+  if (!raw) return null;
+
+  // Normalize old single-provider format { provider, credentials }
+  // to new multi-provider format { providers, default }
+  if ("provider" in raw && "credentials" in raw && !("providers" in raw)) {
+    const name = raw.provider as string;
+    const creds = raw.credentials as Record<string, string>;
+    return { providers: { [name]: creds }, default: name };
+  }
+
+  return raw as unknown as DnsProviderSettings;
+}
+
+export async function saveDnsProviderSettings(settings: DnsProviderSettings): Promise<void> {
+  await setSetting("dns_provider", settings);
 }
 
 export async function getUpstreamDnsResolutionSettings(): Promise<UpstreamDnsResolutionSettings | null> {
