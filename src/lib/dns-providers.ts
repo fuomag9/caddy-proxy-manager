@@ -177,7 +177,7 @@ export const DNS_PROVIDERS: DnsProviderDefinition[] = [
     docsUrl: "https://github.com/caddy-dns/ionos",
     modulePath: "github.com/caddy-dns/ionos",
     fields: [
-      { key: "api_token", label: "API Token", type: "password", required: true, placeholder: "prefix.secret" },
+      { key: "auth_api_token", label: "API Token", type: "password", required: true, placeholder: "prefix.secret" },
     ],
   },
   {
