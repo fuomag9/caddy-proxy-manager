@@ -402,6 +402,13 @@ function sanitizeAuthentikMeta(meta: ProxyHostAuthentikMeta | undefined): ProxyH
     }
   }
 
+  if (Array.isArray(meta.excluded_paths)) {
+    const paths = meta.excluded_paths.map((path) => path?.trim().replace(/\{[^}]*\}/g, "")).filter((path): path is string => Boolean(path));
+    if (paths.length > 0) {
+      normalized.excluded_paths = paths;
+    }
+  }
+
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
 
@@ -579,6 +586,12 @@ function sanitizeCpmForwardAuthMeta(meta: CpmForwardAuthMeta | undefined): CpmFo
     const paths = meta.protected_paths.map((p) => p?.trim().replace(/\{[^}]*\}/g, "")).filter((p): p is string => Boolean(p)); // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
     if (paths.length > 0) {
       normalized.protected_paths = paths;
+    }
+  }
+  if (Array.isArray(meta.excluded_paths)) {
+    const paths = meta.excluded_paths.map((p) => p?.trim().replace(/\{[^}]*\}/g, "")).filter((p): p is string => Boolean(p)); // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
+    if (paths.length > 0) {
+      normalized.excluded_paths = paths;
     }
   }
   return Object.keys(normalized).length > 0 ? normalized : undefined;
