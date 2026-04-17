@@ -171,6 +171,16 @@ export const DNS_PROVIDERS: DnsProviderDefinition[] = [
     ],
   },
   {
+    name: "ionos",
+    displayName: "IONOS",
+    description: "IONOS DNS API",
+    docsUrl: "https://github.com/caddy-dns/ionos",
+    modulePath: "github.com/caddy-dns/ionos",
+    fields: [
+      { key: "api_token", label: "API Token", type: "password", required: true, placeholder: "prefix.secret" },
+    ],
+  },
+  {
     name: "linode",
     displayName: "Linode (Akamai)",
     description: "Linode/Akamai DNS API",

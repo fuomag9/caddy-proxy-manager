@@ -18,6 +18,7 @@ RUN GOPROXY=direct xcaddy build \
     --with github.com/caddy-dns/godaddy \
     --with github.com/caddy-dns/namecheap \
     --with github.com/caddy-dns/ovh \
+    --with github.com/caddy-dns/ionos \
     --with github.com/caddy-dns/linode \
     --with github.com/mholt/caddy-l4 \
     --with github.com/fuomag9/caddy-blocker-plugin \
