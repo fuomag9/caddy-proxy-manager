@@ -7,6 +7,7 @@ import CertificatesClient from './CertificatesClient';
 import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-certificates';
 import { listIssuedClientCertificates, type IssuedClientCertificate } from '@/src/lib/models/issued-client-certificates';
 import { listMtlsRoles, type MtlsRole } from '@/src/lib/models/mtls-roles';
+import { isDomainCoveredByCert } from '@/src/lib/cert-domain-match';
 
 export type { CaCertificate };
 export type { IssuedClientCertificate };
@@ -78,6 +79,7 @@ function getExpiryStatus(validToIso: string): CertExpiryStatus {
   return 'ok';
 }
 
+
 export default async function CertificatesPage({ searchParams }: PageProps) {
   await requireAdmin();
   const { page: pageParam } = await searchParams;
@@ -140,6 +142,44 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
     usageMap.set(u.certId, hosts);
   }
 
+  // Build a map of cert ID -> its domain list (including wildcard entries)
+  const certDomainMap = new Map<number, string[]>();
+  for (const cert of certRows) {
+    const domainNames = JSON.parse(cert.domainNames) as string[];
+    // For imported certs, also check PEM SANs which may include wildcards
+    if (cert.type === 'imported' && cert.certificatePem) {
+      const pemInfo = parsePemInfo(cert.certificatePem);
+      if (pemInfo?.sanDomains.length) {
+        certDomainMap.set(cert.id, pemInfo.sanDomains);
+        continue;
+      }
+    }
+    certDomainMap.set(cert.id, domainNames);
+  }
+
+  // Filter out ACME hosts whose domains are fully covered by an existing certificate's wildcard,
+  // and attribute them to that certificate's usedBy list instead.
+  let adjustedAcmeTotal = acmeTotal;
+  const filteredAcmeHosts: AcmeHost[] = [];
+  for (const host of acmeHosts) {
+    let coveredByCertId: number | null = null;
+    for (const [certId, certDomains] of certDomainMap) {
+      if (host.domains.every(d => isDomainCoveredByCert(d, certDomains))) {
+        coveredByCertId = certId;
+        break;
+      }
+    }
+    if (coveredByCertId !== null) {
+      // Move this host to the cert's usedBy list
+      const hosts = usageMap.get(coveredByCertId) ?? [];
+      hosts.push({ id: host.id, name: host.name, domains: host.domains });
+      usageMap.set(coveredByCertId, hosts);
+      adjustedAcmeTotal--;
+    } else {
+      filteredAcmeHosts.push(host);
+    }
+  }
+
   const importedCerts: ImportedCertView[] = [];
   const managedCerts: ManagedCertView[] = [];
   const issuedByCa = issuedClientCerts.reduce<Map<number, IssuedClientCertificate[]>>((map, cert) => {
@@ -174,11 +214,11 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
 
   return (
     <CertificatesClient
-      acmeHosts={acmeHosts}
+      acmeHosts={filteredAcmeHosts}
       importedCerts={importedCerts}
       managedCerts={managedCerts}
       caCertificates={caCertificateViews}
-      acmePagination={{ total: acmeTotal, page, perPage: PER_PAGE }}
+      acmePagination={{ total: adjustedAcmeTotal, page, perPage: PER_PAGE }}
       mtlsRoles={mtlsRoles}
       issuedClientCerts={issuedClientCerts}
     />
