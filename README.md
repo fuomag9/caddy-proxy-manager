@@ -38,7 +38,7 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 - **L4 Proxy Hosts** - TCP/UDP stream proxying with TLS SNI matching, proxy protocol (v1/v2), load balancing, health checks, and per-host geo blocking. Automatic Docker Compose port management via sidecar
 - **Location Rules** - Path-based routing to different upstreams per proxy host (e.g. `/api/*` to one backend, `/ws/*` to another)
 - **Redirect & Rewrite** - Per-host redirect rules (301/302/307/308) and path prefix rewriting
-- **Forward Auth Portal** - Built-in identity provider for protecting proxy hosts without an external IdP. Credential and OAuth login portal, user groups with membership management, and per-host access control by user or group
+- **Forward Auth Portal** - Built-in identity provider for protecting proxy hosts without an external IdP. Credential and OAuth login portal, user groups with membership management, per-host access control by user or group, and excluded paths that bypass authentication
 - **WAF** - Web Application Firewall powered by Coraza with optional OWASP Core Rule Set (SQLi, XSS, LFI, RCE). Per-host enable/disable, global and per-host rule suppression, custom SecLang directives, and a searchable event log with severity and blocked/detected classification
 - **Analytics** - Live traffic charts, protocol breakdown, country map, top user agents, and blocked request log with configurable time ranges
 - **Geo Blocking** - Block or allow traffic by country, continent, ASN, CIDR range, or exact IP per proxy host. Allow rules override block rules. Fail-closed mode, custom response codes/bodies, and trusted proxy support
@@ -55,7 +55,8 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 - **API Tokens** - Create and manage API tokens with optional expiration for programmatic access
 - **Instance Sync** - Master/slave configuration sync for multi-instance deployments. The master pushes proxy hosts, certificates, access lists, and settings to slaves on every change
 - **OAuth / SSO** - OAuth2/OIDC authentication with any compliant provider (Authentik, Keycloak, Auth0, etc.). Account linking from the Profile page
-- **Settings** - ACME email, Cloudflare DNS-01, upstream DNS pinning defaults, Authentik outpost, Prometheus metrics, logging format
+- **DNS Providers** - Multi-provider DNS-01 challenge support for ACME certificates: Cloudflare, Route 53, DigitalOcean, Duck DNS, Hetzner, Vultr, Porkbun, GoDaddy, Namecheap, OVH, IONOS, and Linode. Credentials encrypted at rest. Per-certificate provider override supported
+- **Settings** - ACME email, DNS provider configuration, upstream DNS pinning defaults, Authentik outpost, Prometheus metrics, logging format
 - **Audit Log** - Searchable configuration change history with user attribution and pagination
 - **Search & Pagination** - Server-side search and pagination on all data tables
 - **Dark Mode** - Full dark/light theme support with system preference detection
@@ -158,7 +159,7 @@ New users default to the **user** role. The initial admin account is created fro
 
 Caddy automatically obtains Let's Encrypt certificates for all proxy hosts.
 
-**Cloudflare DNS-01** (optional): Configure in Settings with a Cloudflare API token (`Zone.DNS:Edit` permissions).
+**DNS-01 Challenge** (optional): Configure a DNS provider in **Settings → DNS Providers** for wildcard certificates and environments where ports 80/443 are not public. Supported providers: Cloudflare, Route 53, DigitalOcean, Duck DNS, Hetzner, Vultr, Porkbun, GoDaddy, Namecheap, OVH, IONOS, and Linode. Credentials are encrypted at rest with AES-256-GCM. You can override the DNS provider per certificate.
 
 **Custom Certificates** (optional): Import your own certificates via the Certificates page. Private keys are stored unencrypted in SQLite.
 
@@ -324,8 +325,6 @@ Each forward-auth-protected host has its own access list of allowed users and/or
 ---
 
 ## Roadmap
-
-- [ ] Additional DNS providers (Route53, Namecheap, etc.)
 
 [Open an issue](https://github.com/fuomag9/caddy-proxy-manager/issues) for feature requests.
 
