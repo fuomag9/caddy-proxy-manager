@@ -39,4 +39,16 @@ test.describe('Authentication', () => {
     // Should redirect away from login
     await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
   });
+
+  test('hyphenated username passes validation (not rejected as invalid)', async ({ page }) => {
+    // Regression test for #112: better-auth default username validator rejects hyphens.
+    // A non-existent hyphenated user should get 401 (wrong credentials), not 422 (invalid username).
+    const res = await page.request.post('http://localhost:3000/api/auth/sign-in/username', {
+      data: { username: 'test-hyphen', password: 'SomePassword123!' },
+      headers: { 'Content-Type': 'application/json', 'Origin': 'http://localhost:3000' },
+    });
+    // 401 = passed validation, user not found → correct
+    // 422 = username rejected by validator → bug
+    expect(res.status()).toBe(401);
+  });
 });
