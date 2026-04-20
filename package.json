@@ -39,7 +39,7 @@
     "apexcharts": "^5.10.6",
     "autoprefixer": "^10.5.0",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.6.4",
+    "better-auth": "^1.6.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
