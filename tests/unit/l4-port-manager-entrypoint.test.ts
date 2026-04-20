@@ -89,12 +89,12 @@ describe('L4 port manager entrypoint.sh', () => {
     expect(script).toContain('"$CURRENT_TRIGGER" = "$LAST_TRIGGER"');
   });
 
-  it('does not pull images (only recreates)', () => {
+  it('uses --pull never to avoid registry pulls (only recreates)', () => {
     const composeUpLines = lines.filter(line =>
       line.includes('docker compose') && line.includes('up')
     );
     for (const line of composeUpLines) {
-      expect(line).not.toContain('--pull');
+      expect(line).toContain('--pull never');
       expect(line).not.toContain('--build');
     }
   });

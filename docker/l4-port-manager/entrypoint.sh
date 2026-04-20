@@ -93,7 +93,7 @@ do_apply() {
   write_status "applying" "Recreating caddy container with updated ports..."
 
   # shellcheck disable=SC2086
-  if docker compose $COMPOSE_ARGS up -d --no-deps --force-recreate caddy 2>&1; then
+  if docker compose $COMPOSE_ARGS up -d --no-deps --pull never --force-recreate caddy 2>&1; then
     log "Caddy container recreated successfully."
 
     # Wait for caddy healthcheck to pass
