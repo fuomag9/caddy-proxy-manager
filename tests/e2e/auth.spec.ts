@@ -40,6 +40,25 @@ test.describe('Authentication', () => {
     await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
   });
 
+  test('logout redirects to /login on the correct host (not 0.0.0.0)', async ({ page }) => {
+    // Regression test: logout used request.url as redirect base, which inside
+    // Docker resolves to 0.0.0.0 instead of the configured BASE_URL.
+    await page.goto('/login');
+    await page.getByRole('textbox', { name: /username/i }).fill('testadmin');
+    await page.getByRole('textbox', { name: /password/i }).fill('TestPassword2026!');
+    await page.getByRole('button', { name: /sign in/i }).click();
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
+
+    // Click logout
+    await page.getByRole('button', { name: /log\s*out|sign\s*out/i }).click();
+
+    // Should land on /login on localhost, not 0.0.0.0
+    await expect(page).toHaveURL(/\/login/, { timeout: 10000 });
+    const url = new URL(page.url());
+    expect(url.hostname).not.toBe('0.0.0.0');
+    expect(url.hostname).toBe('localhost');
+  });
+
   test('hyphenated username passes validation (not rejected as invalid)', async ({ page }) => {
     // Regression test for #112: better-auth default username validator rejects hyphens.
     // A non-existent hyphenated user should get 401 (wrong credentials), not 422 (invalid username).
