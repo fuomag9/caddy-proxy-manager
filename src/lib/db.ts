@@ -301,10 +301,48 @@ function runCloudflareToProviderMigration() {
   db.insert(settingsTable).values({ key: "dns_provider_migrated", value: "true", updatedAt: now }).run();
 }
 
+/**
+ * One-time migration: rename IONOS DNS credential key from the old
+ * `api_token` to the correct `auth_api_token` expected by the libdns module.
+ * Idempotent — skips if the key has already been renamed or never existed.
+ */
+function runIonosFieldNameMigration() {
+  if (sqlitePath === ":memory:") return;
+
+  const { settings: settingsTable } = schema;
+
+  const flag = db.select().from(settingsTable).where(eq(settingsTable.key, "ionos_field_migrated")).get();
+  if (flag) return;
+
+  const row = db.select().from(settingsTable).where(eq(settingsTable.key, "dns_provider")).get();
+  if (row) {
+    try {
+      const parsed = JSON.parse(row.value) as { providers?: Record<string, Record<string, string>>; default?: string };
+      const ionos = parsed.providers?.ionos;
+      if (ionos && "api_token" in ionos && !("auth_api_token" in ionos)) {
+        ionos.auth_api_token = ionos.api_token;
+        delete ionos.api_token;
+        const now = new Date().toISOString();
+        db.update(settingsTable)
+          .set({ value: JSON.stringify(parsed), updatedAt: now })
+          .where(eq(settingsTable.key, "dns_provider"))
+          .run();
+        console.log("Migrated IONOS DNS provider field: api_token -> auth_api_token");
+      }
+    } catch (e) {
+      console.warn("Failed to migrate IONOS field name:", e);
+    }
+  }
+
+  const now = new Date().toISOString();
+  db.insert(settingsTable).values({ key: "ionos_field_migrated", value: "true", updatedAt: now }).run();
+}
+
 try {
   runBetterAuthDataMigration();
   runEnvProviderSync();
   runCloudflareToProviderMigration();
+  runIonosFieldNameMigration();
 } catch (error) {
   console.warn("Better Auth data migration warning:", error);
 }

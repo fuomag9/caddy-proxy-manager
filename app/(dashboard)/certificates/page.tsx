@@ -180,6 +180,28 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
     }
   }
 
+  // Among ACME auto-managed hosts, collapse subdomain hosts under wildcard hosts.
+  // e.g. if *.domain.de is an ACME host, sub.domain.de should not appear separately.
+  const wildcardAcmeHosts = filteredAcmeHosts.filter(h => h.domains.some(d => d.startsWith('*.')));
+  const wildcardDomainSets = wildcardAcmeHosts.map(h => h.domains);
+  const deduplicatedAcmeHosts: AcmeHost[] = [];
+  for (const host of filteredAcmeHosts) {
+    // Never collapse a host that itself has a wildcard domain
+    if (host.domains.some(d => d.startsWith('*.'))) {
+      deduplicatedAcmeHosts.push(host);
+      continue;
+    }
+    // Check if all of this host's domains are covered by any wildcard ACME host
+    const coveredByWildcard = wildcardDomainSets.some(wcDomains =>
+      host.domains.every(d => isDomainCoveredByCert(d, wcDomains))
+    );
+    if (coveredByWildcard) {
+      adjustedAcmeTotal--;
+    } else {
+      deduplicatedAcmeHosts.push(host);
+    }
+  }
+
   const importedCerts: ImportedCertView[] = [];
   const managedCerts: ManagedCertView[] = [];
   const issuedByCa = issuedClientCerts.reduce<Map<number, IssuedClientCertificate[]>>((map, cert) => {
@@ -214,7 +236,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
 
   return (
     <CertificatesClient
-      acmeHosts={filteredAcmeHosts}
+      acmeHosts={deduplicatedAcmeHosts}
       importedCerts={importedCerts}
       managedCerts={managedCerts}
       caCertificates={caCertificateViews}
