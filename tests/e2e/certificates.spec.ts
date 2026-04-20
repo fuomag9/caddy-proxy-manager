@@ -107,8 +107,8 @@ test.describe('Certificates', () => {
       await page.getByRole('tab', { name: /acme/i }).click();
 
       const acmeTab = page.locator('[role="tabpanel"]');
-      // The wildcard host should be visible
-      await expect(acmeTab.getByText(`*.${domain}`)).toBeVisible({ timeout: 5_000 });
+      // The wildcard host should be visible (use .first() as DataTable renders both mobile card and desktop table)
+      await expect(acmeTab.getByText(`*.${domain}`).first()).toBeVisible({ timeout: 5_000 });
       // The subdomain host should NOT appear as a separate entry
       await expect(acmeTab.getByText(`sub.${domain}`)).not.toBeVisible({ timeout: 5_000 });
     } finally {

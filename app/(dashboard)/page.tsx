@@ -11,6 +11,7 @@ import { count, desc, isNull, sql } from "drizzle-orm";
 import { ArrowLeftRight, ShieldCheck, KeyRound } from "lucide-react";
 import { ReactNode } from "react";
 import { getAnalyticsSummary } from "@/src/lib/analytics-db";
+import { isDomainCoveredByCert } from "@/src/lib/cert-domain-match";
 
 type StatCard = {
   label: string;
@@ -20,19 +21,51 @@ type StatCard = {
 };
 
 async function loadStats(): Promise<StatCard[]> {
-  const [proxyHostCountResult, acmeCertCountResult, importedCertCountResult, accessListCountResult] =
+  const [proxyHostCountResult, acmeRows, certRows, importedCertCountResult, accessListCountResult] =
     await Promise.all([
       db.select({ value: count() }).from(proxyHosts),
-      // Proxy hosts with no explicit cert → Caddy auto-issues one ACME cert per host
-      db.select({ value: count() }).from(proxyHosts).where(isNull(proxyHosts.certificateId)),
+      // All proxy hosts with no explicit cert (for ACME deduplication)
+      db.select({ domains: proxyHosts.domains }).from(proxyHosts).where(isNull(proxyHosts.certificateId)),
+      // All certs (for wildcard coverage check)
+      db.select({ id: certificates.id, type: certificates.type, domainNames: certificates.domainNames, certificatePem: certificates.certificatePem }).from(certificates),
       // Imported certs with actual PEM data (valid, user-managed)
       db.select({ value: count() }).from(certificates).where(
         sql`${certificates.type} = 'imported' AND ${certificates.certificatePem} IS NOT NULL`
       ),
       db.select({ value: count() }).from(accessLists)
     ]);
+
+  // Build cert domain map for wildcard coverage checks
+  const certDomainMap = new Map<number, string[]>();
+  for (const cert of certRows) {
+    certDomainMap.set(cert.id, JSON.parse(cert.domainNames) as string[]);
+  }
+
+  // Deduplicate ACME hosts: remove those covered by a cert's wildcard or another ACME wildcard
+  const acmeHostDomains = acmeRows.map(r => JSON.parse(r.domains) as string[]);
+  const wildcardAcmeDomainSets = acmeHostDomains.filter(domains => domains.some((d: string) => d.startsWith('*.')));
+
+  let acmeCount = 0;
+  for (const domains of acmeHostDomains) {
+    // Check if covered by an existing certificate's wildcard
+    let covered = false;
+    for (const [, certDomains] of certDomainMap) {
+      if (domains.every((d: string) => isDomainCoveredByCert(d, certDomains))) {
+        covered = true;
+        break;
+      }
+    }
+    // Check if this non-wildcard host is covered by a wildcard ACME host
+    if (!covered && !domains.some((d: string) => d.startsWith('*.'))) {
+      covered = wildcardAcmeDomainSets.some(wcDomains =>
+        domains.every((d: string) => isDomainCoveredByCert(d, wcDomains))
+      );
+    }
+    if (!covered) acmeCount++;
+  }
+
   const proxyHostsCount = proxyHostCountResult[0]?.value ?? 0;
-  const certificatesCount = (acmeCertCountResult[0]?.value ?? 0) + (importedCertCountResult[0]?.value ?? 0);
+  const certificatesCount = acmeCount + (importedCertCountResult[0]?.value ?? 0);
   const accessListsCount = accessListCountResult[0]?.value ?? 0;
 
   return [

@@ -91,7 +91,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
   ]);
   const mtlsRoles = await listMtlsRoles().catch(() => []);
 
-  const [acmeRows, acmeTotal, certRows, usageRows] = await Promise.all([
+  const [allAcmeRows, certRows, usageRows] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -102,14 +102,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       })
       .from(proxyHosts)
       .where(isNull(proxyHosts.certificateId))
-      .orderBy(proxyHosts.name)
-      .limit(PER_PAGE)
-      .offset(offset),
-    db
-      .select({ value: count() })
-      .from(proxyHosts)
-      .where(isNull(proxyHosts.certificateId))
-      .then(([r]) => r?.value ?? 0),
+      .orderBy(proxyHosts.name),
     db.select().from(certificates),
     db
       .select({
@@ -122,7 +115,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       .where(isNotNull(proxyHosts.certificateId)),
   ]);
 
-  const acmeHosts: AcmeHost[] = acmeRows.map(r => ({
+  const allAcmeHosts: AcmeHost[] = allAcmeRows.map(r => ({
     id: r.id,
     name: r.name,
     domains: JSON.parse(r.domains) as string[],
@@ -159,9 +152,8 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
 
   // Filter out ACME hosts whose domains are fully covered by an existing certificate's wildcard,
   // and attribute them to that certificate's usedBy list instead.
-  let adjustedAcmeTotal = acmeTotal;
   const filteredAcmeHosts: AcmeHost[] = [];
-  for (const host of acmeHosts) {
+  for (const host of allAcmeHosts) {
     let coveredByCertId: number | null = null;
     for (const [certId, certDomains] of certDomainMap) {
       if (host.domains.every(d => isDomainCoveredByCert(d, certDomains))) {
@@ -174,7 +166,6 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       const hosts = usageMap.get(coveredByCertId) ?? [];
       hosts.push({ id: host.id, name: host.name, domains: host.domains });
       usageMap.set(coveredByCertId, hosts);
-      adjustedAcmeTotal--;
     } else {
       filteredAcmeHosts.push(host);
     }
@@ -195,12 +186,14 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
     const coveredByWildcard = wildcardDomainSets.some(wcDomains =>
       host.domains.every(d => isDomainCoveredByCert(d, wcDomains))
     );
-    if (coveredByWildcard) {
-      adjustedAcmeTotal--;
-    } else {
+    if (!coveredByWildcard) {
       deduplicatedAcmeHosts.push(host);
     }
   }
+
+  // Paginate the deduplicated ACME hosts
+  const adjustedAcmeTotal = deduplicatedAcmeHosts.length;
+  const paginatedAcmeHosts = deduplicatedAcmeHosts.slice(offset, offset + PER_PAGE);
 
   const importedCerts: ImportedCertView[] = [];
   const managedCerts: ManagedCertView[] = [];
@@ -236,7 +229,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
 
   return (
     <CertificatesClient
-      acmeHosts={deduplicatedAcmeHosts}
+      acmeHosts={paginatedAcmeHosts}
       importedCerts={importedCerts}
       managedCerts={managedCerts}
       caCertificates={caCertificateViews}
