@@ -119,7 +119,8 @@ services:
       start_period: 10s
 
   # Docker socket proxy — restricts API surface exposed to l4-port-manager.
-  # Only allows GET, POST to /containers/ and /compose/ endpoints.
+  # Allows container management and network inspection (needed by docker compose up
+  # to inspect caddy-network when recreating the caddy container for L4 port changes).
   docker-socket-proxy:
     container_name: caddy-proxy-manager-docker-proxy
     image: tecnativa/docker-socket-proxy:latest
@@ -127,14 +128,14 @@ services:
     environment:
       CONTAINERS: 1
       POST: 1
+      NETWORKS: 1
+      VOLUMES: 1
+      IMAGES: 1
+      SECRETS: 1
       # Deny everything else by default
-      IMAGES: 0
-      NETWORKS: 0
-      VOLUMES: 0
       EXEC: 0
       SWARM: 0
       AUTH: 0
-      SECRETS: 0
       BUILD: 0
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

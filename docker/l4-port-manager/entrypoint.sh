@@ -93,7 +93,10 @@ do_apply() {
   write_status "applying" "Recreating caddy container with updated ports..."
 
   # shellcheck disable=SC2086
-  if docker compose $COMPOSE_ARGS up -d --no-deps --pull never --force-recreate caddy 2>&1; then
+  COMPOSE_OUTPUT=$(docker compose $COMPOSE_ARGS up -d --no-deps --pull never --force-recreate caddy 2>&1)
+  COMPOSE_EXIT=$?
+  log "$COMPOSE_OUTPUT"
+  if [ $COMPOSE_EXIT -eq 0 ]; then
     log "Caddy container recreated successfully."
 
     # Wait for caddy healthcheck to pass
@@ -117,7 +120,9 @@ do_apply() {
       log "Warning: Caddy health status is '$HEALTH' after ${HEALTH_TIMEOUT}s."
     fi
   else
-    ERROR_MSG="Failed to recreate caddy container. Check Docker logs."
+    # Truncate output to avoid oversized status files
+    SHORT_OUTPUT=$(echo "$COMPOSE_OUTPUT" | tail -5)
+    ERROR_MSG="Failed to recreate caddy container: $SHORT_OUTPUT"
     write_status "failed" "$ERROR_MSG" "$ERROR_MSG"
     log "ERROR: $ERROR_MSG"
   fi
