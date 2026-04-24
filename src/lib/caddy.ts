@@ -566,7 +566,7 @@ function mergeGeoBlockSettings(
   };
 }
 
-function resolveEffectiveGeoBlock(
+export function resolveEffectiveGeoBlock(
   global: GeoBlockSettings | null,
   host: { geoblock: GeoBlockSettings | null; geoblock_mode: GeoBlockMode }
 ): GeoBlockSettings | null {
@@ -581,8 +581,9 @@ function resolveEffectiveGeoBlock(
     return hostConfig.enabled ? hostConfig : null;
   }
 
-  // Host merge mode: merge global + host
-  if (hostConfig && globalConfig) {
+  // Host merge mode: only enabled host config should alter global behavior.
+  // A disabled host geoblock means "no per-host geoblock" in merge mode.
+  if (hostConfig?.enabled && globalConfig) {
     return mergeGeoBlockSettings(globalConfig, hostConfig);
   }
 
@@ -593,7 +594,7 @@ function resolveEffectiveGeoBlock(
   return null;
 }
 
-function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> {
+export function buildBlockerHandler(config: GeoBlockSettings): Record<string, unknown> {
   const handler: Record<string, unknown> = {
     handler: "blocker",
     geoip_db: "/usr/share/GeoIP/GeoLite2-Country.mmdb",

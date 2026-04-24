@@ -1,7 +1,7 @@
 import { X509Certificate } from 'node:crypto';
 import db from '@/src/lib/db';
 import { proxyHosts, certificates } from '@/src/lib/db/schema';
-import { isNull, isNotNull, count } from 'drizzle-orm';
+import { isNull, isNotNull } from 'drizzle-orm';
 import { requireAdmin } from '@/src/lib/auth';
 import CertificatesClient from './CertificatesClient';
 import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-certificates';

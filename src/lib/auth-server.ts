@@ -170,7 +170,7 @@ function createAuth(): any {
     },
     plugins: [
       username({
-        usernameValidator: (username) => /^[a-zA-Z0-9_.\-]+$/.test(username),
+        usernameValidator: (username) => /^[a-zA-Z0-9_.-]+$/.test(username),
       }),
       genericOAuth({ config: oauthConfigs }),
     ],
