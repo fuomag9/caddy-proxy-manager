@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { Globe, Home, X } from "lucide-react";
+import { Globe, Home, Search, X } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { GeoBlockSettings } from "@/lib/settings";
 import { GeoBlockMode } from "@/lib/models/proxy-hosts";
@@ -90,13 +90,12 @@ function CountryPicker({ name, initialValues = [], accentColor = "warning" }: Co
   );
   const [search, setSearch] = useState("");
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return COUNTRIES;
-    return COUNTRIES.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().startsWith(q)
-    );
-  }, [search]);
+  const isWarning = accentColor === "warning";
+
+  const selectedList = useMemo(
+    () => COUNTRIES.filter((c) => selected.has(c.code)),
+    [selected]
+  );
 
   const toggle = useCallback((code: string) => {
     setSelected((prev) => {
@@ -107,38 +106,109 @@ function CountryPicker({ name, initialValues = [], accentColor = "warning" }: Co
     });
   }, []);
 
-  const selectFiltered = useCallback(() => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      filtered.forEach((c) => next.add(c.code));
-      return next;
+  // Unselected countries grouped alphabetically (shown when not searching)
+  const grouped = useMemo(() => {
+    const g: Record<string, typeof COUNTRIES> = {};
+    COUNTRIES.forEach((c) => {
+      if (selected.has(c.code)) return;
+      const letter = c.name[0].toUpperCase();
+      if (!g[letter]) g[letter] = [];
+      g[letter].push(c);
     });
-  }, [filtered]);
+    return g;
+  }, [selected]);
 
-  const clearFiltered = useCallback(() => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      filtered.forEach((c) => next.delete(c.code));
-      return next;
-    });
-  }, [filtered]);
+  // All matching countries (shown when searching)
+  const searchResults = useMemo(() => {
+    if (!search) return [];
+    const q = search.toLowerCase().trim();
+    return COUNTRIES.filter(
+      (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().startsWith(q)
+    );
+  }, [search]);
 
-  const selectedInFiltered = filtered.filter((c) => selected.has(c.code)).length;
-  const allFilteredSelected = filtered.length > 0 && selectedInFiltered === filtered.length;
-
-  const isWarning = accentColor === "warning";
+  const chipClasses = isWarning
+    ? "bg-yellow-500/15 border-yellow-500/50 text-yellow-700 dark:text-yellow-400"
+    : "bg-green-500/15 border-green-500/50 text-green-700 dark:text-green-400";
+  const zoneClasses = isWarning
+    ? "bg-yellow-500/[0.06] border-yellow-500/25"
+    : "bg-green-500/[0.06] border-green-500/25";
+  const rowSelClass = isWarning ? "bg-yellow-500/[0.07]" : "bg-green-500/[0.07]";
+  const checkboxCheckedClass = isWarning
+    ? "bg-yellow-400 border-yellow-400"
+    : "bg-green-400 border-green-400";
 
   return (
     <div>
       <input type="hidden" name={name} value={[...selected].join(",")} />
 
+      {/* Toolbar */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-muted-foreground">
+          {selected.size > 0 ? (
+            <>{selected.size} selected</>
+          ) : (
+            <span className="opacity-50">None selected</span>
+          )}
+        </span>
+        <div className="flex items-center gap-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelected(new Set(COUNTRIES.map((c) => c.code)))}
+            disabled={selected.size === COUNTRIES.length}
+            className="text-[0.7rem] py-0.5 px-1.5 h-auto"
+          >
+            Select all
+          </Button>
+          <span className="text-xs text-muted-foreground">·</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelected(new Set())}
+            disabled={selected.size === 0}
+            className="text-[0.7rem] py-0.5 px-1.5 h-auto"
+          >
+            Clear all
+          </Button>
+        </div>
+      </div>
+
+      {/* Selected chips zone */}
+      {selectedList.length > 0 && (
+        <div className={cn("rounded-xl border p-2.5 mb-2", zoneClasses)}>
+          <div className="flex flex-wrap gap-1.5 max-h-[90px] overflow-y-auto pr-0.5">
+            {selectedList.map((c) => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => toggle(c.code)}
+                title={`Remove ${c.name}`}
+                className={cn(
+                  "inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full border text-xs font-medium transition-all duration-100 cursor-pointer",
+                  chipClasses
+                )}
+              >
+                <span className="text-[0.85rem] leading-none">{flagEmoji(c.code)}</span>
+                <span>{c.name}</span>
+                <span className="opacity-60 text-[0.6rem] font-mono">{c.code}</span>
+                <span className="text-[0.9rem] leading-none ml-0.5 opacity-60">×</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Search */}
       <div className="relative mb-1.5">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
         <Input
-          placeholder="Search by country name or code…"
+          placeholder="Search countries…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-8 text-sm pr-8"
+          className="h-8 text-sm pl-7 pr-8"
         />
         {search && (
           <button
@@ -151,105 +221,68 @@ function CountryPicker({ name, initialValues = [], accentColor = "warning" }: Co
         )}
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs text-muted-foreground">
-          {selected.size > 0 ? (
-            <>{selected.size} selected{search && `, ${selectedInFiltered} shown`}</>
+      {/* Country list */}
+      <div className="max-h-[240px] overflow-y-auto rounded-xl border border-border bg-black/[0.015] dark:bg-white/[0.02]">
+        {search ? (
+          searchResults.length === 0 ? (
+            <div className="text-xs text-muted-foreground p-3 text-center">
+              No countries match &ldquo;{search}&rdquo;
+            </div>
           ) : (
-            <span className="opacity-50">None selected</span>
-          )}
-        </span>
-        <div className="flex items-center gap-0.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={selectFiltered}
-            disabled={allFilteredSelected}
-            className="text-[0.7rem] py-0.5 px-1.5 h-auto"
-          >
-            {search ? "Select matching" : "Select all"}
-          </Button>
-          <span className="text-xs text-muted-foreground">·</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={clearFiltered}
-            disabled={selectedInFiltered === 0}
-            className="text-[0.7rem] py-0.5 px-1.5 h-auto"
-          >
-            {search ? "Clear matching" : "Clear all"}
-          </Button>
-        </div>
-      </div>
-
-      {/* Grid */}
-      <div className="max-h-[220px] overflow-y-auto flex flex-wrap gap-1 p-1.5 rounded-xl border border-border bg-black/[0.015] dark:bg-white/[0.02]">
-        {filtered.length === 0 ? (
-          <span className="text-xs text-muted-foreground p-1">
-            No countries match &ldquo;{search}&rdquo;
-          </span>
-        ) : (
-          filtered.map((country) => {
-            const isSelected = selected.has(country.code);
-            return (
-              <button
-                key={country.code}
-                type="button"
-                onClick={() => toggle(country.code)}
-                className={cn(
-                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs border transition-all duration-100 cursor-pointer h-[26px]",
-                  isSelected
-                    ? isWarning
-                      ? "border-yellow-500 bg-yellow-500/10 font-semibold text-yellow-700 dark:text-yellow-400"
-                      : "border-green-500 bg-green-500/10 font-semibold text-green-700 dark:text-green-400"
-                    : "border-border hover:border-muted-foreground hover:bg-accent"
-                )}
-              >
-                <span className="text-[0.85rem] leading-none">{flagEmoji(country.code)}</span>
-                <span>{country.name}</span>
-                <span className="opacity-55 text-[0.6rem] font-mono">{country.code}</span>
-              </button>
-            );
-          })
-        )}
-      </div>
-
-      {/* Selected summary chips (shown when search is active and selected items are hidden) */}
-      {search && selected.size > 0 && (
-        <div className="mt-1.5">
-          <span className="text-xs text-muted-foreground block mb-1">All selected ({selected.size}):</span>
-          <div className="flex flex-wrap gap-1 max-h-[72px] overflow-y-auto">
-            {[...selected].map((code) => {
-              const country = COUNTRIES.find((c) => c.code === code);
+            searchResults.map((c) => {
+              const isSel = selected.has(c.code);
               return (
-                <Badge
-                  key={code}
-                  variant="secondary"
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => toggle(c.code)}
                   className={cn(
-                    "gap-1 pr-1 text-[0.7rem] h-[22px] font-semibold",
-                    isWarning
-                      ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-                      : "bg-green-500/10 text-green-700 dark:text-green-400"
+                    "flex items-center gap-2 w-full px-3 py-1.5 text-left border-b border-border/50 last:border-0 transition-colors duration-100 cursor-pointer",
+                    isSel ? rowSelClass : "hover:bg-accent"
                   )}
                 >
-                  <span className="text-[0.8rem]">{flagEmoji(code)}</span>
-                  {country?.name ?? code}
-                  <button
-                    type="button"
-                    onClick={() => toggle(code)}
-                    className="rounded-full hover:bg-destructive/20 p-0.5"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
+                  <span className="text-base leading-none w-5 text-center shrink-0">{flagEmoji(c.code)}</span>
+                  <span className="flex-1 text-sm">{c.name}</span>
+                  <span className="text-[0.6rem] text-muted-foreground font-mono">{c.code}</span>
+                  <span className={cn(
+                    "w-4 h-4 rounded flex items-center justify-center border shrink-0 transition-all duration-100",
+                    isSel ? checkboxCheckedClass : "border-border bg-background"
+                  )}>
+                    {isSel && (
+                      <svg width="9" height="9" viewBox="0 0 10 10">
+                        <polyline points="1.5,5 4,7.5 8.5,2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-background" />
+                      </svg>
+                    )}
+                  </span>
+                </button>
               );
-            })}
-          </div>
-        </div>
-      )}
+            })
+          )
+        ) : Object.keys(grouped).length === 0 ? (
+          <div className="text-xs text-muted-foreground p-3 text-center">All countries selected</div>
+        ) : (
+          Object.entries(grouped).map(([letter, countries]) => (
+            <div key={letter}>
+              <div className="px-3 py-1 text-[0.6rem] font-bold text-muted-foreground/60 uppercase tracking-widest bg-background/60 sticky top-0 border-b border-border/30">
+                {letter}
+              </div>
+              {countries.map((c) => (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => toggle(c.code)}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-left border-b border-border/50 last:border-0 hover:bg-accent transition-colors duration-100 cursor-pointer"
+                >
+                  <span className="text-base leading-none w-5 text-center shrink-0">{flagEmoji(c.code)}</span>
+                  <span className="flex-1 text-sm">{c.name}</span>
+                  <span className="text-[0.6rem] text-muted-foreground font-mono">{c.code}</span>
+                  <span className="w-4 h-4 rounded border border-border bg-background shrink-0" />
+                </button>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }
@@ -327,17 +360,15 @@ function ContinentPicker({ name, initialValues = [], accentColor = "warning" }: 
               )}
             >
               <span className="text-base leading-none">{c.emoji}</span>
-              <div>
-                <span className={cn(
-                  "block text-xs leading-snug transition-all duration-100",
-                  isSelected
-                    ? isWarning ? "font-bold text-yellow-700 dark:text-yellow-400" : "font-bold text-green-700 dark:text-green-400"
-                    : "font-normal text-foreground"
-                )}>
-                  {c.name}
-                </span>
-                <span className="text-[0.62rem] text-muted-foreground font-mono">{c.code}</span>
-              </div>
+              <span className={cn(
+                "text-xs whitespace-nowrap transition-all duration-100",
+                isSelected
+                  ? isWarning ? "font-semibold text-yellow-700 dark:text-yellow-400" : "font-semibold text-green-700 dark:text-green-400"
+                  : "font-normal text-foreground"
+              )}>
+                {c.name}
+              </span>
+              <span className="text-[0.62rem] text-muted-foreground font-mono">{c.code}</span>
             </button>
           );
         })}

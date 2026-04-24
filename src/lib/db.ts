@@ -79,6 +79,126 @@ if (process.env.NODE_ENV !== "production") {
 
 const migrationsFolder = resolvePath(process.cwd(), "drizzle");
 
+/**
+ * Rename a column if the snake_case form exists and the camelCase form does not.
+ * No-ops silently if the table doesn't exist or the column is already correct.
+ */
+function renameColumnIfNeeded(table: string, from: string, to: string) {
+  try {
+    const cols = db.$client.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>;
+    const names = new Set(cols.map((c) => c.name));
+    if (names.has(from) && !names.has(to)) {
+      db.$client.prepare(`ALTER TABLE "${table}" RENAME COLUMN "${from}" TO "${to}"`).run();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Add a column if it is absent from the table (checks both snake_case and camelCase
+ * forms so we don't add a column that was already renamed by a later migration).
+ */
+function addColumnIfMissing(table: string, snake: string, camel: string, definition: string) {
+  try {
+    const cols = db.$client.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>;
+    if (cols.length === 0) return; // table doesn't exist yet
+    const names = new Set(cols.map((c) => c.name));
+    if (!names.has(snake) && !names.has(camel)) {
+      db.$client.prepare(`ALTER TABLE "${table}" ADD COLUMN "${snake}" ${definition}`).run();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Ensure the sessions table uses INTEGER PRIMARY KEY AUTOINCREMENT for `id`.
+ * Better Auth is configured with generateId:"serial" so it omits `id` from INSERT
+ * and relies on the DB to generate it. If the table was created with `id TEXT NOT NULL`
+ * (older schema), the insert fails with NOT NULL constraint. Sessions are ephemeral
+ * so we simply recreate the table with the correct schema when needed.
+ */
+function fixSessionsSchema() {
+  try {
+    const cols = db.$client.prepare('PRAGMA table_info("sessions")').all() as Array<{
+      name: string; type: string; pk: number;
+    }>;
+    if (cols.length === 0) return; // table doesn't exist yet
+    const idCol = cols.find((c) => c.name === "id");
+    if (!idCol) return;
+    // INTEGER PRIMARY KEY is an alias for rowid — auto-generates on insert
+    if (idCol.type.toUpperCase() === "INTEGER" && idCol.pk === 1) return;
+    // Wrong type (e.g. TEXT NOT NULL) — recreate as autoincrement
+    db.$client.prepare(`CREATE TABLE "sessions_patch" (
+      "id"        INTEGER PRIMARY KEY AUTOINCREMENT,
+      "userId"    INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+      "token"     TEXT NOT NULL,
+      "expiresAt" TEXT NOT NULL,
+      "ipAddress" TEXT,
+      "userAgent" TEXT,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL
+    )`).run();
+    // Sessions are short-lived — skip copying stale rows
+    db.$client.prepare('DROP TABLE "sessions"').run();
+    db.$client.prepare('ALTER TABLE "sessions_patch" RENAME TO "sessions"').run();
+    db.$client.prepare('CREATE UNIQUE INDEX IF NOT EXISTS "sessions_token_unique" ON "sessions" ("token")').run();
+    db.$client.prepare('CREATE INDEX IF NOT EXISTS "sessions_user_idx" ON "sessions" ("userId")').run();
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Pre-migration compatibility patch for deployments that ran an older version of
+ * migration 0020 with different column names. Migration 0021 renames columns in
+ * many tables but does NOT touch `accounts`, `sessions`, or `verifications` — if
+ * those were created with snake_case names they stay that way and Better Auth fails.
+ *
+ * This function runs before `migrate()` and brings any stale table schemas up to
+ * the state that 0021/0022 expect, so the Drizzle migrations can complete cleanly.
+ */
+function patchTablesForMigration020() {
+  // ── users ────────────────────────────────────────────────────────────────────
+  // Columns added by 0020 that older deployments may be missing
+  addColumnIfMissing("users", "email_verified", "emailVerified", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing("users", "username",        "username",      "TEXT");
+  addColumnIfMissing("users", "display_username", "displayUsername", "TEXT");
+
+  // ── accounts ─────────────────────────────────────────────────────────────────
+  // 0020 should create these with camelCase; older versions used snake_case.
+  // 0021 does NOT rename accounts columns, so we must fix them here.
+  renameColumnIfNeeded("accounts", "user_id",                  "userId");
+  renameColumnIfNeeded("accounts", "account_id",               "accountId");
+  renameColumnIfNeeded("accounts", "provider_id",              "providerId");
+  renameColumnIfNeeded("accounts", "access_token",             "accessToken");
+  renameColumnIfNeeded("accounts", "refresh_token",            "refreshToken");
+  renameColumnIfNeeded("accounts", "id_token",                 "idToken");
+  renameColumnIfNeeded("accounts", "access_token_expires_at",  "accessTokenExpiresAt");
+  renameColumnIfNeeded("accounts", "refresh_token_expires_at", "refreshTokenExpiresAt");
+  renameColumnIfNeeded("accounts", "created_at",               "createdAt");
+  renameColumnIfNeeded("accounts", "updated_at",               "updatedAt");
+
+  // ── sessions ─────────────────────────────────────────────────────────────────
+  // auth-server.ts uses generateId:"serial" — Better Auth omits `id` from INSERT
+  // and relies on INTEGER PRIMARY KEY AUTOINCREMENT. If the cloud's older schema
+  // had `id TEXT NOT NULL`, the insert fails. Recreate the table when needed.
+  // Sessions are ephemeral so data loss is acceptable.
+  fixSessionsSchema();
+  renameColumnIfNeeded("sessions", "user_id",    "userId");
+  renameColumnIfNeeded("sessions", "expires_at", "expiresAt");
+  renameColumnIfNeeded("sessions", "ip_address", "ipAddress");
+  renameColumnIfNeeded("sessions", "user_agent", "userAgent");
+  renameColumnIfNeeded("sessions", "created_at", "createdAt");
+  renameColumnIfNeeded("sessions", "updated_at", "updatedAt");
+
+  // ── verifications ─────────────────────────────────────────────────────────────
+  renameColumnIfNeeded("verifications", "expires_at", "expiresAt");
+  renameColumnIfNeeded("verifications", "created_at", "createdAt");
+  renameColumnIfNeeded("verifications", "updated_at", "updatedAt");
+}
+
 function runMigrations() {
   if (sqlitePath === ":memory:") {
     return;
@@ -86,6 +206,7 @@ function runMigrations() {
   if (globalForDrizzle.__MIGRATIONS_RAN__) {
     return;
   }
+  patchTablesForMigration020();
   try {
     migrate(db, { migrationsFolder });
     globalForDrizzle.__MIGRATIONS_RAN__ = true;
