@@ -97,7 +97,7 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
   if (config.mtlsCaNames?.length) {
     // Enable mTLS — the switch is near the "Mutual TLS (mTLS)" text
     // Scroll to the mTLS section first, then click the switch in the containing card
-    const mtlsCard = page.locator('input[name="mtls_enabled"]').locator('..');
+    const mtlsCard = page.locator('input[name="mtlsEnabled"]').locator('..');
     await mtlsCard.scrollIntoViewIfNeeded();
     await mtlsCard.getByRole('switch').click();
 
@@ -110,22 +110,22 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
       await caLabel.click();
     }
     // Verify at least one cert was selected (each CA group selects its certs)
-    const certInputs = page.locator('input[name="mtls_cert_id"]');
+    const certInputs = page.locator('input[name="mtlsCertId"]');
     await expect(certInputs.first()).toBeAttached({ timeout: 5_000 });
   }
 
   // Inject hidden fields:
-  //  ssl_forced_present=on  → tells the action the field was in the form
-  //  (ssl_forced absent)    → parseCheckbox(null) = false → no HTTPS redirect
-  const extraFields: Record<string, string> = { ssl_forced_present: 'on' };
+  //  sslForcedPresent=on  → tells the action the field was in the form
+  //  (sslForced absent)   → parseCheckbox(null) = false → no HTTPS redirect
+  const extraFields: Record<string, string> = { sslForcedPresent: 'on' };
 
   if (config.enableWaf) {
     Object.assign(extraFields, {
-      waf_present: 'on',
-      waf_enabled: 'on',
-      waf_engine_mode: 'On',    // blocking mode
-      waf_load_owasp_crs: 'on',
-      waf_mode: 'override',
+      wafPresent: 'on',
+      wafEnabled: 'on',
+      wafEngineMode: 'On',    // blocking mode
+      wafLoadOwaspCrs: 'on',
+      wafMode: 'override',
     });
   }
 

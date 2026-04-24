@@ -27,8 +27,8 @@ test.describe.serial('SSL Redirect (ssl_forced)', () => {
 
     // Inject ssl_forced=true (default form behavior — no override)
     await injectFormFields(page, {
-      ssl_forced_present: 'on',
-      ssl_forced: 'on',    // checkbox checked → ssl_forced = true
+      sslForcedPresent: 'on',
+      sslForced: 'on',    // checkbox checked → ssl_forced = true
     });
 
     await page.getByRole('button', { name: /^create$/i }).click();

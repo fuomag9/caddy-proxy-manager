@@ -42,8 +42,8 @@ test.describe.serial('Redirect Rules – full URLs, cross-domain, wildcards', ()
     await page.getByPlaceholder('10.0.0.5:8080').first().fill('echo-server:8080');
 
     await injectFormFields(page, {
-      ssl_forced_present: 'on',
-      redirects_json: JSON.stringify([
+      sslForcedPresent: 'on',
+      redirectsJson: JSON.stringify([
         // ── full absolute URL destinations ──────────────────────────────────
         // Exact path → full URL on a completely different host (301)
         { from: '/old-page',          to: 'https://new-site.example.com/page',  status: 301 },

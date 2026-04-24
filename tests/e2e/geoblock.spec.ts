@@ -58,13 +58,13 @@ test.describe('Geo Blocking — form persistence', () => {
     }
 
     await geoSection.getByRole('tab', { name: /allow rules/i }).click();
-    const allowInput = cidrInput(geoSection, 'geoblock_allow_cidrs');
+    const allowInput = cidrInput(geoSection, 'geoblockAllowCidrs');
     await allowInput.fill(SAFE_ALLOW_CIDR);
     await allowInput.press('Enter');
     await expect(geoSection.locator(`text=${SAFE_ALLOW_CIDR}`)).toBeVisible();
 
     await geoSection.getByRole('tab', { name: /block rules/i }).click();
-    const blockInput = cidrInput(geoSection, 'geoblock_block_cidrs');
+    const blockInput = cidrInput(geoSection, 'geoblockBlockCidrs');
     await blockInput.fill(SAFE_BLOCK_CIDR);
     await blockInput.press('Enter');
     await expect(geoSection.locator(`text=${SAFE_BLOCK_CIDR}`)).toBeVisible();
@@ -90,13 +90,13 @@ test.describe('Geo Blocking — form persistence', () => {
     }
 
     await geoSection.getByRole('tab', { name: /block rules/i }).click();
-    const blockInput = cidrInput(geoSection, 'geoblock_block_cidrs');
+    const blockInput = cidrInput(geoSection, 'geoblockBlockCidrs');
     await blockInput.fill(SAFE_BLOCK_CIDR_2);
     await blockInput.press('Enter');
     await expect(geoSection.locator(`text=${SAFE_BLOCK_CIDR_2}`)).toBeVisible();
 
     await geoSection.getByRole('tab', { name: /allow rules/i }).click();
-    const allowInput = cidrInput(geoSection, 'geoblock_allow_cidrs');
+    const allowInput = cidrInput(geoSection, 'geoblockAllowCidrs');
     await allowInput.fill(SAFE_ALLOW_CIDR_2);
     await allowInput.press('Enter');
     await expect(geoSection.locator(`text=${SAFE_ALLOW_CIDR_2}`)).toBeVisible();

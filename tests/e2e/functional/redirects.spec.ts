@@ -31,8 +31,8 @@ test.describe.serial('Per-path Redirect Rules', () => {
     // reflects React state; setting .value just before submit works because no
     // React render cycle fires between the injection and form data collection.
     await injectFormFields(page, {
-      ssl_forced_present: 'on',
-      redirects_json: JSON.stringify([
+      sslForcedPresent: 'on',
+      redirectsJson: JSON.stringify([
         { from: '/.well-known/carddav', to: '/remote.php/dav/', status: 301 },
         { from: '/.well-known/caldav',  to: '/remote.php/dav/', status: 302 },
       ]),
