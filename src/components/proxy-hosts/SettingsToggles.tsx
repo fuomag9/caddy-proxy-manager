@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 type ToggleSetting = {
-    name: "hstsSubdomains" | "skipHttpsHostnameValidation";
+    stateKey: "hstsSubdomains" | "skipHttpsHostnameValidation";
+    fieldName: "hsts_subdomains" | "skip_https_hostname_validation";
     label: string;
     description: string;
-    defaultChecked: boolean;
 };
 
 type SettingsTogglesProps = {
@@ -32,16 +32,16 @@ export function SettingsToggles({
 
     const settings: ToggleSetting[] = [
         {
-            name: "hstsSubdomains",
+            stateKey: "hstsSubdomains",
+            fieldName: "hsts_subdomains",
             label: "HSTS Subdomains",
             description: "Include subdomains in the Strict-Transport-Security header",
-            defaultChecked: values.hstsSubdomains,
         },
         {
-            name: "skipHttpsHostnameValidation",
+            stateKey: "skipHttpsHostnameValidation",
+            fieldName: "skip_https_hostname_validation",
             label: "Skip HTTPS Validation",
             description: "Skip SSL certificate hostname verification for backend connections",
-            defaultChecked: values.skipHttpsHostnameValidation,
         }
     ];
 
@@ -80,17 +80,17 @@ export function SettingsToggles({
                 </div>
                 <div className="divide-y divide-border">
                     {settings.map((setting) => (
-                        <div key={setting.name}>
-                            <input type="hidden" name={`${setting.name}_present`} value="1" />
+                        <div key={setting.stateKey}>
+                            <input type="hidden" name={`${setting.fieldName}_present`} value="1" />
                             <div className="flex flex-row items-center justify-between px-4 py-3">
                                 <div className="pr-4">
                                     <p className="text-sm font-medium">{setting.label}</p>
                                     <span className="text-xs text-muted-foreground">{setting.description}</span>
                                 </div>
                                 <Switch
-                                    name={setting.name}
-                                    checked={values[setting.name]}
-                                    onCheckedChange={handleChange(setting.name)}
+                                    name={setting.fieldName}
+                                    checked={values[setting.stateKey]}
+                                    onCheckedChange={handleChange(setting.stateKey)}
                                 />
                             </div>
                         </div>
