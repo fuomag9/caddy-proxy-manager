@@ -104,7 +104,7 @@ export function LocationRulesFields({ initialData = [] }: Props) {
   return (
     <div>
       <p className="text-sm font-semibold mb-2">Location Rules</p>
-      <input type="hidden" name="location_rules_json" value={toJson(rules)} />
+      <input type="hidden" name="locationRulesJson" value={toJson(rules)} />
       {rules.length > 0 && (
         <div className="mb-2 flex flex-col gap-4">
           {rules.map((rule, i) => (

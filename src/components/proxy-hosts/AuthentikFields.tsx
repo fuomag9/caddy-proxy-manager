@@ -39,7 +39,7 @@ function HiddenCheckboxField({
 }) {
     return (
         <div>
-            <input type="hidden" name={`${name}_present`} value="1" />
+            <input type="hidden" name={`${name}Present`} value="1" />
             <div className={cn("flex items-start gap-2", disabled && "opacity-50")}>
                 <Checkbox
                     id={`checkbox-${name}`}
@@ -83,8 +83,8 @@ export function AuthentikFields({
 
     return (
         <div className="rounded-lg border border-primary bg-primary/5 p-5">
-            <input type="hidden" name="authentik_present" value="1" />
-            <input type="hidden" name="authentik_enabled_present" value="1" />
+            <input type="hidden" name="authentikPresent" value="1" />
+            <input type="hidden" name="authentikEnabledPresent" value="1" />
             <div className="flex flex-col gap-4">
                 <div className="flex flex-row items-center justify-between">
                     <div>
@@ -92,7 +92,7 @@ export function AuthentikFields({
                         <p className="text-sm text-muted-foreground">Proxy authentication via Authentik outpost</p>
                     </div>
                     <Switch
-                        name="authentik_enabled"
+                        name="authentikEnabled"
                         checked={enabled}
                         onCheckedChange={setEnabled}
                     />
@@ -106,7 +106,7 @@ export function AuthentikFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Outpost Domain</label>
                             <Input
-                                name="authentik_outpost_domain"
+                                name="authentikOutpostDomain"
                                 placeholder="outpost.goauthentik.io"
                                 defaultValue={initial?.outpostDomain ?? defaults?.outpostDomain ?? ""}
                                 required={enabled}
@@ -116,7 +116,7 @@ export function AuthentikFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Outpost Upstream URL</label>
                             <Input
-                                name="authentik_outpost_upstream"
+                                name="authentikOutpostUpstream"
                                 placeholder="https://outpost.internal:9000"
                                 defaultValue={initial?.outpostUpstream ?? defaults?.outpostUpstream ?? ""}
                                 required={enabled}
@@ -126,7 +126,7 @@ export function AuthentikFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Auth Endpoint (Optional)</label>
                             <Input
-                                name="authentik_auth_endpoint"
+                                name="authentikAuthEndpoint"
                                 placeholder="/outpost.goauthentik.io/auth/caddy"
                                 defaultValue={initial?.authEndpoint ?? defaults?.authEndpoint ?? ""}
                                 disabled={!enabled}
@@ -135,7 +135,7 @@ export function AuthentikFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Headers to Copy</label>
                             <Textarea
-                                name="authentik_copy_headers"
+                                name="authentikCopyHeaders"
                                 defaultValue={copyHeadersValue}
                                 disabled={!enabled}
                                 rows={3}
@@ -144,7 +144,7 @@ export function AuthentikFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Trusted Proxies</label>
                             <Input
-                                name="authentik_trusted_proxies"
+                                name="authentikTrustedProxies"
                                 defaultValue={trustedProxiesValue}
                                 disabled={!enabled}
                             />
@@ -152,7 +152,7 @@ export function AuthentikFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Protected Paths (Optional)</label>
                             <Textarea
-                                name="authentik_protected_paths"
+                                name="authentikProtectedPaths"
                                 placeholder="/secret/*, /admin/*"
                                 defaultValue={initial?.protectedPaths?.join(", ") ?? ""}
                                 disabled={!enabled}
@@ -165,7 +165,7 @@ export function AuthentikFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Excluded Paths (Optional)</label>
                             <Textarea
-                                name="authentik_excluded_paths"
+                                name="authentikExcludedPaths"
                                 placeholder="/share/*, /rest/*"
                                 defaultValue={initial?.excludedPaths?.join(", ") ?? ""}
                                 disabled={!enabled}
@@ -176,7 +176,7 @@ export function AuthentikFields({
                             </p>
                         </div>
                         <HiddenCheckboxField
-                            name="authentik_set_host_header"
+                            name="authentikSetHostHeader"
                             defaultChecked={setHostHeaderDefault}
                             label="Set Host Header for Outpost"
                             disabled={!enabled}

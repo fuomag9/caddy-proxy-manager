@@ -16,8 +16,8 @@ export function DnsResolverFields({
 
   return (
     <div className="rounded-lg border border-emerald-500/60 bg-emerald-500/5 p-5">
-      <input type="hidden" name="dns_present" value="1" />
-      <input type="hidden" name="dns_enabled_present" value="1" />
+      <input type="hidden" name="dnsPresent" value="1" />
+      <input type="hidden" name="dnsEnabledPresent" value="1" />
       <div className="flex flex-col gap-4">
         <div className="flex flex-row items-center justify-between">
           <div>
@@ -27,7 +27,7 @@ export function DnsResolverFields({
             </p>
           </div>
           <Switch
-            name="dns_enabled"
+            name="dnsEnabled"
             checked={enabled}
             onCheckedChange={setEnabled}
           />
@@ -41,7 +41,7 @@ export function DnsResolverFields({
             <div>
               <label className="text-sm font-medium mb-1 block">DNS Resolvers</label>
               <Textarea
-                name="dns_resolvers"
+                name="dnsResolvers"
                 placeholder={"1.1.1.1\n8.8.8.8"}
                 defaultValue={initial?.resolvers?.join("\n") ?? ""}
                 rows={2}
@@ -53,7 +53,7 @@ export function DnsResolverFields({
             <div>
               <label className="text-sm font-medium mb-1 block">Fallback DNS Resolvers (Optional)</label>
               <Textarea
-                name="dns_fallbacks"
+                name="dnsFallbacks"
                 placeholder={"8.8.4.4\n1.0.0.1"}
                 defaultValue={initial?.fallbacks?.join("\n") ?? ""}
                 rows={2}
@@ -63,7 +63,7 @@ export function DnsResolverFields({
             <div>
               <label className="text-sm font-medium mb-1 block">DNS Query Timeout</label>
               <Input
-                name="dns_timeout"
+                name="dnsTimeout"
                 placeholder="5s"
                 defaultValue={initial?.timeout ?? ""}
                 className="h-8 text-sm"

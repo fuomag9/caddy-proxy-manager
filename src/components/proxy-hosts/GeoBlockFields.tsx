@@ -453,8 +453,8 @@ function ResponseHeadersEditor({ initialHeaders }: { initialHeaders: Record<stri
         <div className="flex flex-col gap-2">
           {rows.map((row, i) => (
             <div key={i} className="flex items-start gap-2">
-              <input type="hidden" name="geoblock_response_headers_keys[]" value={row.key} />
-              <input type="hidden" name="geoblock_response_headers_values[]" value={row.value} />
+              <input type="hidden" name="geoblockResponseHeadersKeys[]" value={row.key} />
+              <input type="hidden" name="geoblockResponseHeadersValues[]" value={row.value} />
               <Input
                 placeholder="Header"
                 value={row.key}
@@ -495,6 +495,7 @@ type RulesPanelProps = {
 
 function RulesPanel({ prefix, initial, resetKey = 0 }: RulesPanelProps) {
   const accentColor = prefix === "block" ? "warning" : "success";
+  const cap = prefix === "block" ? "Block" : "Allow";
   const countries = prefix === "block" ? (initial?.block_countries ?? []) : (initial?.allow_countries ?? []);
   const continents = prefix === "block" ? (initial?.block_continents ?? []) : (initial?.allow_continents ?? []);
   const asns = prefix === "block" ? (initial?.block_asns ?? []) : (initial?.allow_asns ?? []);
@@ -507,7 +508,7 @@ function RulesPanel({ prefix, initial, resetKey = 0 }: RulesPanelProps) {
       <div>
         <p className="text-sm font-semibold mb-2">Countries</p>
         <CountryPicker
-          name={`geoblock_${prefix}_countries`}
+          name={`geoblock${cap}Countries`}
           initialValues={countries}
           accentColor={accentColor}
         />
@@ -519,7 +520,7 @@ function RulesPanel({ prefix, initial, resetKey = 0 }: RulesPanelProps) {
       <div>
         <p className="text-sm font-semibold mb-2">Continents</p>
         <ContinentPicker
-          name={`geoblock_${prefix}_continents`}
+          name={`geoblock${cap}Continents`}
           initialValues={continents}
           accentColor={accentColor}
         />
@@ -529,7 +530,7 @@ function RulesPanel({ prefix, initial, resetKey = 0 }: RulesPanelProps) {
 
       {/* ASNs */}
       <TagInput
-        name={`geoblock_${prefix}_asns`}
+        name={`geoblock${cap}Asns`}
         label="ASNs"
         initialValues={asns.map(String)}
         placeholder="13335, 15169…"
@@ -541,7 +542,7 @@ function RulesPanel({ prefix, initial, resetKey = 0 }: RulesPanelProps) {
       <div className="grid grid-cols-2 gap-4">
         <TagInput
           key={`${prefix}-cidrs-${resetKey}`}
-          name={`geoblock_${prefix}_cidrs`}
+          name={`geoblock${cap}Cidrs`}
           label="CIDRs"
           initialValues={cidrs}
           placeholder="10.0.0.0/8…"
@@ -549,7 +550,7 @@ function RulesPanel({ prefix, initial, resetKey = 0 }: RulesPanelProps) {
         />
         <TagInput
           key={`${prefix}-ips-${resetKey}`}
-          name={`geoblock_${prefix}_ips`}
+          name={`geoblock${cap}Ips`}
           label="IP Addresses"
           initialValues={ips}
           placeholder="1.2.3.4…"
@@ -606,7 +607,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
 
   return (
     <div className="rounded-lg border border-rose-500/60 bg-rose-500/5 p-4">
-      <input type="hidden" name="geoblock_present" value="1" />
+      <input type="hidden" name="geoblockPresent" value="1" />
 
       {/* Header */}
       <div className="flex flex-row items-start justify-between gap-2">
@@ -625,7 +626,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
           </div>
         </div>
         <Switch
-          name="geoblock_enabled"
+          name="geoblockEnabled"
           checked={enabled}
           onCheckedChange={setEnabled}
           className="shrink-0"
@@ -633,7 +634,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
       </div>
 
       {/* Mode selector */}
-      <input type="hidden" name="geoblock_mode" value={mode} />
+      <input type="hidden" name="geoblockMode" value={mode} />
 
       {/* Detail fields */}
       <div className={cn(
@@ -710,7 +711,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
               <AccordionContent forceMount className="px-4 pb-4 data-[state=closed]:hidden">
                 <div className="flex flex-col gap-4">
                   <TagInput
-                    name="geoblock_trusted_proxies"
+                    name="geoblockTrustedProxies"
                     label="Trusted Proxies"
                     initialValues={initial?.trusted_proxies ?? []}
                     placeholder="private_ranges, 10.0.0.0/8…"
@@ -720,7 +721,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                   <div className="flex items-center gap-2" title="When enabled, requests where the real client IP cannot be determined (e.g. behind a trusted proxy with no usable X-Forwarded-For) are blocked. Default: off (fail-open).">
                     <Checkbox
                       id="geoblock-fail-closed"
-                      name="geoblock_fail_closed"
+                      name="geoblockFailClosed"
                       defaultChecked={initial?.fail_closed ?? false}
                     />
                     <label htmlFor="geoblock-fail-closed" className="text-sm cursor-pointer">
@@ -734,7 +735,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                     <div className="col-span-1">
                       <label className="text-sm font-medium mb-1 block">Status Code</label>
                       <Input
-                        name="geoblock_response_status"
+                        name="geoblockResponseStatus"
                         type="number"
                         min={100}
                         max={599}
@@ -746,7 +747,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                     <div className="col-span-2">
                       <label className="text-sm font-medium mb-1 block">Response Body</label>
                       <Input
-                        name="geoblock_response_body"
+                        name="geoblockResponseBody"
                         defaultValue={initial?.response_body ?? "Forbidden"}
                         className="h-8 text-sm"
                       />
@@ -755,7 +756,7 @@ export function GeoBlockFields({ initialValues, showModeSelector = true }: GeoBl
                     <div className="col-span-3">
                       <label className="text-sm font-medium mb-1 block">Redirect URL</label>
                       <Input
-                        name="geoblock_redirect_url"
+                        name="geoblockRedirectUrl"
                         defaultValue={initial?.redirect_url ?? ""}
                         placeholder="https://example.com/blocked"
                         className="h-8 text-sm"

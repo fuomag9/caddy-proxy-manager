@@ -642,8 +642,8 @@ function parseGeoBlockNumberList(key: string, formData: FormData): number[] {
 }
 
 function parseGeoBlockResponseHeaders(formData: FormData): Record<string, string> {
-  const keys = formData.getAll("geoblock_response_headers_keys[]") as string[];
-  const values = formData.getAll("geoblock_response_headers_values[]") as string[];
+  const keys = formData.getAll("geoblockResponseHeadersKeys[]") as string[];
+  const values = formData.getAll("geoblockResponseHeadersValues[]") as string[];
   const headers: Record<string, string> = {};
   keys.forEach((key, i) => {
     const trimmed = key.trim();
@@ -658,36 +658,36 @@ export async function updateGeoBlockSettingsAction(_prevState: ActionResult | nu
   try {
     await requireAdmin();
 
-    const enabled = parseGeoBlockCheckbox(formData.get("geoblock_enabled"));
+    const enabled = parseGeoBlockCheckbox(formData.get("geoblockEnabled"));
 
-    const statusRaw = formData.get("geoblock_response_status");
+    const statusRaw = formData.get("geoblockResponseStatus");
     const statusNum = statusRaw && typeof statusRaw === "string" && statusRaw.trim() !== ""
       ? Number(statusRaw.trim())
       : NaN;
     const responseStatus = Number.isFinite(statusNum) && statusNum >= 100 && statusNum <= 599 ? statusNum : 403;
 
-    const responseBodyRaw = formData.get("geoblock_response_body");
+    const responseBodyRaw = formData.get("geoblockResponseBody");
     const responseBody = responseBodyRaw && typeof responseBodyRaw === "string" && responseBodyRaw.trim().length > 0
       ? responseBodyRaw.trim()
       : "Forbidden";
 
-    const redirectUrlRaw = formData.get("geoblock_redirect_url");
+    const redirectUrlRaw = formData.get("geoblockRedirectUrl");
     const redirectUrl = parseRedirectUrl(redirectUrlRaw);
 
     const config: GeoBlockSettings = {
       enabled,
-      block_countries: parseGeoBlockStringList("geoblock_block_countries", formData),
-      block_continents: parseGeoBlockStringList("geoblock_block_continents", formData),
-      block_asns: parseGeoBlockNumberList("geoblock_block_asns", formData),
-      block_cidrs: parseGeoBlockStringList("geoblock_block_cidrs", formData),
-      block_ips: parseGeoBlockStringList("geoblock_block_ips", formData),
-      allow_countries: parseGeoBlockStringList("geoblock_allow_countries", formData),
-      allow_continents: parseGeoBlockStringList("geoblock_allow_continents", formData),
-      allow_asns: parseGeoBlockNumberList("geoblock_allow_asns", formData),
-      allow_cidrs: parseGeoBlockStringList("geoblock_allow_cidrs", formData),
-      allow_ips: parseGeoBlockStringList("geoblock_allow_ips", formData),
-      trusted_proxies: parseGeoBlockStringList("geoblock_trusted_proxies", formData),
-      fail_closed: parseGeoBlockCheckbox(formData.get("geoblock_fail_closed")),
+      block_countries: parseGeoBlockStringList("geoblockBlockCountries", formData),
+      block_continents: parseGeoBlockStringList("geoblockBlockContinents", formData),
+      block_asns: parseGeoBlockNumberList("geoblockBlockAsns", formData),
+      block_cidrs: parseGeoBlockStringList("geoblockBlockCidrs", formData),
+      block_ips: parseGeoBlockStringList("geoblockBlockIps", formData),
+      allow_countries: parseGeoBlockStringList("geoblockAllowCountries", formData),
+      allow_continents: parseGeoBlockStringList("geoblockAllowContinents", formData),
+      allow_asns: parseGeoBlockNumberList("geoblockAllowAsns", formData),
+      allow_cidrs: parseGeoBlockStringList("geoblockAllowCidrs", formData),
+      allow_ips: parseGeoBlockStringList("geoblockAllowIps", formData),
+      trusted_proxies: parseGeoBlockStringList("geoblockTrustedProxies", formData),
+      fail_closed: parseGeoBlockCheckbox(formData.get("geoblockFailClosed")),
       response_status: responseStatus,
       response_body: responseBody,
       response_headers: parseGeoBlockResponseHeaders(formData),
@@ -917,13 +917,13 @@ export async function updateWafSettingsAction(_prevState: ActionResult | null, f
   try {
     await requireAdmin();
 
-    const enabled = formData.get("waf_enabled") === "on";
+    const enabled = formData.get("wafEnabled") === "on";
     const mode: WafSettings["mode"] = enabled ? "On" : "Off";
-    const loadOwasp = formData.get("waf_load_owasp_crs") === "on";
-    const customDirectives = typeof formData.get("waf_custom_directives") === "string"
-      ? (formData.get("waf_custom_directives") as string).trim()
+    const loadOwasp = formData.get("wafLoadOwaspCrs") === "on";
+    const customDirectives = typeof formData.get("wafCustomDirectives") === "string"
+      ? (formData.get("wafCustomDirectives") as string).trim()
       : "";
-    const rawExcl = formData.get("waf_excluded_rule_ids");
+    const rawExcl = formData.get("wafExcludedRuleIds");
     let excluded_rule_ids: number[];
     if (rawExcl !== null) {
       excluded_rule_ids = (JSON.parse(rawExcl as string) as unknown[])

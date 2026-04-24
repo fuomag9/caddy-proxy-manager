@@ -32,8 +32,8 @@ export function LoadBalancerFields({
 
   return (
     <div className="rounded-lg border border-cyan-500/60 bg-cyan-500/5 p-5">
-      <input type="hidden" name="lb_present" value="1" />
-      <input type="hidden" name="lb_enabled_present" value="1" />
+      <input type="hidden" name="lbPresent" value="1" />
+      <input type="hidden" name="lbEnabledPresent" value="1" />
       <div className="flex flex-col gap-4">
         <div className="flex flex-row items-center justify-between">
           <div>
@@ -43,7 +43,7 @@ export function LoadBalancerFields({
             </p>
           </div>
           <Switch
-            name="lb_enabled"
+            name="lbEnabled"
             checked={enabled}
             onCheckedChange={setEnabled}
           />
@@ -57,7 +57,7 @@ export function LoadBalancerFields({
             {/* Policy Selection */}
             <div>
               <p className="text-sm font-semibold mb-2">Selection Policy</p>
-              <input type="hidden" name="lb_policy" value={policy} />
+              <input type="hidden" name="lbPolicy" value={policy} />
               <Select value={policy} onValueChange={(v) => setPolicy(v as LoadBalancingPolicy)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select policy" />
@@ -80,7 +80,7 @@ export function LoadBalancerFields({
               <div>
                 <label className="text-sm font-medium mb-1 block">Header Field Name</label>
                 <Input
-                  name="lb_policy_header_field"
+                  name="lbPolicyHeaderField"
                   placeholder="X-Custom-Header"
                   defaultValue={initial?.policyHeaderField ?? ""}
                   className="h-8 text-sm"
@@ -98,7 +98,7 @@ export function LoadBalancerFields({
                 <div>
                   <label className="text-sm font-medium mb-1 block">Cookie Name</label>
                   <Input
-                    name="lb_policy_cookie_name"
+                    name="lbPolicyCookieName"
                     placeholder="server_id"
                     defaultValue={initial?.policyCookieName ?? ""}
                     className="h-8 text-sm"
@@ -108,7 +108,7 @@ export function LoadBalancerFields({
                 <div>
                   <label className="text-sm font-medium mb-1 block">Cookie Secret (Optional)</label>
                   <Input
-                    name="lb_policy_cookie_secret"
+                    name="lbPolicyCookieSecret"
                     placeholder="your-secret-key"
                     defaultValue={initial?.policyCookieSecret ?? ""}
                     className="h-8 text-sm"
@@ -125,7 +125,7 @@ export function LoadBalancerFields({
                 <div>
                   <label className="text-sm font-medium mb-1 block">Try Duration</label>
                   <Input
-                    name="lb_try_duration"
+                    name="lbTryDuration"
                     placeholder="5s"
                     defaultValue={initial?.tryDuration ?? ""}
                     className="h-8 text-sm"
@@ -135,7 +135,7 @@ export function LoadBalancerFields({
                 <div>
                   <label className="text-sm font-medium mb-1 block">Try Interval</label>
                   <Input
-                    name="lb_try_interval"
+                    name="lbTryInterval"
                     placeholder="250ms"
                     defaultValue={initial?.tryInterval ?? ""}
                     className="h-8 text-sm"
@@ -145,7 +145,7 @@ export function LoadBalancerFields({
                 <div>
                   <label className="text-sm font-medium mb-1 block">Max Retries</label>
                   <Input
-                    name="lb_retries"
+                    name="lbRetries"
                     type="number"
                     min={0}
                     defaultValue={initial?.retries ?? ""}
@@ -158,11 +158,11 @@ export function LoadBalancerFields({
 
             {/* Active Health Checks */}
             <div className="rounded-lg border border-border p-4">
-              <input type="hidden" name="lb_active_health_enabled_present" value="1" />
+              <input type="hidden" name="lbActiveHealthEnabledPresent" value="1" />
               <div className="flex flex-col gap-4">
                 <div className="flex items-start gap-3">
                   <Switch
-                    name="lb_active_health_enabled"
+                    name="lbActiveHealthEnabled"
                     checked={activeHealthEnabled}
                     onCheckedChange={setActiveHealthEnabled}
                   />
@@ -180,36 +180,36 @@ export function LoadBalancerFields({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium mb-1 block">Health Check URI</label>
-                        <Input name="lb_active_health_uri" placeholder="/health" defaultValue={initial?.activeHealthCheck?.uri ?? ""} className="h-8 text-sm" />
+                        <Input name="lbActiveHealthUri" placeholder="/health" defaultValue={initial?.activeHealthCheck?.uri ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">Path to probe for health</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium mb-1 block">Health Check Port</label>
-                        <Input name="lb_active_health_port" type="number" min={1} max={65535} defaultValue={initial?.activeHealthCheck?.port ?? ""} className="h-8 text-sm" />
+                        <Input name="lbActiveHealthPort" type="number" min={1} max={65535} defaultValue={initial?.activeHealthCheck?.port ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">Override upstream port</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium mb-1 block">Check Interval</label>
-                        <Input name="lb_active_health_interval" placeholder="30s" defaultValue={initial?.activeHealthCheck?.interval ?? ""} className="h-8 text-sm" />
+                        <Input name="lbActiveHealthInterval" placeholder="30s" defaultValue={initial?.activeHealthCheck?.interval ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">How often to check</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium mb-1 block">Check Timeout</label>
-                        <Input name="lb_active_health_timeout" placeholder="5s" defaultValue={initial?.activeHealthCheck?.timeout ?? ""} className="h-8 text-sm" />
+                        <Input name="lbActiveHealthTimeout" placeholder="5s" defaultValue={initial?.activeHealthCheck?.timeout ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">Timeout for health probe</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium mb-1 block">Expected Status Code</label>
-                        <Input name="lb_active_health_status" type="number" min={100} max={599} defaultValue={initial?.activeHealthCheck?.status ?? ""} className="h-8 text-sm" />
+                        <Input name="lbActiveHealthStatus" type="number" min={100} max={599} defaultValue={initial?.activeHealthCheck?.status ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">Expected HTTP status</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium mb-1 block">Expected Body</label>
-                        <Input name="lb_active_health_body" placeholder="OK" defaultValue={initial?.activeHealthCheck?.body ?? ""} className="h-8 text-sm" />
+                        <Input name="lbActiveHealthBody" placeholder="OK" defaultValue={initial?.activeHealthCheck?.body ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">Expected response body</p>
                       </div>
                     </div>
@@ -220,11 +220,11 @@ export function LoadBalancerFields({
 
             {/* Passive Health Checks */}
             <div className="rounded-lg border border-border p-4">
-              <input type="hidden" name="lb_passive_health_enabled_present" value="1" />
+              <input type="hidden" name="lbPassiveHealthEnabledPresent" value="1" />
               <div className="flex flex-col gap-4">
                 <div className="flex items-start gap-3">
                   <Switch
-                    name="lb_passive_health_enabled"
+                    name="lbPassiveHealthEnabled"
                     checked={passiveHealthEnabled}
                     onCheckedChange={setPassiveHealthEnabled}
                   />
@@ -242,24 +242,24 @@ export function LoadBalancerFields({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium mb-1 block">Fail Duration</label>
-                        <Input name="lb_passive_health_fail_duration" placeholder="30s" defaultValue={initial?.passiveHealthCheck?.failDuration ?? ""} className="h-8 text-sm" />
+                        <Input name="lbPassiveHealthFailDuration" placeholder="30s" defaultValue={initial?.passiveHealthCheck?.failDuration ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">How long to remember failures</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium mb-1 block">Max Failures</label>
-                        <Input name="lb_passive_health_max_fails" type="number" min={0} defaultValue={initial?.passiveHealthCheck?.maxFails ?? ""} className="h-8 text-sm" />
+                        <Input name="lbPassiveHealthMaxFails" type="number" min={0} defaultValue={initial?.passiveHealthCheck?.maxFails ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">Failures before marking unhealthy</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <label className="text-sm font-medium mb-1 block">Unhealthy Status Codes</label>
-                        <Input name="lb_passive_health_unhealthy_status" placeholder="500, 502, 503" defaultValue={initial?.passiveHealthCheck?.unhealthyStatus?.join(", ") ?? ""} className="h-8 text-sm" />
+                        <Input name="lbPassiveHealthUnhealthyStatus" placeholder="500, 502, 503" defaultValue={initial?.passiveHealthCheck?.unhealthyStatus?.join(", ") ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">Comma-separated status codes</p>
                       </div>
                       <div>
                         <label className="text-sm font-medium mb-1 block">Unhealthy Latency</label>
-                        <Input name="lb_passive_health_unhealthy_latency" placeholder="5s" defaultValue={initial?.passiveHealthCheck?.unhealthyLatency ?? ""} className="h-8 text-sm" />
+                        <Input name="lbPassiveHealthUnhealthyLatency" placeholder="5s" defaultValue={initial?.passiveHealthCheck?.unhealthyLatency ?? ""} className="h-8 text-sm" />
                         <p className="text-xs text-muted-foreground mt-1">Latency threshold for unhealthy</p>
                       </div>
                     </div>

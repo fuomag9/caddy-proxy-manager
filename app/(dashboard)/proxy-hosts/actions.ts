@@ -61,25 +61,25 @@ async function validateAndSanitizeCertificateId(
 }
 
 function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | undefined {
-  if (!formData.has("authentik_present")) {
+  if (!formData.has("authentikPresent")) {
     return undefined;
   }
 
-  const enabledIndicator = formData.has("authentik_enabled_present");
+  const enabledIndicator = formData.has("authentikEnabledPresent");
   const enabledValue = enabledIndicator
-    ? formData.has("authentik_enabled")
-      ? parseCheckbox(formData.get("authentik_enabled"))
+    ? formData.has("authentikEnabled")
+      ? parseCheckbox(formData.get("authentikEnabled"))
       : false
     : undefined;
-  const outpostDomain = parseOptionalText(formData.get("authentik_outpost_domain"));
-  const outpostUpstream = parseOptionalText(formData.get("authentik_outpost_upstream"));
-  const authEndpoint = parseOptionalText(formData.get("authentik_auth_endpoint"));
-  const copyHeaders = parseCsv(formData.get("authentik_copy_headers"));
-  const trustedProxies = parseCsv(formData.get("authentik_trusted_proxies"));
-  const protectedPaths = parseCsv(formData.get("authentik_protected_paths"));
-  const excludedPaths = parseCsv(formData.get("authentik_excluded_paths"));
-  const setHostHeader = formData.has("authentik_set_host_header_present")
-    ? parseCheckbox(formData.get("authentik_set_host_header"))
+  const outpostDomain = parseOptionalText(formData.get("authentikOutpostDomain"));
+  const outpostUpstream = parseOptionalText(formData.get("authentikOutpostUpstream"));
+  const authEndpoint = parseOptionalText(formData.get("authentikAuthEndpoint"));
+  const copyHeaders = parseCsv(formData.get("authentikCopyHeaders"));
+  const trustedProxies = parseCsv(formData.get("authentikTrustedProxies"));
+  const protectedPaths = parseCsv(formData.get("authentikProtectedPaths"));
+  const excludedPaths = parseCsv(formData.get("authentikExcludedPaths"));
+  const setHostHeader = formData.has("authentikSetHostHeaderPresent")
+    ? parseCheckbox(formData.get("authentikSetHostHeader"))
     : undefined;
 
   const result: ProxyHostAuthentikInput = {};
@@ -95,16 +95,16 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
   if (authEndpoint !== null) {
     result.authEndpoint = authEndpoint;
   }
-  if (copyHeaders.length > 0 || formData.has("authentik_copy_headers")) {
+  if (copyHeaders.length > 0 || formData.has("authentikCopyHeaders")) {
     result.copyHeaders = copyHeaders;
   }
-  if (trustedProxies.length > 0 || formData.has("authentik_trusted_proxies")) {
+  if (trustedProxies.length > 0 || formData.has("authentikTrustedProxies")) {
     result.trustedProxies = trustedProxies;
   }
-  if (protectedPaths.length > 0 || formData.has("authentik_protected_paths")) {
+  if (protectedPaths.length > 0 || formData.has("authentikProtectedPaths")) {
     result.protectedPaths = protectedPaths;
   }
-  if (excludedPaths.length > 0 || formData.has("authentik_excluded_paths")) {
+  if (excludedPaths.length > 0 || formData.has("authentikExcludedPaths")) {
     result.excludedPaths = excludedPaths;
   }
   if (setHostHeader !== undefined) {
@@ -115,27 +115,27 @@ function parseAuthentikConfig(formData: FormData): ProxyHostAuthentikInput | und
 }
 
 function parseCpmForwardAuthConfig(formData: FormData): CpmForwardAuthInput | undefined {
-  if (!formData.has("cpm_forward_auth_present")) {
+  if (!formData.has("cpmForwardAuthPresent")) {
     return undefined;
   }
 
-  const enabledIndicator = formData.has("cpm_forward_auth_enabled_present");
+  const enabledIndicator = formData.has("cpmForwardAuthEnabledPresent");
   const enabledValue = enabledIndicator
-    ? formData.has("cpm_forward_auth_enabled")
-      ? parseCheckbox(formData.get("cpm_forward_auth_enabled"))
+    ? formData.has("cpmForwardAuthEnabled")
+      ? parseCheckbox(formData.get("cpmForwardAuthEnabled"))
       : false
     : undefined;
-  const protectedPaths = parseCsv(formData.get("cpm_forward_auth_protected_paths"));
-  const excludedPaths = parseCsv(formData.get("cpm_forward_auth_excluded_paths"));
+  const protectedPaths = parseCsv(formData.get("cpmForwardAuthProtectedPaths"));
+  const excludedPaths = parseCsv(formData.get("cpmForwardAuthExcludedPaths"));
 
   const result: CpmForwardAuthInput = {};
   if (enabledValue !== undefined) {
     result.enabled = enabledValue;
   }
-  if (protectedPaths.length > 0 || formData.has("cpm_forward_auth_protected_paths")) {
+  if (protectedPaths.length > 0 || formData.has("cpmForwardAuthProtectedPaths")) {
     result.protected_paths = protectedPaths.length > 0 ? protectedPaths : null;
   }
-  if (excludedPaths.length > 0 || formData.has("cpm_forward_auth_excluded_paths")) {
+  if (excludedPaths.length > 0 || formData.has("cpmForwardAuthExcludedPaths")) {
     result.excluded_paths = excludedPaths.length > 0 ? excludedPaths : null;
   }
 
@@ -160,60 +160,60 @@ const VALID_LB_POLICIES: LoadBalancingPolicy[] = ["random", "round_robin", "leas
 const VALID_UPSTREAM_DNS_FAMILIES = ["ipv6", "ipv4", "both"] as const;
 
 function parseLoadBalancerConfig(formData: FormData): LoadBalancerInput | undefined {
-  if (!formData.has("lb_present")) {
+  if (!formData.has("lbPresent")) {
     return undefined;
   }
 
-  const enabledIndicator = formData.has("lb_enabled_present");
+  const enabledIndicator = formData.has("lbEnabledPresent");
   const enabledValue = enabledIndicator
-    ? formData.has("lb_enabled")
-      ? parseCheckbox(formData.get("lb_enabled"))
+    ? formData.has("lbEnabled")
+      ? parseCheckbox(formData.get("lbEnabled"))
       : false
     : undefined;
 
-  const policyRaw = parseOptionalText(formData.get("lb_policy"));
+  const policyRaw = parseOptionalText(formData.get("lbPolicy"));
   const policy = policyRaw && VALID_LB_POLICIES.includes(policyRaw as LoadBalancingPolicy)
     ? (policyRaw as LoadBalancingPolicy)
     : undefined;
 
-  const policyHeaderField = parseOptionalText(formData.get("lb_policy_header_field"));
-  const policyCookieName = parseOptionalText(formData.get("lb_policy_cookie_name"));
-  const policyCookieSecret = parseOptionalText(formData.get("lb_policy_cookie_secret"));
-  const tryDuration = parseOptionalText(formData.get("lb_try_duration"));
-  const tryInterval = parseOptionalText(formData.get("lb_try_interval"));
-  const retries = parseOptionalNumber(formData.get("lb_retries"));
+  const policyHeaderField = parseOptionalText(formData.get("lbPolicyHeaderField"));
+  const policyCookieName = parseOptionalText(formData.get("lbPolicyCookieName"));
+  const policyCookieSecret = parseOptionalText(formData.get("lbPolicyCookieSecret"));
+  const tryDuration = parseOptionalText(formData.get("lbTryDuration"));
+  const tryInterval = parseOptionalText(formData.get("lbTryInterval"));
+  const retries = parseOptionalNumber(formData.get("lbRetries"));
 
   // Active health check
-  const activeHealthEnabled = formData.has("lb_active_health_enabled_present")
-    ? formData.has("lb_active_health_enabled")
-      ? parseCheckbox(formData.get("lb_active_health_enabled"))
+  const activeHealthEnabled = formData.has("lbActiveHealthEnabledPresent")
+    ? formData.has("lbActiveHealthEnabled")
+      ? parseCheckbox(formData.get("lbActiveHealthEnabled"))
       : false
     : undefined;
 
   let activeHealthCheck: LoadBalancerInput["activeHealthCheck"] = undefined;
-  if (activeHealthEnabled !== undefined || formData.has("lb_active_health_uri")) {
+  if (activeHealthEnabled !== undefined || formData.has("lbActiveHealthUri")) {
     activeHealthCheck = {
       enabled: activeHealthEnabled,
-      uri: parseOptionalText(formData.get("lb_active_health_uri")),
-      port: parseOptionalNumber(formData.get("lb_active_health_port")),
-      interval: parseOptionalText(formData.get("lb_active_health_interval")),
-      timeout: parseOptionalText(formData.get("lb_active_health_timeout")),
-      status: parseOptionalNumber(formData.get("lb_active_health_status")),
-      body: parseOptionalText(formData.get("lb_active_health_body"))
+      uri: parseOptionalText(formData.get("lbActiveHealthUri")),
+      port: parseOptionalNumber(formData.get("lbActiveHealthPort")),
+      interval: parseOptionalText(formData.get("lbActiveHealthInterval")),
+      timeout: parseOptionalText(formData.get("lbActiveHealthTimeout")),
+      status: parseOptionalNumber(formData.get("lbActiveHealthStatus")),
+      body: parseOptionalText(formData.get("lbActiveHealthBody"))
     };
   }
 
   // Passive health check
-  const passiveHealthEnabled = formData.has("lb_passive_health_enabled_present")
-    ? formData.has("lb_passive_health_enabled")
-      ? parseCheckbox(formData.get("lb_passive_health_enabled"))
+  const passiveHealthEnabled = formData.has("lbPassiveHealthEnabledPresent")
+    ? formData.has("lbPassiveHealthEnabled")
+      ? parseCheckbox(formData.get("lbPassiveHealthEnabled"))
       : false
     : undefined;
 
   let passiveHealthCheck: LoadBalancerInput["passiveHealthCheck"] = undefined;
-  if (passiveHealthEnabled !== undefined || formData.has("lb_passive_health_fail_duration")) {
+  if (passiveHealthEnabled !== undefined || formData.has("lbPassiveHealthFailDuration")) {
     // Parse unhealthy status codes from comma-separated input
-    const unhealthyStatusRaw = parseOptionalText(formData.get("lb_passive_health_unhealthy_status"));
+    const unhealthyStatusRaw = parseOptionalText(formData.get("lbPassiveHealthUnhealthyStatus"));
     let unhealthyStatus: number[] | null = null;
     if (unhealthyStatusRaw) {
       unhealthyStatus = unhealthyStatusRaw
@@ -227,10 +227,10 @@ function parseLoadBalancerConfig(formData: FormData): LoadBalancerInput | undefi
 
     passiveHealthCheck = {
       enabled: passiveHealthEnabled,
-      failDuration: parseOptionalText(formData.get("lb_passive_health_fail_duration")),
-      maxFails: parseOptionalNumber(formData.get("lb_passive_health_max_fails")),
+      failDuration: parseOptionalText(formData.get("lbPassiveHealthFailDuration")),
+      maxFails: parseOptionalNumber(formData.get("lbPassiveHealthMaxFails")),
       unhealthyStatus,
-      unhealthyLatency: parseOptionalText(formData.get("lb_passive_health_unhealthy_latency"))
+      unhealthyLatency: parseOptionalText(formData.get("lbPassiveHealthUnhealthyLatency"))
     };
   }
 
@@ -273,12 +273,12 @@ function parseGeoBlockConfig(formData: FormData): {
   geoblock: GeoBlockSettings | null;
   geoblock_mode: GeoBlockMode;
 } {
-  if (!formData.has("geoblock_present")) {
+  if (!formData.has("geoblockPresent")) {
     return { geoblock: null, geoblock_mode: "merge" };
   }
 
-  const enabled = parseCheckbox(formData.get("geoblock_enabled"));
-  const rawMode = formData.get("geoblock_mode");
+  const enabled = parseCheckbox(formData.get("geoblockEnabled"));
+  const rawMode = formData.get("geoblockMode");
   const mode: GeoBlockMode = rawMode === "override" ? "override" : "merge";
 
   // Helper to parse a comma-separated string field into a string array
@@ -297,25 +297,25 @@ function parseGeoBlockConfig(formData: FormData): {
 
   const config: GeoBlockSettings = {
     enabled,
-    block_countries: parseStringList("geoblock_block_countries"),
-    block_continents: parseStringList("geoblock_block_continents"),
-    block_asns: parseNumberList("geoblock_block_asns"),
-    block_cidrs: parseStringList("geoblock_block_cidrs"),
-    block_ips: parseStringList("geoblock_block_ips"),
-    allow_countries: parseStringList("geoblock_allow_countries"),
-    allow_continents: parseStringList("geoblock_allow_continents"),
-    allow_asns: parseNumberList("geoblock_allow_asns"),
-    allow_cidrs: parseStringList("geoblock_allow_cidrs"),
-    allow_ips: parseStringList("geoblock_allow_ips"),
-    trusted_proxies: parseStringList("geoblock_trusted_proxies"),
-    fail_closed: formData.get("geoblock_fail_closed") === "on",
+    block_countries: parseStringList("geoblockBlockCountries"),
+    block_continents: parseStringList("geoblockBlockContinents"),
+    block_asns: parseNumberList("geoblockBlockAsns"),
+    block_cidrs: parseStringList("geoblockBlockCidrs"),
+    block_ips: parseStringList("geoblockBlockIps"),
+    allow_countries: parseStringList("geoblockAllowCountries"),
+    allow_continents: parseStringList("geoblockAllowContinents"),
+    allow_asns: parseNumberList("geoblockAllowAsns"),
+    allow_cidrs: parseStringList("geoblockAllowCidrs"),
+    allow_ips: parseStringList("geoblockAllowIps"),
+    trusted_proxies: parseStringList("geoblockTrustedProxies"),
+    fail_closed: formData.get("geoblockFailClosed") === "on",
     response_status: (() => {
-      const s = parseOptionalNumber(formData.get("geoblock_response_status")) ?? 403;
+      const s = parseOptionalNumber(formData.get("geoblockResponseStatus")) ?? 403;
       return s >= 100 && s <= 599 ? s : 403;
     })(),
-    response_body: parseOptionalText(formData.get("geoblock_response_body")) ?? "Forbidden",
+    response_body: parseOptionalText(formData.get("geoblockResponseBody")) ?? "Forbidden",
     response_headers: parseResponseHeaders(formData),
-    redirect_url: parseRedirectUrl(formData.get("geoblock_redirect_url")),
+    redirect_url: parseRedirectUrl(formData.get("geoblockRedirectUrl")),
   };
 
   return { geoblock: config, geoblock_mode: mode };
@@ -323,8 +323,8 @@ function parseGeoBlockConfig(formData: FormData): {
 
 // Helper: parse response headers from geoblock_response_headers_keys[] and geoblock_response_headers_values[]
 function parseResponseHeaders(formData: FormData): Record<string, string> {
-  const keys = formData.getAll("geoblock_response_headers_keys[]") as string[];
-  const values = formData.getAll("geoblock_response_headers_values[]") as string[];
+  const keys = formData.getAll("geoblockResponseHeadersKeys[]") as string[];
+  const values = formData.getAll("geoblockResponseHeadersValues[]") as string[];
   const headers: Record<string, string> = {};
   keys.forEach((key, i) => {
     const trimmed = key.trim();
@@ -336,18 +336,18 @@ function parseResponseHeaders(formData: FormData): Record<string, string> {
 }
 
 function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
-  if (!formData.has("waf_present")) return {};
-  const enabled = parseCheckbox(formData.get("waf_enabled"));
-  const rawMode = formData.get("waf_mode");
-  const wafMode: WafHostConfig["waf_mode"] = rawMode === "override" ? "override" : "merge";
-  const rawEngineMode = formData.get("waf_engine_mode");
+  if (!formData.has("wafPresent")) return {};
+  const enabled = parseCheckbox(formData.get("wafEnabled"));
+  const rawMode = formData.get("wafMode");
+  const wafMode: WafHostConfig["wafMode"] = rawMode === "override" ? "override" : "merge";
+  const rawEngineMode = formData.get("wafEngineMode");
   const engineMode: WafHostConfig["mode"] =
     rawEngineMode === "On" ? "On" : rawEngineMode === "Off" ? "Off" : undefined;
-  const loadCrs = parseCheckbox(formData.get("waf_load_owasp_crs"));
-  const customDirectives = typeof formData.get("waf_custom_directives") === "string"
-    ? (formData.get("waf_custom_directives") as string).trim()
+  const loadCrs = parseCheckbox(formData.get("wafLoadOwaspCrs"));
+  const customDirectives = typeof formData.get("wafCustomDirectives") === "string"
+    ? (formData.get("wafCustomDirectives") as string).trim()
     : "";
-  const rawExcl = formData.get("waf_excluded_rule_ids");
+  const rawExcl = formData.get("wafExcludedRuleIds");
   const excluded_rule_ids: number[] = rawExcl
     ? (JSON.parse(rawExcl as string) as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0)
     : [];
@@ -369,21 +369,21 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
 }
 
 function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefined {
-  if (!formData.has("dns_present")) {
+  if (!formData.has("dnsPresent")) {
     return undefined;
   }
 
-  const enabledIndicator = formData.has("dns_enabled_present");
+  const enabledIndicator = formData.has("dnsEnabledPresent");
   const enabledValue = enabledIndicator
-    ? formData.has("dns_enabled")
-      ? parseCheckbox(formData.get("dns_enabled"))
+    ? formData.has("dnsEnabled")
+      ? parseCheckbox(formData.get("dnsEnabled"))
       : false
     : undefined;
 
   // Parse resolvers from newline-separated input
-  const resolversRaw = parseOptionalText(formData.get("dns_resolvers"));
+  const resolversRaw = parseOptionalText(formData.get("dnsResolvers"));
   let resolvers: string[] | undefined = undefined;
-  if (resolversRaw || formData.has("dns_resolvers")) {
+  if (resolversRaw || formData.has("dnsResolvers")) {
     resolvers = resolversRaw
       ? resolversRaw
           .split(/[\n,]/)
@@ -393,7 +393,7 @@ function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefine
   }
 
   // Parse fallbacks from newline-separated input
-  const fallbacksRaw = parseOptionalText(formData.get("dns_fallbacks"));
+  const fallbacksRaw = parseOptionalText(formData.get("dnsFallbacks"));
   let fallbacks: string[] | null = null;
   if (fallbacksRaw) {
     fallbacks = fallbacksRaw
@@ -405,7 +405,7 @@ function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefine
     }
   }
 
-  const timeout = parseOptionalText(formData.get("dns_timeout"));
+  const timeout = parseOptionalText(formData.get("dnsTimeout"));
 
   const result: DnsResolverInput = {};
   if (enabledValue !== undefined) {
@@ -425,16 +425,16 @@ function parseDnsResolverConfig(formData: FormData): DnsResolverInput | undefine
 }
 
 function parseMtlsConfig(formData: FormData): MtlsConfig | null {
-  if (!formData.has("mtls_present")) return null;
-  const enabled = formData.get("mtls_enabled") === "true";
+  if (!formData.has("mtlsPresent")) return null;
+  const enabled = formData.get("mtlsEnabled") === "true";
   if (!enabled) return null;
-  const certIds = formData.getAll("mtls_cert_id").map(Number).filter(n => Number.isFinite(n) && n > 0);
-  const roleIds = formData.getAll("mtls_role_id").map(Number).filter(n => Number.isFinite(n) && n > 0);
+  const certIds = formData.getAll("mtlsCertId").map(Number).filter(n => Number.isFinite(n) && n > 0);
+  const roleIds = formData.getAll("mtlsRoleId").map(Number).filter(n => Number.isFinite(n) && n > 0);
   return { enabled, trusted_client_cert_ids: certIds, trusted_role_ids: roleIds };
 }
 
 function parseRedirectsConfig(formData: FormData): RedirectRule[] | null {
-  const raw = formData.get("redirects_json");
+  const raw = formData.get("redirectsJson");
   if (!raw || typeof raw !== "string") return null;
   try {
     const parsed = JSON.parse(raw);
@@ -452,7 +452,7 @@ function parseRedirectsConfig(formData: FormData): RedirectRule[] | null {
 }
 
 function parseLocationRulesConfig(formData: FormData): import("@/src/lib/models/proxy-hosts").LocationRule[] | null {
-  const raw = formData.get("location_rules_json");
+  const raw = formData.get("locationRulesJson");
   if (!raw || typeof raw !== "string") return null;
   try {
     const parsed = JSON.parse(raw);
@@ -464,18 +464,18 @@ function parseLocationRulesConfig(formData: FormData): import("@/src/lib/models/
 }
 
 function parseRewriteConfig(formData: FormData): RewriteConfig | null {
-  const prefix = formData.get("rewrite_path_prefix");
+  const prefix = formData.get("rewritePathPrefix");
   if (!prefix || typeof prefix !== "string" || !prefix.trim()) return null;
   return { path_prefix: prefix.trim() };
 }
 
 function parseUpstreamDnsResolutionConfig(formData: FormData): UpstreamDnsResolutionInput | undefined {
-  if (!formData.has("upstream_dns_resolution_present")) {
+  if (!formData.has("upstreamDnsResolutionPresent")) {
     return undefined;
   }
 
-  const modeRaw = parseOptionalText(formData.get("upstream_dns_resolution_mode")) ?? "inherit";
-  const familyRaw = parseOptionalText(formData.get("upstream_dns_resolution_family")) ?? "inherit";
+  const modeRaw = parseOptionalText(formData.get("upstreamDnsResolutionMode")) ?? "inherit";
+  const familyRaw = parseOptionalText(formData.get("upstreamDnsResolutionFamily")) ?? "inherit";
 
   const result: UpstreamDnsResolutionInput = {};
 
@@ -506,7 +506,7 @@ export async function createProxyHostAction(
     const userId = Number(session.user.id);
 
     // Parse certificateId safely
-    const parsedCertificateId = parseCertificateId(formData.get("certificate_id"));
+    const parsedCertificateId = parseCertificateId(formData.get("certificateId"));
 
     // Validate certificate exists and get sanitized value
     const cloudflareSettings = await getCloudflareSettings();
@@ -525,13 +525,13 @@ export async function createProxyHostAction(
         domains: parseCsv(formData.get("domains")),
         upstreams: parseUpstreams(formData.get("upstreams")),
         certificateId: certificateId,
-        accessListId: parseAccessListId(formData.get("access_list_id")),
-        sslForced: formData.has("ssl_forced_present") ? parseCheckbox(formData.get("ssl_forced")) : undefined,
-        hstsSubdomains: parseCheckbox(formData.get("hsts_subdomains")),
-        skipHttpsHostnameValidation: parseCheckbox(formData.get("skip_https_hostname_validation")),
+        accessListId: parseAccessListId(formData.get("accessListId")),
+        sslForced: formData.has("sslForcedPresent") ? parseCheckbox(formData.get("sslForced")) : undefined,
+        hstsSubdomains: parseCheckbox(formData.get("hstsSubdomains")),
+        skipHttpsHostnameValidation: parseCheckbox(formData.get("skipHttpsHostnameValidation")),
         enabled: parseCheckbox(formData.get("enabled")),
-        customPreHandlersJson: parseOptionalText(formData.get("custom_pre_handlers_json")),
-        customReverseProxyJson: parseOptionalText(formData.get("custom_reverse_proxy_json")),
+        customPreHandlersJson: parseOptionalText(formData.get("customPreHandlersJson")),
+        customReverseProxyJson: parseOptionalText(formData.get("customReverseProxyJson")),
         authentik: parseAuthentikConfig(formData),
         cpmForwardAuth: parseCpmForwardAuthConfig(formData),
         loadBalancer: parseLoadBalancerConfig(formData),
@@ -548,8 +548,8 @@ export async function createProxyHostAction(
     );
 
     // Save forward auth access if CPM forward auth is enabled
-    const faUserIds = formData.getAll("cpm_fa_user_id").map((v) => Number(v)).filter((n) => n > 0);
-    const faGroupIds = formData.getAll("cpm_fa_group_id").map((v) => Number(v)).filter((n) => n > 0);
+    const faUserIds = formData.getAll("cpmFaUserId").map((v) => Number(v)).filter((n) => n > 0);
+    const faGroupIds = formData.getAll("cpmFaGroupId").map((v) => Number(v)).filter((n) => n > 0);
     if (host.cpmForwardAuth?.enabled && (faUserIds.length > 0 || faGroupIds.length > 0)) {
       await setForwardAuthAccess(host.id, { userIds: faUserIds, groupIds: faGroupIds }, userId);
     }
@@ -576,14 +576,14 @@ export async function updateProxyHostAction(
   try {
     const session = await requireAdmin();
     const userId = Number(session.user.id);
-    const boolField = (key: string) => (formData.has(`${key}_present`) ? parseCheckbox(formData.get(key)) : undefined);
+    const boolField = (key: string) => (formData.has(`${key}Present`) ? parseCheckbox(formData.get(key)) : undefined);
 
     // Parse and validate certificate_id if present
     let certificateId: number | null | undefined = undefined;
     let warning: string | undefined;
 
-    if (formData.has("certificate_id")) {
-      const parsedCertificateId = parseCertificateId(formData.get("certificate_id"));
+    if (formData.has("certificateId")) {
+      const parsedCertificateId = parseCertificateId(formData.get("certificateId"));
 
       // Validate certificate exists and get sanitized value
       const cloudflareSettings = await getCloudflareSettings();
@@ -606,17 +606,17 @@ export async function updateProxyHostAction(
         domains: formData.get("domains") ? parseCsv(formData.get("domains")) : undefined,
         upstreams: formData.get("upstreams") ? parseUpstreams(formData.get("upstreams")) : undefined,
         certificateId: certificateId,
-        accessListId: formData.has("access_list_id")
-          ? parseAccessListId(formData.get("access_list_id"))
+        accessListId: formData.has("accessListId")
+          ? parseAccessListId(formData.get("accessListId"))
           : undefined,
-        hstsSubdomains: boolField("hsts_subdomains"),
-        skipHttpsHostnameValidation: boolField("skip_https_hostname_validation"),
+        hstsSubdomains: boolField("hstsSubdomains"),
+        skipHttpsHostnameValidation: boolField("skipHttpsHostnameValidation"),
         enabled: boolField("enabled"),
-        customPreHandlersJson: formData.has("custom_pre_handlers_json")
-          ? parseOptionalText(formData.get("custom_pre_handlers_json"))
+        customPreHandlersJson: formData.has("customPreHandlersJson")
+          ? parseOptionalText(formData.get("customPreHandlersJson"))
           : undefined,
-        customReverseProxyJson: formData.has("custom_reverse_proxy_json")
-          ? parseOptionalText(formData.get("custom_reverse_proxy_json"))
+        customReverseProxyJson: formData.has("customReverseProxyJson")
+          ? parseOptionalText(formData.get("customReverseProxyJson"))
           : undefined,
         authentik: parseAuthentikConfig(formData),
         cpmForwardAuth: parseCpmForwardAuthConfig(formData),
@@ -625,18 +625,18 @@ export async function updateProxyHostAction(
         upstreamDnsResolution: parseUpstreamDnsResolutionConfig(formData),
         ...parseGeoBlockConfig(formData),
         ...parseWafConfig(formData),
-        mtls: formData.has("mtls_present") ? parseMtlsConfig(formData) : undefined,
-        redirects: formData.has("redirects_json") ? parseRedirectsConfig(formData) : undefined,
-        rewrite: formData.has("rewrite_path_prefix") ? parseRewriteConfig(formData) : undefined,
-        locationRules: formData.has("location_rules_json") ? parseLocationRulesConfig(formData) : undefined,
+        mtls: formData.has("mtlsPresent") ? parseMtlsConfig(formData) : undefined,
+        redirects: formData.has("redirectsJson") ? parseRedirectsConfig(formData) : undefined,
+        rewrite: formData.has("rewritePathPrefix") ? parseRewriteConfig(formData) : undefined,
+        locationRules: formData.has("locationRulesJson") ? parseLocationRulesConfig(formData) : undefined,
       },
       userId
     );
 
     // Save forward auth access if the section is present in the form
-    if (formData.has("cpm_forward_auth_present")) {
-      const faUserIds = formData.getAll("cpm_fa_user_id").map((v) => Number(v)).filter((n) => n > 0);
-      const faGroupIds = formData.getAll("cpm_fa_group_id").map((v) => Number(v)).filter((n) => n > 0);
+    if (formData.has("cpmForwardAuthPresent")) {
+      const faUserIds = formData.getAll("cpmFaUserId").map((v) => Number(v)).filter((n) => n > 0);
+      const faGroupIds = formData.getAll("cpmFaGroupId").map((v) => Number(v)).filter((n) => n > 0);
       await setForwardAuthAccess(id, { userIds: faUserIds, groupIds: faGroupIds }, userId);
     }
 

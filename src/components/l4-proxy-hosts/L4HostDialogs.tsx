@@ -93,7 +93,7 @@ function L4HostForm({
         </Alert>
       )}
 
-      <input type="hidden" name="enabled_present" value="1" />
+      <input type="hidden" name="enabledPresent" value="1" />
       <input type="hidden" name="enabled" value={enabled ? "on" : ""} />
       <div className={cn(
         "flex flex-row items-center justify-between p-4 rounded-lg border transition-all duration-200",
@@ -156,12 +156,12 @@ function L4HostForm({
 
       <FormField
         label="Listen Address"
-        htmlFor="listen_address"
+        htmlFor="listenAddress"
         helperText="Format: :PORT or HOST:PORT. Make sure to expose this port in docker-compose.yml on the caddy service."
       >
         <Input
-          id="listen_address"
-          name="listen_address"
+          id="listenAddress"
+          name="listenAddress"
           placeholder=":5432"
           defaultValue={initialData?.listenAddress ?? ""}
           required
@@ -184,9 +184,9 @@ function L4HostForm({
       </FormField>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="matcher_type">Matcher</Label>
+        <Label htmlFor="matcherType">Matcher</Label>
         <Select
-          name="matcher_type"
+          name="matcherType"
           value={matcherType}
           onValueChange={(v) =>
             setMatcherType(
@@ -194,7 +194,7 @@ function L4HostForm({
             )
           }
         >
-          <SelectTrigger id="matcher_type">
+          <SelectTrigger id="matcherType">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -213,12 +213,12 @@ function L4HostForm({
       {(matcherType === "tls_sni" || matcherType === "http_host") && (
         <FormField
           label={matcherType === "tls_sni" ? "SNI Hostnames" : "HTTP Hostnames"}
-          htmlFor="matcher_value"
+          htmlFor="matcherValue"
           helperText="Comma-separated list of hostnames to match."
         >
           <Input
-            id="matcher_value"
-            name="matcher_value"
+            id="matcherValue"
+            name="matcherValue"
             placeholder="db.example.com, api.example.com"
             defaultValue={initialData?.matcherValue?.join(", ") ?? ""}
             required
@@ -229,34 +229,34 @@ function L4HostForm({
       {protocol === "tcp" && (
         <div className="flex items-center gap-2">
           <Switch
-            id="tls_termination"
-            name="tls_termination"
+            id="tlsTermination"
+            name="tlsTermination"
             defaultChecked={initialData?.tlsTermination ?? false}
           />
-          <Label htmlFor="tls_termination">TLS Termination</Label>
+          <Label htmlFor="tlsTermination">TLS Termination</Label>
         </div>
       )}
 
       <div className="flex items-center gap-2">
         <Switch
-          id="proxy_protocol_receive"
-          name="proxy_protocol_receive"
+          id="proxyProtocolReceive"
+          name="proxyProtocolReceive"
           defaultChecked={initialData?.proxyProtocolReceive ?? false}
         />
-        <Label htmlFor="proxy_protocol_receive">
+        <Label htmlFor="proxyProtocolReceive">
           Accept inbound PROXY protocol
         </Label>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="proxy_protocol_version">
+        <Label htmlFor="proxyProtocolVersion">
           Send PROXY protocol to upstream
         </Label>
         <Select
-          name="proxy_protocol_version"
+          name="proxyProtocolVersion"
           defaultValue={initialData?.proxyProtocolVersion ?? "__none__"}
         >
-          <SelectTrigger id="proxy_protocol_version">
+          <SelectTrigger id="proxyProtocolVersion">
             <SelectValue placeholder="None" />
           </SelectTrigger>
           <SelectContent>
@@ -285,27 +285,27 @@ function L4HostForm({
           </AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
-              <input type="hidden" name="lb_present" value="1" />
-              <input type="hidden" name="lb_enabled_present" value="1" />
+              <input type="hidden" name="lbPresent" value="1" />
+              <input type="hidden" name="lbEnabledPresent" value="1" />
               <div className="flex items-center gap-2">
                 <Switch
-                  id="lb_enabled"
-                  name="lb_enabled"
+                  id="lbEnabled"
+                  name="lbEnabled"
                   defaultChecked={
                     initialData?.loadBalancer?.enabled ?? false
                   }
                 />
-                <Label htmlFor="lb_enabled">Enable Load Balancing</Label>
+                <Label htmlFor="lbEnabled">Enable Load Balancing</Label>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="lb_policy">Policy</Label>
+                <Label htmlFor="lbPolicy">Policy</Label>
                 <Select
-                  name="lb_policy"
+                  name="lbPolicy"
                   defaultValue={
                     initialData?.loadBalancer?.policy ?? "random"
                   }
                 >
-                  <SelectTrigger id="lb_policy">
+                  <SelectTrigger id="lbPolicy">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -319,30 +319,30 @@ function L4HostForm({
                   </SelectContent>
                 </Select>
               </div>
-              <FormField label="Try Duration" htmlFor="lb_try_duration">
+              <FormField label="Try Duration" htmlFor="lbTryDuration">
                 <Input
-                  id="lb_try_duration"
-                  name="lb_try_duration"
+                  id="lbTryDuration"
+                  name="lbTryDuration"
                   placeholder="5s"
                   defaultValue={
                     initialData?.loadBalancer?.tryDuration ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Try Interval" htmlFor="lb_try_interval">
+              <FormField label="Try Interval" htmlFor="lbTryInterval">
                 <Input
-                  id="lb_try_interval"
-                  name="lb_try_interval"
+                  id="lbTryInterval"
+                  name="lbTryInterval"
                   placeholder="250ms"
                   defaultValue={
                     initialData?.loadBalancer?.tryInterval ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Retries" htmlFor="lb_retries">
+              <FormField label="Retries" htmlFor="lbRetries">
                 <Input
-                  id="lb_retries"
-                  name="lb_retries"
+                  id="lbRetries"
+                  name="lbRetries"
                   type="number"
                   defaultValue={initialData?.loadBalancer?.retries ?? ""}
                 />
@@ -353,39 +353,39 @@ function L4HostForm({
               </p>
               <input
                 type="hidden"
-                name="lb_active_health_enabled_present"
+                name="lbActiveHealthEnabledPresent"
                 value="1"
               />
               <div className="flex items-center gap-2">
                 <Switch
-                  id="lb_active_health_enabled"
-                  name="lb_active_health_enabled"
+                  id="lbActiveHealthEnabled"
+                  name="lbActiveHealthEnabled"
                   defaultChecked={
                     initialData?.loadBalancer?.activeHealthCheck?.enabled ??
                     false
                   }
                 />
-                <Label htmlFor="lb_active_health_enabled">
+                <Label htmlFor="lbActiveHealthEnabled">
                   Enable Active Health Check
                 </Label>
               </div>
               <FormField
                 label="Health Check Port"
-                htmlFor="lb_active_health_port"
+                htmlFor="lbActiveHealthPort"
               >
                 <Input
-                  id="lb_active_health_port"
-                  name="lb_active_health_port"
+                  id="lbActiveHealthPort"
+                  name="lbActiveHealthPort"
                   type="number"
                   defaultValue={
                     initialData?.loadBalancer?.activeHealthCheck?.port ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Interval" htmlFor="lb_active_health_interval">
+              <FormField label="Interval" htmlFor="lbActiveHealthInterval">
                 <Input
-                  id="lb_active_health_interval"
-                  name="lb_active_health_interval"
+                  id="lbActiveHealthInterval"
+                  name="lbActiveHealthInterval"
                   placeholder="30s"
                   defaultValue={
                     initialData?.loadBalancer?.activeHealthCheck?.interval ??
@@ -393,10 +393,10 @@ function L4HostForm({
                   }
                 />
               </FormField>
-              <FormField label="Timeout" htmlFor="lb_active_health_timeout">
+              <FormField label="Timeout" htmlFor="lbActiveHealthTimeout">
                 <Input
-                  id="lb_active_health_timeout"
-                  name="lb_active_health_timeout"
+                  id="lbActiveHealthTimeout"
+                  name="lbActiveHealthTimeout"
                   placeholder="5s"
                   defaultValue={
                     initialData?.loadBalancer?.activeHealthCheck?.timeout ?? ""
@@ -409,29 +409,29 @@ function L4HostForm({
               </p>
               <input
                 type="hidden"
-                name="lb_passive_health_enabled_present"
+                name="lbPassiveHealthEnabledPresent"
                 value="1"
               />
               <div className="flex items-center gap-2">
                 <Switch
-                  id="lb_passive_health_enabled"
-                  name="lb_passive_health_enabled"
+                  id="lbPassiveHealthEnabled"
+                  name="lbPassiveHealthEnabled"
                   defaultChecked={
                     initialData?.loadBalancer?.passiveHealthCheck?.enabled ??
                     false
                   }
                 />
-                <Label htmlFor="lb_passive_health_enabled">
+                <Label htmlFor="lbPassiveHealthEnabled">
                   Enable Passive Health Check
                 </Label>
               </div>
               <FormField
                 label="Fail Duration"
-                htmlFor="lb_passive_health_fail_duration"
+                htmlFor="lbPassiveHealthFailDuration"
               >
                 <Input
-                  id="lb_passive_health_fail_duration"
-                  name="lb_passive_health_fail_duration"
+                  id="lbPassiveHealthFailDuration"
+                  name="lbPassiveHealthFailDuration"
                   placeholder="30s"
                   defaultValue={
                     initialData?.loadBalancer?.passiveHealthCheck
@@ -439,10 +439,10 @@ function L4HostForm({
                   }
                 />
               </FormField>
-              <FormField label="Max Fails" htmlFor="lb_passive_health_max_fails">
+              <FormField label="Max Fails" htmlFor="lbPassiveHealthMaxFails">
                 <Input
-                  id="lb_passive_health_max_fails"
-                  name="lb_passive_health_max_fails"
+                  id="lbPassiveHealthMaxFails"
+                  name="lbPassiveHealthMaxFails"
                   type="number"
                   defaultValue={
                     initialData?.loadBalancer?.passiveHealthCheck?.maxFails ??
@@ -452,11 +452,11 @@ function L4HostForm({
               </FormField>
               <FormField
                 label="Unhealthy Latency"
-                htmlFor="lb_passive_health_unhealthy_latency"
+                htmlFor="lbPassiveHealthUnhealthyLatency"
               >
                 <Input
-                  id="lb_passive_health_unhealthy_latency"
-                  name="lb_passive_health_unhealthy_latency"
+                  id="lbPassiveHealthUnhealthyLatency"
+                  name="lbPassiveHealthUnhealthyLatency"
                   placeholder="5s"
                   defaultValue={
                     initialData?.loadBalancer?.passiveHealthCheck
@@ -487,24 +487,24 @@ function L4HostForm({
           </AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
-              <input type="hidden" name="dns_present" value="1" />
-              <input type="hidden" name="dns_enabled_present" value="1" />
+              <input type="hidden" name="dnsPresent" value="1" />
+              <input type="hidden" name="dnsEnabledPresent" value="1" />
               <div className="flex items-center gap-2">
                 <Switch
-                  id="dns_enabled"
-                  name="dns_enabled"
+                  id="dnsEnabled"
+                  name="dnsEnabled"
                   defaultChecked={initialData?.dnsResolver?.enabled ?? false}
                 />
-                <Label htmlFor="dns_enabled">Enable Custom DNS</Label>
+                <Label htmlFor="dnsEnabled">Enable Custom DNS</Label>
               </div>
               <FormField
                 label="DNS Resolvers"
-                htmlFor="dns_resolvers"
+                htmlFor="dnsResolvers"
                 helperText="One per line. Used for upstream hostname resolution."
               >
                 <Textarea
-                  id="dns_resolvers"
-                  name="dns_resolvers"
+                  id="dnsResolvers"
+                  name="dnsResolvers"
                   placeholder={"1.1.1.1\n8.8.8.8"}
                   defaultValue={
                     initialData?.dnsResolver?.resolvers?.join("\n") ?? ""
@@ -514,12 +514,12 @@ function L4HostForm({
               </FormField>
               <FormField
                 label="Fallback Resolvers"
-                htmlFor="dns_fallbacks"
+                htmlFor="dnsFallbacks"
                 helperText="Fallback DNS servers (one per line)."
               >
                 <Textarea
-                  id="dns_fallbacks"
-                  name="dns_fallbacks"
+                  id="dnsFallbacks"
+                  name="dnsFallbacks"
                   placeholder="8.8.4.4"
                   defaultValue={
                     initialData?.dnsResolver?.fallbacks?.join("\n") ?? ""
@@ -527,10 +527,10 @@ function L4HostForm({
                   rows={1}
                 />
               </FormField>
-              <FormField label="Timeout" htmlFor="dns_timeout">
+              <FormField label="Timeout" htmlFor="dnsTimeout">
                 <Input
-                  id="dns_timeout"
-                  name="dns_timeout"
+                  id="dnsTimeout"
+                  name="dnsTimeout"
                   placeholder="5s"
                   defaultValue={initialData?.dnsResolver?.timeout ?? ""}
                 />
@@ -558,22 +558,22 @@ function L4HostForm({
           </AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3 pt-1">
-              <input type="hidden" name="geoblock_present" value="1" />
+              <input type="hidden" name="geoblockPresent" value="1" />
               <div className="flex items-center gap-2">
                 <Switch
-                  id="geoblock_enabled"
-                  name="geoblock_enabled"
+                  id="geoblockEnabled"
+                  name="geoblockEnabled"
                   defaultChecked={initialData?.geoblock?.enabled ?? false}
                 />
-                <Label htmlFor="geoblock_enabled">Enable Geo Blocking</Label>
+                <Label htmlFor="geoblockEnabled">Enable Geo Blocking</Label>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="geoblock_mode">Mode</Label>
+                <Label htmlFor="geoblockMode">Mode</Label>
                 <Select
-                  name="geoblock_mode"
+                  name="geoblockMode"
                   defaultValue={initialData?.geoblockMode ?? "merge"}
                 >
-                  <SelectTrigger id="geoblock_mode">
+                  <SelectTrigger id="geoblockMode">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -591,12 +591,12 @@ function L4HostForm({
               </p>
               <FormField
                 label="Block Countries"
-                htmlFor="geoblock_block_countries"
+                htmlFor="geoblockBlockCountries"
                 helperText="ISO 3166-1 alpha-2 codes, comma-separated"
               >
                 <Input
-                  id="geoblock_block_countries"
-                  name="geoblock_block_countries"
+                  id="geoblockBlockCountries"
+                  name="geoblockBlockCountries"
                   placeholder="CN, RU, KP"
                   defaultValue={
                     initialData?.geoblock?.block_countries?.join(", ") ?? ""
@@ -605,42 +605,42 @@ function L4HostForm({
               </FormField>
               <FormField
                 label="Block Continents"
-                htmlFor="geoblock_block_continents"
+                htmlFor="geoblockBlockContinents"
                 helperText="AF, AN, AS, EU, NA, OC, SA"
               >
                 <Input
-                  id="geoblock_block_continents"
-                  name="geoblock_block_continents"
+                  id="geoblockBlockContinents"
+                  name="geoblockBlockContinents"
                   placeholder="AF, AS"
                   defaultValue={
                     initialData?.geoblock?.block_continents?.join(", ") ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Block ASNs" htmlFor="geoblock_block_asns">
+              <FormField label="Block ASNs" htmlFor="geoblockBlockAsns">
                 <Input
-                  id="geoblock_block_asns"
-                  name="geoblock_block_asns"
+                  id="geoblockBlockAsns"
+                  name="geoblockBlockAsns"
                   placeholder="12345, 67890"
                   defaultValue={
                     initialData?.geoblock?.block_asns?.join(", ") ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Block CIDRs" htmlFor="geoblock_block_cidrs">
+              <FormField label="Block CIDRs" htmlFor="geoblockBlockCidrs">
                 <Input
-                  id="geoblock_block_cidrs"
-                  name="geoblock_block_cidrs"
+                  id="geoblockBlockCidrs"
+                  name="geoblockBlockCidrs"
                   placeholder="192.0.2.0/24"
                   defaultValue={
                     initialData?.geoblock?.block_cidrs?.join(", ") ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Block IPs" htmlFor="geoblock_block_ips">
+              <FormField label="Block IPs" htmlFor="geoblockBlockIps">
                 <Input
-                  id="geoblock_block_ips"
-                  name="geoblock_block_ips"
+                  id="geoblockBlockIps"
+                  name="geoblockBlockIps"
                   placeholder="203.0.113.1"
                   defaultValue={
                     initialData?.geoblock?.block_ips?.join(", ") ?? ""
@@ -652,11 +652,11 @@ function L4HostForm({
               </p>
               <FormField
                 label="Allow Countries"
-                htmlFor="geoblock_allow_countries"
+                htmlFor="geoblockAllowCountries"
               >
                 <Input
-                  id="geoblock_allow_countries"
-                  name="geoblock_allow_countries"
+                  id="geoblockAllowCountries"
+                  name="geoblockAllowCountries"
                   placeholder="US, DE"
                   defaultValue={
                     initialData?.geoblock?.allow_countries?.join(", ") ?? ""
@@ -665,41 +665,41 @@ function L4HostForm({
               </FormField>
               <FormField
                 label="Allow Continents"
-                htmlFor="geoblock_allow_continents"
+                htmlFor="geoblockAllowContinents"
               >
                 <Input
-                  id="geoblock_allow_continents"
-                  name="geoblock_allow_continents"
+                  id="geoblockAllowContinents"
+                  name="geoblockAllowContinents"
                   placeholder="EU, NA"
                   defaultValue={
                     initialData?.geoblock?.allow_continents?.join(", ") ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Allow ASNs" htmlFor="geoblock_allow_asns">
+              <FormField label="Allow ASNs" htmlFor="geoblockAllowAsns">
                 <Input
-                  id="geoblock_allow_asns"
-                  name="geoblock_allow_asns"
+                  id="geoblockAllowAsns"
+                  name="geoblockAllowAsns"
                   placeholder="11111"
                   defaultValue={
                     initialData?.geoblock?.allow_asns?.join(", ") ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Allow CIDRs" htmlFor="geoblock_allow_cidrs">
+              <FormField label="Allow CIDRs" htmlFor="geoblockAllowCidrs">
                 <Input
-                  id="geoblock_allow_cidrs"
-                  name="geoblock_allow_cidrs"
+                  id="geoblockAllowCidrs"
+                  name="geoblockAllowCidrs"
                   placeholder="10.0.0.0/8"
                   defaultValue={
                     initialData?.geoblock?.allow_cidrs?.join(", ") ?? ""
                   }
                 />
               </FormField>
-              <FormField label="Allow IPs" htmlFor="geoblock_allow_ips">
+              <FormField label="Allow IPs" htmlFor="geoblockAllowIps">
                 <Input
-                  id="geoblock_allow_ips"
-                  name="geoblock_allow_ips"
+                  id="geoblockAllowIps"
+                  name="geoblockAllowIps"
                   placeholder="1.2.3.4"
                   defaultValue={
                     initialData?.geoblock?.allow_ips?.join(", ") ?? ""
@@ -738,7 +738,7 @@ function L4HostForm({
             <div className="flex flex-col gap-3 pt-1">
               <input
                 type="hidden"
-                name="upstream_dns_resolution_present"
+                name="upstreamDnsResolutionPresent"
                 value="1"
               />
               <p className="text-sm text-muted-foreground">
@@ -746,11 +746,11 @@ function L4HostForm({
                 config time, pinning DNS resolution.
               </p>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="upstream_dns_resolution_mode">
+                <Label htmlFor="upstreamDnsResolutionMode">
                   Resolution Mode
                 </Label>
                 <Select
-                  name="upstream_dns_resolution_mode"
+                  name="upstreamDnsResolutionMode"
                   defaultValue={
                     initialData?.upstreamDnsResolution?.enabled === true
                       ? "enabled"
@@ -759,7 +759,7 @@ function L4HostForm({
                       : "inherit"
                   }
                 >
-                  <SelectTrigger id="upstream_dns_resolution_mode">
+                  <SelectTrigger id="upstreamDnsResolutionMode">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -772,16 +772,16 @@ function L4HostForm({
                 </Select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="upstream_dns_resolution_family">
+                <Label htmlFor="upstreamDnsResolutionFamily">
                   Address Family Preference
                 </Label>
                 <Select
-                  name="upstream_dns_resolution_family"
+                  name="upstreamDnsResolutionFamily"
                   defaultValue={
                     initialData?.upstreamDnsResolution?.family ?? "inherit"
                   }
                 >
-                  <SelectTrigger id="upstream_dns_resolution_family">
+                  <SelectTrigger id="upstreamDnsResolutionFamily">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

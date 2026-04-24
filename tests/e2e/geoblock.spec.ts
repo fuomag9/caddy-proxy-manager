@@ -127,7 +127,7 @@ test.describe('Geo Blocking — form persistence', () => {
     }
 
     await geoSection.getByRole('button', { name: /trusted proxies/i }).click();
-    const redirectInput = geoSection.locator('input[name="geoblock_redirect_url"]');
+    const redirectInput = geoSection.locator('input[name="geoblockRedirectUrl"]');
     await expect(redirectInput).toBeVisible();
     await redirectInput.fill('https://example.com/blocked');
 
@@ -139,7 +139,7 @@ test.describe('Geo Blocking — form persistence', () => {
     await page.reload();
     const fresh = page.locator('form', { has: page.getByRole('button', { name: /save geoblocking settings/i }) });
     await fresh.getByRole('button', { name: /trusted proxies/i }).click();
-    await expect(fresh.locator('input[name="geoblock_redirect_url"]'))
+    await expect(fresh.locator('input[name="geoblockRedirectUrl"]'))
       .toHaveValue('https://example.com/blocked', { timeout: 5000 });
   });
 

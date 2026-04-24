@@ -27,41 +27,41 @@ const VALID_L4_LB_POLICIES: L4LoadBalancingPolicy[] = ["random", "round_robin", 
 const VALID_DNS_FAMILIES = ["ipv6", "ipv4", "both"] as const;
 
 function parseL4LoadBalancerConfig(formData: FormData): Partial<L4LoadBalancerConfig> | undefined {
-  if (!formData.has("lb_present")) return undefined;
-  const enabled = formData.has("lb_enabled_present")
-    ? parseCheckbox(formData.get("lb_enabled"))
+  if (!formData.has("lbPresent")) return undefined;
+  const enabled = formData.has("lbEnabledPresent")
+    ? parseCheckbox(formData.get("lbEnabled"))
     : undefined;
-  const policyRaw = parseOptionalText(formData.get("lb_policy"));
+  const policyRaw = parseOptionalText(formData.get("lbPolicy"));
   const policy = policyRaw && VALID_L4_LB_POLICIES.includes(policyRaw as L4LoadBalancingPolicy)
     ? (policyRaw as L4LoadBalancingPolicy) : undefined;
 
   const result: Partial<L4LoadBalancerConfig> = {};
   if (enabled !== undefined) result.enabled = enabled;
   if (policy) result.policy = policy;
-  const tryDuration = parseOptionalText(formData.get("lb_try_duration"));
+  const tryDuration = parseOptionalText(formData.get("lbTryDuration"));
   if (tryDuration !== null) result.tryDuration = tryDuration;
-  const tryInterval = parseOptionalText(formData.get("lb_try_interval"));
+  const tryInterval = parseOptionalText(formData.get("lbTryInterval"));
   if (tryInterval !== null) result.tryInterval = tryInterval;
-  const retries = parseOptionalNumber(formData.get("lb_retries"));
+  const retries = parseOptionalNumber(formData.get("lbRetries"));
   if (retries !== null) result.retries = retries;
 
   // Active health check
-  if (formData.has("lb_active_health_enabled_present")) {
+  if (formData.has("lbActiveHealthEnabledPresent")) {
     result.activeHealthCheck = {
-      enabled: parseCheckbox(formData.get("lb_active_health_enabled")),
-      port: parseOptionalNumber(formData.get("lb_active_health_port")),
-      interval: parseOptionalText(formData.get("lb_active_health_interval")),
-      timeout: parseOptionalText(formData.get("lb_active_health_timeout")),
+      enabled: parseCheckbox(formData.get("lbActiveHealthEnabled")),
+      port: parseOptionalNumber(formData.get("lbActiveHealthPort")),
+      interval: parseOptionalText(formData.get("lbActiveHealthInterval")),
+      timeout: parseOptionalText(formData.get("lbActiveHealthTimeout")),
     };
   }
 
   // Passive health check
-  if (formData.has("lb_passive_health_enabled_present")) {
+  if (formData.has("lbPassiveHealthEnabledPresent")) {
     result.passiveHealthCheck = {
-      enabled: parseCheckbox(formData.get("lb_passive_health_enabled")),
-      failDuration: parseOptionalText(formData.get("lb_passive_health_fail_duration")),
-      maxFails: parseOptionalNumber(formData.get("lb_passive_health_max_fails")),
-      unhealthyLatency: parseOptionalText(formData.get("lb_passive_health_unhealthy_latency")),
+      enabled: parseCheckbox(formData.get("lbPassiveHealthEnabled")),
+      failDuration: parseOptionalText(formData.get("lbPassiveHealthFailDuration")),
+      maxFails: parseOptionalNumber(formData.get("lbPassiveHealthMaxFails")),
+      unhealthyLatency: parseOptionalText(formData.get("lbPassiveHealthUnhealthyLatency")),
     };
   }
 
@@ -69,19 +69,19 @@ function parseL4LoadBalancerConfig(formData: FormData): Partial<L4LoadBalancerCo
 }
 
 function parseL4DnsResolverConfig(formData: FormData): Partial<L4DnsResolverConfig> | undefined {
-  if (!formData.has("dns_present")) return undefined;
-  const enabled = formData.has("dns_enabled_present")
-    ? parseCheckbox(formData.get("dns_enabled"))
+  if (!formData.has("dnsPresent")) return undefined;
+  const enabled = formData.has("dnsEnabledPresent")
+    ? parseCheckbox(formData.get("dnsEnabled"))
     : undefined;
-  const resolversRaw = parseOptionalText(formData.get("dns_resolvers"));
+  const resolversRaw = parseOptionalText(formData.get("dnsResolvers"));
   const resolvers = resolversRaw
     ? resolversRaw.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
     : undefined;
-  const fallbacksRaw = parseOptionalText(formData.get("dns_fallbacks"));
+  const fallbacksRaw = parseOptionalText(formData.get("dnsFallbacks"));
   const fallbacks = fallbacksRaw
     ? fallbacksRaw.split(/[\n,]/).map(s => s.trim()).filter(Boolean)
     : undefined;
-  const timeout = parseOptionalText(formData.get("dns_timeout"));
+  const timeout = parseOptionalText(formData.get("dnsTimeout"));
 
   const result: Partial<L4DnsResolverConfig> = {};
   if (enabled !== undefined) result.enabled = enabled;
@@ -93,9 +93,9 @@ function parseL4DnsResolverConfig(formData: FormData): Partial<L4DnsResolverConf
 }
 
 function parseL4UpstreamDnsResolutionConfig(formData: FormData): Partial<L4UpstreamDnsResolutionConfig> | undefined {
-  if (!formData.has("upstream_dns_resolution_present")) return undefined;
-  const modeRaw = parseOptionalText(formData.get("upstream_dns_resolution_mode")) ?? "inherit";
-  const familyRaw = parseOptionalText(formData.get("upstream_dns_resolution_family")) ?? "inherit";
+  if (!formData.has("upstreamDnsResolutionPresent")) return undefined;
+  const modeRaw = parseOptionalText(formData.get("upstreamDnsResolutionMode")) ?? "inherit";
+  const familyRaw = parseOptionalText(formData.get("upstreamDnsResolutionFamily")) ?? "inherit";
 
   const result: Partial<L4UpstreamDnsResolutionConfig> = {};
   if (modeRaw === "enabled") result.enabled = true;
@@ -111,11 +111,11 @@ function parseL4UpstreamDnsResolutionConfig(formData: FormData): Partial<L4Upstr
 }
 
 function parseL4GeoBlockConfig(formData: FormData): { geoblock: L4GeoBlockConfig | null; geoblock_mode: L4GeoBlockMode } {
-  if (!formData.has("geoblock_present")) {
+  if (!formData.has("geoblockPresent")) {
     return { geoblock: null, geoblock_mode: "merge" };
   }
-  const enabled = parseCheckbox(formData.get("geoblock_enabled"));
-  const rawMode = formData.get("geoblock_mode");
+  const enabled = parseCheckbox(formData.get("geoblockEnabled"));
+  const rawMode = formData.get("geoblockMode");
   const mode: L4GeoBlockMode = rawMode === "override" ? "override" : "merge";
 
   const parseStringList = (key: string): string[] => {
@@ -129,16 +129,16 @@ function parseL4GeoBlockConfig(formData: FormData): { geoblock: L4GeoBlockConfig
 
   const config: L4GeoBlockConfig = {
     enabled,
-    block_countries: parseStringList("geoblock_block_countries"),
-    block_continents: parseStringList("geoblock_block_continents"),
-    block_asns: parseNumberList("geoblock_block_asns"),
-    block_cidrs: parseStringList("geoblock_block_cidrs"),
-    block_ips: parseStringList("geoblock_block_ips"),
-    allow_countries: parseStringList("geoblock_allow_countries"),
-    allow_continents: parseStringList("geoblock_allow_continents"),
-    allow_asns: parseNumberList("geoblock_allow_asns"),
-    allow_cidrs: parseStringList("geoblock_allow_cidrs"),
-    allow_ips: parseStringList("geoblock_allow_ips"),
+    block_countries: parseStringList("geoblockBlockCountries"),
+    block_continents: parseStringList("geoblockBlockContinents"),
+    block_asns: parseNumberList("geoblockBlockAsns"),
+    block_cidrs: parseStringList("geoblockBlockCidrs"),
+    block_ips: parseStringList("geoblockBlockIps"),
+    allow_countries: parseStringList("geoblockAllowCountries"),
+    allow_continents: parseStringList("geoblockAllowContinents"),
+    allow_asns: parseNumberList("geoblockAllowAsns"),
+    allow_cidrs: parseStringList("geoblockAllowCidrs"),
+    allow_ips: parseStringList("geoblockAllowIps"),
   };
   return { geoblock: config, geoblock_mode: mode };
 }
@@ -150,13 +150,13 @@ function parseProtocol(formData: FormData): L4Protocol {
 }
 
 function parseMatcherType(formData: FormData): L4MatcherType {
-  const raw = String(formData.get("matcher_type") ?? "none").trim();
+  const raw = String(formData.get("matcherType") ?? "none").trim();
   if (VALID_MATCHER_TYPES.includes(raw as L4MatcherType)) return raw as L4MatcherType;
   return "none";
 }
 
 function parseProxyProtocolVersion(formData: FormData): L4ProxyProtocolVersion | null {
-  const raw = parseOptionalText(formData.get("proxy_protocol_version"));
+  const raw = parseOptionalText(formData.get("proxyProtocolVersion"));
   if (raw && VALID_PP_VERSIONS.includes(raw as L4ProxyProtocolVersion)) return raw as L4ProxyProtocolVersion;
   return null;
 }
@@ -172,19 +172,19 @@ export async function createL4ProxyHostAction(
 
     const matcherType = parseMatcherType(formData);
     const matcherValue = (matcherType === "tls_sni" || matcherType === "http_host")
-      ? parseCsv(formData.get("matcher_value"))
+      ? parseCsv(formData.get("matcherValue"))
       : [];
 
     const input: L4ProxyHostInput = {
       name: String(formData.get("name") ?? "Untitled"),
       protocol: parseProtocol(formData),
-      listenAddress: String(formData.get("listen_address") ?? "").trim(),
+      listenAddress: String(formData.get("listenAddress") ?? "").trim(),
       upstreams: parseUpstreams(formData.get("upstreams")),
       matcherType: matcherType,
       matcherValue: matcherValue,
-      tlsTermination: parseCheckbox(formData.get("tls_termination")),
+      tlsTermination: parseCheckbox(formData.get("tlsTermination")),
       proxyProtocolVersion: parseProxyProtocolVersion(formData),
-      proxyProtocolReceive: parseCheckbox(formData.get("proxy_protocol_receive")),
+      proxyProtocolReceive: parseCheckbox(formData.get("proxyProtocolReceive")),
       enabled: parseCheckbox(formData.get("enabled")),
       loadBalancer: parseL4LoadBalancerConfig(formData),
       dnsResolver: parseL4DnsResolverConfig(formData),
@@ -213,20 +213,20 @@ export async function updateL4ProxyHostAction(
 
     const matcherType = parseMatcherType(formData);
     const matcherValue = (matcherType === "tls_sni" || matcherType === "http_host")
-      ? parseCsv(formData.get("matcher_value"))
+      ? parseCsv(formData.get("matcherValue"))
       : [];
 
     const input: Partial<L4ProxyHostInput> = {
       name: formData.get("name") ? String(formData.get("name")) : undefined,
       protocol: parseProtocol(formData),
-      listenAddress: formData.get("listen_address") ? String(formData.get("listen_address")).trim() : undefined,
+      listenAddress: formData.get("listenAddress") ? String(formData.get("listenAddress")).trim() : undefined,
       upstreams: formData.get("upstreams") ? parseUpstreams(formData.get("upstreams")) : undefined,
       matcherType: matcherType,
       matcherValue: matcherValue,
-      tlsTermination: parseCheckbox(formData.get("tls_termination")),
+      tlsTermination: parseCheckbox(formData.get("tlsTermination")),
       proxyProtocolVersion: parseProxyProtocolVersion(formData),
-      proxyProtocolReceive: parseCheckbox(formData.get("proxy_protocol_receive")),
-      enabled: formData.has("enabled_present") ? parseCheckbox(formData.get("enabled")) : undefined,
+      proxyProtocolReceive: parseCheckbox(formData.get("proxyProtocolReceive")),
+      enabled: formData.has("enabledPresent") ? parseCheckbox(formData.get("enabled")) : undefined,
       loadBalancer: parseL4LoadBalancerConfig(formData),
       dnsResolver: parseL4DnsResolverConfig(formData),
       upstreamDnsResolution: parseL4UpstreamDnsResolutionConfig(formData),

@@ -58,13 +58,13 @@ export function CpmForwardAuthFields({
 
     return (
         <div className="rounded-lg border border-primary bg-primary/5 p-5">
-            <input type="hidden" name="cpm_forward_auth_present" value="1" />
-            <input type="hidden" name="cpm_forward_auth_enabled_present" value="1" />
+            <input type="hidden" name="cpmForwardAuthPresent" value="1" />
+            <input type="hidden" name="cpmForwardAuthEnabledPresent" value="1" />
             {enabled && selectedUserIds.map((id) => (
-                <input key={`faa-u-${id}`} type="hidden" name="cpm_fa_user_id" value={String(id)} />
+                <input key={`faa-u-${id}`} type="hidden" name="cpmFaUserId" value={String(id)} />
             ))}
             {enabled && selectedGroupIds.map((id) => (
-                <input key={`faa-g-${id}`} type="hidden" name="cpm_fa_group_id" value={String(id)} />
+                <input key={`faa-g-${id}`} type="hidden" name="cpmFaGroupId" value={String(id)} />
             ))}
             <div className="flex flex-col gap-4">
                 <div className="flex flex-row items-center justify-between">
@@ -75,7 +75,7 @@ export function CpmForwardAuthFields({
                         </p>
                     </div>
                     <Switch
-                        name="cpm_forward_auth_enabled"
+                        name="cpmForwardAuthEnabled"
                         checked={enabled}
                         onCheckedChange={setEnabled}
                     />
@@ -89,7 +89,7 @@ export function CpmForwardAuthFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Protected Paths (Optional)</label>
                             <Textarea
-                                name="cpm_forward_auth_protected_paths"
+                                name="cpmForwardAuthProtectedPaths"
                                 placeholder="/secret/*, /admin/*"
                                 defaultValue={initial?.protected_paths?.join(", ") ?? ""}
                                 disabled={!enabled}
@@ -102,7 +102,7 @@ export function CpmForwardAuthFields({
                         <div>
                             <label className="text-sm font-medium mb-1 block">Excluded Paths (Optional)</label>
                             <Textarea
-                                name="cpm_forward_auth_excluded_paths"
+                                name="cpmForwardAuthExcludedPaths"
                                 placeholder="/share/*, /rest/*"
                                 defaultValue={initial?.excluded_paths?.join(", ") ?? ""}
                                 disabled={!enabled}

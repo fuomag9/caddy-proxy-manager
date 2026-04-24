@@ -84,13 +84,13 @@ export function MtlsFields({ value, caCertificates, issuedClientCerts = [], prox
 
   return (
     <div className="rounded-lg border border-amber-500/60 bg-amber-500/5 p-4">
-      <input type="hidden" name="mtls_present" value="1" />
-      <input type="hidden" name="mtls_enabled" value={enabled ? "true" : "false"} />
+      <input type="hidden" name="mtlsPresent" value="1" />
+      <input type="hidden" name="mtlsEnabled" value={enabled ? "true" : "false"} />
       {enabled && selectedCertIds.map(id => (
-        <input key={`c${id}`} type="hidden" name="mtls_cert_id" value={String(id)} />
+        <input key={`c${id}`} type="hidden" name="mtlsCertId" value={String(id)} />
       ))}
       {enabled && selectedRoleIds.map(id => (
-        <input key={`r${id}`} type="hidden" name="mtls_role_id" value={String(id)} />
+        <input key={`r${id}`} type="hidden" name="mtlsRoleId" value={String(id)} />
       ))}
 
       {/* Header */}

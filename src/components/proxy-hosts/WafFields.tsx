@@ -37,12 +37,12 @@ export function WafFields({ value, showModeSelector = true }: Props) {
 
   return (
     <div className="rounded-lg border border-destructive bg-destructive/5 p-4">
-      <input type="hidden" name="waf_present" value="1" />
-      <input type="hidden" name="waf_enabled" value={enabled ? "on" : ""} />
-      <input type="hidden" name="waf_mode" value={wafMode} />
-      <input type="hidden" name="waf_engine_mode" value={engineMode} />
-      <input type="hidden" name="waf_load_owasp_crs" value={loadCrs ? "on" : ""} />
-      <input type="hidden" name="waf_custom_directives" value={customDirectives} />
+      <input type="hidden" name="wafPresent" value="1" />
+      <input type="hidden" name="wafEnabled" value={enabled ? "on" : ""} />
+      <input type="hidden" name="wafMode" value={wafMode} />
+      <input type="hidden" name="wafEngineMode" value={engineMode} />
+      <input type="hidden" name="wafLoadOwaspCrs" value={loadCrs ? "on" : ""} />
+      <input type="hidden" name="wafCustomDirectives" value={customDirectives} />
 
       {/* Header */}
       <div className="flex flex-row items-start justify-between gap-2">

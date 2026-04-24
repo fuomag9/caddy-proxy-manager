@@ -23,7 +23,7 @@ export function RedirectsFields({ initialData = [] }: Props) {
   return (
     <div>
       <p className="text-sm font-semibold mb-2">Redirects</p>
-      <input type="hidden" name="redirects_json" value={JSON.stringify(rules)} />
+      <input type="hidden" name="redirectsJson" value={JSON.stringify(rules)} />
       {rules.length > 0 && (
         <div className="mb-2">
           <div className="grid grid-cols-[1fr_1fr_90px_40px] gap-2 mb-1">

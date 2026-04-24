@@ -4,7 +4,7 @@ import { useState } from "react";
 
 type ToggleSetting = {
     stateKey: "hstsSubdomains" | "skipHttpsHostnameValidation";
-    fieldName: "hsts_subdomains" | "skip_https_hostname_validation";
+    fieldName: "hstsSubdomains" | "skipHttpsHostnameValidation";
     label: string;
     description: string;
 };
@@ -33,13 +33,13 @@ export function SettingsToggles({
     const settings: ToggleSetting[] = [
         {
             stateKey: "hstsSubdomains",
-            fieldName: "hsts_subdomains",
+            fieldName: "hstsSubdomains",
             label: "HSTS Subdomains",
             description: "Include subdomains in the Strict-Transport-Security header",
         },
         {
             stateKey: "skipHttpsHostnameValidation",
-            fieldName: "skip_https_hostname_validation",
+            fieldName: "skipHttpsHostnameValidation",
             label: "Skip HTTPS Validation",
             description: "Skip SSL certificate hostname verification for backend connections",
         }
@@ -47,7 +47,7 @@ export function SettingsToggles({
 
     return (
         <div className="flex flex-col gap-6">
-            <input type="hidden" name="enabled_present" value="1" />
+            <input type="hidden" name="enabledPresent" value="1" />
             <input type="hidden" name="enabled" value={values.enabled ? "on" : ""} />
 
             {/* Main Enable Switch */}
@@ -81,7 +81,7 @@ export function SettingsToggles({
                 <div className="divide-y divide-border">
                     {settings.map((setting) => (
                         <div key={setting.stateKey}>
-                            <input type="hidden" name={`${setting.fieldName}_present`} value="1" />
+                            <input type="hidden" name={`${setting.fieldName}Present`} value="1" />
                             <div className="flex flex-row items-center justify-between px-4 py-3">
                                 <div className="pr-4">
                                     <p className="text-sm font-medium">{setting.label}</p>

@@ -28,7 +28,7 @@ export function WafRuleExclusions({ value }: Props) {
 
   return (
     <div>
-      <input type="hidden" name="waf_excluded_rule_ids" value={JSON.stringify(ids)} />
+      <input type="hidden" name="wafExcludedRuleIds" value={JSON.stringify(ids)} />
       <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">
         Excluded Rule IDs
       </span>

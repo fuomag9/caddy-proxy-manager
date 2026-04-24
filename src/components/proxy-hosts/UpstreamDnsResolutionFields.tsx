@@ -39,7 +39,7 @@ export function UpstreamDnsResolutionFields({
 
   return (
     <div className="rounded-lg border border-violet-500/60 bg-violet-500/5 p-5">
-      <input type="hidden" name="upstream_dns_resolution_present" value="1" />
+      <input type="hidden" name="upstreamDnsResolutionPresent" value="1" />
       <div className="flex flex-col gap-4">
         <div className="flex flex-row items-center justify-between">
           <div>
@@ -68,7 +68,7 @@ export function UpstreamDnsResolutionFields({
           <div className="flex flex-col gap-4">
             <div>
               <label className="text-sm font-medium mb-1 block">Resolution Mode</label>
-              <input type="hidden" name="upstream_dns_resolution_mode" value={currentMode} />
+              <input type="hidden" name="upstreamDnsResolutionMode" value={currentMode} />
               <Select value={currentMode} onValueChange={(v) => setCurrentMode(v as ResolutionMode)}>
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />
@@ -85,7 +85,7 @@ export function UpstreamDnsResolutionFields({
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block">Address Family Preference</label>
-              <input type="hidden" name="upstream_dns_resolution_family" value={currentFamily} />
+              <input type="hidden" name="upstreamDnsResolutionFamily" value={currentFamily} />
               <Select value={currentFamily} onValueChange={(v) => setCurrentFamily(v as FamilyMode)}>
                 <SelectTrigger className="h-8 text-sm">
                   <SelectValue />

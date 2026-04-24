@@ -92,8 +92,8 @@ test.describe('Proxy Hosts', () => {
       // Locate Advanced Options toggles via their hidden _present inputs, which
       // uniquely identify each row and avoid ambiguity with ancestor divs.
       const dialog = page.getByRole('dialog');
-      const hstsSwitch = dialog.locator('div:has(> input[name="hsts_subdomains_present"])').getByRole('switch');
-      const skipSwitch = dialog.locator('div:has(> input[name="skip_https_hostname_validation_present"])').getByRole('switch');
+      const hstsSwitch = dialog.locator('div:has(> input[name="hstsSubdomainsPresent"])').getByRole('switch');
+      const skipSwitch = dialog.locator('div:has(> input[name="skipHttpsHostnameValidationPresent"])').getByRole('switch');
 
       // Verify initial state matches what was saved
       await expect(hstsSwitch).toHaveAttribute('data-state', 'checked');
@@ -122,8 +122,8 @@ test.describe('Proxy Hosts', () => {
       await expect(page.getByRole('dialog')).toBeVisible();
 
       const dialog2 = page.getByRole('dialog');
-      const hstsSwitch2 = dialog2.locator('div:has(> input[name="hsts_subdomains_present"])').getByRole('switch');
-      const skipSwitch2 = dialog2.locator('div:has(> input[name="skip_https_hostname_validation_present"])').getByRole('switch');
+      const hstsSwitch2 = dialog2.locator('div:has(> input[name="hstsSubdomainsPresent"])').getByRole('switch');
+      const skipSwitch2 = dialog2.locator('div:has(> input[name="skipHttpsHostnameValidationPresent"])').getByRole('switch');
 
       await expect(hstsSwitch2).toHaveAttribute('data-state', 'unchecked');
       await expect(skipSwitch2).toHaveAttribute('data-state', 'checked');

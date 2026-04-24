@@ -118,7 +118,7 @@ export function CreateHostDialog({
                 <UpstreamInput defaultUpstreams={initialData?.upstreams} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Certificate</label>
-                    <Select name="certificate_id" defaultValue={String(initialData?.certificateId ?? "__none__")}>
+                    <Select name="certificateId" defaultValue={String(initialData?.certificateId ?? "__none__")}>
                         <SelectTrigger aria-label="Certificate">
                             <SelectValue placeholder="Managed by Caddy (Auto)" />
                         </SelectTrigger>
@@ -134,7 +134,7 @@ export function CreateHostDialog({
                 </div>
                 <div>
                     <label className="text-sm font-medium mb-1 block">Access List</label>
-                    <Select name="access_list_id" defaultValue={String(initialData?.accessListId ?? "__none__")}>
+                    <Select name="accessListId" defaultValue={String(initialData?.accessListId ?? "__none__")}>
                         <SelectTrigger aria-label="Access List">
                             <SelectValue placeholder="None" />
                         </SelectTrigger>
@@ -154,7 +154,7 @@ export function CreateHostDialog({
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
                     <Textarea
-                        name="custom_pre_handlers_json"
+                        name="customPreHandlersJson"
                         placeholder='[{"handler": "headers", ...}]'
                         defaultValue={initialData?.customPreHandlersJson ?? ""}
                         rows={3}
@@ -164,7 +164,7 @@ export function CreateHostDialog({
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Reverse Proxy (JSON)</label>
                     <Textarea
-                        name="custom_reverse_proxy_json"
+                        name="customReverseProxyJson"
                         placeholder='{"headers": {"request": {...}}}'
                         defaultValue={initialData?.customReverseProxyJson ?? ""}
                         rows={3}
@@ -269,7 +269,7 @@ export function EditHostDialog({
                 <UpstreamInput defaultUpstreams={host.upstreams} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Certificate</label>
-                    <Select name="certificate_id" defaultValue={String(host.certificateId ?? "__none__")}>
+                    <Select name="certificateId" defaultValue={String(host.certificateId ?? "__none__")}>
                         <SelectTrigger aria-label="Certificate">
                             <SelectValue placeholder="Managed by Caddy (Auto)" />
                         </SelectTrigger>
@@ -285,7 +285,7 @@ export function EditHostDialog({
                 </div>
                 <div>
                     <label className="text-sm font-medium mb-1 block">Access List</label>
-                    <Select name="access_list_id" defaultValue={String(host.accessListId ?? "__none__")}>
+                    <Select name="accessListId" defaultValue={String(host.accessListId ?? "__none__")}>
                         <SelectTrigger aria-label="Access List">
                             <SelectValue placeholder="None" />
                         </SelectTrigger>
@@ -305,7 +305,7 @@ export function EditHostDialog({
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
                     <Textarea
-                        name="custom_pre_handlers_json"
+                        name="customPreHandlersJson"
                         defaultValue={host.customPreHandlersJson ?? ""}
                         rows={3}
                     />
@@ -314,7 +314,7 @@ export function EditHostDialog({
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Reverse Proxy (JSON)</label>
                     <Textarea
-                        name="custom_reverse_proxy_json"
+                        name="customReverseProxyJson"
                         defaultValue={host.customReverseProxyJson ?? ""}
                         rows={3}
                     />
