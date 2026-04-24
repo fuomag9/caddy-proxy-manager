@@ -339,7 +339,7 @@ function parseWafConfig(formData: FormData): { waf?: WafHostConfig | null } {
   if (!formData.has("wafPresent")) return {};
   const enabled = parseCheckbox(formData.get("wafEnabled"));
   const rawMode = formData.get("wafMode");
-  const wafMode: WafHostConfig["wafMode"] = rawMode === "override" ? "override" : "merge";
+  const wafMode: WafHostConfig["waf_mode"] = rawMode === "override" ? "override" : "merge";
   const rawEngineMode = formData.get("wafEngineMode");
   const engineMode: WafHostConfig["mode"] =
     rawEngineMode === "On" ? "On" : rawEngineMode === "Off" ? "Off" : undefined;
