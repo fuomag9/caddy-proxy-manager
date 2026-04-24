@@ -1,5 +1,5 @@
 import { chromium } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -13,6 +13,7 @@ export const AUTH_DIR = resolve(__dirname, '.auth');
 export const AUTH_FILE = resolve(AUTH_DIR, 'admin.json');
 const MAX_WAIT_MS = 180_000;
 const POLL_INTERVAL_MS = 3_000;
+const ENV = { ...process.env, CLICKHOUSE_PASSWORD: 'test-clickhouse-password-2026' };
 
 async function waitForHealth(): Promise<void> {
   const start = Date.now();
@@ -35,10 +36,37 @@ async function waitForHealth(): Promise<void> {
 
   console.error('[global-setup] Health check timed out. Container logs:');
   try {
-    execFileSync('docker', [...COMPOSE_ARGS, 'logs', '--tail=50'], { stdio: 'inherit', cwd: process.cwd(), env: { ...process.env, CLICKHOUSE_PASSWORD: 'test-clickhouse-password-2026' } });
+    execFileSync('docker', [...COMPOSE_ARGS, 'logs', '--tail=50'], { stdio: 'inherit', cwd: process.cwd(), env: ENV });
   } catch { /* ignore */ }
 
   throw new Error(`App did not become healthy within ${MAX_WAIT_MS}ms`);
+}
+
+/**
+ * Wait for Caddy to be healthy according to Docker's health status.
+ *
+ * The l4-port-manager runs `docker compose up --force-recreate caddy` on
+ * startup if an L4 port override file is already present (e.g. left over from
+ * a previous run whose teardown was interrupted).  `docker compose up --wait`
+ * may return before that startup apply completes, so we poll explicitly here
+ * to ensure Caddy is stable before tests begin.
+ */
+async function waitForCaddyHealthy(): Promise<void> {
+  const start = Date.now();
+  const maxWait = 90_000;
+  console.log('[global-setup] Verifying Caddy is healthy...');
+  while (Date.now() - start < maxWait) {
+    const result = spawnSync('docker', ['inspect', '--format={{.State.Health.Status}}', 'caddy-proxy-manager-caddy'], {
+      encoding: 'utf-8',
+      cwd: process.cwd(),
+    });
+    if (result.status === 0 && result.stdout.trim() === 'healthy') {
+      console.log('[global-setup] Caddy is healthy.');
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  console.warn('[global-setup] Caddy health wait timed out — proceeding anyway.');
 }
 
 async function seedAuthState(): Promise<void> {
@@ -79,6 +107,7 @@ export default async function globalSetup() {
 
   console.log('[global-setup] Containers up. Waiting for /api/health...');
   await waitForHealth();
+  await waitForCaddyHealthy();
   await seedAuthState();
 
   console.log('[global-setup] Done.');

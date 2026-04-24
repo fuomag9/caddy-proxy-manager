@@ -31,6 +31,12 @@ services:
       - "15433:15433"
       # L4 test ports (UDP)
       - "15353:15353/udp"
+  # Skip any local docker-compose.override.yml and use this file instead,
+  # so the sidecar recreates caddy with the correct "-test" volume names.
+  l4-port-manager:
+    environment:
+      COMPOSE_SKIP_OVERRIDE: "1"
+      COMPOSE_EXTRA_FILE: /compose/tests/docker-compose.test.yml
   # Dex OIDC provider for OAuth E2E tests
   dex:
     image: dexidp/dex:v2.41.1

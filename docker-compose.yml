@@ -131,7 +131,7 @@ services:
       NETWORKS: 1
       VOLUMES: 1
       IMAGES: 1
-      SECRETS: 1
+      SECRETS: 0
       # Deny everything else by default
       EXEC: 0
       SWARM: 0

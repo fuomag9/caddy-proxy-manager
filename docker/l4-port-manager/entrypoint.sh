@@ -17,6 +17,8 @@
 #   CADDY_CONTAINER_NAME  - Caddy container name for project auto-detection (default: caddy-proxy-manager-caddy)
 #   COMPOSE_PROJECT_NAME  - Override compose project name (auto-detected from caddy container labels if unset)
 #   POLL_INTERVAL         - Seconds between trigger file checks (default: 2)
+#   COMPOSE_SKIP_OVERRIDE - If non-empty, skip docker-compose.override.yml (useful in test environments)
+#   COMPOSE_EXTRA_FILE    - If set, include this additional compose file (e.g. a test-specific override)
 
 set -e
 
@@ -83,8 +85,11 @@ do_apply() {
     COMPOSE_ARGS="$COMPOSE_ARGS --env-file $COMPOSE_DIR/.env"
   fi
   COMPOSE_ARGS="$COMPOSE_ARGS -f $COMPOSE_DIR/docker-compose.yml"
-  if [ -f "$COMPOSE_DIR/docker-compose.override.yml" ]; then
+  if [ -z "$COMPOSE_SKIP_OVERRIDE" ] && [ -f "$COMPOSE_DIR/docker-compose.override.yml" ]; then
     COMPOSE_ARGS="$COMPOSE_ARGS -f $COMPOSE_DIR/docker-compose.override.yml"
+  fi
+  if [ -n "$COMPOSE_EXTRA_FILE" ] && [ -f "$COMPOSE_EXTRA_FILE" ]; then
+    COMPOSE_ARGS="$COMPOSE_ARGS -f $COMPOSE_EXTRA_FILE"
   fi
   if [ -f "$OVERRIDE_FILE" ]; then
     COMPOSE_ARGS="$COMPOSE_ARGS -f $OVERRIDE_FILE"
