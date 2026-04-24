@@ -37,6 +37,7 @@ function ensureTestUser() {
   const script = `
     import { Database } from "bun:sqlite";
     const db = new Database("./data/caddy-proxy-manager.db");
+    db.run("PRAGMA busy_timeout = 5000");
     const email = "${TEST_EMAIL}";
     const hash = await Bun.password.hash("${TEST_PASSWORD}", { algorithm: "bcrypt", cost: 12 });
     const now = new Date().toISOString();
@@ -68,6 +69,7 @@ function setUserStatus(status: 'active' | 'disabled') {
   const script = `
     import { Database } from "bun:sqlite";
     const db = new Database("./data/caddy-proxy-manager.db");
+    db.run("PRAGMA busy_timeout = 5000");
     const now = new Date().toISOString();
     db.run("UPDATE users SET status = ?, updatedAt = ? WHERE email = ?",
       ["${status}", now, "${TEST_EMAIL}"]);
@@ -81,6 +83,7 @@ function createApiToken(): string {
     import { Database } from "bun:sqlite";
     import { createHash } from "crypto";
     const db = new Database("./data/caddy-proxy-manager.db");
+    db.run("PRAGMA busy_timeout = 5000");
     const user = db.query("SELECT id FROM users WHERE email = ?").get("${TEST_EMAIL}");
     if (!user) { console.error("User not found"); process.exit(1); }
     const hash = createHash("sha256").update("${token}").digest("hex");

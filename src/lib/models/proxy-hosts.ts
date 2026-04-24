@@ -1745,6 +1745,9 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
         ...(existing.cpmForwardAuth.excluded_paths ? { excluded_paths: existing.cpmForwardAuth.excluded_paths } : {})
       }
     } : {}),
+    ...(existing.redirects && existing.redirects.length > 0 ? { redirects: existing.redirects } : {}),
+    ...(existing.rewrite ? { rewrite: existing.rewrite } : {}),
+    ...(existing.locationRules && existing.locationRules.length > 0 ? { location_rules: existing.locationRules } : {}),
   };
   const meta = buildMeta(existingMeta, input);
 

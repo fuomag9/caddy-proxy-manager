@@ -140,6 +140,66 @@ test.describe('Proxy Hosts', () => {
     }
   });
 
+  /**
+   * Regression test for #120: Toggling a proxy host disabled then re-enabled
+   * via the row-level switch wiped custom configs (redirects, rewrite,
+   * location_rules) because they were not included in existingMeta when
+   * updateProxyHost was called with only { enabled }.
+   */
+  test('toggling enabled/disabled preserves redirects and rewrite config (#120)', async ({ page }) => {
+    const origin = new URL(page.url()).origin;
+
+    // Create a host with redirect rules and a rewrite config via the REST API
+    const createResp = await page.request.post(API_PROXY_HOSTS, {
+      headers: { Origin: origin },
+      data: {
+        name: 'Toggle Persistence Test',
+        domains: ['toggle-persist.local'],
+        upstreams: ['localhost:9988'],
+        redirects: [{ from: '/.well-known/carddav', to: '/remote.php/dav/', status: 308 }],
+        rewrite: { path_prefix: '/app' },
+      },
+    });
+    expect(createResp.ok()).toBeTruthy();
+    const created = await createResp.json() as { id: number; redirects: unknown[]; rewrite: unknown };
+    expect(created.redirects).toHaveLength(1);
+    expect(created.rewrite).toBeDefined();
+
+    try {
+      await page.reload();
+      await expect(page.getByRole('table').getByText('Toggle Persistence Test')).toBeVisible({ timeout: 10000 });
+
+      // Click the Switch in the row to disable the host
+      const row = page.locator('tr', { hasText: 'Toggle Persistence Test' });
+      const rowSwitch = row.getByRole('switch').first();
+      await expect(rowSwitch).toHaveAttribute('data-state', 'checked');
+      await rowSwitch.click();
+      await expect(rowSwitch).toHaveAttribute('data-state', 'unchecked', { timeout: 10000 });
+
+      // Verify redirects and rewrite survive the disable toggle
+      const afterDisable = await (await page.request.get(`${API_PROXY_HOSTS}/${created.id}`)).json() as {
+        redirects: unknown[]; rewrite: unknown; enabled: boolean
+      };
+      expect(afterDisable.enabled).toBe(false);
+      expect(afterDisable.redirects).toHaveLength(1);
+      expect(afterDisable.rewrite).toBeDefined();
+
+      // Re-enable
+      await rowSwitch.click();
+      await expect(rowSwitch).toHaveAttribute('data-state', 'checked', { timeout: 10000 });
+
+      // Verify redirects and rewrite survive the re-enable toggle
+      const afterEnable = await (await page.request.get(`${API_PROXY_HOSTS}/${created.id}`)).json() as {
+        redirects: unknown[]; rewrite: unknown; enabled: boolean
+      };
+      expect(afterEnable.enabled).toBe(true);
+      expect(afterEnable.redirects).toHaveLength(1);
+      expect(afterEnable.rewrite).toBeDefined();
+    } finally {
+      await page.request.delete(`${API_PROXY_HOSTS}/${created.id}`, { headers: { Origin: origin } });
+    }
+  });
+
   test('delete proxy host removes it from table', async ({ page }) => {
     // Create one to delete
     await page.getByRole('button', { name: /create host/i }).click();
