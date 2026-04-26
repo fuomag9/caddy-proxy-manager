@@ -2,8 +2,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useFormState } from "react-dom";
-import { useEffect } from "react";
+import { useActionState, useEffect } from "react";
 import {
     createProxyHostAction,
     deleteProxyHostAction,
@@ -61,7 +60,7 @@ export function CreateHostDialog({
     forwardAuthUsers?: ForwardAuthUser[];
     forwardAuthGroups?: ForwardAuthGroup[];
 }) {
-    const [state, formAction] = useFormState(createProxyHostAction, INITIAL_ACTION_STATE);
+    const [state, formAction] = useActionState(createProxyHostAction, INITIAL_ACTION_STATE);
 
     useEffect(() => {
         if (state.status === "success") {
@@ -220,7 +219,7 @@ export function EditHostDialog({
     forwardAuthGroups?: ForwardAuthGroup[];
     forwardAuthAccess?: ForwardAuthAccessData | null;
 }) {
-    const [state, formAction] = useFormState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
+    const [state, formAction] = useActionState(updateProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
 
     useEffect(() => {
         if (state.status === "success") {
@@ -360,7 +359,7 @@ export function DeleteHostDialog({
     host: ProxyHost;
     onClose: () => void;
 }) {
-    const [state, formAction] = useFormState(deleteProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
+    const [state, formAction] = useActionState(deleteProxyHostAction.bind(null, host.id), INITIAL_ACTION_STATE);
 
     useEffect(() => {
         if (state.status === "success") {

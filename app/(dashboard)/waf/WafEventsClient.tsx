@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { useFormState } from "react-dom";
+import { useActionState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Search, X, ShieldOff, Trash2, Copy, ChevronDown } from "lucide-react";
@@ -431,7 +431,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const [localGlobalExcluded, setLocalGlobalExcluded] = useState(globalExcluded);
   const [localGlobalMessages, setLocalGlobalMessages] = useState(globalExcludedMessages);
   const [localHostWafMap, setLocalHostWafMap] = useState(hostWafMap);
-  const [wafState, wafFormAction] = useFormState(updateWafSettingsAction, null);
+  const [wafState, wafFormAction] = useActionState(updateWafSettingsAction, null);
   const [wafCustomDirectives, setWafCustomDirectives] = useState(globalWaf?.custom_directives ?? "");
   const [wafShowTemplates, setWafShowTemplates] = useState(false);
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);

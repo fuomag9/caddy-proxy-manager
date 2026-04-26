@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useState, useActionState } from "react";
 import {
   Cloud, Globe, Network, Pin, Activity,
   ScrollText, Settings2, UserCheck, MapPin, KeyRound,
@@ -189,22 +188,22 @@ export default function SettingsClient({
   baseUrl,
   instanceSync
 }: Props) {
-  const [generalState, generalFormAction] = useFormState(updateGeneralSettingsAction, null);
-  const [dnsProviderState, dnsProviderFormAction] = useFormState(updateDnsProviderSettingsAction, null);
+  const [generalState, generalFormAction] = useActionState(updateGeneralSettingsAction, null);
+  const [dnsProviderState, dnsProviderFormAction] = useActionState(updateDnsProviderSettingsAction, null);
   const [selectedProvider, setSelectedProvider] = useState("none");
   const configuredProviders = dnsProvider?.providers ? Object.keys(dnsProvider.providers) : [];
-  const [authentikState, authentikFormAction] = useFormState(updateAuthentikSettingsAction, null);
-  const [metricsState, metricsFormAction] = useFormState(updateMetricsSettingsAction, null);
-  const [loggingState, loggingFormAction] = useFormState(updateLoggingSettingsAction, null);
-  const [dnsState, dnsFormAction] = useFormState(updateDnsSettingsAction, null);
-  const [upstreamDnsResolutionState, upstreamDnsResolutionFormAction] = useFormState(
+  const [authentikState, authentikFormAction] = useActionState(updateAuthentikSettingsAction, null);
+  const [metricsState, metricsFormAction] = useActionState(updateMetricsSettingsAction, null);
+  const [loggingState, loggingFormAction] = useActionState(updateLoggingSettingsAction, null);
+  const [dnsState, dnsFormAction] = useActionState(updateDnsSettingsAction, null);
+  const [upstreamDnsResolutionState, upstreamDnsResolutionFormAction] = useActionState(
     updateUpstreamDnsResolutionSettingsAction, null
   );
-  const [instanceModeState, instanceModeFormAction] = useFormState(updateInstanceModeAction, null);
-  const [slaveTokenState, slaveTokenFormAction] = useFormState(updateSlaveMasterTokenAction, null);
-  const [slaveInstanceState, slaveInstanceFormAction] = useFormState(createSlaveInstanceAction, null);
-  const [syncState, syncFormAction] = useFormState(syncSlaveInstancesAction, null);
-  const [geoBlockState, geoBlockFormAction] = useFormState(updateGeoBlockSettingsAction, null);
+  const [instanceModeState, instanceModeFormAction] = useActionState(updateInstanceModeAction, null);
+  const [slaveTokenState, slaveTokenFormAction] = useActionState(updateSlaveMasterTokenAction, null);
+  const [slaveInstanceState, slaveInstanceFormAction] = useActionState(createSlaveInstanceAction, null);
+  const [syncState, syncFormAction] = useActionState(syncSlaveInstancesAction, null);
+  const [geoBlockState, geoBlockFormAction] = useActionState(updateGeoBlockSettingsAction, null);
 
   const isSlave = instanceSync.mode === "slave";
   const isMaster = instanceSync.mode === "master";

@@ -1,7 +1,6 @@
 "use client";
 
-import { useFormState } from "react-dom";
-import { useEffect, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import {
   createL4ProxyHostAction,
   deleteL4ProxyHostAction,
@@ -811,7 +810,7 @@ export function CreateL4HostDialog({
   onClose: () => void;
   initialData?: L4ProxyHost | null;
 }) {
-  const [state, formAction] = useFormState(
+  const [state, formAction] = useActionState(
     createL4ProxyHostAction,
     INITIAL_ACTION_STATE
   );
@@ -856,7 +855,7 @@ export function EditL4HostDialog({
   host: L4ProxyHost;
   onClose: () => void;
 }) {
-  const [state, formAction] = useFormState(
+  const [state, formAction] = useActionState(
     updateL4ProxyHostAction.bind(null, host.id),
     INITIAL_ACTION_STATE
   );
@@ -899,7 +898,7 @@ export function DeleteL4HostDialog({
   host: L4ProxyHost;
   onClose: () => void;
 }) {
-  const [state, formAction] = useFormState(
+  const [state, formAction] = useActionState(
     deleteL4ProxyHostAction.bind(null, host.id),
     INITIAL_ACTION_STATE
   );

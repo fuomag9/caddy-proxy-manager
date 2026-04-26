@@ -36,17 +36,17 @@ export function getClient(): ClickHouseClient {
 
 const TRAFFIC_EVENTS_DDL = `
 CREATE TABLE IF NOT EXISTS traffic_events (
-    ts          DateTime,
-    client_ip   String,
-    country_code Nullable(String),
-    host        String DEFAULT '',
-    method      String DEFAULT '',
-    uri         String DEFAULT '',
-    status      UInt16 DEFAULT 0,
-    proto       String DEFAULT '',
-    bytes_sent  UInt64 DEFAULT 0,
-    user_agent  String DEFAULT '',
-    is_blocked  Bool DEFAULT false
+    ts           DateTime          CODEC(Delta, ZSTD),
+    client_ip    String            CODEC(ZSTD(3)),
+    country_code LowCardinality(Nullable(String)),
+    host         LowCardinality(String) DEFAULT '' CODEC(ZSTD(3)),
+    method       LowCardinality(String) DEFAULT '' CODEC(ZSTD(3)),
+    uri          String            DEFAULT '' CODEC(ZSTD(3)),
+    status       UInt16            DEFAULT 0,
+    proto        LowCardinality(String) DEFAULT '' CODEC(ZSTD(3)),
+    bytes_sent   UInt64            DEFAULT 0 CODEC(Delta, ZSTD),
+    user_agent   String            DEFAULT '' CODEC(ZSTD(3)),
+    is_blocked   Bool              DEFAULT false
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ts)
 ORDER BY (host, ts)
@@ -56,17 +56,17 @@ SETTINGS index_granularity = 8192
 
 const WAF_EVENTS_DDL = `
 CREATE TABLE IF NOT EXISTS waf_events (
-    ts           DateTime,
-    host         String DEFAULT '',
-    client_ip    String,
-    country_code Nullable(String),
-    method       String DEFAULT '',
-    uri          String DEFAULT '',
+    ts           DateTime          CODEC(Delta, ZSTD),
+    host         LowCardinality(String) DEFAULT '' CODEC(ZSTD(3)),
+    client_ip    String            CODEC(ZSTD(3)),
+    country_code LowCardinality(Nullable(String)),
+    method       LowCardinality(String) DEFAULT '' CODEC(ZSTD(3)),
+    uri          String            DEFAULT '' CODEC(ZSTD(3)),
     rule_id      Nullable(Int32),
-    rule_message Nullable(String),
-    severity     Nullable(String),
-    raw_data     Nullable(String),
-    blocked      Bool DEFAULT true
+    rule_message Nullable(String)  CODEC(ZSTD(3)),
+    severity     LowCardinality(Nullable(String)),
+    raw_data     Nullable(String)  CODEC(ZSTD(3)),
+    blocked      Bool              DEFAULT true
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ts)
 ORDER BY (host, ts)
@@ -74,11 +74,39 @@ TTL ts + INTERVAL 90 DAY DELETE
 SETTINGS index_granularity = 8192
 `;
 
+// Migrations applied to existing tables on startup (idempotent MODIFY COLUMN).
+const TRAFFIC_EVENTS_MIGRATIONS = [
+  `ALTER TABLE traffic_events MODIFY COLUMN ts DateTime CODEC(Delta, ZSTD)`,
+  `ALTER TABLE traffic_events MODIFY COLUMN client_ip String CODEC(ZSTD(3))`,
+  `ALTER TABLE traffic_events MODIFY COLUMN country_code LowCardinality(Nullable(String))`,
+  `ALTER TABLE traffic_events MODIFY COLUMN host LowCardinality(String) DEFAULT '' CODEC(ZSTD(3))`,
+  `ALTER TABLE traffic_events MODIFY COLUMN method LowCardinality(String) DEFAULT '' CODEC(ZSTD(3))`,
+  `ALTER TABLE traffic_events MODIFY COLUMN uri String DEFAULT '' CODEC(ZSTD(3))`,
+  `ALTER TABLE traffic_events MODIFY COLUMN proto LowCardinality(String) DEFAULT '' CODEC(ZSTD(3))`,
+  `ALTER TABLE traffic_events MODIFY COLUMN bytes_sent UInt64 DEFAULT 0 CODEC(Delta, ZSTD)`,
+  `ALTER TABLE traffic_events MODIFY COLUMN user_agent String DEFAULT '' CODEC(ZSTD(3))`,
+];
+
+const WAF_EVENTS_MIGRATIONS = [
+  `ALTER TABLE waf_events MODIFY COLUMN ts DateTime CODEC(Delta, ZSTD)`,
+  `ALTER TABLE waf_events MODIFY COLUMN host LowCardinality(String) DEFAULT '' CODEC(ZSTD(3))`,
+  `ALTER TABLE waf_events MODIFY COLUMN client_ip String CODEC(ZSTD(3))`,
+  `ALTER TABLE waf_events MODIFY COLUMN country_code LowCardinality(Nullable(String))`,
+  `ALTER TABLE waf_events MODIFY COLUMN method LowCardinality(String) DEFAULT '' CODEC(ZSTD(3))`,
+  `ALTER TABLE waf_events MODIFY COLUMN uri String DEFAULT '' CODEC(ZSTD(3))`,
+  `ALTER TABLE waf_events MODIFY COLUMN severity LowCardinality(Nullable(String))`,
+  `ALTER TABLE waf_events MODIFY COLUMN rule_message Nullable(String) CODEC(ZSTD(3))`,
+  `ALTER TABLE waf_events MODIFY COLUMN raw_data Nullable(String) CODEC(ZSTD(3))`,
+];
+
 export async function initClickHouse(): Promise<void> {
   const ch = getClient();
   await ch.command({ query: `CREATE DATABASE IF NOT EXISTS ${CH_DB}` });
   await ch.command({ query: TRAFFIC_EVENTS_DDL });
   await ch.command({ query: WAF_EVENTS_DDL });
+  for (const q of [...TRAFFIC_EVENTS_MIGRATIONS, ...WAF_EVENTS_MIGRATIONS]) {
+    await ch.command({ query: q });
+  }
 }
 
 export async function closeClickHouse(): Promise<void> {
