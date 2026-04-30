@@ -82,7 +82,8 @@ export async function createUser(data: {
   const now = nowIso();
   const role = data.role ?? "user";
   const email = data.email.trim().toLowerCase();
-  const username = data.username ?? email;
+  const provider = data.provider === "credential" ? "credentials" : data.provider;
+  const username = data.username ?? email.split("@")[0]?.toLowerCase() ?? email;
   const displayUsername = data.displayUsername ?? data.name ?? email.split("@")[0];
 
   const [user] = await db
@@ -92,7 +93,7 @@ export async function createUser(data: {
       name: data.name ?? null,
       passwordHash: data.passwordHash ?? null,
       role,
-      provider: data.provider,
+      provider,
       subject: data.subject,
       avatarUrl: data.avatarUrl ?? null,
       status: "active",
@@ -102,6 +103,17 @@ export async function createUser(data: {
       updatedAt: now
     })
     .returning();
+
+  if (provider === "credentials" && data.passwordHash) {
+    await db.insert(accounts).values({
+      userId: user.id,
+      accountId: user.id.toString(),
+      providerId: "credential",
+      password: data.passwordHash,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 
   return parseDbUser(user);
 }

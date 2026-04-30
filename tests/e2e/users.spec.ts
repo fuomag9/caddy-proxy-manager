@@ -5,6 +5,81 @@
  * Runs as admin (testadmin) — the page requires admin role.
  */
 import { test, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+
+const BASE = 'http://localhost:3000';
+const COMPOSE_ARGS = [
+  'compose',
+  '-f', 'docker-compose.yml',
+  '-f', 'tests/docker-compose.test.yml',
+];
+
+type CreatedUserRecord = {
+  email: string;
+  provider: string | null;
+  subject: string | null;
+  username: string | null;
+  displayUsername: string | null;
+  accountProviderId: string | null;
+  accountId: string | null;
+  accountHasPassword: boolean;
+  role: string;
+};
+
+function execInContainer(script: string): string {
+  return execFileSync('docker', [...COMPOSE_ARGS, 'exec', '-T', 'web', 'bun', '-e', script], {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+}
+
+function getCreatedUserRecord(email: string): CreatedUserRecord {
+  const output = execInContainer(`
+    import { Database } from "bun:sqlite";
+    const db = new Database("./data/caddy-proxy-manager.db");
+    const user = db.query(
+      "SELECT id, email, provider, subject, username, displayUsername, role FROM users WHERE email = ?"
+    ).get(${JSON.stringify(email)});
+    if (!user) {
+      console.error("User not found");
+      process.exit(1);
+    }
+    const account = db.query(
+      "SELECT providerId, accountId, password FROM accounts WHERE userId = ? AND providerId = 'credential'"
+    ).get(user.id);
+    console.log(JSON.stringify({
+      email: user.email,
+      provider: user.provider,
+      subject: user.subject,
+      username: user.username,
+      displayUsername: user.displayUsername,
+      accountProviderId: account?.providerId ?? null,
+      accountId: account?.accountId ?? null,
+      accountHasPassword: !!account?.password,
+      role: user.role,
+    }));
+  `).trim();
+
+  return JSON.parse(output) as CreatedUserRecord;
+}
+
+async function loginWithCredentials(
+  browser: import('@playwright/test').Browser,
+  username: string,
+  password: string,
+) {
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const page = await context.newPage();
+
+  await page.goto(`${BASE}/login`);
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 10000 });
+
+  return { context, page };
+}
 
 test.describe('Users page', () => {
   test.beforeEach(async ({ page }) => {
@@ -94,26 +169,47 @@ test.describe('Users page', () => {
     await expect(page.getByTestId('create-email')).not.toBeVisible();
   });
 
-  test('creating a user via the form adds it to the list', async ({ page }) => {
+  test('creating a user via the form provisions a working credential account', async ({ page, browser }) => {
+    const email = `newuser-ui-${Date.now()}@test.local`;
+    const password = 'SecurePass2026!';
+    const expectedUsername = email.split('@')[0];
+
     await page.getByRole('button', { name: /create user/i }).click();
 
-    await page.getByTestId('create-email').fill('newuser@test.local');
+    await page.getByTestId('create-email').fill(email);
     await page.getByTestId('create-name').fill('New Test User');
-    await page.getByTestId('create-password').fill('SecurePass2026!');
+    await page.getByTestId('create-password').fill(password);
 
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
     await expect(page.getByTestId('create-email')).not.toBeVisible();
-    await expect(page.getByText('newuser@test.local')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(email)).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('New Test User')).toBeVisible({ timeout: 5000 });
+
+    const created = getCreatedUserRecord(email);
+    expect(created.provider).toBe('credentials');
+    expect(created.subject).toBe(expectedUsername);
+    expect(created.username).toBe(expectedUsername);
+    expect(created.displayUsername).toBe('New Test User');
+    expect(created.accountProviderId).toBe('credential');
+    expect(created.accountId).not.toBeNull();
+    expect(created.accountHasPassword).toBe(true);
+
+    const { context, page: loginPage } = await loginWithCredentials(browser, expectedUsername, password);
+    await expect(loginPage).not.toHaveURL(/\/login/, { timeout: 10000 });
+    await context.close();
   });
 
-  test('creating a user with a specific role shows correct badge', async ({ page }) => {
+  test('creating a user with a specific role shows correct badge and derived username works', async ({ page, browser }) => {
+    const email = `viewer-ui-${Date.now()}@test.local`;
+    const password = 'ViewerPass2026!';
+    const expectedUsername = email.split('@')[0];
+
     await page.getByRole('button', { name: /create user/i }).click();
 
-    await page.getByTestId('create-email').fill('vieweruser@test.local');
+    await page.getByTestId('create-email').fill(email);
     await page.getByTestId('create-name').fill('Viewer User');
-    await page.getByTestId('create-password').fill('ViewerPass2026!');
+    await page.getByTestId('create-password').fill(password);
 
     // Select Viewer role
     await page.getByTestId('create-role').click();
@@ -121,8 +217,17 @@ test.describe('Users page', () => {
 
     await page.getByRole('button', { name: 'Create', exact: true }).click();
 
-    await expect(page.getByText('vieweruser@test.local')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(email)).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('viewer', { exact: true }).first()).toBeVisible({ timeout: 5000 });
+
+    const created = getCreatedUserRecord(email);
+    expect(created.role).toBe('viewer');
+    expect(created.provider).toBe('credentials');
+    expect(created.subject).toBe(expectedUsername);
+    expect(created.username).toBe(expectedUsername);
+
+    const { context } = await loginWithCredentials(browser, expectedUsername, password);
+    await context.close();
   });
 });
 
@@ -143,37 +248,51 @@ test.describe('Users API v1 — create user (POST)', () => {
     await expect(page).not.toHaveURL(/\/login/);
   });
 
-  test('admin can create a user via API', async ({ page }) => {
+  test('admin can create a user via API', async ({ page, browser }) => {
     const origin = new URL(page.url()).origin;
+    const email = `api-created-${Date.now()}@test.local`;
+    const password = 'ApiPass2026!';
+    const expectedUsername = email.split('@')[0];
 
     const response = await page.request.post('http://localhost:3000/api/v1/users', {
       headers: { Origin: origin },
       data: {
-        email: 'api-created@test.local',
+        email,
         name: 'API Created',
-        password: 'ApiPass2026!',
+        password,
         role: 'user',
       },
     });
 
     expect(response.status()).toBe(201);
     const body = await response.json();
-    expect(body.email).toBe('api-created@test.local');
+    expect(body.email).toBe(email);
     expect(body.name).toBe('API Created');
     expect(body.role).toBe('user');
     expect(body.passwordHash).toBeUndefined();
 
+    const created = getCreatedUserRecord(email);
+    expect(created.provider).toBe('credentials');
+    expect(created.subject).toBe(expectedUsername);
+    expect(created.username).toBe(expectedUsername);
+    expect(created.accountProviderId).toBe('credential');
+    expect(created.accountHasPassword).toBe(true);
+
     await page.goto('/users');
-    await expect(page.getByText('api-created@test.local')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(email)).toBeVisible({ timeout: 5000 });
+
+    const { context } = await loginWithCredentials(browser, expectedUsername, password);
+    await context.close();
   });
 
   test('admin can create a viewer via API', async ({ page }) => {
     const origin = new URL(page.url()).origin;
+    const email = `api-viewer-${Date.now()}@test.local`;
 
     const response = await page.request.post('http://localhost:3000/api/v1/users', {
       headers: { Origin: origin },
       data: {
-        email: 'api-viewer@test.local',
+        email,
         name: 'API Viewer',
         password: 'ViewerPass2026!',
         role: 'viewer',
@@ -183,6 +302,33 @@ test.describe('Users API v1 — create user (POST)', () => {
     expect(response.status()).toBe(201);
     const body = await response.json();
     expect(body.role).toBe('viewer');
+
+    const created = getCreatedUserRecord(email);
+    expect(created.role).toBe('viewer');
+    expect(created.provider).toBe('credentials');
+    expect(created.accountProviderId).toBe('credential');
+  });
+
+  test('API POST with invalid role is downgraded to user', async ({ page }) => {
+    const origin = new URL(page.url()).origin;
+    const email = `api-invalid-role-${Date.now()}@test.local`;
+
+    const response = await page.request.post('http://localhost:3000/api/v1/users', {
+      headers: { Origin: origin },
+      data: {
+        email,
+        name: 'Invalid Role',
+        password: 'InvalidRole2026!',
+        role: 'superadmin',
+      },
+    });
+
+    expect(response.status()).toBe(201);
+    const body = await response.json();
+    expect(body.role).toBe('user');
+
+    const created = getCreatedUserRecord(email);
+    expect(created.role).toBe('user');
   });
 
   test('API POST returns 400 when email is missing', async ({ page }) => {

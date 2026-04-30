@@ -12,13 +12,16 @@ import {
 } from "@/src/lib/models/user";
 import { logAuditEvent } from "@/src/lib/audit";
 
+const VALID_ROLES = new Set<User["role"]>(["admin", "user", "viewer"]);
+
 export async function createUserAction(formData: FormData) {
   const session = await requireAdmin();
   const actorId = Number(session.user.id);
 
   const email = String(formData.get("email") ?? "").trim();
   const name = formData.get("name") ? String(formData.get("name")).trim() : null;
-  const role = (String(formData.get("role") ?? "user")) as User["role"];
+  const requestedRole = String(formData.get("role") ?? "user");
+  const role = VALID_ROLES.has(requestedRole as User["role"]) ? (requestedRole as User["role"]) : "user";
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) {
@@ -32,8 +35,8 @@ export async function createUserAction(formData: FormData) {
     email,
     name,
     role,
-    provider: "credential",
-    subject: email,
+    provider: "credentials",
+    subject: email.split("@")[0]?.toLowerCase() ?? email,
     passwordHash,
   });
 

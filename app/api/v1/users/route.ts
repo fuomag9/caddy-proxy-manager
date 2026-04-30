@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiAdmin, apiErrorResponse } from "@/src/lib/api-auth";
 import { listUsers, createUser } from "@/src/lib/models/user";
 
+const VALID_ROLES = new Set(["admin", "user", "viewer"]);
+
 function stripPasswordHash(user: Record<string, unknown>) {
   const { passwordHash: _, ...rest } = user;
   void _;
@@ -26,7 +28,7 @@ export async function POST(request: NextRequest) {
     const email = String(body.email ?? "").trim();
     const password = String(body.password ?? "");
     const name = body.name ? String(body.name).trim() : null;
-    const role = ["admin", "user", "viewer"].includes(body.role) ? body.role : "user";
+    const role = VALID_ROLES.has(body.role) ? body.role : "user";
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
@@ -39,8 +41,8 @@ export async function POST(request: NextRequest) {
       email,
       name,
       role,
-      provider: "credential",
-      subject: email,
+      provider: "credentials",
+      subject: email.split("@")[0]?.toLowerCase() ?? email,
       passwordHash,
     });
 
