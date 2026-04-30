@@ -151,6 +151,53 @@ function fixSessionsSchema() {
 }
 
 /**
+ * Ensure the accounts table uses INTEGER PRIMARY KEY AUTOINCREMENT for `id`.
+ * Some upgraded deployments can end up with an `accounts.id` column that is
+ * NOT NULL but not rowid-backed, so inserts that omit `id` fail. Unlike
+ * sessions, accounts are durable, so preserve rows while rebuilding the table.
+ */
+function fixAccountsSchema() {
+  try {
+    const cols = db.$client.prepare('PRAGMA table_info("accounts")').all() as Array<{
+      name: string; type: string; pk: number;
+    }>;
+    if (cols.length === 0) return;
+    const idCol = cols.find((c) => c.name === 'id');
+    if (!idCol) return;
+    if (idCol.type.toUpperCase() === 'INTEGER' && idCol.pk === 1) return;
+
+    db.$client.prepare(`CREATE TABLE "accounts_patch" (
+      "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+      "userId" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+      "accountId" TEXT NOT NULL,
+      "providerId" TEXT NOT NULL,
+      "accessToken" TEXT,
+      "refreshToken" TEXT,
+      "idToken" TEXT,
+      "accessTokenExpiresAt" TEXT,
+      "refreshTokenExpiresAt" TEXT,
+      "scope" TEXT,
+      "password" TEXT,
+      "createdAt" TEXT NOT NULL,
+      "updatedAt" TEXT NOT NULL
+    )`).run();
+    db.$client.prepare(`INSERT INTO "accounts_patch" (
+      "userId", "accountId", "providerId", "accessToken", "refreshToken", "idToken",
+      "accessTokenExpiresAt", "refreshTokenExpiresAt", "scope", "password", "createdAt", "updatedAt"
+    ) SELECT
+      "userId", "accountId", "providerId", "accessToken", "refreshToken", "idToken",
+      "accessTokenExpiresAt", "refreshTokenExpiresAt", "scope", "password", "createdAt", "updatedAt"
+    FROM "accounts"`).run();
+    db.$client.prepare('DROP TABLE "accounts"').run();
+    db.$client.prepare('ALTER TABLE "accounts_patch" RENAME TO "accounts"').run();
+    db.$client.prepare('CREATE UNIQUE INDEX IF NOT EXISTS "accounts_provider_account_idx" ON "accounts" ("providerId", "accountId")').run();
+    db.$client.prepare('CREATE INDEX IF NOT EXISTS "accounts_user_idx" ON "accounts" ("userId")').run();
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Pre-migration compatibility patch for deployments that ran an older version of
  * migration 0020 with different column names. Migration 0021 renames columns in
  * many tables but does NOT touch `accounts`, `sessions`, or `verifications` — if
@@ -179,6 +226,7 @@ function patchTablesForMigration020() {
   renameColumnIfNeeded("accounts", "refresh_token_expires_at", "refreshTokenExpiresAt");
   renameColumnIfNeeded("accounts", "created_at",               "createdAt");
   renameColumnIfNeeded("accounts", "updated_at",               "updatedAt");
+  fixAccountsSchema();
 
   // ── sessions ─────────────────────────────────────────────────────────────────
   // auth-server.ts uses generateId:"serial" — Better Auth omits `id` from INSERT
