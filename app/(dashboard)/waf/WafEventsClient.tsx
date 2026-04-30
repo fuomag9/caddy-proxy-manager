@@ -432,6 +432,8 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const [localGlobalMessages, setLocalGlobalMessages] = useState(globalExcludedMessages);
   const [localHostWafMap, setLocalHostWafMap] = useState(hostWafMap);
   const [wafState, wafFormAction] = useActionState(updateWafSettingsAction, null);
+  const [wafEnabled, setWafEnabled] = useState(globalWaf?.enabled ?? false);
+  const [wafLoadOwaspCrs, setWafLoadOwaspCrs] = useState(globalWaf?.load_owasp_crs ?? true);
   const [wafCustomDirectives, setWafCustomDirectives] = useState(globalWaf?.custom_directives ?? "");
   const [wafShowTemplates, setWafShowTemplates] = useState(false);
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);
@@ -632,17 +634,19 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
               </p>
             </div>
             <form action={wafFormAction} className="flex flex-col gap-4">
+              <input type="hidden" name="wafEnabled" value={wafEnabled ? "on" : ""} />
+              <input type="hidden" name="wafLoadOwaspCrs" value={wafLoadOwaspCrs ? "on" : ""} />
               {wafState?.message && (
                 <Alert variant={wafState.success ? "default" : "destructive"}>
                   <AlertDescription>{wafState.message}</AlertDescription>
                 </Alert>
               )}
               <div className="flex items-center gap-3">
-                <Switch name="waf_enabled" defaultChecked={globalWaf?.enabled ?? false} id="waf_enabled" />
+                <Switch checked={wafEnabled} onCheckedChange={setWafEnabled} id="waf_enabled" />
                 <Label htmlFor="waf_enabled">Enable WAF globally (blocking)</Label>
               </div>
               <div className="flex items-center gap-3">
-                <Checkbox name="waf_load_owasp_crs" defaultChecked={globalWaf?.load_owasp_crs ?? true} id="waf_load_owasp_crs" />
+                <Checkbox checked={wafLoadOwaspCrs} onCheckedChange={(v) => setWafLoadOwaspCrs(!!v)} id="waf_load_owasp_crs" />
                 <Label htmlFor="waf_load_owasp_crs">
                   Load OWASP Core Rule Set{" "}
                   <span className="text-xs text-muted-foreground">(covers SQLi, XSS, LFI, RCE — recommended)</span>
@@ -653,7 +657,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
                 <Label htmlFor="waf_custom_directives">Custom SecLang Directives</Label>
                 <Textarea
                   id="waf_custom_directives"
-                  name="waf_custom_directives"
+                  name="wafCustomDirectives"
                   rows={3}
                   value={wafCustomDirectives}
                   onChange={(e) => setWafCustomDirectives(e.target.value)}
