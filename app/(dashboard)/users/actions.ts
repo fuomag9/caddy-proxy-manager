@@ -36,7 +36,7 @@ export async function createUserAction(formData: FormData) {
     name,
     role,
     provider: "credentials",
-    subject: email.split("@")[0]?.toLowerCase() ?? email,
+    subject: email,
     passwordHash,
   });
 

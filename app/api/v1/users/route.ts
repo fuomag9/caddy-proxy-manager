@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       name,
       role,
       provider: "credentials",
-      subject: email.split("@")[0]?.toLowerCase() ?? email,
+      subject: email,
       passwordHash,
     });
 

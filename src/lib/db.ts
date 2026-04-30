@@ -345,10 +345,11 @@ function runBetterAuthDataMigration() {
   // Populate username field for all users (derived from email prefix)
   const usersWithoutUsername = db.select().from(users).where(isNull(users.username)).all();
   for (const user of usersWithoutUsername) {
-    const usernameFromEmail = user.email.split("@")[0] || user.email;
+    const usernameFromEmail = user.email.toLowerCase();
+    const displayUsername = user.email.split("@")[0] || user.email;
     db.update(users).set({
-      username: usernameFromEmail.toLowerCase(),
-      displayUsername: usernameFromEmail,
+      username: usernameFromEmail,
+      displayUsername,
     }).where(eq(users.id, user.id)).run();
   }
 

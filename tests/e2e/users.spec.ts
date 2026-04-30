@@ -172,7 +172,7 @@ test.describe('Users page', () => {
   test('creating a user via the form provisions a working credential account', async ({ page, browser }) => {
     const email = `newuser-ui-${Date.now()}@test.local`;
     const password = 'SecurePass2026!';
-    const expectedUsername = email.split('@')[0];
+    const expectedUsername = email;
 
     await page.getByRole('button', { name: /create user/i }).click();
 
@@ -200,10 +200,10 @@ test.describe('Users page', () => {
     await context.close();
   });
 
-  test('creating a user with a specific role shows correct badge and derived username works', async ({ page, browser }) => {
+  test('creating a user with a specific role shows correct badge and email login works', async ({ page, browser }) => {
     const email = `viewer-ui-${Date.now()}@test.local`;
     const password = 'ViewerPass2026!';
-    const expectedUsername = email.split('@')[0];
+    const expectedUsername = email;
 
     await page.getByRole('button', { name: /create user/i }).click();
 
@@ -252,7 +252,7 @@ test.describe('Users API v1 — create user (POST)', () => {
     const origin = new URL(page.url()).origin;
     const email = `api-created-${Date.now()}@test.local`;
     const password = 'ApiPass2026!';
-    const expectedUsername = email.split('@')[0];
+    const expectedUsername = email;
 
     const response = await page.request.post('http://localhost:3000/api/v1/users', {
       headers: { Origin: origin },

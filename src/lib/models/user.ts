@@ -83,7 +83,7 @@ export async function createUser(data: {
   const role = data.role ?? "user";
   const email = data.email.trim().toLowerCase();
   const provider = data.provider === "credential" ? "credentials" : data.provider;
-  const username = data.username ?? email.split("@")[0]?.toLowerCase() ?? email;
+  const username = data.username ?? email;
   const displayUsername = data.displayUsername ?? data.name ?? email.split("@")[0];
 
   const [user] = await db
