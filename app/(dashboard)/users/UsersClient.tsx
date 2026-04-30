@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { UserCog, Trash2, Pencil, Ban, CheckCircle2 } from "lucide-react";
+import { UserCog, Trash2, Pencil, Ban, CheckCircle2, Plus } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import {
+  createUserAction,
   updateUserRoleAction,
   updateUserStatusAction,
   updateUserInfoAction,
@@ -49,6 +50,8 @@ export default function UsersClient({ users }: Props) {
   const router = useRouter();
   const [editUserId, setEditUserId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [createRole, setCreateRole] = useState<UserEntry["role"]>("user");
 
   const filtered = search
     ? users.filter(
@@ -76,7 +79,62 @@ export default function UsersClient({ users }: Props) {
         <span className="text-sm text-muted-foreground ml-auto">
           {filtered.length} user{filtered.length !== 1 ? "s" : ""}
         </span>
+        <Button onClick={() => setShowCreate(!showCreate)} variant="outline" size="sm">
+          <Plus className="h-4 w-4 mr-1" />
+          Create User
+        </Button>
       </div>
+
+      {showCreate && (
+        <Card>
+          <CardContent className="pt-4">
+            <form
+              action={async (formData) => {
+                formData.set("role", createRole);
+                await createUserAction(formData);
+                setShowCreate(false);
+                setCreateRole("user");
+                router.refresh();
+              }}
+              className="flex flex-col gap-3"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="create-email">Email</Label>
+                  <Input id="create-email" name="email" type="email" placeholder="user@example.com" required data-testid="create-email" />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="create-name">Name</Label>
+                  <Input id="create-name" name="name" placeholder="Display name" data-testid="create-name" />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="create-role">Role</Label>
+                  <Select value={createRole} onValueChange={(v) => setCreateRole(v as UserEntry["role"])}>
+                    <SelectTrigger id="create-role" data-testid="create-role">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="create-password">Password</Label>
+                  <Input id="create-password" name="password" type="password" placeholder="Min 8 characters" required minLength={8} data-testid="create-password" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" size="sm">Create</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCreate(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       {filtered.length === 0 && (
         <Card>

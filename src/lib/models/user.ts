@@ -76,10 +76,14 @@ export async function createUser(data: {
   subject: string;
   avatarUrl?: string | null;
   passwordHash?: string | null;
+  username?: string | null;
+  displayUsername?: string | null;
 }): Promise<User> {
   const now = nowIso();
   const role = data.role ?? "user";
   const email = data.email.trim().toLowerCase();
+  const username = data.username ?? email;
+  const displayUsername = data.displayUsername ?? data.name ?? email.split("@")[0];
 
   const [user] = await db
     .insert(users)
@@ -92,6 +96,8 @@ export async function createUser(data: {
       subject: data.subject,
       avatarUrl: data.avatarUrl ?? null,
       status: "active",
+      username,
+      displayUsername,
       createdAt: now,
       updatedAt: now
     })

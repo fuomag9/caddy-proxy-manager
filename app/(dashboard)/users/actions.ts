@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import {
+  createUser,
   updateUserProfile,
   updateUserRole,
   updateUserStatus,
@@ -10,6 +11,42 @@ import {
   type User,
 } from "@/src/lib/models/user";
 import { logAuditEvent } from "@/src/lib/audit";
+
+export async function createUserAction(formData: FormData) {
+  const session = await requireAdmin();
+  const actorId = Number(session.user.id);
+
+  const email = String(formData.get("email") ?? "").trim();
+  const name = formData.get("name") ? String(formData.get("name")).trim() : null;
+  const role = (String(formData.get("role") ?? "user")) as User["role"];
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !password) {
+    throw new Error("Email and password are required");
+  }
+
+  const bcrypt = await import("bcryptjs");
+  const passwordHash = bcrypt.default.hashSync(password, 12);
+
+  const user = await createUser({
+    email,
+    name,
+    role,
+    provider: "credential",
+    subject: email,
+    passwordHash,
+  });
+
+  logAuditEvent({
+    userId: actorId,
+    action: "create",
+    entityType: "user",
+    entityId: user.id,
+    summary: `Created user ${user.id} (${email}) with role ${role}`,
+  });
+
+  revalidatePath("/users");
+}
 
 export async function updateUserRoleAction(userId: number, role: User["role"]) {
   const session = await requireAdmin();
