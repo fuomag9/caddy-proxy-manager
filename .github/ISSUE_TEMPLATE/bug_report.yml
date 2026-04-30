@@ -1,0 +1,93 @@
+name: Bug report
+description: Create a report to help us improve
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Are you in the right place?**
+        - If you are looking for support, please use [Discussions](https://github.com/fuomag9/caddy-proxy-manager/discussions).
+        - If you think you found a bug with Caddy Proxy Manager, you are in the *right place*.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched for similar issues (both open and closed)
+          required: true
+
+  - type: input
+    id: docker_digest
+    attributes:
+      label: Docker image SHA256 digest
+      description: Run `docker inspect --format='{{index .RepoDigests 0}}' <container>` to get the exact digest.
+      placeholder: "e.g. sha256:abc123..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide detailed steps so we can reproduce the issue.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, drag and drop screenshots here to help explain your problem.
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: Which OS is running on the host machine?
+      placeholder: "e.g. Ubuntu 24.04, Debian 12, macOS 15"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: docker_compose
+    attributes:
+      label: Docker Compose
+      options:
+        - label: I have NOT modified the default docker-compose.yml
+          required: false
+        - label: I HAVE modified the docker-compose.yml (please describe modifications below)
+          required: false
+
+  - type: textarea
+    id: compose_modifications
+    attributes:
+      label: Docker Compose modifications
+      description: If you checked "I HAVE modified", describe what you changed.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Docker version, docker-compose.yml, logs, browser version, etc. Too much info is better than too little.
