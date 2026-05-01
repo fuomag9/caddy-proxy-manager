@@ -66,8 +66,13 @@ detect_project_name() {
   fi
 }
 
+APPLY_LOCK="$DATA_DIR/.l4-apply.lock"
+
 # Apply the current port override — recreates only the caddy container.
 do_apply() {
+  # Record timestamp so startup can detect an in-progress apply.
+  date +%s > "$APPLY_LOCK"
+
   COMPOSE_PROJECT="$(detect_project_name)"
   log "Using compose project: $COMPOSE_PROJECT"
 
@@ -135,16 +140,35 @@ do_apply() {
   # Delete the trigger file after processing so stale triggers don't cause
   # "Waiting for port manager sidecar..." on the next boot.
   rm -f "$TRIGGER_FILE"
+
+  # Clear the apply lock — the apply completed (success or failure).
+  rm -f "$APPLY_LOCK"
 }
 
 # ---------------------------------------------------------------------------
 # Startup: always apply the override so caddy has the correct ports bound.
 # (The main compose stack starts caddy without the L4 ports override file.)
-# Only apply if the override file exists — it is created on first "Apply Ports".
+# Only apply if the override file exists (created on first "Apply Ports").
+#
+# If the apply lock was written less than 10 s ago, this container was just
+# recreated as a side effect of a compose "up" targeting caddy. In that
+# case skip the re-apply — the compose operation is already in progress.
 # ---------------------------------------------------------------------------
 if [ -f "$OVERRIDE_FILE" ]; then
-  log "Startup: applying existing L4 port override..."
-  do_apply
+  SKIP_APPLY=0
+  if [ -f "$APPLY_LOCK" ]; then
+    LOCK_TS=$(cat "$APPLY_LOCK" 2>/dev/null || echo "0")
+    NOW=$(date +%s)
+    if [ $((NOW - LOCK_TS)) -lt 10 ]; then
+      SKIP_APPLY=1
+      log "Startup: restore after compose-up restart — caddy recreation already in progress, skipping..."
+    fi
+  fi
+
+  if [ "$SKIP_APPLY" -eq 0 ]; then
+    log "Startup: applying existing L4 port override..."
+    do_apply
+  fi
 else
   write_status "idle" "Port manager sidecar is running and ready."
   log "Started. No L4 port override file yet."
