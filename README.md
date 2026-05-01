@@ -100,7 +100,7 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `INSTANCE_SYNC_ALLOW_HTTP` | Allow sync over HTTP (for internal Docker networks) | `false` | No |
 | `CLICKHOUSE_URL` | ClickHouse HTTP endpoint for analytics | `http://clickhouse:8123` | No |
 | `CLICKHOUSE_USER` | ClickHouse username | `cpm` | No |
-| `CLICKHOUSE_PASSWORD` | ClickHouse password (`openssl rand -base64 32`) | None | **Yes** |
+| `CLICKHOUSE_PASSWORD` | ClickHouse password (`openssl rand -base64 32`). Required when the `clickhouse` profile is active. | None | No (required if analytics enabled) |
 | `CLICKHOUSE_DB` | ClickHouse database name | `analytics` | No |
 
 **Production Requirements:**
@@ -198,6 +198,48 @@ Geo blocking requires MaxMind GeoLite2 Country and/or ASN databases. Use the bun
    ```
 
 The databases are stored in the `geoip-data` Docker volume and shared between the web and Caddy containers.
+
+---
+
+## Analytics
+
+Analytics uses a bundled ClickHouse instance for storing and querying traffic events and WAF events. Data is retained for **90 days** via ClickHouse's TTL.
+
+### Enabling analytics (recommended)
+
+Analytics is enabled via the `clickhouse` Docker Compose profile. The default `.env.example` has it on:
+
+```env
+COMPOSE_PROFILES=clickhouse
+CLICKHOUSE_PASSWORD=your-clickhouse-password   # openssl rand -base64 32
+```
+
+Then start (or restart) the stack:
+
+```bash
+docker compose up -d
+```
+
+### Disabling analytics
+
+Remove `clickhouse` from `COMPOSE_PROFILES` (or leave the variable empty) and omit `CLICKHOUSE_PASSWORD`:
+
+```env
+COMPOSE_PROFILES=
+```
+
+The web container starts normally without ClickHouse. The Analytics page shows a notice explaining that ClickHouse is not enabled, and no data is collected.
+
+### Combining profiles
+
+To run both analytics and GeoIP updates simultaneously, list both profiles:
+
+```env
+COMPOSE_PROFILES=clickhouse,geoipupdate
+CLICKHOUSE_PASSWORD=…
+GEOIPUPDATE_ACCOUNT_ID=…
+GEOIPUPDATE_LICENSE_KEY=…
+```
 
 ---
 

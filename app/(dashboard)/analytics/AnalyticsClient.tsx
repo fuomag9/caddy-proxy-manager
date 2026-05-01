@@ -54,6 +54,7 @@ interface AnalyticsSummary {
   blockedPercent: number;
   bytesServed: number;
   loggingDisabled: boolean;
+  analyticsDisabled: boolean;
 }
 
 interface TimelineBucket { ts: number; total: number; blocked: number; }
@@ -483,8 +484,18 @@ export default function AnalyticsClient() {
         </div>
       </div>
 
+      {/* Analytics disabled alert */}
+      {summary?.analyticsDisabled && (
+        <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-300">
+          ClickHouse analytics is not enabled — traffic and WAF data is not being collected.{' '}
+          Add <code className="font-mono bg-blue-500/10 px-1 rounded">COMPOSE_PROFILES=clickhouse</code> and{' '}
+          <code className="font-mono bg-blue-500/10 px-1 rounded">CLICKHOUSE_PASSWORD=…</code> to your{' '}
+          <code className="font-mono bg-blue-500/10 px-1 rounded">.env</code> and restart to enable analytics.
+        </div>
+      )}
+
       {/* Logging disabled alert */}
-      {summary?.loggingDisabled && (
+      {summary?.loggingDisabled && !summary?.analyticsDisabled && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
           Caddy access logging is not enabled — no traffic data is being collected.{' '}
           <Link href="/settings" className="underline underline-offset-2">Enable logging in Settings</Link>.
