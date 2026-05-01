@@ -13,7 +13,8 @@ export const AUTH_DIR = resolve(__dirname, '.auth');
 export const AUTH_FILE = resolve(AUTH_DIR, 'admin.json');
 const MAX_WAIT_MS = 180_000;
 const POLL_INTERVAL_MS = 3_000;
-const ENV = { ...process.env, CLICKHOUSE_PASSWORD: 'test-clickhouse-password-2026', COMPOSE_PROFILES: 'clickhouse' };
+// No CLICKHOUSE_PASSWORD — analytics should be disabled
+const ENV = { ...process.env };
 
 async function waitForHealth(): Promise<void> {
   const start = Date.now();
@@ -23,18 +24,18 @@ async function waitForHealth(): Promise<void> {
     try {
       const res = await fetch(HEALTH_URL);
       if (res.status === 200) {
-        console.log(`[global-setup] App is healthy (attempt ${attempt})`);
+        console.log(`[global-setup-no-ch] App is healthy (attempt ${attempt})`);
         return;
       }
-      console.log(`[global-setup] Health check attempt ${attempt}: HTTP ${res.status}, retrying...`);
+      console.log(`[global-setup-no-ch] Health check attempt ${attempt}: HTTP ${res.status}, retrying...`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.log(`[global-setup] Health check attempt ${attempt}: ${msg}, retrying in ${POLL_INTERVAL_MS / 1000}s...`);
+      console.log(`[global-setup-no-ch] Health check attempt ${attempt}: ${msg}, retrying in ${POLL_INTERVAL_MS / 1000}s...`);
     }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
 
-  console.error('[global-setup] Health check timed out. Container logs:');
+  console.error('[global-setup-no-ch] Health check timed out. Container logs:');
   try {
     execFileSync('docker', [...COMPOSE_ARGS, 'logs', '--tail=50'], { stdio: 'inherit', cwd: process.cwd(), env: ENV });
   } catch { /* ignore */ }
@@ -42,35 +43,26 @@ async function waitForHealth(): Promise<void> {
   throw new Error(`App did not become healthy within ${MAX_WAIT_MS}ms`);
 }
 
-/**
- * Wait for Caddy to be healthy according to Docker's health status.
- *
- * The l4-port-manager runs `docker compose up --force-recreate caddy` on
- * startup if an L4 port override file is already present (e.g. left over from
- * a previous run whose teardown was interrupted).  `docker compose up --wait`
- * may return before that startup apply completes, so we poll explicitly here
- * to ensure Caddy is stable before tests begin.
- */
 async function waitForCaddyHealthy(): Promise<void> {
   const start = Date.now();
   const maxWait = 90_000;
-  console.log('[global-setup] Verifying Caddy is healthy...');
+  console.log('[global-setup-no-ch] Verifying Caddy is healthy...');
   while (Date.now() - start < maxWait) {
     const result = spawnSync('docker', ['inspect', '--format={{.State.Health.Status}}', 'caddy-proxy-manager-caddy'], {
       encoding: 'utf-8',
       cwd: process.cwd(),
     });
     if (result.status === 0 && result.stdout.trim() === 'healthy') {
-      console.log('[global-setup] Caddy is healthy.');
+      console.log('[global-setup-no-ch] Caddy is healthy.');
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
-  console.warn('[global-setup] Caddy health wait timed out — proceeding anyway.');
+  console.warn('[global-setup-no-ch] Caddy health wait timed out — proceeding anyway.');
 }
 
 async function seedAuthState(): Promise<void> {
-  console.log('[global-setup] Seeding auth state via browser login...');
+  console.log('[global-setup-no-ch] Seeding auth state via browser login...');
   mkdirSync(AUTH_DIR, { recursive: true });
 
   const browser = await chromium.launch();
@@ -82,19 +74,18 @@ async function seedAuthState(): Promise<void> {
     await page.getByRole('textbox', { name: /password/i }).fill('TestPassword2026!');
     await page.getByRole('button', { name: /sign in/i }).click();
 
-    // Wait for redirect away from /login
     await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 15_000 });
-    console.log(`[global-setup] Login succeeded, landed on: ${page.url()}`);
+    console.log(`[global-setup-no-ch] Login succeeded, landed on: ${page.url()}`);
 
     await page.context().storageState({ path: AUTH_FILE });
-    console.log('[global-setup] Auth state saved to', AUTH_FILE);
+    console.log('[global-setup-no-ch] Auth state saved to', AUTH_FILE);
   } finally {
     await browser.close();
   }
 }
 
 export default async function globalSetup() {
-  console.log('[global-setup] Starting Docker Compose test stack...');
+  console.log('[global-setup-no-ch] Starting Docker Compose test stack (no ClickHouse)...');
   execFileSync('docker', [
     ...COMPOSE_ARGS,
     'up', '-d', '--build',
@@ -105,10 +96,10 @@ export default async function globalSetup() {
     env: ENV,
   });
 
-  console.log('[global-setup] Containers up. Waiting for /api/health...');
+  console.log('[global-setup-no-ch] Containers up. Waiting for /api/health...');
   await waitForHealth();
   await waitForCaddyHealthy();
   await seedAuthState();
 
-  console.log('[global-setup] Done.');
+  console.log('[global-setup-no-ch] Done.');
 }

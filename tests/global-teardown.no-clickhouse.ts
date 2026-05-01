@@ -9,22 +9,22 @@ const COMPOSE_ARGS = [
 ];
 
 export default async function globalTeardown() {
-  console.log('[global-teardown] Stopping Docker Compose test stack...');
+  console.log('[global-teardown-no-ch] Stopping Docker Compose test stack (no ClickHouse)...');
   try {
     execFileSync('docker', [...COMPOSE_ARGS, 'down', '-v', '--remove-orphans'], {
       stdio: 'inherit',
       cwd: process.cwd(),
-      env: { ...process.env, CLICKHOUSE_PASSWORD: 'test-clickhouse-password-2026', COMPOSE_PROFILES: 'clickhouse' },
+      env: { ...process.env },
     });
   } catch (err) {
-    console.warn('[global-teardown] docker compose down failed:', err);
+    console.warn('[global-teardown-no-ch] docker compose down failed:', err);
   }
 
   const authDir = resolve(__dirname, '.auth');
   if (existsSync(authDir)) {
     rmSync(authDir, { recursive: true, force: true });
-    console.log('[global-teardown] Removed', authDir);
+    console.log('[global-teardown-no-ch] Removed', authDir);
   }
 
-  console.log('[global-teardown] Done.');
+  console.log('[global-teardown-no-ch] Done.');
 }

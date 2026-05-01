@@ -17,7 +17,8 @@
     "test:ui": "vitest --ui --config tests/vitest.config.ts",
     "test:e2e": "playwright test --config tests/playwright.config.ts",
     "test:e2e:ui": "playwright test --ui --config tests/playwright.config.ts",
-    "test:e2e:headed": "playwright test --headed --config tests/playwright.config.ts"
+    "test:e2e:headed": "playwright test --headed --config tests/playwright.config.ts",
+    "test:e2e:no-clickhouse": "playwright test --config tests/playwright.no-clickhouse.config.ts"
   },
   "dependencies": {
     "@clickhouse/client": "^1.18.3",
