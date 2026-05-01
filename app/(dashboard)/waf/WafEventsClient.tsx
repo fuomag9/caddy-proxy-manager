@@ -491,20 +491,20 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
       ),
     },
     {
-      id: "blocked", label: "Action", width: 90,
+      id: "blocked", label: "Action", width: 85,
       render: (r: WafEvent) => <BlockedChip blocked={r.blocked} />,
     },
     {
-      id: "severity", label: "Severity", width: 100,
+      id: "severity", label: "Severity", width: 90,
       render: (r: WafEvent) => <SeverityChip severity={r.severity} />,
     },
     {
-      id: "host", label: "Host", width: 150,
+      id: "host", label: "Host", width: 130,
       render: (r: WafEvent) => (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="font-mono text-[0.8rem] max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap block">
+              <span className="font-mono text-[0.8rem] max-w-[130px] overflow-hidden text-ellipsis whitespace-nowrap block">
                 {r.host || <span className="opacity-40">—</span>}
               </span>
             </TooltipTrigger>
@@ -514,7 +514,7 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
       ),
     },
     {
-      id: "clientIp", label: "Client IP", width: 140,
+      id: "clientIp", label: "Client IP", width: 130,
       render: (r: WafEvent) => (
         <div className="flex items-center gap-1">
           <span className="font-mono text-[0.8rem] whitespace-nowrap">{r.clientIp}</span>
@@ -527,18 +527,18 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
       ),
     },
     {
-      id: "method", label: "M", width: 60,
+      id: "method", label: "M", width: 50,
       render: (r: WafEvent) => (
         <Badge variant="outline" className="font-mono text-[0.7rem]">{r.method || "—"}</Badge>
       ),
     },
     {
-      id: "uri", label: "URI", width: 200,
+      id: "uri", label: "URI", width: 180,
       render: (r: WafEvent) => (
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="font-mono text-[0.8rem] max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap block">
+              <span className="font-mono text-[0.8rem] max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap block">
                 {r.uri || <span className="opacity-40">—</span>}
               </span>
             </TooltipTrigger>
@@ -548,25 +548,29 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
       ),
     },
     {
-      id: "ruleId", label: "Rule ID", width: 80,
+      id: "ruleId", label: "Rule ID", width: 70,
       render: (r: WafEvent) => (
         <span className="text-muted-foreground font-mono text-[0.8rem]">{r.ruleId ?? "—"}</span>
       ),
     },
     {
-      id: "ruleMessage", label: "Rule Message",
-      render: (r: WafEvent) => (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="overflow-hidden text-ellipsis whitespace-nowrap block text-sm">
-                {r.ruleMessage ?? <span className="opacity-40">—</span>}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{r.ruleMessage ?? ""}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      ),
+      id: "ruleMessage", label: "Rule Message", width: 300,
+      render: (r: WafEvent) => {
+        const msg = r.ruleMessage;
+        if (!msg) return <span className="opacity-40 text-sm">—</span>;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="text-sm leading-relaxed line-clamp-2">
+                  {msg}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[400px] whitespace-normal">{msg}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      },
     },
   ];
 
