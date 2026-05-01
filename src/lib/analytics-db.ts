@@ -9,6 +9,7 @@ import {
   queryUserAgents,
   queryBlocked,
   queryDistinctHosts,
+  isAnalyticsEnabled,
   type AnalyticsSummary as CHSummary,
   type TimelineBucket,
   type CountryStats,
@@ -36,12 +37,14 @@ export const INTERVAL_SECONDS: Record<Interval, number> = {
 
 export interface AnalyticsSummary extends CHSummary {
   loggingDisabled: boolean;
+  analyticsDisabled: boolean;
 }
 
 export async function getAnalyticsSummary(from: number, to: number, hosts: string[]): Promise<AnalyticsSummary> {
   const loggingDisabled = !existsSync(LOG_FILE);
+  const analyticsDisabled = !isAnalyticsEnabled();
   const summary = await querySummary(from, to, hosts);
-  return { ...summary, loggingDisabled };
+  return { ...summary, loggingDisabled, analyticsDisabled };
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────

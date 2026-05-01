@@ -12,6 +12,15 @@ if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(CH_DB)) {
   throw new Error(`CLICKHOUSE_DB contains invalid characters: ${CH_DB}`);
 }
 
+// ── Analytics readiness flag ────────────────────────────────────────────────
+
+let analyticsReady = false;
+
+/** Returns true once ClickHouse has been successfully initialised. */
+export function isAnalyticsEnabled(): boolean {
+  return analyticsReady;
+}
+
 // ── Singleton client ────────────────────────────────────────────────────────
 
 let client: ClickHouseClient | null = null;
@@ -100,6 +109,10 @@ const WAF_EVENTS_MIGRATIONS = [
 ];
 
 export async function initClickHouse(): Promise<void> {
+  if (!CH_PASS) {
+    console.log('ClickHouse analytics disabled (CLICKHOUSE_PASSWORD not set)');
+    return;
+  }
   const ch = getClient();
   await ch.command({ query: `CREATE DATABASE IF NOT EXISTS ${CH_DB}` });
   await ch.command({ query: TRAFFIC_EVENTS_DDL });
@@ -107,6 +120,7 @@ export async function initClickHouse(): Promise<void> {
   for (const q of [...TRAFFIC_EVENTS_MIGRATIONS, ...WAF_EVENTS_MIGRATIONS]) {
     await ch.command({ query: q });
   }
+  analyticsReady = true;
 }
 
 export async function closeClickHouse(): Promise<void> {
@@ -147,7 +161,7 @@ export interface WafEventRow {
 }
 
 export async function insertTrafficEvents(rows: TrafficEventRow[]): Promise<void> {
-  if (rows.length === 0) return;
+  if (!analyticsReady || rows.length === 0) return;
   const ch = getClient();
   // Convert unix timestamp to ClickHouse DateTime string
   const values = rows.map(r => ({
@@ -159,7 +173,7 @@ export async function insertTrafficEvents(rows: TrafficEventRow[]): Promise<void
 }
 
 export async function insertWafEvents(rows: WafEventRow[]): Promise<void> {
-  if (rows.length === 0) return;
+  if (!analyticsReady || rows.length === 0) return;
   const ch = getClient();
   const values = rows.map(r => ({
     ...r,
@@ -204,6 +218,7 @@ function safeUint(n: number): number {
 }
 
 async function queryRows<T>(query: string, query_params?: QueryParams): Promise<T[]> {
+  if (!analyticsReady) return [];
   const ch = getClient();
   const result = await ch.query({ query, query_params, format: 'JSONEachRow' });
   return result.json<T>();
@@ -401,6 +416,7 @@ export interface BlockedPage {
 }
 
 export async function queryBlocked(from: number, to: number, hosts: string[], page: number): Promise<BlockedPage> {
+  if (!analyticsReady) return { events: [], total: 0, page: 1, pages: 1 };
   const pageSize = 10;
   const hf = hostFilter(hosts);
   const tp = timeParams(from, to);

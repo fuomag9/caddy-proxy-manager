@@ -53,10 +53,10 @@ services:
       OAUTH_USERINFO_URL: ${OAUTH_USERINFO_URL:-}
       OAUTH_ALLOW_AUTO_LINKING: ${OAUTH_ALLOW_AUTO_LINKING:-false}
 
-      # ClickHouse analytics database
+      # ClickHouse analytics database (optional — omit CLICKHOUSE_PASSWORD to disable analytics)
       CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-cpm}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?ERROR - CLICKHOUSE_PASSWORD is required}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
     group_add:
       - "${CADDY_GID:-10000}"  # caddy's GID — lets the web user read /logs/access.log
@@ -69,6 +69,7 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
+        required: false
     networks:
       - caddy-network
     healthcheck:
@@ -171,6 +172,7 @@ services:
   clickhouse:
     container_name: caddy-proxy-manager-clickhouse
     image: clickhouse/clickhouse-server:latest-alpine
+    profiles: [clickhouse]
     restart: always
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
