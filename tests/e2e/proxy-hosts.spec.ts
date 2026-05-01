@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const API_PROXY_HOSTS = 'http://localhost:3000/api/v1/proxy-hosts';
+const API_AUTHENTIK_SETTINGS = 'http://localhost:3000/api/v1/settings/authentik';
 
 test.describe('Proxy Hosts', () => {
   test.beforeEach(async ({ page }) => {
@@ -197,6 +198,57 @@ test.describe('Proxy Hosts', () => {
       expect(afterEnable.rewrite).toBeDefined();
     } finally {
       await page.request.delete(`${API_PROXY_HOSTS}/${created.id}`, { headers: { Origin: origin } });
+    }
+  });
+
+  test('create host Authentik fields are prefilled from global defaults (#141)', async ({ page }) => {
+    const origin = new URL(page.url()).origin;
+    const defaultSettings = {
+      outpostDomain: 'auth.example.test',
+      outpostUpstream: 'http://authentik.internal:9000',
+      authEndpoint: '/outpost.goauthentik.io/auth/caddy',
+    };
+
+    const originalSettingsResp = await page.request.get(API_AUTHENTIK_SETTINGS);
+    expect(originalSettingsResp.ok()).toBeTruthy();
+    const originalSettings = await originalSettingsResp.json() as Partial<typeof defaultSettings>;
+
+    try {
+      await page.goto('/settings');
+
+      await page.getByLabel('Outpost domain').fill(defaultSettings.outpostDomain);
+      await page.getByLabel('Outpost upstream').fill(defaultSettings.outpostUpstream);
+      await page.getByLabel('Auth endpoint').fill(defaultSettings.authEndpoint);
+      await page.getByRole('button', { name: /save authentik defaults/i }).click();
+      await expect(page.getByText(/authentik defaults saved successfully/i)).toBeVisible({ timeout: 10000 });
+
+      await page.goto('/proxy-hosts');
+      await page.getByRole('button', { name: /create host/i }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+
+      const dialog = page.getByRole('dialog');
+      const authentikSection = dialog.locator('div:has(> input[name="authentikPresent"])');
+      const authentikSwitch = authentikSection.getByRole('switch');
+      await expect(authentikSwitch).toHaveAttribute('data-state', 'unchecked');
+
+      await authentikSwitch.click();
+      await expect(authentikSwitch).toHaveAttribute('data-state', 'checked');
+
+      await expect(dialog.locator('input[name="authentikOutpostDomain"]')).toHaveValue(defaultSettings.outpostDomain);
+      await expect(dialog.locator('input[name="authentikOutpostUpstream"]')).toHaveValue(defaultSettings.outpostUpstream);
+      await expect(dialog.locator('input[name="authentikAuthEndpoint"]')).toHaveValue(defaultSettings.authEndpoint);
+    } finally {
+      if (originalSettings.outpostDomain && originalSettings.outpostUpstream) {
+        const restoreResp = await page.request.put(API_AUTHENTIK_SETTINGS, {
+          headers: { Origin: origin },
+          data: {
+            outpostDomain: originalSettings.outpostDomain,
+            outpostUpstream: originalSettings.outpostUpstream,
+            authEndpoint: originalSettings.authEndpoint ?? '',
+          },
+        });
+        expect(restoreResp.ok()).toBeTruthy();
+      }
     }
   });
 

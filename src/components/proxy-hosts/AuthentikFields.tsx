@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AuthentikSettings } from "@/lib/settings";
 import { ProxyHost } from "@/lib/models/proxy-hosts";
 
@@ -23,6 +23,27 @@ const AUTHENTIK_DEFAULT_HEADERS = [
 ];
 
 const AUTHENTIK_DEFAULT_TRUSTED_PROXIES = ["private_ranges"];
+
+function getAuthentikFormDefaults(
+    authentik: ProxyHost["authentik"] | null,
+    defaults: AuthentikSettings | null | undefined
+) {
+    return {
+        enabled: authentik?.enabled ?? false,
+        outpostDomain: authentik?.outpostDomain ?? defaults?.outpostDomain ?? "",
+        outpostUpstream: authentik?.outpostUpstream ?? defaults?.outpostUpstream ?? "",
+        authEndpoint: authentik?.authEndpoint ?? defaults?.authEndpoint ?? "",
+        copyHeaders:
+            authentik && authentik.copyHeaders.length > 0
+                ? authentik.copyHeaders.join("\n")
+                : AUTHENTIK_DEFAULT_HEADERS.join("\n"),
+        trustedProxies:
+            authentik && authentik.trustedProxies.length > 0
+                ? authentik.trustedProxies.join("\n")
+                : AUTHENTIK_DEFAULT_TRUSTED_PROXIES.join("\n"),
+        setHostHeader: authentik?.setOutpostHostHeader ?? true
+    };
+}
 
 function HiddenCheckboxField({
     name,
@@ -71,20 +92,30 @@ export function AuthentikFields({
     defaults?: AuthentikSettings | null;
 }) {
     const initial = authentik ?? null;
-    const [enabled, setEnabled] = useState(initial?.enabled ?? false);
+    const [enabled, setEnabled] = useState(false);
+    const [outpostDomain, setOutpostDomain] = useState("");
+    const [outpostUpstream, setOutpostUpstream] = useState("");
+    const [authEndpoint, setAuthEndpoint] = useState("");
+    const [copyHeadersValue, setCopyHeadersValue] = useState("");
+    const [trustedProxiesValue, setTrustedProxiesValue] = useState("");
+    const [setHostHeaderDefault, setSetHostHeaderDefault] = useState(true);
 
-    const copyHeadersValue =
-        initial && initial.copyHeaders.length > 0 ? initial.copyHeaders.join("\n") : AUTHENTIK_DEFAULT_HEADERS.join("\n");
-    const trustedProxiesValue =
-        initial && initial.trustedProxies.length > 0
-            ? initial.trustedProxies.join("\n")
-            : AUTHENTIK_DEFAULT_TRUSTED_PROXIES.join("\n");
-    const setHostHeaderDefault = initial?.setOutpostHostHeader ?? true;
+    useEffect(() => {
+        const next = getAuthentikFormDefaults(initial, defaults);
+        setEnabled(next.enabled);
+        setOutpostDomain(next.outpostDomain);
+        setOutpostUpstream(next.outpostUpstream);
+        setAuthEndpoint(next.authEndpoint);
+        setCopyHeadersValue(next.copyHeaders);
+        setTrustedProxiesValue(next.trustedProxies);
+        setSetHostHeaderDefault(next.setHostHeader);
+    }, [initial, defaults]);
 
     return (
         <div className="rounded-lg border border-primary bg-primary/5 p-5">
             <input type="hidden" name="authentikPresent" value="1" />
             <input type="hidden" name="authentikEnabledPresent" value="1" />
+            <input type="hidden" name="authentikEnabled" value={enabled ? "true" : "false"} />
             <div className="flex flex-col gap-4">
                 <div className="flex flex-row items-center justify-between">
                     <div>
@@ -92,7 +123,6 @@ export function AuthentikFields({
                         <p className="text-sm text-muted-foreground">Proxy authentication via Authentik outpost</p>
                     </div>
                     <Switch
-                        name="authentikEnabled"
                         checked={enabled}
                         onCheckedChange={setEnabled}
                     />
@@ -108,7 +138,8 @@ export function AuthentikFields({
                             <Input
                                 name="authentikOutpostDomain"
                                 placeholder="outpost.goauthentik.io"
-                                defaultValue={initial?.outpostDomain ?? defaults?.outpostDomain ?? ""}
+                                value={outpostDomain}
+                                onChange={(event) => setOutpostDomain(event.target.value)}
                                 required={enabled}
                                 disabled={!enabled}
                             />
@@ -118,7 +149,8 @@ export function AuthentikFields({
                             <Input
                                 name="authentikOutpostUpstream"
                                 placeholder="https://outpost.internal:9000"
-                                defaultValue={initial?.outpostUpstream ?? defaults?.outpostUpstream ?? ""}
+                                value={outpostUpstream}
+                                onChange={(event) => setOutpostUpstream(event.target.value)}
                                 required={enabled}
                                 disabled={!enabled}
                             />
@@ -128,7 +160,8 @@ export function AuthentikFields({
                             <Input
                                 name="authentikAuthEndpoint"
                                 placeholder="/outpost.goauthentik.io/auth/caddy"
-                                defaultValue={initial?.authEndpoint ?? defaults?.authEndpoint ?? ""}
+                                value={authEndpoint}
+                                onChange={(event) => setAuthEndpoint(event.target.value)}
                                 disabled={!enabled}
                             />
                         </div>
@@ -136,7 +169,8 @@ export function AuthentikFields({
                             <label className="text-sm font-medium mb-1 block">Headers to Copy</label>
                             <Textarea
                                 name="authentikCopyHeaders"
-                                defaultValue={copyHeadersValue}
+                                value={copyHeadersValue}
+                                onChange={(event) => setCopyHeadersValue(event.target.value)}
                                 disabled={!enabled}
                                 rows={3}
                             />
@@ -145,7 +179,8 @@ export function AuthentikFields({
                             <label className="text-sm font-medium mb-1 block">Trusted Proxies</label>
                             <Input
                                 name="authentikTrustedProxies"
-                                defaultValue={trustedProxiesValue}
+                                value={trustedProxiesValue}
+                                onChange={(event) => setTrustedProxiesValue(event.target.value)}
                                 disabled={!enabled}
                             />
                         </div>
