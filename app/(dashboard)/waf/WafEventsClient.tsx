@@ -115,10 +115,47 @@ interface AuditMessageDetails {
 interface AuditMessage {
   message?: string;
   details?: AuditMessageDetails;
+  error_message?: string;
 }
 interface AuditData {
   transaction?: AuditTransaction;
   messages?: AuditMessage[];
+}
+
+function extractBracketField(message: string, field: string): string | null {
+  const match = message.match(new RegExp(`\\[${field} "([^"]*)"\\]`));
+  return match ? match[1] : null;
+}
+
+function extractBracketFields(message: string, field: string): string[] {
+  return [...message.matchAll(new RegExp(`\\[${field} "([^"]*)"\\]`, "g"))].map((match) => match[1]);
+}
+
+function normalizeAuditMessage(message: AuditMessage): AuditMessage {
+  if (message.details || !message.error_message) return message;
+
+  const ruleId = extractBracketField(message.error_message, "id");
+  const msg = extractBracketField(message.error_message, "msg");
+  const severity = extractBracketField(message.error_message, "severity");
+  const logdata = extractBracketField(message.error_message, "data");
+  const file = extractBracketField(message.error_message, "file");
+  const lineNumber = extractBracketField(message.error_message, "line");
+  const tags = extractBracketFields(message.error_message, "tag");
+
+  return {
+    ...message,
+    message: message.message || msg || message.error_message,
+    details: {
+      ruleId: ruleId ? Number.parseInt(ruleId, 10) : undefined,
+      severity: severity ?? undefined,
+      msg: msg ?? undefined,
+      match: logdata ?? undefined,
+      logdata: logdata ?? undefined,
+      file: file ?? undefined,
+      lineNumber: lineNumber ?? undefined,
+      tags: tags.length > 0 ? tags : undefined,
+    },
+  };
 }
 
 /* ── Severity config ──────────────────────────────────────────────────────── */
@@ -219,7 +256,7 @@ function AuditPanel({ rawData }: { rawData: string | null }) {
   const tx   = data.transaction ?? null;
   const req  = tx?.request ?? null;
   const res  = tx?.response ?? null;
-  const msgs = data.messages ?? [];
+  const msgs = (data.messages ?? []).map(normalizeAuditMessage);
 
   const INNER_TABS = [
     { id: "overview",  label: "Overview" },
