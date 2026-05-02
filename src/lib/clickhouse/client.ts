@@ -210,6 +210,31 @@ function timeParams(from: number, to: number): QueryParams {
   return { p_from: safeUint(from), p_to: safeUint(to) };
 }
 
+function buildWafFilter(search?: string, from?: number, to?: number): { where: string; params: QueryParams } {
+  const clauses: string[] = [];
+  let params: QueryParams = {};
+
+  if (Number.isFinite(from) && Number.isFinite(to)) {
+    clauses.push(timeFilter());
+    params = { ...params, ...timeParams(from as number, to as number) };
+  }
+
+  if (search) {
+    clauses.push(`(
+      host ILIKE {p_search:String}
+         OR client_ip ILIKE {p_search:String}
+         OR uri ILIKE {p_search:String}
+         OR rule_message ILIKE {p_search:String}
+    )`);
+    params.p_search = `%${search}%`;
+  }
+
+  return {
+    where: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
+    params,
+  };
+}
+
 /** Clamp a number to a safe non-negative integer (guards against NaN/Infinity). */
 function safeUint(n: number): number {
   if (!Number.isFinite(n) || n < 0) return 0;
@@ -470,19 +495,49 @@ export async function queryWafCount(from: number, to: number): Promise<number> {
   return Number(row?.value ?? 0);
 }
 
-export async function queryWafCountWithSearch(search?: string): Promise<number> {
-  if (!search) {
-    const row = await queryRow<{ value: string }>(`SELECT count() AS value FROM waf_events`);
-    return Number(row?.value ?? 0);
-  }
+export async function queryWafCountWithSearch(search?: string, from?: number, to?: number): Promise<number> {
+  const filter = buildWafFilter(search, from, to);
   const row = await queryRow<{ value: string }>(`
     SELECT count() AS value FROM waf_events
-    WHERE host ILIKE {p_search:String}
-       OR client_ip ILIKE {p_search:String}
-       OR uri ILIKE {p_search:String}
-       OR rule_message ILIKE {p_search:String}
-  `, { p_search: `%${search}%` });
+    ${filter.where}
+  `, filter.params);
   return Number(row?.value ?? 0);
+}
+
+export interface WafEventStats {
+  total: number;
+  blocked: number;
+  critical: number;
+  uniqueHosts: number;
+  ruleIdsTriggered: number;
+}
+
+export async function queryWafEventStatsWithSearch(search?: string, from?: number, to?: number): Promise<WafEventStats> {
+  const filter = buildWafFilter(search, from, to);
+  const row = await queryRow<{
+    total: string;
+    blocked: string;
+    critical: string;
+    unique_hosts: string;
+    rule_ids_triggered: string;
+  }>(`
+    SELECT
+      count() AS total,
+      countIf(blocked) AS blocked,
+      countIf(upperUTF8(ifNull(severity, '')) = 'CRITICAL') AS critical,
+      uniqExact(host) AS unique_hosts,
+      uniqExactIf(rule_id, rule_id IS NOT NULL) AS rule_ids_triggered
+    FROM waf_events
+    ${filter.where}
+  `, filter.params);
+
+  return {
+    total: Number(row?.total ?? 0),
+    blocked: Number(row?.blocked ?? 0),
+    critical: Number(row?.critical ?? 0),
+    uniqueHosts: Number(row?.unique_hosts ?? 0),
+    ruleIdsTriggered: Number(row?.rule_ids_triggered ?? 0),
+  };
 }
 
 export interface TopWafRule {
@@ -595,37 +650,19 @@ export interface WafEvent {
   blocked: boolean;
 }
 
-export async function queryWafEvents(limit = 50, offset = 0, search?: string): Promise<WafEvent[]> {
+export async function queryWafEvents(limit = 50, offset = 0, search?: string, from?: number, to?: number): Promise<WafEvent[]> {
   const safeLimit = safeUint(limit);
   const safeOffset = safeUint(offset);
-
-  let query: string;
-  let params: QueryParams;
-
-  if (search) {
-    query = `
-      SELECT toUInt32(ts) AS ts, host, client_ip, country_code, method, uri,
-             rule_id, rule_message, severity, raw_data, blocked
-      FROM waf_events
-      WHERE host ILIKE {p_search:String}
-         OR client_ip ILIKE {p_search:String}
-         OR uri ILIKE {p_search:String}
-         OR rule_message ILIKE {p_search:String}
-      ORDER BY ts DESC
-      LIMIT {p_limit:UInt32} OFFSET {p_offset:UInt32}
-    `;
-    params = { p_search: `%${search}%`, p_limit: safeLimit, p_offset: safeOffset };
-  } else {
-    query = `
-      SELECT toUInt32(ts) AS ts, host, client_ip, country_code, method, uri,
-             rule_id, rule_message, severity, raw_data, blocked
-      FROM waf_events
-      WHERE 1=1
-      ORDER BY ts DESC
-      LIMIT {p_limit:UInt32} OFFSET {p_offset:UInt32}
-    `;
-    params = { p_limit: safeLimit, p_offset: safeOffset };
-  }
+  const filter = buildWafFilter(search, from, to);
+  const query = `
+    SELECT toUInt32(ts) AS ts, host, client_ip, country_code, method, uri,
+           rule_id, rule_message, severity, raw_data, blocked
+    FROM waf_events
+    ${filter.where}
+    ORDER BY ts DESC
+    LIMIT {p_limit:UInt32} OFFSET {p_offset:UInt32}
+  `;
+  const params = { ...filter.params, p_limit: safeLimit, p_offset: safeOffset };
 
   const rows = await queryRows<{
     ts: string; host: string; client_ip: string; country_code: string | null;

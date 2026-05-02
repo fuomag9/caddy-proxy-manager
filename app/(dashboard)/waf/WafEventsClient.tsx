@@ -21,7 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 import { DataTable } from "@/components/ui/DataTable";
-import type { WafEvent } from "@/lib/models/waf-events";
+import type { WafEvent, WafEventStats } from "@/lib/models/waf-events";
 import type { WafSettings } from "@/lib/settings";
 import {
   suppressWafRuleGloballyAction,
@@ -33,14 +33,47 @@ import {
 
 type Props = {
   events: WafEvent[];
+  stats: WafEventStats;
   pagination: { total: number; page: number; perPage: number };
   initialSearch: string;
+  initialRange: 'all' | '24h' | '7d' | '30d' | 'custom';
+  initialFrom: number | null;
+  initialTo: number | null;
   globalExcluded: number[];
   globalExcludedMessages: Record<number, string | null>;
   globalWafEnabled: boolean;
   hostWafMap: Record<string, number[]>;
   globalWaf: WafSettings | null;
 };
+
+type RangeOption = Props['initialRange'];
+
+function formatDateTimeLocal(unixTs: number | null): string {
+  if (!unixTs) return '';
+  const d = new Date(unixTs * 1000);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+function parseDateTimeLocal(value: string): number | null {
+  if (!value) return null;
+  const ts = Math.floor(new Date(value).getTime() / 1000);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function formatPeriodBadge(range: RangeOption, from: number | null, to: number | null): string {
+  if (range === 'all') return 'All time';
+  if (range === '24h') return 'Last 24 hours';
+  if (range === '7d') return 'Last 7 days';
+  if (range === '30d') return 'Last 30 days';
+  if (!from || !to) return 'Custom range';
+
+  return `${new Date(from * 1000).toLocaleString()} - ${new Date(to * 1000).toLocaleString()}`;
+}
 
 /* ── Audit data types ─────────────────────────────────────────────────────── */
 interface AuditRequest {
@@ -131,23 +164,18 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 }
 
 /* ── Stats bar ────────────────────────────────────────────────────────────── */
-function StatsBar({ events }: { events: WafEvent[] }) {
-  const blocked  = events.filter(e => e.blocked).length;
-  const critical = events.filter(e => e.severity?.toUpperCase() === "CRITICAL").length;
-  const hosts    = new Set(events.map(e => e.host)).size;
-  const rules    = new Set(events.map(e => e.ruleId).filter(Boolean)).size;
-
-  const stats = [
-    { label: "Total Events",       value: events.length, color: "" },
-    { label: "Blocked",            value: blocked,        color: "text-destructive" },
-    { label: "Critical",           value: critical,       color: "text-yellow-500" },
-    { label: "Unique Hosts",       value: hosts,          color: "text-primary" },
-    { label: "Rule IDs Triggered", value: rules,          color: "text-blue-500" },
+function StatsBar({ stats }: { stats: WafEventStats }) {
+  const items = [
+    { label: "Total Events",       value: stats.total,            color: "" },
+    { label: "Blocked",            value: stats.blocked,          color: "text-destructive" },
+    { label: "Critical",           value: stats.critical,         color: "text-yellow-500" },
+    { label: "Unique Hosts",       value: stats.uniqueHosts,      color: "text-primary" },
+    { label: "Rule IDs Triggered", value: stats.ruleIdsTriggered, color: "text-blue-500" },
   ];
 
   return (
     <div className="grid grid-cols-5 gap-3">
-      {stats.map(({ label, value, color }) => (
+      {items.map(({ label, value, color }) => (
         <div key={label} className="rounded-lg border bg-card px-4 py-3 flex flex-col gap-0.5">
           <span className={cn("text-2xl font-bold leading-none", color || "text-foreground")}>{value}</span>
           <span className="text-[0.7rem] text-muted-foreground font-medium">{label}</span>
@@ -658,12 +686,15 @@ function GlobalSuppressedRules({
 }
 
 /* ── Main client component ───────────────────────────────────────────────── */
-export default function WafEventsClient({ events, pagination, initialSearch, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap, globalWaf }: Props) {
+export default function WafEventsClient({ events, stats, pagination, initialSearch, initialRange, initialFrom, initialTo, globalExcluded, globalExcludedMessages, globalWafEnabled, hostWafMap, globalWaf }: Props) {
   const router       = useRouter();
   const pathname     = usePathname();
   const searchParams = useSearchParams();
   const [tab, setTab]                             = useState("events");
   const [searchTerm, setSearchTerm]               = useState(initialSearch);
+  const [range, setRange]                         = useState<RangeOption>(initialRange);
+  const [customFrom, setCustomFrom]               = useState(formatDateTimeLocal(initialFrom));
+  const [customTo, setCustomTo]                   = useState(formatDateTimeLocal(initialTo));
   const [selected, setSelected]                   = useState<WafEvent | null>(null);
   const [localGlobalExcluded, setLocalGlobalExcluded]     = useState(globalExcluded);
   const [localGlobalMessages, setLocalGlobalMessages]     = useState(globalExcludedMessages);
@@ -673,8 +704,14 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   const [wafLoadOwaspCrs, setWafLoadOwaspCrs]     = useState(globalWaf?.load_owasp_crs ?? true);
   const [wafCustomDirectives, setWafCustomDirectives]     = useState(globalWaf?.custom_directives ?? "");
   const [wafShowTemplates, setWafShowTemplates]   = useState(false);
+  const activePeriodLabel = formatPeriodBadge(initialRange, initialFrom, initialTo);
 
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);
+  useEffect(() => {
+    setRange(initialRange);
+    setCustomFrom(formatDateTimeLocal(initialFrom));
+    setCustomTo(formatDateTimeLocal(initialTo));
+  }, [initialRange, initialFrom, initialTo]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateSearch = useCallback(
@@ -691,6 +728,51 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
   );
 
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+  const pushRange = useCallback((nextRange: RangeOption, nextFrom?: string, nextTo?: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('page');
+
+    if (nextRange === 'all') {
+      params.delete('range');
+      params.delete('from');
+      params.delete('to');
+      router.push(`${pathname}?${params.toString()}`);
+      return;
+    }
+
+    params.set('range', nextRange);
+    if (nextRange === 'custom') {
+      const fromTs = parseDateTimeLocal(nextFrom ?? '');
+      const toTs = parseDateTimeLocal(nextTo ?? '');
+      if (fromTs == null || toTs == null || fromTs >= toTs) {
+        toast.error('Choose a valid custom time range');
+        return;
+      }
+      params.set('from', String(fromTs));
+      params.set('to', String(toTs));
+    } else {
+      params.delete('from');
+      params.delete('to');
+    }
+
+    router.push(`${pathname}?${params.toString()}`);
+  }, [pathname, router, searchParams]);
+
+  const selectRange = useCallback((nextRange: Exclude<RangeOption, 'custom'>) => {
+    setRange(nextRange);
+    pushRange(nextRange);
+  }, [pushRange]);
+
+  const activateCustom = useCallback(() => {
+    setRange('custom');
+    if (!customFrom || !customTo) {
+      const now = new Date();
+      const dayAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+      setCustomFrom(formatDateTimeLocal(Math.floor(dayAgo.getTime() / 1000)));
+      setCustomTo(formatDateTimeLocal(Math.floor(now.getTime() / 1000)));
+    }
+  }, [customFrom, customTo]);
 
   const METHOD_COLORS: Record<string, string> = {
     GET:    "text-green-500",
@@ -803,15 +885,36 @@ export default function WafEventsClient({ events, pagination, initialSearch, glo
           <div className={cn("flex gap-6 items-start", selected ? "flex-row" : "flex-col")}>
             {/* Left: table area */}
             <div className="flex-1 flex flex-col gap-4 min-w-0">
-              <StatsBar events={events} />
-              <div className="relative max-w-[480px]">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by host, IP, URI, or rule message..."
-                  value={searchTerm}
-                  onChange={(e) => { setSearchTerm(e.target.value); updateSearch(e.target.value); }}
-                  className="pl-8"
-                />
+              <StatsBar stats={stats} />
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant={range === 'all' ? 'default' : 'outline'} onClick={() => selectRange('all')}>All time</Button>
+                  <Button size="sm" variant={range === '24h' ? 'default' : 'outline'} onClick={() => selectRange('24h')}>24h</Button>
+                  <Button size="sm" variant={range === '7d' ? 'default' : 'outline'} onClick={() => selectRange('7d')}>7d</Button>
+                  <Button size="sm" variant={range === '30d' ? 'default' : 'outline'} onClick={() => selectRange('30d')}>30d</Button>
+                  <Button size="sm" variant={range === 'custom' ? 'default' : 'outline'} onClick={activateCustom}>Custom</Button>
+                  <button type="button" aria-label="Reset period filter" onClick={() => selectRange('all')} className="max-w-full">
+                    <Badge variant="secondary" className="max-w-full truncate text-xs font-normal hover:bg-secondary/80">
+                      {activePeriodLabel}
+                    </Badge>
+                  </button>
+                </div>
+                {range === 'custom' && (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input type="datetime-local" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="sm:w-[220px]" />
+                    <Input type="datetime-local" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="sm:w-[220px]" />
+                    <Button size="sm" onClick={() => pushRange('custom', customFrom, customTo)}>Apply range</Button>
+                  </div>
+                )}
+                <div className="relative max-w-[480px]">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by host, IP, URI, or rule message..."
+                    value={searchTerm}
+                    onChange={(e) => { setSearchTerm(e.target.value); updateSearch(e.target.value); }}
+                    className="pl-8"
+                  />
+                </div>
               </div>
               <DataTable
                 columns={columns}

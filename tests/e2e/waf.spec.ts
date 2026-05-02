@@ -1,6 +1,44 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('WAF', () => {
+  test('WAF events period filters support presets, custom range, and reset badge', async ({ page }) => {
+    const customFrom = '2026-05-01T09:00';
+    const customTo = '2026-05-02T09:30';
+    const expectedFrom = Math.floor(new Date(customFrom).getTime() / 1000);
+    const expectedTo = Math.floor(new Date(customTo).getTime() / 1000);
+
+    await page.goto('/waf');
+
+    await page.getByRole('button', { name: '24h' }).click();
+    await expect(page).toHaveURL(/range=24h/);
+    await expect(page.getByText('Last 24 hours', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: '7d' }).click();
+    await expect(page).toHaveURL(/range=7d/);
+    await expect(page.getByText('Last 7 days', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: '30d' }).click();
+    await expect(page).toHaveURL(/range=30d/);
+    await expect(page.getByText('Last 30 days', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Custom' }).click();
+    const dateInputs = page.locator('input[type="datetime-local"]');
+    await expect(dateInputs).toHaveCount(2);
+    await dateInputs.nth(0).fill(customFrom);
+    await dateInputs.nth(1).fill(customTo);
+    await page.getByRole('button', { name: /apply range/i }).click();
+
+    await expect(page).toHaveURL(new RegExp(`range=custom.*from=${expectedFrom}.*to=${expectedTo}`));
+    await expect(dateInputs.nth(0)).toHaveValue(customFrom);
+    await expect(dateInputs.nth(1)).toHaveValue(customTo);
+
+    await page.getByRole('button', { name: 'Reset period filter' }).click();
+    await expect(page).not.toHaveURL(/range=/);
+    await expect(page).not.toHaveURL(/from=/);
+    await expect(page).not.toHaveURL(/to=/);
+    await expect(page.getByRole('button', { name: 'All time' })).toBeVisible();
+  });
+
   test('WAF page loads without redirecting to login', async ({ page }) => {
     await page.goto('/waf');
     await expect(page).not.toHaveURL(/login/);

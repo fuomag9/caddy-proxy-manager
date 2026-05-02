@@ -54,4 +54,28 @@ describe('clickhouse client analytics enablement', () => {
 
     expect(createClient).not.toHaveBeenCalled();
   });
+
+  it('returns full WAF stats for the filtered result set', async () => {
+    vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
+
+    const query = vi.fn().mockResolvedValueOnce({
+      json: async () => [{ total: '5400', blocked: '5400', critical: '5400', unique_hosts: '1', rule_ids_triggered: '3' }],
+    });
+
+    vi.doMock('@clickhouse/client', () => ({
+      createClient: vi.fn(() => ({ query, command: vi.fn(), insert: vi.fn(), close: vi.fn() })),
+    }));
+
+    const { queryWafEventStatsWithSearch } = await import('@/src/lib/clickhouse/client');
+
+    await expect(queryWafEventStatsWithSearch('fuo.fi')).resolves.toEqual({
+      total: 5400,
+      blocked: 5400,
+      critical: 5400,
+      uniqueHosts: 1,
+      ruleIdsTriggered: 3,
+    });
+
+    expect(query).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,20 +1,26 @@
 import {
   queryWafCount,
   queryWafCountWithSearch,
+  queryWafEventStatsWithSearch,
   queryTopWafRules,
   queryTopWafRulesWithHosts,
   queryWafCountries,
   queryWafRuleMessages,
   queryWafEvents,
   type WafEvent,
+  type WafEventStats,
   type TopWafRule,
   type TopWafRuleWithHosts,
 } from "../clickhouse/client";
 
-export type { WafEvent, TopWafRule, TopWafRuleWithHosts };
+export type { WafEvent, WafEventStats, TopWafRule, TopWafRuleWithHosts };
 
-export async function countWafEvents(search?: string): Promise<number> {
-  return queryWafCountWithSearch(search);
+export async function countWafEvents(search?: string, from?: number, to?: number): Promise<number> {
+  return queryWafCountWithSearch(search, from, to);
+}
+
+export async function getWafEventStats(search?: string, from?: number, to?: number): Promise<WafEventStats> {
+  return queryWafEventStatsWithSearch(search, from, to);
 }
 
 export async function countWafEventsInRange(from: number, to: number): Promise<number> {
@@ -37,6 +43,6 @@ export async function getWafRuleMessages(ruleIds: number[]): Promise<Record<numb
   return queryWafRuleMessages(ruleIds);
 }
 
-export async function listWafEvents(limit = 50, offset = 0, search?: string): Promise<WafEvent[]> {
-  return queryWafEvents(limit, offset, search);
+export async function listWafEvents(limit = 50, offset = 0, search?: string, from?: number, to?: number): Promise<WafEvent[]> {
+  return queryWafEvents(limit, offset, search, from, to);
 }
