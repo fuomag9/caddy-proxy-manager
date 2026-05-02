@@ -25,6 +25,8 @@ const ALLOW_DOMAIN = `${PREFIX}-allow.test`;
 const MULTI_CA_DOMAIN = `${PREFIX}-multi.test`;
 const APP_DOMAIN = `${PREFIX}-app.test`;
 const API_DOMAIN = `${PREFIX}-api.test`;
+const PROTECTED_PATHS_DOMAIN = `${PREFIX}-protected-paths.test`;
+const EXCLUDED_PATHS_DOMAIN = `${PREFIX}-excluded-paths.test`;
 const REVOKED_DOMAIN = `${PREFIX}-revoked.test`;
 const ALL_REVOKED_DOMAIN = `${PREFIX}-all-revoked.test`;
 
@@ -57,6 +59,8 @@ test.describe.serial('mTLS HTTPS enforcement', () => {
       MULTI_CA_DOMAIN,
       APP_DOMAIN,
       API_DOMAIN,
+      PROTECTED_PATHS_DOMAIN,
+      EXCLUDED_PATHS_DOMAIN,
       REVOKED_DOMAIN,
       ALL_REVOKED_DOMAIN,
     ]);
@@ -68,6 +72,8 @@ test.describe.serial('mTLS HTTPS enforcement', () => {
         MULTI_CA_DOMAIN,
         APP_DOMAIN,
         API_DOMAIN,
+        PROTECTED_PATHS_DOMAIN,
+        EXCLUDED_PATHS_DOMAIN,
         REVOKED_DOMAIN,
         ALL_REVOKED_DOMAIN,
       ],
@@ -148,6 +154,24 @@ test.describe.serial('mTLS HTTPS enforcement', () => {
     });
 
     await createProxyHost(page, {
+      name: `${PREFIX} Protected Paths Host`,
+      domain: PROTECTED_PATHS_DOMAIN,
+      upstream: 'echo-server:8080',
+      certificateName: SERVER_CERT_NAME,
+      mtlsCaNames: [CA_A_NAME],
+      mtlsProtectedPaths: ['/admin/*', '/internal/*'],
+    });
+
+    await createProxyHost(page, {
+      name: `${PREFIX} Excluded Paths Host`,
+      domain: EXCLUDED_PATHS_DOMAIN,
+      upstream: 'echo-server:8080',
+      certificateName: SERVER_CERT_NAME,
+      mtlsCaNames: [CA_A_NAME],
+      mtlsExcludedPaths: ['/health', '/public/*'],
+    });
+
+    await createProxyHost(page, {
       name: `${PREFIX} Revoked Host`,
       domain: REVOKED_DOMAIN,
       upstream: 'echo-server:8080',
@@ -167,6 +191,8 @@ test.describe.serial('mTLS HTTPS enforcement', () => {
     await waitForHttpsRoute(MULTI_CA_DOMAIN, tlsIdentity(clientB));
     await waitForHttpsRoute(APP_DOMAIN, tlsIdentity(clientA));
     await waitForHttpsRoute(API_DOMAIN, tlsIdentity(clientB));
+    await waitForHttpsRoute(PROTECTED_PATHS_DOMAIN, tlsIdentity(clientA));
+    await waitForHttpsRoute(EXCLUDED_PATHS_DOMAIN, tlsIdentity(clientA));
     await waitForHttpsRoute(REVOKED_DOMAIN, tlsIdentity(revokedClient));
     await waitForHttpsRoute(ALL_REVOKED_DOMAIN, tlsIdentity(loneClient));
   });
@@ -203,6 +229,46 @@ test.describe.serial('mTLS HTTPS enforcement', () => {
     expect(apiResponse.status).toBe(200);
     expectMtlsBlocked(await httpsGetOutcome(APP_DOMAIN, '/', tlsIdentity(clientB)));
     expectMtlsBlocked(await httpsGetOutcome(API_DOMAIN, '/', tlsIdentity(clientA)));
+  });
+
+  test('enforces mTLS only on configured protected paths', async () => {
+    const publicWithoutCert = await httpsGet(PROTECTED_PATHS_DOMAIN, '/');
+    expect(publicWithoutCert.status).toBe(200);
+    expect(publicWithoutCert.body).toContain(ECHO_BODY);
+
+    const protectedWithTrustedCert = await httpsGet(PROTECTED_PATHS_DOMAIN, '/admin/panel', tlsIdentity(clientA));
+    expect(protectedWithTrustedCert.status).toBe(200);
+    expect(protectedWithTrustedCert.body).toContain(ECHO_BODY);
+
+    const nestedProtectedWithTrustedCert = await httpsGet(PROTECTED_PATHS_DOMAIN, '/internal/status', tlsIdentity(clientA));
+    expect(nestedProtectedWithTrustedCert.status).toBe(200);
+    expect(nestedProtectedWithTrustedCert.body).toContain(ECHO_BODY);
+
+    const protectedWithoutCert = await httpsGet(PROTECTED_PATHS_DOMAIN, '/admin/panel');
+    expect(protectedWithoutCert.status).toBe(403);
+    expect(protectedWithoutCert.body).toContain('mTLS access denied');
+
+    expectMtlsBlocked(await httpsGetOutcome(PROTECTED_PATHS_DOMAIN, '/admin/panel', tlsIdentity(clientB)));
+  });
+
+  test('bypasses mTLS on excluded paths while keeping other paths protected', async () => {
+    const excludedWithoutCert = await httpsGet(EXCLUDED_PATHS_DOMAIN, '/public/info');
+    expect(excludedWithoutCert.status).toBe(200);
+    expect(excludedWithoutCert.body).toContain(ECHO_BODY);
+
+    const excludedHealthWithoutCert = await httpsGet(EXCLUDED_PATHS_DOMAIN, '/health');
+    expect(excludedHealthWithoutCert.status).toBe(200);
+    expect(excludedHealthWithoutCert.body).toContain('"status":"ok"');
+
+    const protectedWithoutCert = await httpsGet(EXCLUDED_PATHS_DOMAIN, '/private');
+    expect(protectedWithoutCert.status).toBe(403);
+    expect(protectedWithoutCert.body).toContain('mTLS access denied');
+
+    const protectedWithTrustedCert = await httpsGet(EXCLUDED_PATHS_DOMAIN, '/private', tlsIdentity(clientA));
+    expect(protectedWithTrustedCert.status).toBe(200);
+    expect(protectedWithTrustedCert.body).toContain(ECHO_BODY);
+
+    expectMtlsBlocked(await httpsGetOutcome(EXCLUDED_PATHS_DOMAIN, '/private', tlsIdentity(clientB)));
   });
 
   test('revokes a tracked client certificate and blocks it while leaving other active certs usable', async ({ page }) => {

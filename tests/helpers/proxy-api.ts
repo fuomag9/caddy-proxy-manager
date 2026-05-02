@@ -17,6 +17,8 @@ export interface ProxyHostConfig {
   accessListName?: string; // name of an existing access list to attach
   certificateName?: string;
   mtlsCaNames?: string[];
+  mtlsProtectedPaths?: string[];
+  mtlsExcludedPaths?: string[];
   enableWaf?: boolean;     // enable WAF with OWASP CRS in blocking mode
 }
 
@@ -112,6 +114,14 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
     // Verify at least one cert was selected (each CA group selects its certs)
     const certInputs = page.locator('input[name="mtlsCertId"]');
     await expect(certInputs.first()).toBeAttached({ timeout: 5_000 });
+
+    if (config.mtlsProtectedPaths?.length) {
+      await page.locator('[name="mtlsProtectedPaths"]').fill(config.mtlsProtectedPaths.join(', '));
+    }
+
+    if (config.mtlsExcludedPaths?.length) {
+      await page.locator('[name="mtlsExcludedPaths"]').fill(config.mtlsExcludedPaths.join(', '));
+    }
   }
 
   // Inject hidden fields:

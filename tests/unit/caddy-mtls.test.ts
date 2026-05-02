@@ -224,7 +224,7 @@ describe('buildClientAuthentication', () => {
     expect(result!.trusted_ca_certs).toEqual(['CA_A']);
   });
 
-  it('supports optional client certificate verification mode', () => {
+  it('supports request mode for HTTP-layer scoped mTLS enforcement', () => {
     const mTlsDomainMap = new Map([['app.example.com', [1]]]);
     const caCertMap = makeCaCertMap([1, 'CA_A']);
 
@@ -235,12 +235,11 @@ describe('buildClientAuthentication', () => {
       new Map(),
       new Set(),
       undefined,
-      'verify_if_given'
+      'request'
     );
 
     expect(result).not.toBeNull();
-    expect(result!.mode).toBe('verify_if_given');
-    expect(result!.trusted_ca_certs).toEqual(['CA_A']);
+    expect(result).toEqual({ mode: 'request' });
   });
 });
 

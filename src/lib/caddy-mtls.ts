@@ -61,8 +61,12 @@ export function buildClientAuthentication(
   issuedClientCertMap: Map<number, string[]>,
   cAsWithAnyIssuedCerts: Set<number>,
   mTlsDomainLeafOverride?: Map<string, string[]>,
-  mode: "require_and_verify" | "verify_if_given" = "require_and_verify"
+  mode: "require_and_verify" | "verify_if_given" | "request" = "require_and_verify"
 ): Record<string, unknown> | null {
+  if (mode === "request") {
+    return { mode: "request" };
+  }
+
   const caCertIds = new Set<number>();
   for (const domain of domains) {
     const ids = mTlsDomainMap.get(domain.toLowerCase());
@@ -227,7 +231,8 @@ export function buildMtlsRbacSubroutes(
   certFingerprintMap: Map<number, string>,
   baseHandlers: Record<string, unknown>[],
   reverseProxyHandler: Record<string, unknown>,
-  requireValidClientCertByDefault = false
+  requireValidClientCertByDefault = false,
+  defaultAllowedFingerprints?: Set<string>
 ): Record<string, unknown>[] | null {
   if (accessRules.length === 0) return null;
 
@@ -286,8 +291,12 @@ export function buildMtlsRbacSubroutes(
   }
 
   if (requireValidClientCertByDefault) {
+    const defaultExpression = defaultAllowedFingerprints && defaultAllowedFingerprints.size > 0
+      ? buildFingerprintCelExpression(defaultAllowedFingerprints)
+      : buildValidClientCertCelExpression();
+
     subroutes.push({
-      match: [{ expression: buildValidClientCertCelExpression() }],
+      match: [{ expression: defaultExpression }],
       handle: [...baseHandlers, reverseProxyHandler],
       terminal: true,
     });

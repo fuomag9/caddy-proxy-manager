@@ -52,7 +52,7 @@ import {
   l4ProxyHosts
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule } from "./models/proxy-hosts";
-import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildValidClientCertCelExpression, type MtlsAccessRuleLike } from "./caddy-mtls";
+import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildFingerprintCelExpression, buildValidClientCertCelExpression, resolveAllowedFingerprints, type MtlsAccessRuleLike } from "./caddy-mtls";
 import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
 import { getAccessRulesForHosts } from "./models/mtls-access-rules";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
@@ -1420,6 +1420,21 @@ async function buildProxyRoutes(
       const hostAccessRules = options.mtlsRbac?.accessRulesByHost.get(row.id);
       const hasMtlsRbac = hostAccessRules && hostAccessRules.length > 0
         && options.mtlsRbac?.roleFingerprintMap && options.mtlsRbac?.certFingerprintMap;
+      const hostTrustedFingerprints = mtls
+        ? resolveAllowedFingerprints(
+            {
+              pathPattern: "*",
+              allowedRoleIds: mtls.trusted_role_ids ?? [],
+              allowedCertIds: mtls.trusted_client_cert_ids ?? [],
+              denyAll: false,
+            },
+            options.mtlsRbac?.roleFingerprintMap ?? new Map(),
+            options.mtlsRbac?.certFingerprintMap ?? new Map()
+          )
+        : new Set<string>();
+      const hostTrustedFingerprintExpression = hostTrustedFingerprints.size > 0
+        ? buildFingerprintCelExpression(hostTrustedFingerprints)
+        : validClientCertExpression;
 
       for (const domainGroup of domainGroups) {
         const pushProtectedCatchAllRoute = () => {
@@ -1430,7 +1445,8 @@ async function buildProxyRoutes(
               options.mtlsRbac!.certFingerprintMap,
               handlers,
               reverseProxyHandler,
-              true
+              true,
+              hostTrustedFingerprints
             );
             if (rbacSubroutes) {
               hostRoutes.push({
@@ -1443,7 +1459,7 @@ async function buildProxyRoutes(
           }
 
           hostRoutes.push({
-            match: [{ host: domainGroup, expression: validClientCertExpression }],
+            match: [{ host: domainGroup, expression: hostTrustedFingerprintExpression }],
             handle: [...handlers, reverseProxyHandler],
             terminal: true,
           });
@@ -1463,7 +1479,8 @@ async function buildProxyRoutes(
                 options.mtlsRbac!.certFingerprintMap,
                 handlers,
                 reverseProxyHandler,
-                true
+                true,
+                hostTrustedFingerprints
               );
               if (rbacSubroutes) {
                 hostRoutes.push({
@@ -1476,7 +1493,7 @@ async function buildProxyRoutes(
             }
 
             hostRoutes.push({
-              match: [{ host: domainGroup, path: [protectedPath], expression: validClientCertExpression }],
+              match: [{ host: domainGroup, path: [protectedPath], expression: hostTrustedFingerprintExpression }],
               handle: [...handlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
               terminal: true,
             });
@@ -1526,7 +1543,7 @@ async function buildProxyRoutes(
             );
             if (!safePath) continue;
             hostRoutes.push({
-              match: [{ host: domainGroup, path: [safePath], expression: validClientCertExpression }],
+              match: [{ host: domainGroup, path: [safePath], expression: hostTrustedFingerprintExpression }],
               handle: [...handlers, locationProxy],
               terminal: true,
             });
@@ -1611,7 +1628,7 @@ function buildTlsConnectionPolicies(
   const readyCertificates = new Set<number>();
   const importedCertPems: { certificate: string; key: string }[] = [];
 
-  const buildAuth = (domains: string[], mode: "require_and_verify" | "verify_if_given") =>
+  const buildAuth = (domains: string[], mode: "require_and_verify" | "verify_if_given" | "request") =>
     buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap, cAsWithAnyIssuedCerts, mTlsDomainLeafOverride, mode);
 
   /**
@@ -1626,7 +1643,7 @@ function buildTlsConnectionPolicies(
 
     for (const [domains, mode] of [
       [requiredDomains, "require_and_verify"],
-      [scopedDomains, "verify_if_given"],
+      [scopedDomains, "request"],
     ] as const) {
       if (domains.length === 0) continue;
 
