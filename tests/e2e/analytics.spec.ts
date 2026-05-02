@@ -21,6 +21,11 @@ test.describe('Analytics', () => {
     await expect(page.getByText('Blocked Requests', { exact: true })).toBeVisible({ timeout: 10000 });
   });
 
+  test('analytics page does not show disabled banner when ClickHouse is configured', async ({ page }) => {
+    await page.goto('/analytics');
+    await expect(page.getByText('ClickHouse analytics is not enabled')).not.toBeVisible();
+  });
+
   test('analytics page has time range toggle buttons', async ({ page }) => {
     await page.goto('/analytics');
     await expect(page.getByRole('button', { name: '24h' })).toBeVisible();
