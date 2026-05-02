@@ -65,16 +65,6 @@ function parseDateTimeLocal(value: string): number | null {
   return Number.isFinite(ts) ? ts : null;
 }
 
-function formatPeriodBadge(range: RangeOption, from: number | null, to: number | null): string {
-  if (range === 'all') return 'All time';
-  if (range === '24h') return 'Last 24 hours';
-  if (range === '7d') return 'Last 7 days';
-  if (range === '30d') return 'Last 30 days';
-  if (!from || !to) return 'Custom range';
-
-  return `${new Date(from * 1000).toLocaleString()} - ${new Date(to * 1000).toLocaleString()}`;
-}
-
 /* ── Audit data types ─────────────────────────────────────────────────────── */
 interface AuditRequest {
   method?: string;
@@ -741,7 +731,6 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
   const [wafLoadOwaspCrs, setWafLoadOwaspCrs]     = useState(globalWaf?.load_owasp_crs ?? true);
   const [wafCustomDirectives, setWafCustomDirectives]     = useState(globalWaf?.custom_directives ?? "");
   const [wafShowTemplates, setWafShowTemplates]   = useState(false);
-  const activePeriodLabel = formatPeriodBadge(initialRange, initialFrom, initialTo);
 
   useEffect(() => { setSearchTerm(initialSearch); }, [initialSearch]);
   useEffect(() => {
@@ -930,11 +919,6 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
                   <Button size="sm" variant={range === '7d' ? 'default' : 'outline'} onClick={() => selectRange('7d')}>7d</Button>
                   <Button size="sm" variant={range === '30d' ? 'default' : 'outline'} onClick={() => selectRange('30d')}>30d</Button>
                   <Button size="sm" variant={range === 'custom' ? 'default' : 'outline'} onClick={activateCustom}>Custom</Button>
-                  <button type="button" aria-label="Reset period filter" onClick={() => selectRange('all')} className="max-w-full">
-                    <Badge variant="secondary" className="max-w-full truncate text-xs font-normal hover:bg-secondary/80">
-                      {activePeriodLabel}
-                    </Badge>
-                  </button>
                 </div>
                 {range === 'custom' && (
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
