@@ -16,6 +16,7 @@ import { describe, it, expect } from 'vitest';
 import {
   pemToBase64Der,
   buildClientAuthentication,
+  buildValidClientCertCelExpression,
   groupMtlsDomainsByCaSet,
 } from '../../src/lib/caddy-mtls';
 
@@ -221,6 +222,31 @@ describe('buildClientAuthentication', () => {
 
     expect(result).not.toBeNull();
     expect(result!.trusted_ca_certs).toEqual(['CA_A']);
+  });
+
+  it('supports optional client certificate verification mode', () => {
+    const mTlsDomainMap = new Map([['app.example.com', [1]]]);
+    const caCertMap = makeCaCertMap([1, 'CA_A']);
+
+    const result = buildClientAuthentication(
+      ['app.example.com'],
+      mTlsDomainMap,
+      caCertMap,
+      new Map(),
+      new Set(),
+      undefined,
+      'verify_if_given'
+    );
+
+    expect(result).not.toBeNull();
+    expect(result!.mode).toBe('verify_if_given');
+    expect(result!.trusted_ca_certs).toEqual(['CA_A']);
+  });
+});
+
+describe('buildValidClientCertCelExpression', () => {
+  it('checks for a non-empty client fingerprint', () => {
+    expect(buildValidClientCertCelExpression()).toBe("{http.request.tls.client.fingerprint} != ''");
   });
 });
 

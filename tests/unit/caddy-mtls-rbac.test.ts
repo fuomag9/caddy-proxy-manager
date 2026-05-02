@@ -12,6 +12,7 @@ import {
   resolveAllowedFingerprints,
   buildFingerprintCelExpression,
   buildMtlsRbacSubroutes,
+  buildValidClientCertCelExpression,
   normalizeFingerprint,
   type MtlsAccessRuleLike,
 } from "../../src/lib/caddy-mtls";
@@ -256,6 +257,18 @@ describe("buildMtlsRbacSubroutes", () => {
     const result = buildMtlsRbacSubroutes(rules, new Map(), new Map(), baseHandlers, reverseProxy);
     const denyHandler = (result![0] as any).handle[0];
     expect(denyHandler.body).toBe("mTLS access denied");
+  });
+
+  it("requires a valid client cert on the catch-all when requested", () => {
+    const roleFpMap = new Map<number, Set<string>>([[1, new Set(["fp_admin"])]]);
+    const rules = [makeRule({ allowedRoleIds: [1] })];
+    const result = buildMtlsRbacSubroutes(rules, roleFpMap, new Map(), baseHandlers, reverseProxy, true);
+
+    expect(result).not.toBeNull();
+    const catchAllAllow = result![2] as Record<string, unknown>;
+    const catchAllDeny = result![3] as Record<string, unknown>;
+    expect((catchAllAllow.match as Record<string, unknown>[])[0].expression).toBe(buildValidClientCertCelExpression());
+    expect(((catchAllDeny.handle as Record<string, unknown>[])[0]).status_code).toBe("403");
   });
 
   it("handles mixed denyAll and role-based rules", () => {

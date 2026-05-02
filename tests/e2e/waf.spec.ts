@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('WAF', () => {
-  test('WAF events period filters support presets, custom range, and reset badge', async ({ page }) => {
+  test('WAF events period filters support presets, custom range, and reset to all time', async ({ page }) => {
     const customFrom = '2026-05-01T09:00';
     const customTo = '2026-05-02T09:30';
     const expectedFrom = Math.floor(new Date(customFrom).getTime() / 1000);
@@ -11,15 +11,15 @@ test.describe('WAF', () => {
 
     await page.getByRole('button', { name: '24h' }).click();
     await expect(page).toHaveURL(/range=24h/);
-    await expect(page.getByText('Last 24 hours', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '24h' })).toBeVisible();
 
     await page.getByRole('button', { name: '7d' }).click();
     await expect(page).toHaveURL(/range=7d/);
-    await expect(page.getByText('Last 7 days', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '7d' })).toBeVisible();
 
     await page.getByRole('button', { name: '30d' }).click();
     await expect(page).toHaveURL(/range=30d/);
-    await expect(page.getByText('Last 30 days', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '30d' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Custom' }).click();
     const dateInputs = page.locator('input[type="datetime-local"]');
@@ -32,11 +32,12 @@ test.describe('WAF', () => {
     await expect(dateInputs.nth(0)).toHaveValue(customFrom);
     await expect(dateInputs.nth(1)).toHaveValue(customTo);
 
-    await page.getByRole('button', { name: 'Reset period filter' }).click();
+    await page.getByRole('button', { name: 'All time' }).click();
     await expect(page).not.toHaveURL(/range=/);
     await expect(page).not.toHaveURL(/from=/);
     await expect(page).not.toHaveURL(/to=/);
     await expect(page.getByRole('button', { name: 'All time' })).toBeVisible();
+    await expect(page.locator('input[type="datetime-local"]')).toHaveCount(0);
   });
 
   test('WAF page loads without redirecting to login', async ({ page }) => {

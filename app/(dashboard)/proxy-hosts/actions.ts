@@ -430,7 +430,15 @@ function parseMtlsConfig(formData: FormData): MtlsConfig | null {
   if (!enabled) return null;
   const certIds = formData.getAll("mtlsCertId").map(Number).filter(n => Number.isFinite(n) && n > 0);
   const roleIds = formData.getAll("mtlsRoleId").map(Number).filter(n => Number.isFinite(n) && n > 0);
-  return { enabled, trusted_client_cert_ids: certIds, trusted_role_ids: roleIds };
+  const protectedPaths = parseCsv(formData.get("mtlsProtectedPaths"));
+  const excludedPaths = parseCsv(formData.get("mtlsExcludedPaths"));
+  return {
+    enabled,
+    trusted_client_cert_ids: certIds,
+    trusted_role_ids: roleIds,
+    protected_paths: protectedPaths.length > 0 ? protectedPaths : null,
+    excluded_paths: excludedPaths.length > 0 ? excludedPaths : null,
+  };
 }
 
 function parseRedirectsConfig(formData: FormData): RedirectRule[] | null {

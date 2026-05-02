@@ -60,7 +60,8 @@ export function buildClientAuthentication(
   caCertMap: Map<number, { id: number; certificatePem: string }>,
   issuedClientCertMap: Map<number, string[]>,
   cAsWithAnyIssuedCerts: Set<number>,
-  mTlsDomainLeafOverride?: Map<string, string[]>
+  mTlsDomainLeafOverride?: Map<string, string[]>,
+  mode: "require_and_verify" | "verify_if_given" = "require_and_verify"
 ): Record<string, unknown> | null {
   const caCertIds = new Set<number>();
   for (const domain of domains) {
@@ -128,11 +129,15 @@ export function buildClientAuthentication(
   if (trustedCaCerts.length === 0) return null;
 
   const result: Record<string, unknown> = {
-    mode: "require_and_verify",
+    mode,
     trusted_ca_certs: trustedCaCerts,
   };
   if (trustedLeafCerts.length > 0) result.trusted_leaf_certs = trustedLeafCerts;
   return result;
+}
+
+export function buildValidClientCertCelExpression(): string {
+  return "{http.request.tls.client.fingerprint} != ''";
 }
 
 /**
@@ -221,7 +226,8 @@ export function buildMtlsRbacSubroutes(
   roleFingerprintMap: Map<number, Set<string>>,
   certFingerprintMap: Map<number, string>,
   baseHandlers: Record<string, unknown>[],
-  reverseProxyHandler: Record<string, unknown>
+  reverseProxyHandler: Record<string, unknown>,
+  requireValidClientCertByDefault = false
 ): Record<string, unknown>[] | null {
   if (accessRules.length === 0) return null;
 
@@ -279,12 +285,27 @@ export function buildMtlsRbacSubroutes(
     });
   }
 
-  // Catch-all: paths without explicit rules → any valid cert gets through
-  subroutes.push({
-    handle: [...baseHandlers, reverseProxyHandler],
-    terminal: true,
-  });
+  if (requireValidClientCertByDefault) {
+    subroutes.push({
+      match: [{ expression: buildValidClientCertCelExpression() }],
+      handle: [...baseHandlers, reverseProxyHandler],
+      terminal: true,
+    });
+    subroutes.push({
+      handle: [{
+        handler: "static_response",
+        status_code: "403",
+        body: "mTLS access denied",
+      }],
+      terminal: true,
+    });
+  } else {
+    // Catch-all: paths without explicit rules → any valid cert gets through
+    subroutes.push({
+      handle: [...baseHandlers, reverseProxyHandler],
+      terminal: true,
+    });
+  }
 
   return subroutes;
 }
-

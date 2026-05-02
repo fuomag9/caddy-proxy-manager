@@ -241,9 +241,56 @@ export type MtlsConfig = {
   trusted_client_cert_ids?: number[];
   /** Trust all certificates belonging to these roles */
   trusted_role_ids?: number[];
+  protected_paths?: string[] | null;
+  excluded_paths?: string[] | null;
   /** @deprecated Old model: trust entire CAs. Kept for backward compat migration. */
   ca_certificate_ids?: number[];
 };
+
+function sanitizeMtlsMeta(meta: MtlsConfig | undefined): MtlsConfig | undefined {
+  if (!meta?.enabled) {
+    return undefined;
+  }
+
+  const normalized: MtlsConfig = { enabled: true };
+
+  if (Array.isArray(meta.trusted_client_cert_ids)) {
+    const certIds = meta.trusted_client_cert_ids.filter((id): id is number => Number.isFinite(id) && id > 0);
+    if (certIds.length > 0) {
+      normalized.trusted_client_cert_ids = certIds;
+    }
+  }
+
+  if (Array.isArray(meta.trusted_role_ids)) {
+    const roleIds = meta.trusted_role_ids.filter((id): id is number => Number.isFinite(id) && id > 0);
+    if (roleIds.length > 0) {
+      normalized.trusted_role_ids = roleIds;
+    }
+  }
+
+  if (Array.isArray(meta.protected_paths)) {
+    const paths = meta.protected_paths.map((path) => path?.trim().replace(/\{[^}]*\}/g, "")).filter((path): path is string => Boolean(path)); // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
+    if (paths.length > 0) {
+      normalized.protected_paths = paths;
+    }
+  }
+
+  if (Array.isArray(meta.excluded_paths)) {
+    const paths = meta.excluded_paths.map((path) => path?.trim().replace(/\{[^}]*\}/g, "")).filter((path): path is string => Boolean(path)); // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
+    if (paths.length > 0) {
+      normalized.excluded_paths = paths;
+    }
+  }
+
+  if (Array.isArray(meta.ca_certificate_ids)) {
+    const caIds = meta.ca_certificate_ids.filter((id): id is number => Number.isFinite(id) && id > 0);
+    if (caIds.length > 0) {
+      normalized.ca_certificate_ids = caIds;
+    }
+  }
+
+  return normalized;
+}
 
 export type CpmForwardAuthConfig = {
   enabled: boolean;
@@ -644,8 +691,11 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.waf = meta.waf;
   }
 
-  if (meta.mtls && meta.mtls.enabled) {
-    normalized.mtls = meta.mtls;
+  if (meta.mtls) {
+    const mtls = sanitizeMtlsMeta(meta.mtls);
+    if (mtls) {
+      normalized.mtls = mtls;
+    }
   }
 
   if (meta.cpm_forward_auth) {
@@ -1216,7 +1266,10 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
 
   if (input.mtls !== undefined) {
     if (input.mtls && input.mtls.enabled) {
-      next.mtls = input.mtls;
+      const mtls = sanitizeMtlsMeta(input.mtls);
+      if (mtls) {
+        next.mtls = mtls;
+      }
     } else {
       delete next.mtls;
     }

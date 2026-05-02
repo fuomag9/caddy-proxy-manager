@@ -52,7 +52,7 @@ import {
   l4ProxyHosts
 } from "./db/schema";
 import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule } from "./models/proxy-hosts";
-import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, type MtlsAccessRuleLike } from "./caddy-mtls";
+import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildValidClientCertCelExpression, type MtlsAccessRuleLike } from "./caddy-mtls";
 import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
 import { getAccessRulesForHosts } from "./models/mtls-access-rules";
 import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
@@ -113,6 +113,15 @@ type CpmForwardAuthMeta = {
   excluded_paths?: string[];
 };
 
+type MtlsMeta = {
+  enabled?: boolean;
+  trusted_client_cert_ids?: number[];
+  trusted_role_ids?: number[];
+  protected_paths?: string[];
+  excluded_paths?: string[];
+  ca_certificate_ids?: number[];
+};
+
 type ProxyHostMeta = {
   custom_reverse_proxy_json?: string;
   custom_pre_handlers_json?: string;
@@ -124,6 +133,7 @@ type ProxyHostMeta = {
   geoblock?: GeoBlockSettings;
   geoblock_mode?: GeoBlockMode;
   waf?: WafHostConfig;
+  mtls?: MtlsMeta;
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
   location_rules?: LocationRule[];
@@ -680,6 +690,7 @@ async function buildProxyRoutes(
   options: BuildProxyRoutesOptions
 ): Promise<CaddyHttpRoute[]> {
   const routes: CaddyHttpRoute[] = [];
+  const validClientCertExpression = buildValidClientCertCelExpression();
 
   for (const row of rows) {
     if (!row.enabled) {
@@ -1401,6 +1412,9 @@ async function buildProxyRoutes(
       }
     } else {
       const locationRules = meta.location_rules ?? [];
+      const mtls = meta.mtls?.enabled ? meta.mtls : null;
+      const mtlsProtectedPaths = mtls?.protected_paths?.length ? mtls.protected_paths : null;
+      const mtlsExcludedPaths = mtls?.excluded_paths?.length ? mtls.excluded_paths : null;
 
       // Check for mTLS RBAC access rules for this proxy host
       const hostAccessRules = options.mtlsRbac?.accessRulesByHost.get(row.id);
@@ -1408,6 +1422,125 @@ async function buildProxyRoutes(
         && options.mtlsRbac?.roleFingerprintMap && options.mtlsRbac?.certFingerprintMap;
 
       for (const domainGroup of domainGroups) {
+        const pushProtectedCatchAllRoute = () => {
+          if (hasMtlsRbac) {
+            const rbacSubroutes = buildMtlsRbacSubroutes(
+              hostAccessRules,
+              options.mtlsRbac!.roleFingerprintMap,
+              options.mtlsRbac!.certFingerprintMap,
+              handlers,
+              reverseProxyHandler,
+              true
+            );
+            if (rbacSubroutes) {
+              hostRoutes.push({
+                match: [{ host: domainGroup }],
+                handle: [{ handler: "subroute", routes: rbacSubroutes }],
+                terminal: true,
+              });
+              return;
+            }
+          }
+
+          hostRoutes.push({
+            match: [{ host: domainGroup, expression: validClientCertExpression }],
+            handle: [...handlers, reverseProxyHandler],
+            terminal: true,
+          });
+          hostRoutes.push({
+            match: [{ host: domainGroup }],
+            handle: [{ handler: "static_response", status_code: "403", body: "mTLS access denied" }],
+            terminal: true,
+          });
+        };
+
+        if (mtlsProtectedPaths) {
+          for (const protectedPath of mtlsProtectedPaths) {
+            if (hasMtlsRbac) {
+              const rbacSubroutes = buildMtlsRbacSubroutes(
+                hostAccessRules,
+                options.mtlsRbac!.roleFingerprintMap,
+                options.mtlsRbac!.certFingerprintMap,
+                handlers,
+                reverseProxyHandler,
+                true
+              );
+              if (rbacSubroutes) {
+                hostRoutes.push({
+                  match: [{ host: domainGroup, path: [protectedPath] }],
+                  handle: [{ handler: "subroute", routes: rbacSubroutes }],
+                  terminal: true,
+                });
+                continue;
+              }
+            }
+
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [protectedPath], expression: validClientCertExpression }],
+              handle: [...handlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
+              terminal: true,
+            });
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [protectedPath] }],
+              handle: [{ handler: "static_response", status_code: "403", body: "mTLS access denied" }],
+              terminal: true,
+            });
+          }
+
+          for (const rule of locationRules) {
+            const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+              rule,
+              Boolean(row.skipHttpsHostnameValidation),
+              Boolean(row.preserveHostHeader)
+            );
+            if (!safePath) continue;
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [safePath] }],
+              handle: [...handlers, locationProxy],
+              terminal: true,
+            });
+          }
+
+          hostRoutes.push({
+            match: [{ host: domainGroup }],
+            handle: [...handlers, reverseProxyHandler],
+            terminal: true,
+          });
+          continue;
+        }
+
+        if (mtlsExcludedPaths) {
+          for (const excludedPath of mtlsExcludedPaths) {
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [excludedPath] }],
+              handle: [...handlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
+              terminal: true,
+            });
+          }
+
+          for (const rule of locationRules) {
+            const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
+              rule,
+              Boolean(row.skipHttpsHostnameValidation),
+              Boolean(row.preserveHostHeader)
+            );
+            if (!safePath) continue;
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [safePath], expression: validClientCertExpression }],
+              handle: [...handlers, locationProxy],
+              terminal: true,
+            });
+            hostRoutes.push({
+              match: [{ host: domainGroup, path: [safePath] }],
+              handle: [{ handler: "static_response", status_code: "403", body: "mTLS access denied" }],
+              terminal: true,
+            });
+          }
+
+          pushProtectedCatchAllRoute();
+          continue;
+        }
+
         for (const rule of locationRules) {
           const { safePath, reverseProxyHandler: locationProxy } = buildLocationReverseProxy(
             rule,
@@ -1423,7 +1556,6 @@ async function buildProxyRoutes(
         }
 
         if (hasMtlsRbac) {
-          // mTLS RBAC: wrap in subroute with path-based fingerprint enforcement
           const rbacSubroutes = buildMtlsRbacSubroutes(
             hostAccessRules,
             options.mtlsRbac!.roleFingerprintMap,
@@ -1441,7 +1573,6 @@ async function buildProxyRoutes(
               terminal: true,
             });
           } else {
-            // Fallback: no subroutes generated, use normal routing
             hostRoutes.push({
               match: [{ host: domainGroup }],
               handle: [...handlers, reverseProxyHandler],
@@ -1473,14 +1604,15 @@ function buildTlsConnectionPolicies(
   caCertMap: Map<number, { id: number; certificatePem: string }>,
   issuedClientCertMap: Map<number, string[]>,
   cAsWithAnyIssuedCerts: Set<number>,
-  mTlsDomainLeafOverride: Map<string, string[]>
+  mTlsDomainLeafOverride: Map<string, string[]>,
+  mTlsOptionalAuthDomains: Set<string>
 ) {
   const policies: Record<string, unknown>[] = [];
   const readyCertificates = new Set<number>();
   const importedCertPems: { certificate: string; key: string }[] = [];
 
-  const buildAuth = (domains: string[]) =>
-    buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap, cAsWithAnyIssuedCerts, mTlsDomainLeafOverride);
+  const buildAuth = (domains: string[], mode: "require_and_verify" | "verify_if_given") =>
+    buildClientAuthentication(domains, mTlsDomainMap, caCertMap, issuedClientCertMap, cAsWithAnyIssuedCerts, mTlsDomainLeafOverride, mode);
 
   /**
    * Pushes one TLS policy per unique CA set found in `mTlsDomains`.
@@ -1489,15 +1621,25 @@ function buildTlsConnectionPolicies(
    * authenticate against a host that only trusts CA_A.
    */
   const pushMtlsPolicies = (mTlsDomains: string[]) => {
-    const groups = groupMtlsDomainsByCaSet(mTlsDomains, mTlsDomainMap);
-    for (const domainGroup of groups.values()) {
-      for (const priorityGroup of groupHostPatternsByPriority(domainGroup)) {
-        const mTlsAuth = buildAuth(priorityGroup);
-        if (mTlsAuth) {
-          policies.push({ match: { sni: priorityGroup }, client_authentication: mTlsAuth });
-        } else {
-          // All CAs have all certs revoked — drop connections rather than allow through without mTLS
-          policies.push({ match: { sni: priorityGroup }, drop: true });
+    const scopedDomains = mTlsDomains.filter((domain) => mTlsOptionalAuthDomains.has(domain));
+    const requiredDomains = mTlsDomains.filter((domain) => !mTlsOptionalAuthDomains.has(domain));
+
+    for (const [domains, mode] of [
+      [requiredDomains, "require_and_verify"],
+      [scopedDomains, "verify_if_given"],
+    ] as const) {
+      if (domains.length === 0) continue;
+
+      const groups = groupMtlsDomainsByCaSet(domains, mTlsDomainMap);
+      for (const domainGroup of groups.values()) {
+        for (const priorityGroup of groupHostPatternsByPriority(domainGroup)) {
+          const mTlsAuth = buildAuth(priorityGroup, mode);
+          if (mTlsAuth) {
+            policies.push({ match: { sni: priorityGroup }, client_authentication: mTlsAuth });
+          } else {
+            // All CAs have all certs revoked — drop connections rather than allow through without mTLS
+            policies.push({ match: { sni: priorityGroup }, drop: true });
+          }
         }
       }
     }
@@ -2044,6 +2186,7 @@ async function buildCaddyDocument() {
   const mTlsDomainMap = new Map<string, number[]>();
   // Per-domain override: which specific leaf cert PEMs to pin (new model only)
   const mTlsDomainLeafOverride = new Map<string, string[]>();
+  const mTlsOptionalAuthDomains = new Set<string>();
   for (const row of proxyHostRows) {
     if (!row.enabled) continue;
     const meta = parseJson<{ mtls?: MtlsConfig }>(row.meta, {});
@@ -2051,6 +2194,12 @@ async function buildCaddyDocument() {
 
     const domains = parseJson<string[]>(row.domains, []).map(d => d.trim().toLowerCase()).filter(Boolean);
     if (domains.length === 0) continue;
+
+    if (meta.mtls.protected_paths?.length || meta.mtls.excluded_paths?.length) {
+      for (const domain of domains) {
+        mTlsOptionalAuthDomains.add(domain);
+      }
+    }
 
     // Collect all trusted cert IDs from both direct selection and roles
     const allCertIds = new Set<number>();
@@ -2128,7 +2277,8 @@ async function buildCaddyDocument() {
     caCertMap,
     issuedClientCertMap,
     cAsWithAnyIssuedCerts,
-    mTlsDomainLeafOverride
+    mTlsDomainLeafOverride,
+    mTlsOptionalAuthDomains
   );
 
   const httpRoutes: CaddyHttpRoute[] = await buildProxyRoutes(

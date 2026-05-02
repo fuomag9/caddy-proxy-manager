@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { LockKeyhole, Plus, Pencil, Trash2, ShieldAlert, Ban, UserCheck, ShieldCheck } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
@@ -119,6 +120,35 @@ export function MtlsFields({ value, caCertificates, issuedClientCerts = [], prox
             Select roles and/or individual certificates to allow.
           </AlertDescription>
         </Alert>
+
+        <div className="space-y-4 mb-4">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Protected Paths (Optional)</label>
+            <Textarea
+              name="mtlsProtectedPaths"
+              placeholder="/admin/*, /internal/*"
+              defaultValue={value?.protected_paths?.join(", ") ?? ""}
+              disabled={!enabled}
+              rows={2}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Leave empty to require mTLS for the entire domain. Comma-separated paths to require client certificates on specific routes only.
+            </p>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Excluded Paths (Optional)</label>
+            <Textarea
+              name="mtlsExcludedPaths"
+              placeholder="/health, /public/*"
+              defaultValue={value?.excluded_paths?.join(", ") ?? ""}
+              disabled={!enabled}
+              rows={2}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Paths to exclude from mTLS. These paths bypass client certificate enforcement while all other paths remain protected. Ignored if Protected Paths is set.
+            </p>
+          </div>
+        </div>
 
         {/* ── Trusted Roles ── */}
         {mtlsRoles.length > 0 && (

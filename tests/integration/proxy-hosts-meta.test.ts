@@ -289,6 +289,38 @@ describe('proxy-hosts CPM forward auth meta', () => {
   });
 });
 
+describe('proxy-hosts mTLS meta', () => {
+  it('stores and retrieves mtls config with excluded_paths', async () => {
+    const meta = {
+      mtls: {
+        enabled: true,
+        trusted_client_cert_ids: [10],
+        excluded_paths: ['/health', '/public/*'],
+      },
+    };
+    const host = await insertHost({ meta: JSON.stringify(meta) });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const parsed = JSON.parse(row!.meta!);
+    expect(parsed.mtls.enabled).toBe(true);
+    expect(parsed.mtls.excluded_paths).toEqual(['/health', '/public/*']);
+  });
+
+  it('stores mtls config with protected_paths (no excluded_paths)', async () => {
+    const meta = {
+      mtls: {
+        enabled: true,
+        trusted_role_ids: [7],
+        protected_paths: ['/admin/*'],
+      },
+    };
+    const host = await insertHost({ meta: JSON.stringify(meta) });
+    const row = await db.query.proxyHosts.findFirst({ where: (t, { eq }) => eq(t.id, host.id) });
+    const parsed = JSON.parse(row!.meta!);
+    expect(parsed.mtls.protected_paths).toEqual(['/admin/*']);
+    expect(parsed.mtls.excluded_paths).toBeUndefined();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Null meta field
 // ---------------------------------------------------------------------------
