@@ -723,6 +723,7 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
   const [customFrom, setCustomFrom]               = useState(formatDateTimeLocal(initialFrom));
   const [customTo, setCustomTo]                   = useState(formatDateTimeLocal(initialTo));
   const [selected, setSelected]                   = useState<WafEvent | null>(null);
+  const detailPanelRef                            = useRef<HTMLDivElement | null>(null);
   const [localGlobalExcluded, setLocalGlobalExcluded]     = useState(globalExcluded);
   const [localGlobalMessages, setLocalGlobalMessages]     = useState(globalExcludedMessages);
   const [localHostWafMap, setLocalHostWafMap]             = useState(hostWafMap);
@@ -738,6 +739,19 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
     setCustomFrom(formatDateTimeLocal(initialFrom));
     setCustomTo(formatDateTimeLocal(initialTo));
   }, [initialRange, initialFrom, initialTo]);
+  useEffect(() => {
+    if (!selected || !detailPanelRef.current) return;
+
+    const panel = detailPanelRef.current;
+    const frame = requestAnimationFrame(() => {
+      const rect = panel.getBoundingClientRect();
+      if (rect.top < 96 || rect.top > window.innerHeight - 160) {
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [selected]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateSearch = useCallback(
@@ -951,14 +965,16 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
 
             {/* Right: inline detail panel */}
             {selected && (
-              <EventDetailPanel
-                event={selected}
-                onClose={() => setSelected(null)}
-                globalExcluded={localGlobalExcluded}
-                hostWafMap={localHostWafMap}
-                onSuppressGlobal={(ruleId) => setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])])}
-                onSuppressHost={(ruleId, host) => setLocalHostWafMap((prev) => ({ ...prev, [host]: [...new Set([...(prev[host] ?? []), ruleId])] }))}
-              />
+              <div ref={detailPanelRef}>
+                <EventDetailPanel
+                  event={selected}
+                  onClose={() => setSelected(null)}
+                  globalExcluded={localGlobalExcluded}
+                  hostWafMap={localHostWafMap}
+                  onSuppressGlobal={(ruleId) => setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])])}
+                  onSuppressHost={(ruleId, host) => setLocalHostWafMap((prev) => ({ ...prev, [host]: [...new Set([...(prev[host] ?? []), ruleId])] }))}
+                />
+              </div>
             )}
           </div>
         </TabsContent>
