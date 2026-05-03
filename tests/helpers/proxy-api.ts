@@ -20,6 +20,9 @@ export interface ProxyHostConfig {
   mtlsProtectedPaths?: string[];
   mtlsExcludedPaths?: string[];
   enableWaf?: boolean;     // enable WAF with OWASP CRS in blocking mode
+  wafMode?: 'merge' | 'override';
+  wafLoadOwaspCrs?: boolean;
+  wafCustomDirectives?: string;
 }
 
 export interface ImportedCertificateConfig {
@@ -134,8 +137,9 @@ export async function createProxyHost(page: Page, config: ProxyHostConfig): Prom
       wafPresent: 'on',
       wafEnabled: 'on',
       wafEngineMode: 'On',    // blocking mode
-      wafLoadOwaspCrs: 'on',
-      wafMode: 'override',
+      wafLoadOwaspCrs: config.wafLoadOwaspCrs === false ? '' : 'on',
+      wafMode: config.wafMode ?? 'override',
+      wafCustomDirectives: config.wafCustomDirectives ?? '',
     });
   }
 
