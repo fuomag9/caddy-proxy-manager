@@ -67,7 +67,8 @@ function acmeMobileCard(r: AcmeHost) {
 
 export function AcmeTab({ acmeHosts, acmePagination, search, statusFilter }: Props) {
   const filtered = acmeHosts.filter((h) => {
-    if (statusFilter) return false; // ACME hosts have no expiry status
+    if (statusFilter && statusFilter !== "ok") return false;
+    if (statusFilter === "ok" && !h.enabled) return false;
     if (search) {
       const q = search.toLowerCase();
       return (

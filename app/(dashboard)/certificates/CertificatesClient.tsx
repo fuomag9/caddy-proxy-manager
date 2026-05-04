@@ -50,10 +50,9 @@ export default function CertificatesClient({
   const [searchRoles, setSearchRoles] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
-  const allStatuses: (CertExpiryStatus | null)[] = [
-    ...importedCerts.map((c) => c.expiryStatus),
-  ];
-  const { expired, expiringSoon, healthy } = countExpiry(allStatuses);
+  const importedStatuses: (CertExpiryStatus | null)[] = importedCerts.map((c) => c.expiryStatus);
+  const { expired, expiringSoon, healthy: importedHealthy } = countExpiry(importedStatuses);
+  const healthy = importedHealthy + acmeHosts.filter((host) => host.enabled).length;
 
   const search = activeTab === "acme" ? searchAcme : activeTab === "imported" ? searchImported : activeTab === "roles" ? searchRoles : searchCa;
   const setSearch = activeTab === "acme" ? setSearchAcme : activeTab === "imported" ? setSearchImported : activeTab === "roles" ? setSearchRoles : setSearchCa;
