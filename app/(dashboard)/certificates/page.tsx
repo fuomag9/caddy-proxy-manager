@@ -8,6 +8,7 @@ import { listCaCertificates, type CaCertificate } from '@/src/lib/models/ca-cert
 import { listIssuedClientCertificates, type IssuedClientCertificate } from '@/src/lib/models/issued-client-certificates';
 import { listMtlsRoles, type MtlsRole } from '@/src/lib/models/mtls-roles';
 import { isDomainCoveredByCert } from '@/src/lib/cert-domain-match';
+import { countHealthyAcmeHosts } from './certificate-summary';
 
 export type { CaCertificate };
 export type { IssuedClientCertificate };
@@ -193,6 +194,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
 
   // Paginate the deduplicated ACME hosts
   const adjustedAcmeTotal = deduplicatedAcmeHosts.length;
+  const healthyAcmeTotal = countHealthyAcmeHosts(deduplicatedAcmeHosts);
   const paginatedAcmeHosts = deduplicatedAcmeHosts.slice(offset, offset + PER_PAGE);
 
   const importedCerts: ImportedCertView[] = [];
@@ -234,6 +236,7 @@ export default async function CertificatesPage({ searchParams }: PageProps) {
       managedCerts={managedCerts}
       caCertificates={caCertificateViews}
       acmePagination={{ total: adjustedAcmeTotal, page, perPage: PER_PAGE }}
+      healthyAcmeTotal={healthyAcmeTotal}
       mtlsRoles={mtlsRoles}
       issuedClientCerts={issuedClientCerts}
     />

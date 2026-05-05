@@ -11,6 +11,7 @@ import { AcmeTab } from "./components/AcmeTab";
 import { ImportedTab } from "./components/ImportedTab";
 import { CaTab } from "./components/CaTab";
 import { MtlsRolesTab } from "@/components/mtls-roles/MtlsRolesTab";
+import { countExpiry } from "./certificate-summary";
 
 type TabId = "acme" | "imported" | "ca" | "roles";
 
@@ -20,19 +21,10 @@ type Props = {
   managedCerts: ManagedCertView[];
   caCertificates: CaCertificateView[];
   acmePagination: { total: number; page: number; perPage: number };
+  healthyAcmeTotal: number;
   mtlsRoles: MtlsRole[];
   issuedClientCerts: IssuedClientCertificate[];
 };
-
-function countExpiry(statuses: (CertExpiryStatus | null)[]) {
-  let expired = 0, expiringSoon = 0, healthy = 0;
-  for (const s of statuses) {
-    if (s === "expired") expired++;
-    else if (s === "expiring_soon") expiringSoon++;
-    else if (s === "ok") healthy++;
-  }
-  return { expired, expiringSoon, healthy };
-}
 
 export default function CertificatesClient({
   acmeHosts,
@@ -40,6 +32,7 @@ export default function CertificatesClient({
   managedCerts,
   caCertificates,
   acmePagination,
+  healthyAcmeTotal,
   mtlsRoles,
   issuedClientCerts,
 }: Props) {
@@ -52,7 +45,7 @@ export default function CertificatesClient({
 
   const importedStatuses: (CertExpiryStatus | null)[] = importedCerts.map((c) => c.expiryStatus);
   const { expired, expiringSoon, healthy: importedHealthy } = countExpiry(importedStatuses);
-  const healthy = importedHealthy + acmeHosts.filter((host) => host.enabled).length;
+  const healthy = importedHealthy + healthyAcmeTotal;
 
   const search = activeTab === "acme" ? searchAcme : activeTab === "imported" ? searchImported : activeTab === "roles" ? searchRoles : searchCa;
   const setSearch = activeTab === "acme" ? setSearchAcme : activeTab === "imported" ? setSearchImported : activeTab === "roles" ? setSearchRoles : setSearchCa;
