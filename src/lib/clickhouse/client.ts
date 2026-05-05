@@ -36,6 +36,10 @@ export function getClient(): ClickHouseClient {
         async_insert: 1,
         wait_for_async_insert: 0,
       },
+      log: {
+        // 127 is ClickHouseLogLevel.OFF; keep this numeric to avoid widening test mocks.
+        level: 127,
+      },
     });
   }
   return client;

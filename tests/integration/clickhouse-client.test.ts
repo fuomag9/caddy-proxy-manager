@@ -15,8 +15,10 @@ describe('clickhouse client analytics enablement', () => {
       .mockResolvedValueOnce({ json: async () => [{ total: '12', unique_ips: '4', blocked: '2', bytes: '1024' }] })
       .mockResolvedValueOnce({ json: async () => [{ waf_blocked: '3' }] });
 
+    const createClient = vi.fn(() => ({ query, command: vi.fn(), insert: vi.fn(), close: vi.fn() }));
+
     vi.doMock('@clickhouse/client', () => ({
-      createClient: vi.fn(() => ({ query, command: vi.fn(), insert: vi.fn(), close: vi.fn() })),
+      createClient,
     }));
 
     const { isAnalyticsEnabled, querySummary } = await import('@/src/lib/clickhouse/client');
@@ -32,6 +34,13 @@ describe('clickhouse client analytics enablement', () => {
     });
 
     expect(query).toHaveBeenCalledTimes(2);
+    expect(createClient).toHaveBeenCalledWith(expect.objectContaining({
+      log: { level: 127 },
+      clickhouse_settings: {
+        async_insert: 1,
+        wait_for_async_insert: 0,
+      },
+    }));
   });
 
   it('treats analytics as disabled when CLICKHOUSE_PASSWORD is missing', async () => {

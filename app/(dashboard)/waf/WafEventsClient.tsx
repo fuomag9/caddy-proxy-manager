@@ -466,7 +466,7 @@ function EventDetailPanel({
   }
 
   return (
-    <div className="sticky top-6 shrink-0 rounded-xl border border-border bg-card flex flex-col overflow-hidden" style={{ width: 480, maxHeight: "calc(100vh - 3rem)" }}>
+    <div className="fixed bottom-3 right-3 top-3 z-40 flex w-[calc(100vw-1.5rem)] max-w-[560px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl md:sticky md:bottom-auto md:right-auto md:top-4 md:z-auto md:h-[calc(100vh-2rem)] md:w-[420px] md:max-w-none xl:w-[520px]">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
         <BlockedChip blocked={event.blocked} />
@@ -723,7 +723,6 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
   const [customFrom, setCustomFrom]               = useState(formatDateTimeLocal(initialFrom));
   const [customTo, setCustomTo]                   = useState(formatDateTimeLocal(initialTo));
   const [selected, setSelected]                   = useState<WafEvent | null>(null);
-  const detailPanelRef                            = useRef<HTMLDivElement | null>(null);
   const [localGlobalExcluded, setLocalGlobalExcluded]     = useState(globalExcluded);
   const [localGlobalMessages, setLocalGlobalMessages]     = useState(globalExcludedMessages);
   const [localHostWafMap, setLocalHostWafMap]             = useState(hostWafMap);
@@ -739,19 +738,6 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
     setCustomFrom(formatDateTimeLocal(initialFrom));
     setCustomTo(formatDateTimeLocal(initialTo));
   }, [initialRange, initialFrom, initialTo]);
-  useEffect(() => {
-    if (!selected || !detailPanelRef.current) return;
-
-    const panel = detailPanelRef.current;
-    const frame = requestAnimationFrame(() => {
-      const rect = panel.getBoundingClientRect();
-      if (rect.top < 96 || rect.top > window.innerHeight - 160) {
-        panel.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [selected]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateSearch = useCallback(
@@ -922,7 +908,10 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
         </TabsList>
 
         <TabsContent value="events" className="mt-4">
-          <div className={cn("flex gap-6 items-start", selected ? "flex-row" : "flex-col")}>
+          <div className={cn(
+            "grid gap-6 items-start",
+            selected ? "md:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_520px]" : "grid-cols-1"
+          )}>
             {/* Left: table area */}
             <div className="flex-1 flex flex-col gap-4 min-w-0">
               <StatsBar stats={stats} />
@@ -963,18 +952,15 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
               />
             </div>
 
-            {/* Right: inline detail panel */}
             {selected && (
-              <div ref={detailPanelRef}>
-                <EventDetailPanel
-                  event={selected}
-                  onClose={() => setSelected(null)}
-                  globalExcluded={localGlobalExcluded}
-                  hostWafMap={localHostWafMap}
-                  onSuppressGlobal={(ruleId) => setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])])}
-                  onSuppressHost={(ruleId, host) => setLocalHostWafMap((prev) => ({ ...prev, [host]: [...new Set([...(prev[host] ?? []), ruleId])] }))}
-                />
-              </div>
+              <EventDetailPanel
+                event={selected}
+                onClose={() => setSelected(null)}
+                globalExcluded={localGlobalExcluded}
+                hostWafMap={localHostWafMap}
+                onSuppressGlobal={(ruleId) => setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])])}
+                onSuppressHost={(ruleId, host) => setLocalHostWafMap((prev) => ({ ...prev, [host]: [...new Set([...(prev[host] ?? []), ruleId])] }))}
+              />
             )}
           </div>
         </TabsContent>
