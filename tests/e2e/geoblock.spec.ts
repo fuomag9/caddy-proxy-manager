@@ -37,6 +37,10 @@ test.describe('Geo Blocking — form persistence', () => {
   test.beforeEach(async ({ page }) => {
     await resetGeoblock(page);
     await page.goto('/settings');
+    // Navigate to Global Geoblocking section in the settings sidebar
+    const sidebar = page.locator('aside');
+    await sidebar.getByRole('button', { name: 'Global Geoblocking', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Global Geoblocking' })).toBeVisible();
   });
 
   test.afterEach(async ({ page }) => {
@@ -73,6 +77,7 @@ test.describe('Geo Blocking — form persistence', () => {
     await expect(geoSection.locator('text=/saved|success/i')).toBeVisible({ timeout: 10000 });
 
     await page.reload();
+    await page.locator('aside').getByRole('button', { name: 'Global Geoblocking', exact: true }).click();
     const fresh = page.locator('form', { has: page.getByRole('button', { name: /save geoblocking settings/i }) });
 
     await fresh.getByRole('tab', { name: /block rules/i }).click();
@@ -105,6 +110,7 @@ test.describe('Geo Blocking — form persistence', () => {
     await expect(geoSection.locator('text=/saved|success/i')).toBeVisible({ timeout: 10000 });
 
     await page.reload();
+    await page.locator('aside').getByRole('button', { name: 'Global Geoblocking', exact: true }).click();
     const fresh = page.locator('form', { has: page.getByRole('button', { name: /save geoblocking settings/i }) });
 
     await fresh.getByRole('tab', { name: /block rules/i }).click();
@@ -137,6 +143,7 @@ test.describe('Geo Blocking — form persistence', () => {
     await expect(geoSection.locator('text=/saved|success/i')).toBeVisible({ timeout: 10000 });
 
     await page.reload();
+    await page.locator('aside').getByRole('button', { name: 'Global Geoblocking', exact: true }).click();
     const fresh = page.locator('form', { has: page.getByRole('button', { name: /save geoblocking settings/i }) });
     await fresh.getByRole('button', { name: /trusted proxies/i }).click();
     await expect(fresh.locator('input[name="geoblockRedirectUrl"]'))
