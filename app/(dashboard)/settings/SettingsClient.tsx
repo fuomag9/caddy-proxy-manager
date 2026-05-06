@@ -248,7 +248,7 @@ function SettingsSidebar({
   onSearchClick: () => void;
 }) {
   return (
-    <aside className="hidden lg:flex flex-col w-[260px] shrink-0 border-r border-border bg-card">
+    <aside aria-label="Settings navigation" className="hidden lg:flex flex-col w-[260px] shrink-0 border-r border-border bg-card">
       {/* Search trigger */}
       <div className="p-3 border-b border-border">
         <button
@@ -314,7 +314,7 @@ function MobileSettingsNav({
   onSearchClick: () => void;
 }) {
   return (
-    <div className="lg:hidden">
+    <div className="lg:hidden" data-testid="mobile-settings-nav">
       <div className="flex items-center gap-2 mb-4">
         <button
           onClick={onSearchClick}
@@ -351,7 +351,7 @@ function DetailHeader({ activeId }: { activeId: string }) {
   if (!item) return null;
   return (
     <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border px-6 py-4">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+      <div data-testid="settings-breadcrumb" className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
         <span>Settings</span>
         <ChevronRight className="h-3 w-3" />
         <span>{item.groupLabel}</span>
@@ -475,7 +475,7 @@ export default function SettingsClient({
   );
 
   return (
-    <div className="flex -mx-4 md:-mx-8 -my-6 min-h-[calc(100vh-3rem)] md:min-h-screen">
+    <div className="flex min-h-[calc(100vh-3rem)] md:min-h-screen">
       {/* Desktop sidebar */}
       <SettingsSidebar
         active={active}

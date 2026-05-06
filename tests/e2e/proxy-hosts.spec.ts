@@ -215,10 +215,14 @@ test.describe('Proxy Hosts', () => {
 
     try {
       await page.goto('/settings');
+      const sidebar = page.locator('aside[aria-label="Settings navigation"]');
+      const navBtn = sidebar.getByRole('button', { name: 'Authentik Defaults', exact: true });
+      await expect(navBtn).toBeVisible({ timeout: 10_000 });
+      await navBtn.click();
 
-      await page.getByLabel('Outpost domain').fill(defaultSettings.outpostDomain);
-      await page.getByLabel('Outpost upstream').fill(defaultSettings.outpostUpstream);
-      await page.getByLabel('Auth endpoint').fill(defaultSettings.authEndpoint);
+      await page.locator('input[name="outpostDomain"]').fill(defaultSettings.outpostDomain);
+      await page.locator('input[name="outpostUpstream"]').fill(defaultSettings.outpostUpstream);
+      await page.locator('input[name="authEndpoint"]').fill(defaultSettings.authEndpoint);
       await page.getByRole('button', { name: /save authentik defaults/i }).click();
       await expect(page.getByText(/authentik defaults saved successfully/i)).toBeVisible({ timeout: 10000 });
 

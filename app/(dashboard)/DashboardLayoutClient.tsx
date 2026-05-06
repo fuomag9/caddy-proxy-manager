@@ -182,9 +182,13 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
 
       {/* Main content */}
       <main className="flex-1 md:ml-64 mt-12 md:mt-0 overflow-x-hidden">
-        <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-6">
-          {children}
-        </div>
+        {pathname === "/settings" || pathname === "/access-lists" ? (
+          children
+        ) : (
+          <div className="max-w-screen-xl mx-auto px-4 md:px-8 py-6">
+            {children}
+          </div>
+        )}
       </main>
     </div>
   );

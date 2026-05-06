@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import db, { nowIso, toIso } from "../db";
 import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
-import { accessListEntries, accessLists } from "../db/schema";
+import { accessListEntries, accessLists, proxyHosts } from "../db/schema";
 import { asc, eq, inArray, count } from "drizzle-orm";
 
 export type AccessListEntry = {
@@ -269,4 +269,37 @@ export async function deleteAccessList(id: number, actorUserId: number) {
     summary: `Deleted access list ${existing.name}`
   });
   await applyCaddyConfig();
+}
+
+export type AccessListUsage = {
+  id: number;
+  name: string;
+  domains: string[];
+  enabled: boolean;
+};
+
+export async function getAccessListUsageMap(): Promise<Map<number, AccessListUsage[]>> {
+  const rows = await db
+    .select({
+      id: proxyHosts.id,
+      name: proxyHosts.name,
+      domains: proxyHosts.domains,
+      enabled: proxyHosts.enabled,
+      accessListId: proxyHosts.accessListId,
+    })
+    .from(proxyHosts);
+
+  const map = new Map<number, AccessListUsage[]>();
+  for (const row of rows) {
+    if (row.accessListId == null) continue;
+    const bucket = map.get(row.accessListId) ?? [];
+    bucket.push({
+      id: row.id,
+      name: row.name,
+      domains: JSON.parse(row.domains),
+      enabled: row.enabled,
+    });
+    map.set(row.accessListId, bucket);
+  }
+  return map;
 }

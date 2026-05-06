@@ -252,8 +252,7 @@ export interface AccessListUser {
 
 /**
  * Create an access list with initial users via the browser UI.
- * Uses the "Seed members" textarea (username:password per line) so all
- * users are created atomically with the list — no per-user form needed.
+ * Opens the "New" dialog, fills in name + seed members, and creates.
  */
 export async function createAccessList(
   page: Page,
@@ -262,15 +261,31 @@ export async function createAccessList(
 ): Promise<void> {
   await page.goto('/access-lists');
 
-  await page.getByPlaceholder('Internal users').fill(name);
+  // Open the create dialog
+  await page.getByRole('button', { name: /^new$/i }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible({ timeout: 5_000 });
 
+  // Fill the name
+  await dialog.getByPlaceholder(/internal.*engineering/i).fill(name);
+
+  // Fill seed members
   if (users.length > 0) {
-    const seedMembers = users.map((u) => `${u.username}:${u.password}`).join('\n');
-    await page.getByLabel('Seed members').fill(seedMembers);
+    // Fill the first seed member row
+    await dialog.getByPlaceholder('username').first().fill(users[0].username);
+    await dialog.getByPlaceholder('password').first().fill(users[0].password);
+
+    // Add additional seed member rows
+    for (let i = 1; i < users.length; i++) {
+      await dialog.getByText('+ Add another member').click();
+      await dialog.getByPlaceholder('username').nth(i).fill(users[i].username);
+      await dialog.getByPlaceholder('password').nth(i).fill(users[i].password);
+    }
   }
 
-  await page.getByRole('button', { name: /create access list/i }).click();
+  await dialog.getByRole('button', { name: /create list/i }).click();
 
-  // Wait for the newly created card to appear (match by name to avoid strict-mode violations)
-  await expect(page.getByText(name).first()).toBeVisible({ timeout: 10_000 });
+  // Wait for the dialog to close and the list to appear in the rail
+  await expect(dialog).not.toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name }).first()).toBeVisible({ timeout: 10_000 });
 }
