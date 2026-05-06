@@ -425,7 +425,7 @@ function AuditPanel({ rawData }: { rawData: string | null }) {
   );
 }
 
-/* ── Event detail panel (inline) ─────────────────────────────────────────── */
+/* ── Event detail panel (modal drawer) ───────────────────────────────────── */
 function EventDetailPanel({
   event,
   onClose,
@@ -447,6 +447,12 @@ function EventDetailPanel({
   const isHostOnlySuppressed  = event.ruleId != null && !!event.host && (hostWafMap[event.host] ?? []).includes(event.ruleId);
   const isHostSuppressed      = isGloballySuppressed || isHostOnlySuppressed;
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   function handleSuppressGlobally() {
     if (!event.ruleId) return;
     startTransition(async () => {
@@ -466,91 +472,101 @@ function EventDetailPanel({
   }
 
   return (
-    <div className="fixed bottom-3 right-3 top-3 z-40 flex w-[calc(100vw-1.5rem)] max-w-[560px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-2xl md:sticky md:bottom-auto md:right-auto md:top-4 md:z-auto md:h-[calc(100vh-2rem)] md:w-[420px] md:max-w-none xl:w-[520px]">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
-        <BlockedChip blocked={event.blocked} />
-        <SeverityChip severity={event.severity} />
-        <h2 className="text-sm font-semibold ml-1">WAF Event</h2>
-        <Button variant="ghost" size="icon" onClick={onClose} className="ml-auto h-7 w-7">
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-
-        {/* Metadata grid */}
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border bg-muted/30 p-4">
-          <DetailRow label="Time">
-            <p className="text-sm">{new Date(event.ts * 1000).toLocaleString()}</p>
-          </DetailRow>
-          <DetailRow label="Host">
-            <p className="font-mono text-sm break-all">{event.host || "—"}</p>
-          </DetailRow>
-          <DetailRow label="Client IP">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-mono text-sm">{event.clientIp}</span>
-              {event.countryCode && (
-                <Badge variant="outline" className="text-[0.65rem] h-[18px] px-1">{event.countryCode}</Badge>
-              )}
-            </div>
-          </DetailRow>
-          <DetailRow label="Method">
-            <span className="font-mono text-sm font-semibold text-primary">{event.method}</span>
-          </DetailRow>
-          <div className="col-span-2">
-            <DetailRow label="URI">
-              <p className="font-mono text-xs break-all text-muted-foreground">{event.uri || "—"}</p>
-            </DetailRow>
-          </div>
-          <DetailRow label="Rule ID">
-            <span className="font-mono text-sm text-destructive font-semibold">{event.ruleId ?? "—"}</span>
-          </DetailRow>
-          <div className="col-span-2">
-            <DetailRow label="Rule Message">
-              <p className="text-sm break-words leading-snug">{event.ruleMessage ?? "—"}</p>
-            </DetailRow>
-          </div>
+      {/* Drawer */}
+      <aside className="fixed top-0 right-0 bottom-0 z-50 flex w-[540px] max-w-[92vw] flex-col border-l border-border bg-card shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
+          <BlockedChip blocked={event.blocked} />
+          <SeverityChip severity={event.severity} />
+          <h2 className="text-sm font-semibold ml-1">WAF Event</h2>
+          <Button variant="ghost" size="icon" onClick={onClose} className="ml-auto h-7 w-7">
+            <X className="h-3.5 w-3.5" />
+          </Button>
         </div>
 
-        {/* Suppress actions */}
-        {event.ruleId != null && (
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-[0.72rem] text-destructive border-destructive/40 hover:bg-destructive/10 h-7 gap-1.5"
-              onClick={handleSuppressGlobally}
-              disabled={pending || isGloballySuppressed}
-            >
-              <ShieldOff className="h-3 w-3" />
-              {isGloballySuppressed ? "Suppressed Globally" : "Suppress Globally"}
-            </Button>
-            {event.host && (
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+
+          {/* Metadata grid */}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border bg-muted/30 p-4">
+            <DetailRow label="Time">
+              <p className="text-sm">{new Date(event.ts * 1000).toLocaleString()}</p>
+            </DetailRow>
+            <DetailRow label="Host">
+              <p className="font-mono text-sm break-all">{event.host || "—"}</p>
+            </DetailRow>
+            <DetailRow label="Client IP">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono text-sm">{event.clientIp}</span>
+                {event.countryCode && (
+                  <Badge variant="outline" className="text-[0.65rem] h-[18px] px-1">{event.countryCode}</Badge>
+                )}
+              </div>
+            </DetailRow>
+            <DetailRow label="Method">
+              <span className="font-mono text-sm font-semibold text-primary">{event.method}</span>
+            </DetailRow>
+            <div className="col-span-2">
+              <DetailRow label="URI">
+                <p className="font-mono text-xs break-all text-muted-foreground">{event.uri || "—"}</p>
+              </DetailRow>
+            </div>
+            <DetailRow label="Rule ID">
+              <span className="font-mono text-sm text-destructive font-semibold">{event.ruleId ?? "—"}</span>
+            </DetailRow>
+            <div className="col-span-2">
+              <DetailRow label="Rule Message">
+                <p className="text-sm break-words leading-snug">{event.ruleMessage ?? "—"}</p>
+              </DetailRow>
+            </div>
+          </div>
+
+          {/* Suppress actions */}
+          {event.ruleId != null && (
+            <div className="flex gap-2 flex-wrap">
               <Button
                 size="sm"
                 variant="outline"
-                className="text-[0.72rem] text-yellow-500 border-yellow-500/40 hover:bg-yellow-500/10 h-7 gap-1.5"
-                onClick={handleSuppressForHost}
-                disabled={pending || isHostSuppressed}
+                className="text-[0.72rem] text-destructive border-destructive/40 hover:bg-destructive/10 h-7 gap-1.5"
+                onClick={handleSuppressGlobally}
+                disabled={pending || isGloballySuppressed}
               >
                 <ShieldOff className="h-3 w-3" />
-                {isHostSuppressed ? `Suppressed for ${event.host}` : `Suppress for ${event.host}`}
+                {isGloballySuppressed ? "Suppressed Globally" : "Suppress Globally"}
               </Button>
-            )}
+              {event.host && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-[0.72rem] text-yellow-500 border-yellow-500/40 hover:bg-yellow-500/10 h-7 gap-1.5"
+                  onClick={handleSuppressForHost}
+                  disabled={pending || isHostSuppressed}
+                >
+                  <ShieldOff className="h-3 w-3" />
+                  {isHostSuppressed ? `Suppressed for ${event.host}` : `Suppress for ${event.host}`}
+                </Button>
+              )}
+            </div>
+          )}
+
+          <Separator />
+
+          {/* Audit data */}
+          <div>
+            <p className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground mb-2">Audit Data</p>
+            <AuditPanel rawData={event.rawData} />
           </div>
-        )}
-
-        <Separator />
-
-        {/* Audit data */}
-        <div>
-          <p className="text-[0.62rem] font-bold uppercase tracking-wider text-muted-foreground mb-2">Audit Data</p>
-          <AuditPanel rawData={event.rawData} />
         </div>
-      </div>
-    </div>
+      </aside>
+    </>
   );
 }
 
@@ -908,12 +924,9 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
         </TabsList>
 
         <TabsContent value="events" className="mt-4">
-          <div className={cn(
-            "grid gap-6 items-start",
-            selected ? "md:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_520px]" : "grid-cols-1"
-          )}>
-            {/* Left: table area */}
-            <div className="flex-1 flex flex-col gap-4 min-w-0">
+          <div className="flex flex-col gap-4">
+            {/* Table area — always full width; detail opens as an overlay drawer */}
+            <div className="flex flex-col gap-4 min-w-0">
               <StatsBar stats={stats} />
               <div className="flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-2">
