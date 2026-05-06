@@ -844,7 +844,7 @@ function ListsRail({
   ];
 
   return (
-    <div className="flex flex-col w-[320px] shrink-0 border-r">
+    <div className="flex flex-col w-[320px] shrink-0 border-r border-border bg-card">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between gap-2">
         <div className="min-w-0">
@@ -867,10 +867,10 @@ function ListsRail({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search lists or members..."
-            className="h-8 w-full rounded-md border border-input bg-transparent pl-8 pr-14 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            className="h-8 w-full rounded-md border border-input bg-transparent pl-8 pr-16 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-            <kbd className="inline-flex h-5 min-w-[20px] items-center justify-center rounded border bg-muted px-1 text-[10px] font-mono text-muted-foreground">
+            <kbd className="inline-flex h-5 items-center gap-0.5 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground leading-none">
               {"\u2318"}K
             </kbd>
           </span>
