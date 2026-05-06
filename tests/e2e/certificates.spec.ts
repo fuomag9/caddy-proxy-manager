@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { createSelfSignedServerCertificate } from '../helpers/certs';
 
 test.describe('Certificates', () => {
   test('page loads with tabs visible', async ({ page }) => {
@@ -115,6 +116,51 @@ test.describe('Certificates', () => {
     } finally {
       await page.request.delete(`${API}/proxy-hosts/${subHost.id}`, { headers });
       await page.request.delete(`${API}/proxy-hosts/${wcHost.id}`, { headers });
+    }
+  });
+
+  test('deletes an imported certificate from the Imported tab (#151)', async ({ page }) => {
+    const BASE_URL = 'http://localhost:3000';
+    const API = `${BASE_URL}/api/v1`;
+    const headers = { 'Content-Type': 'application/json', 'Origin': BASE_URL };
+    const domain = `import-delete-${Date.now()}.example`;
+    const certName = `Imported Delete ${domain}`;
+    const { certificatePem, privateKeyPem } = createSelfSignedServerCertificate(domain, [domain]);
+
+    const certRes = await page.request.post(`${API}/certificates`, {
+      data: {
+        name: certName,
+        type: 'imported',
+        domainNames: [domain],
+        autoRenew: false,
+        certificatePem,
+        privateKeyPem,
+      },
+      headers,
+    });
+    expect(certRes.status()).toBe(201);
+    const cert = await certRes.json() as { id: number };
+
+    try {
+      await page.goto('/certificates');
+      await page.getByRole('tab', { name: /imported/i }).click();
+
+      await expect(page.getByText(certName).last()).toBeVisible({ timeout: 10_000 });
+
+      await page.getByRole('button', { name: `Actions for certificate ${certName}` }).last().click();
+      await page.getByRole('menuitem', { name: /^delete$/i }).click();
+
+      const dialog = page.getByRole('dialog', { name: /delete imported certificate/i });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: /delete certificate/i }).click();
+
+      await expect(dialog).not.toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText(certName)).not.toBeVisible({ timeout: 10_000 });
+
+      const getRes = await page.request.get(`${API}/certificates/${cert.id}`, { headers: { Origin: BASE_URL } });
+      expect(getRes.status()).toBe(404);
+    } finally {
+      await page.request.delete(`${API}/certificates/${cert.id}`, { headers }).catch(() => undefined);
     }
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AppDialog } from "@/components/ui/AppDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,49 +53,86 @@ function DomainsCell({ domains }: { domains: string[] }) {
 
 function ActionsMenu({ cert, onEdit }: { cert: ImportedCertView; onEdit: () => void }) {
   const [open, setOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
   function handleDelete() {
+    setError(null);
     startTransition(async () => {
-      await deleteCertificateAction(cert.id);
-      setOpen(false);
+      try {
+        await deleteCertificateAction(cert.id);
+        setDeleteOpen(false);
+        setOpen(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to delete certificate");
+      }
     });
   }
 
   return (
-    <DropdownMenu
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) setConfirmDelete(false);
-      }}
-    >
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => { setOpen(false); onEdit(); }}>Edit</DropdownMenuItem>
-        {confirmDelete ? (
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            disabled={isPending}
-            onClick={handleDelete}
+    <>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label={`Actions for certificate ${cert.name}`}
           >
-            {isPending ? "Deleting..." : "Confirm Delete"}
-          </DropdownMenuItem>
-        ) : (
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => { setOpen(false); onEdit(); }}>Edit</DropdownMenuItem>
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
-            onClick={() => setConfirmDelete(true)}
+            onClick={() => {
+              setOpen(false);
+              setError(null);
+              setDeleteOpen(true);
+            }}
           >
             Delete
           </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AppDialog
+        open={deleteOpen}
+        onClose={() => {
+          if (isPending) return;
+          setDeleteOpen(false);
+          setError(null);
+        }}
+        title="Delete Imported Certificate"
+        maxWidth="sm"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteOpen(false);
+                setError(null);
+              }}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
+              {isPending ? "Deleting..." : "Delete Certificate"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            Delete imported certificate <strong className="text-foreground">{cert.name}</strong>? This cannot be undone.
+          </p>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+      </AppDialog>
+    </>
   );
 }
 
