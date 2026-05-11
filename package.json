@@ -57,7 +57,7 @@
     "postcss": "^8.5.14",
     "react": "^19.2.6",
     "react-apexcharts": "^2.1.0",
-    "react-day-picker": "^9.14.0",
+    "react-day-picker": "^10.0.0",
     "react-dom": "^19.2.6",
     "react-map-gl": "^8.1.1",
     "sonner": "^2.0.7",
