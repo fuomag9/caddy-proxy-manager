@@ -25,7 +25,7 @@ RUN GOPROXY=direct xcaddy build \
     --with github.com/corazawaf/coraza-caddy/v2 \
     --output /usr/bin/caddy
 
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 # Accept build args for user/group IDs to support rootless operation
 # Using 10000 as default to avoid conflicts with system users
