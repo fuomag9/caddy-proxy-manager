@@ -132,27 +132,17 @@ export function ImportCertDrawer({ open, cert, onClose }: Props) {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ic-key-pem">Private Key PEM</Label>
               <div className="relative">
-                {showKey ? (
-                  <Textarea
-                    id="ic-key-pem"
-                    name="private_key_pem"
-                    placeholder={"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"}
-                    rows={6}
-                    value={keyPem}
-                    onChange={(e) => setKeyPem(e.target.value)}
-                    className="font-mono text-xs"
-                  />
-                ) : (
-                  <Input
-                    id="ic-key-pem"
-                    name="private_key_pem"
-                    type="password"
-                    placeholder="••••••••••••••••"
-                    value={keyPem}
-                    onChange={(e) => setKeyPem(e.target.value)}
-                    className="font-mono text-xs pr-10"
-                  />
-                )}
+                {/* <input type="password"> strips newlines on paste, corrupting multi-line PEM keys — always render a textarea and mask visually instead. */}
+                <Textarea
+                  id="ic-key-pem"
+                  name="private_key_pem"
+                  placeholder={showKey ? "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----" : "••••••••••••••••"}
+                  rows={6}
+                  value={keyPem}
+                  onChange={(e) => setKeyPem(e.target.value)}
+                  className="font-mono text-xs pr-10"
+                  style={showKey ? undefined : { WebkitTextSecurity: "disc" } as React.CSSProperties}
+                />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

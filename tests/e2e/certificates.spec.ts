@@ -163,4 +163,64 @@ test.describe('Certificates', () => {
       await page.request.delete(`${API}/certificates/${cert.id}`, { headers }).catch(() => undefined);
     }
   });
+
+  test('imports a certificate via the UI form preserving PEM newlines (#157)', async ({ page }) => {
+    const BASE_URL = 'http://localhost:3000';
+    const API = `${BASE_URL}/api/v1`;
+    const headers = { 'Content-Type': 'application/json', 'Origin': BASE_URL };
+    const domain = `import-ui-${Date.now()}.example`;
+    const certName = `UI Import ${domain}`;
+    const { certificatePem, privateKeyPem } = createSelfSignedServerCertificate(domain, [domain]);
+
+    // Sanity-check the fixture: PEM blocks must be multi-line for this test
+    // to meaningfully exercise newline preservation.
+    expect(privateKeyPem.split('\n').length).toBeGreaterThan(3);
+
+    let createdId: number | null = null;
+    try {
+      await page.goto('/certificates');
+      await page.getByRole('tab', { name: /imported/i }).click();
+
+      // Open the Import drawer. The "Add"/"Import" trigger varies by viewport,
+      // so match any button that opens the import flow.
+      await page.getByRole('button', { name: /import certificate|add certificate|^import$|^add$/i }).first().click();
+
+      const drawer = page.getByRole('dialog');
+      await expect(drawer).toBeVisible();
+
+      await drawer.getByLabel(/^name$/i).fill(certName);
+      await drawer.getByLabel(/domains/i).fill(domain);
+
+      // Certificate PEM goes into a textarea — newlines preserved trivially.
+      await drawer.getByLabel(/certificate pem/i).fill(certificatePem);
+
+      // Private Key PEM: paste while the field is in the default (hidden/masked)
+      // state. Regression for #157 — a <input type="password"> would silently
+      // strip the newlines from the pasted PEM, corrupting the key.
+      const keyField = drawer.getByLabel(/private key pem/i);
+      await keyField.click();
+      await keyField.fill(privateKeyPem);
+
+      await drawer.getByRole('button', { name: /import certificate|save changes/i }).click();
+      await expect(drawer).not.toBeVisible({ timeout: 10_000 });
+
+      // Verify via the API that the persisted PEM still contains its original
+      // newlines — this is what would fail if the password-input regressed.
+      const listRes = await page.request.get(`${API}/certificates`, { headers: { Origin: BASE_URL } });
+      expect(listRes.ok()).toBe(true);
+      const list = await listRes.json() as Array<{ id: number; name: string; privateKeyPem: string | null }>;
+      const created = list.find((c) => c.name === certName);
+      expect(created).toBeTruthy();
+      createdId = created!.id;
+      expect(created!.privateKeyPem).toContain('-----BEGIN');
+      expect(created!.privateKeyPem).toContain('-----END');
+      expect(created!.privateKeyPem!.split('\n').length).toBeGreaterThan(3);
+      // The persisted key must round-trip byte-for-byte (ignoring trailing whitespace).
+      expect(created!.privateKeyPem!.trimEnd()).toBe(privateKeyPem.trimEnd());
+    } finally {
+      if (createdId !== null) {
+        await page.request.delete(`${API}/certificates/${createdId}`, { headers }).catch(() => undefined);
+      }
+    }
+  });
 });
