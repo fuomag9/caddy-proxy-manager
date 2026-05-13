@@ -167,7 +167,7 @@ function DateTimePicker({
           mode="single"
           selected={selectedDate}
           onSelect={handleDaySelect}
-          initialFocus
+          autoFocus
         />
         <div className="flex items-center gap-2 px-3 pb-3">
           <span className="text-xs text-muted-foreground">Time:</span>
