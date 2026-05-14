@@ -1,15 +1,21 @@
 # syntax=docker/dockerfile:1.6
 
-FROM golang:1.26 AS builder
+# Always run the builder on the host arch (BUILDPLATFORM) and let xcaddy
+# cross-compile Caddy for the target arch via GOOS/GOARCH. This avoids QEMU
+# emulation when producing the linux/arm64 image on an x86 GitHub runner —
+# native cross-compilation is several times faster.
+FROM --platform=$BUILDPLATFORM golang:1.26 AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
 
 # Install xcaddy
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 
 # Build Caddy with plugins.
-# GOPROXY=direct bypasses the module proxy cache so the latest commit is always fetched.
 # Caddy version is pinned because xcaddy defaults to `master`, which has shipped
 # breaking regressions (e.g. v2.11.3 broke client TLS auth — caddyserver/caddy#7724).
-RUN GOPROXY=direct xcaddy build v2.11.2 \
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH xcaddy build v2.11.2 \
     --with github.com/caddy-dns/cloudflare \
     --with github.com/caddy-dns/route53 \
     --with github.com/caddy-dns/digitalocean \
