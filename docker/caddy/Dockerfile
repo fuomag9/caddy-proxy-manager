@@ -5,9 +5,11 @@ FROM golang:1.26 AS builder
 # Install xcaddy
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 
-# Build Caddy with plugins
-# GOPROXY=direct bypasses the module proxy cache so the latest commit is always fetched
-RUN GOPROXY=direct xcaddy build \
+# Build Caddy with plugins.
+# GOPROXY=direct bypasses the module proxy cache so the latest commit is always fetched.
+# Caddy version is pinned because xcaddy defaults to `master`, which has shipped
+# breaking regressions (e.g. v2.11.3 broke client TLS auth — caddyserver/caddy#7724).
+RUN GOPROXY=direct xcaddy build v2.11.2 \
     --with github.com/caddy-dns/cloudflare \
     --with github.com/caddy-dns/route53 \
     --with github.com/caddy-dns/digitalocean \
