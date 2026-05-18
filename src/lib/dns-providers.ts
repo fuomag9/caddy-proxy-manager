@@ -190,6 +190,16 @@ export const DNS_PROVIDERS: DnsProviderDefinition[] = [
       { key: "api_token", label: "API Token", type: "password", required: true },
     ],
   },
+  {
+    name: "njalla",
+    displayName: "Njalla",
+    description: "Njalla DNS API",
+    docsUrl: "https://github.com/caddy-dns/njalla",
+    modulePath: "github.com/caddy-dns/njalla",
+    fields: [
+      { key: "api_token", label: "API Token", type: "password", required: true },
+    ],
+  },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
