@@ -13,9 +13,9 @@ ARG TARGETARCH
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
 
 # Build Caddy with plugins.
-# Caddy version is pinned because xcaddy defaults to `master`, which has shipped
-# breaking regressions (e.g. v2.11.3 broke client TLS auth — caddyserver/caddy#7724).
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH xcaddy build v2.11.2 \
+# Track Caddy master until the v2.11.3 client TLS regression fix
+# (caddyserver/caddy#7724) is available in a stable release.
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH xcaddy build master \
     --with github.com/caddy-dns/cloudflare \
     --with github.com/caddy-dns/route53 \
     --with github.com/caddy-dns/digitalocean \
