@@ -1,0 +1,134 @@
+{
+  "apps": {
+    "http": {
+      "servers": {
+        "srv_misc": {
+          "listen": [":1882"],
+          "routes": [
+            {
+              "match": [{ "host": ["worksite.test.fr"] }],
+              "handle": [{
+                "handler": "subroute",
+                "routes": [{ "handle": [{
+                  "handler": "reverse_proxy",
+                  "upstreams": [{ "dial": "10.0.0.1:1882" }]
+                }] }]
+              }],
+              "terminal": true
+            }
+          ]
+        },
+        "srv_legacy": {
+          "listen": [":60881"],
+          "routes": [
+            {
+              "match": [{ "host": ["api-old.test.fr"] }],
+              "handle": [{
+                "handler": "subroute",
+                "routes": [{ "handle": [{
+                  "handler": "reverse_proxy",
+                  "upstreams": [{ "dial": "10.0.0.2:1882" }]
+                }] }]
+              }],
+              "terminal": true
+            }
+          ]
+        },
+        "srv_https": {
+          "listen": [":443"],
+          "routes": [
+            {
+              "match": [{ "host": ["worksite.test.fr"] }],
+              "handle": [{
+                "handler": "subroute",
+                "routes": [{ "handle": [{
+                  "handler": "reverse_proxy",
+                  "upstreams": [{ "dial": "10.0.0.1:8080" }]
+                }] }]
+              }],
+              "terminal": true
+            },
+            {
+              "match": [{ "host": ["proxmox.test.fr"] }],
+              "handle": [{
+                "handler": "subroute",
+                "routes": [{ "handle": [{
+                  "handler": "reverse_proxy",
+                  "transport": {
+                    "protocol": "http",
+                    "tls": { "insecure_skip_verify": true }
+                  },
+                  "upstreams": [{ "dial": "10.0.0.3:8006" }]
+                }] }]
+              }],
+              "terminal": true
+            },
+            {
+              "match": [{ "host": ["nextcloud.test.fr"] }],
+              "handle": [{
+                "handler": "subroute",
+                "routes": [
+                  {
+                    "match": [{ "path": ["/.well-known/carddav"] }],
+                    "handle": [{
+                      "handler": "static_response",
+                      "headers": { "Location": ["/remote.php/dav"] },
+                      "status_code": 301
+                    }]
+                  },
+                  {
+                    "handle": [{
+                      "handler": "reverse_proxy",
+                      "upstreams": [{ "dial": "10.0.0.4:80" }]
+                    }]
+                  }
+                ]
+              }],
+              "terminal": true
+            },
+            {
+              "match": [{ "host": ["vaultwarden.test.fr"] }],
+              "handle": [{
+                "handler": "subroute",
+                "routes": [
+                  {
+                    "handle": [{
+                      "handler": "headers",
+                      "response": { "set": { "Strict-Transport-Security": ["max-age=31536000"] } }
+                    }]
+                  },
+                  {
+                    "match": [{ "path": ["/notifications/hub"] }],
+                    "handle": [{
+                      "handler": "reverse_proxy",
+                      "upstreams": [{ "dial": "10.0.0.5:3012" }]
+                    }]
+                  },
+                  {
+                    "handle": [{
+                      "handler": "reverse_proxy",
+                      "upstreams": [{ "dial": "10.0.0.5:80" }]
+                    }]
+                  }
+                ]
+              }],
+              "terminal": true
+            },
+            {
+              "match": [{ "host": ["authportal.test.fr"] }],
+              "handle": [{
+                "handler": "subroute",
+                "routes": [{ "handle": [{
+                  "handler": "authenticator",
+                  "portal_name": "auth-portal",
+                  "route_matcher": "*"
+                }] }]
+              }],
+              "terminal": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}

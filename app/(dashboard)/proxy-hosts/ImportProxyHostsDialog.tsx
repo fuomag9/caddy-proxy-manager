@@ -14,8 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Check, FileUp, XCircle, AlertTriangle } from "lucide-react";
-import { parseCaddyfile, type CaddyfileImportResult } from "@/lib/caddyfile-import";
+import { ArrowLeft, ArrowRight, Check, FileUp, X, XCircle, AlertTriangle } from "lucide-react";
+import { parseProxyHostsImport, type ImportResult, type ProxyHostImportDraft } from "@/lib/proxy-hosts-import";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
 import {
   importProxyHostsAction,
@@ -49,8 +49,8 @@ export function ImportProxyHostsDialog({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const parsed: CaddyfileImportResult = useMemo(
-    () => parseCaddyfile(rawText),
+  const parsed: ImportResult = useMemo(
+    () => parseProxyHostsImport(rawText),
     [rawText]
   );
 
@@ -116,21 +116,23 @@ export function ImportProxyHostsDialog({
       setErrorMessage(response.message ?? "Import failed.");
       return;
     }
-    setResult(response.result ?? { created: [], skipped: [], errors: [] });
+    setResult(response.result ?? { format: parsed.format, created: [], skipped: [], errors: [] });
     setStep("result");
   }
 
   const canPreview =
     rawText.trim().length > 0 &&
-    (parsed.drafts.length > 0 || parsed.errors.length > 0);
+    (parsed.drafts.length > 0 ||
+      parsed.errors.length > 0 ||
+      parsed.skipped.length > 0);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Import proxy hosts from Caddyfile</DialogTitle>
+          <DialogTitle>Import proxy hosts</DialogTitle>
           <DialogDescription>
-            Paste a minimal Caddyfile. Each <code>site &#123; reverse_proxy upstream &#125;</code> block becomes one proxy host. Other directives are not supported in v1. The preview detects domain conflicts against the current page; the server performs the final authoritative check.
+            Paste a minimal Caddyfile or a Caddy runtime JSON config (e.g. from <code>curl localhost:2019/config/</code>). The format is auto-detected. The preview detects domain conflicts against the current page; the server performs the final authoritative check.
           </DialogDescription>
         </DialogHeader>
 
@@ -153,14 +155,15 @@ export function ImportProxyHostsDialog({
                 className="font-mono text-xs"
               />
               <p className="text-xs text-muted-foreground">
-                {parsed.drafts.length} host(s) detected · {parsed.errors.length} parse error(s)
+                Detected format: {parsed.format === "caddy-json" ? "Caddy JSON" : "Caddyfile"}.{" "}
+                {parsed.drafts.length} host(s) · {parsed.errors.length} error(s)
               </p>
             </div>
             <div>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".caddyfile,.conf,.txt,text/plain"
+                accept=".caddyfile,.conf,.json,.txt,application/json,text/plain"
                 className="hidden"
                 aria-label="Load Caddyfile from file"
                 onChange={handleFile}
@@ -184,6 +187,8 @@ export function ImportProxyHostsDialog({
             errors={parsed.errors}
             newCount={newCount}
             skipCount={skipCount}
+            format={parsed.format}
+            parserSkipped={parsed.skipped}
           />
         )}
 
@@ -195,12 +200,14 @@ export function ImportProxyHostsDialog({
           {step === "input" && (
             <>
               <Button variant="outline" onClick={handleClose}>
+                <X className="mr-2 h-4 w-4" />
                 Cancel
               </Button>
               <Button
                 disabled={!canPreview}
                 onClick={() => setStep("preview")}
               >
+                <ArrowRight className="mr-2 h-4 w-4" />
                 Preview
               </Button>
             </>
@@ -208,6 +215,7 @@ export function ImportProxyHostsDialog({
           {step === "preview" && (
             <>
               <Button variant="outline" onClick={() => setStep("input")}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
               </Button>
               <Button
@@ -220,13 +228,19 @@ export function ImportProxyHostsDialog({
                     Importing…
                   </>
                 ) : (
-                  `Import ${newCount} host(s)`
+                  <>
+                    <FileUp className="mr-2 h-4 w-4" />
+                    {`Import ${newCount} host(s)`}
+                  </>
                 )}
               </Button>
             </>
           )}
           {step === "result" && (
-            <Button onClick={handleClose}>Done</Button>
+            <Button onClick={handleClose}>
+              <Check className="mr-2 h-4 w-4" />
+              Done
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
@@ -239,31 +253,37 @@ function PreviewStep({
   errors,
   newCount,
   skipCount,
+  format,
+  parserSkipped,
 }: {
   rows: {
-    draft: { domains: string[]; upstream: string };
+    draft: ProxyHostImportDraft;
     status: "new" | "skip";
     conflictDomain?: string;
   }[];
-  errors: CaddyfileImportResult["errors"];
+  errors: ImportResult["errors"];
   newCount: number;
   skipCount: number;
+  format: ImportResult["format"];
+  parserSkipped: ImportResult["skipped"];
 }) {
   return (
     <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto">
       <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="muted">Format: {format === "caddy-json" ? "Caddy JSON" : "Caddyfile"}</Badge>
         <Badge variant="success">{newCount} new</Badge>
-        <Badge variant="muted">{skipCount} skip</Badge>
+        <Badge variant="muted">{skipCount + parserSkipped.length} skip</Badge>
         <Badge variant="destructive">{errors.length} error</Badge>
       </div>
 
       {rows.length > 0 && (
-        <div className="rounded-md border overflow-hidden">
+        <div className="rounded-md border max-h-[40vh] overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="sticky top-0 z-10 bg-muted">
               <tr className="text-xs uppercase text-muted-foreground">
                 <th className="text-left font-medium px-3 py-2">Domains</th>
                 <th className="text-left font-medium px-3 py-2">Upstream</th>
+                <th className="text-left font-medium px-3 py-2">Features</th>
                 <th className="text-left font-medium px-3 py-2 w-32">Status</th>
               </tr>
             </thead>
@@ -271,10 +291,18 @@ function PreviewStep({
               {rows.map((row, idx) => (
                 <tr key={idx} className="border-t">
                   <td className="px-3 py-2 font-mono text-xs">
-                    {row.draft.domains.join(", ")}
+                    <div className="flex items-center gap-1">
+                      <span>{row.draft.domains.join(", ")}</span>
+                      {row.draft.warnings && row.draft.warnings.length > 0 && (
+                        <span title={row.draft.warnings.join("\n")}>
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs">
-                    {row.draft.upstream}
+                  <td className="px-3 py-2 font-mono text-xs">{row.draft.upstream}</td>
+                  <td className="px-3 py-2">
+                    <FeatureBadges draft={row.draft} />
                   </td>
                   <td className="px-3 py-2">
                     {row.status === "new" ? (
@@ -303,7 +331,7 @@ function PreviewStep({
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
                 <div className="font-medium">
-                  Lines {err.lineStart}-{err.lineEnd}: {err.message}
+                  {err.locator}: {err.message}
                 </div>
                 <pre className="mt-2 overflow-x-auto rounded bg-destructive/10 p-2 font-mono text-[11px]">
                   {err.raw}
@@ -313,8 +341,52 @@ function PreviewStep({
           ))}
         </div>
       )}
+
+      {parserSkipped.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <Label>Skipped by parser</Label>
+          <ul className="flex flex-col gap-1">
+            {parserSkipped.map((s) => (
+              <li key={s.draft.domains.join(",")} className="flex items-start gap-2 text-sm">
+                <XCircle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <span>
+                  <span className="font-mono">{s.draft.domains.join(", ")}</span>
+                  <span className="text-muted-foreground">{` — ${s.reason}`}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
+}
+
+function FeatureBadges({ draft }: { draft: ProxyHostImportDraft }) {
+  const badges: React.ReactNode[] = [];
+  if (draft.skipHttpsHostnameValidation) {
+    badges.push(
+      <Badge key="tls" variant="muted" className="text-[10px]">
+        TLS skip
+      </Badge>
+    );
+  }
+  if (draft.redirects && draft.redirects.length > 0) {
+    badges.push(
+      <Badge key="redir" variant="muted" className="text-[10px]">
+        {draft.redirects.length} redirect{draft.redirects.length === 1 ? "" : "s"}
+      </Badge>
+    );
+  }
+  if (draft.locationRules && draft.locationRules.length > 0) {
+    badges.push(
+      <Badge key="loc" variant="muted" className="text-[10px]">
+        {draft.locationRules.length} location rule{draft.locationRules.length === 1 ? "" : "s"}
+      </Badge>
+    );
+  }
+  if (badges.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+  return <div className="flex flex-wrap gap-1">{badges}</div>;
 }
 
 function ResultStep({ result }: { result: ImportProxyHostsResult }) {
@@ -372,7 +444,7 @@ function ResultStep({ result }: { result: ImportProxyHostsResult }) {
             >
               <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <span className="text-muted-foreground">
-                Lines {err.lineStart}-{err.lineEnd}: {err.message}
+                {err.locator}: {err.message}
               </span>
             </li>
           ))}

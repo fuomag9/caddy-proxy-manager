@@ -35,6 +35,7 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 ## Features
 
 - **Proxy Hosts** - Reverse proxies with custom headers, multiple upstreams, load balancing (8 policies), active/passive health checks, retries, and enable/disable toggle
+- **Bulk Import** - Paste or upload a minimal Caddyfile or a Caddy runtime JSON config (`curl localhost:2019/config/`) to create proxy hosts in one operation. Auto-detects the format, previews detected hosts with conflict and skip flags, maps `transport.tls.insecure_skip_verify`, `static_response` redirects, and path-based location rules from JSON configs
 - **L4 Proxy Hosts** - TCP/UDP stream proxying with TLS SNI matching, proxy protocol (v1/v2), load balancing, health checks, and per-host geo blocking. Automatic Docker Compose port management via sidecar
 - **Location Rules** - Path-based routing to different upstreams per proxy host (e.g. `/api/*` to one backend, `/ws/*` to another)
 - **Redirect & Rewrite** - Per-host redirect rules (301/302/307/308) and path prefix rewriting

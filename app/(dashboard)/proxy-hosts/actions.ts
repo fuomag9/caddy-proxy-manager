@@ -21,9 +21,10 @@ import {
   type CpmForwardAuthInput
 } from "@/src/lib/models/proxy-hosts";
 import {
-  parseCaddyfile,
-  type CaddyfileImportError,
-} from "@/src/lib/caddyfile-import";
+  parseProxyHostsImport,
+  type ImportError as ProxyHostImportError,
+  type ImportFormat,
+} from "@/src/lib/proxy-hosts-import";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { setForwardAuthAccess } from "@/src/lib/models/forward-auth";
 import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
@@ -702,9 +703,10 @@ export async function toggleProxyHostAction(
 const MAX_IMPORT_BYTES = 1_000_000; // 1 MB
 
 export type ImportProxyHostsResult = {
+  format: ImportFormat;
   created: { id: number; primaryDomain: string }[];
   skipped: { domains: string[]; reason: string }[];
-  errors: CaddyfileImportError[];
+  errors: ProxyHostImportError[];
 };
 
 export type ImportProxyHostsActionState = ActionState & {
@@ -733,7 +735,7 @@ export async function importProxyHostsAction(
       };
     }
 
-    const parsed = parseCaddyfile(rawText);
+    const parsed = parseProxyHostsImport(rawText);
 
     // Note: this snapshot is not atomic with createProxyHost. Concurrent imports
     // or manual creates in another session can still create duplicate domains —
@@ -762,13 +764,22 @@ export async function importProxyHostsAction(
       }
 
       try {
+        const primaryDomain = draft.domains[0];
+        // Use the leftmost label as the display name when the domain has a subdomain;
+        // fall back to the full domain for single-label hosts (e.g. "localhost").
+        const dotIdx = primaryDomain.indexOf(".");
+        const label = dotIdx > 0 ? primaryDomain.slice(0, dotIdx) : primaryDomain;
+        const hostName = label.length > 0 ? label[0].toUpperCase() + label.slice(1) : label;
         const host = await createProxyHost(
           {
-            name: draft.domains[0],
+            name: hostName,
             domains: draft.domains,
             upstreams: [draft.upstream],
             enabled: true,
             hstsSubdomains: true,
+            skipHttpsHostnameValidation: draft.skipHttpsHostnameValidation,
+            redirects: draft.redirects,
+            locationRules: draft.locationRules,
           },
           userId
         );
@@ -790,6 +801,10 @@ export async function importProxyHostsAction(
       }
     }
 
+    for (const s of parsed.skipped) {
+      skipped.push({ domains: s.draft.domains, reason: s.reason });
+    }
+
     if (created.length > 0) {
       revalidatePath("/proxy-hosts");
     }
@@ -798,6 +813,7 @@ export async function importProxyHostsAction(
     return {
       ...actionSuccess(summary),
       result: {
+        format: parsed.format,
         created,
         skipped,
         errors: parsed.errors,
