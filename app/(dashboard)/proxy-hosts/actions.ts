@@ -6,6 +6,7 @@ import { actionError, actionSuccess, INITIAL_ACTION_STATE, type ActionState } fr
 import {
   createProxyHost,
   deleteProxyHost,
+  listProxyHosts,
   updateProxyHost,
   type ProxyHostAuthentikInput,
   type LoadBalancerInput,
@@ -19,6 +20,10 @@ import {
   type RewriteConfig,
   type CpmForwardAuthInput
 } from "@/src/lib/models/proxy-hosts";
+import {
+  parseCaddyfile,
+  type CaddyfileImportError,
+} from "@/src/lib/caddyfile-import";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { setForwardAuthAccess } from "@/src/lib/models/forward-auth";
 import { getCloudflareSettings, type GeoBlockSettings } from "@/src/lib/settings";
@@ -691,5 +696,115 @@ export async function toggleProxyHostAction(
   } catch (error) {
     console.error(`Failed to toggle proxy host ${id}:`, error);
     return actionError(error, "Failed to toggle proxy host. Please check the logs for details.");
+  }
+}
+
+const MAX_IMPORT_BYTES = 1_000_000; // 1 MB
+
+export type ImportProxyHostsResult = {
+  created: { id: number; primaryDomain: string }[];
+  skipped: { domains: string[]; reason: string }[];
+  errors: CaddyfileImportError[];
+};
+
+export type ImportProxyHostsActionState = ActionState & {
+  result?: ImportProxyHostsResult;
+};
+
+export async function importProxyHostsAction(
+  _prevState: ImportProxyHostsActionState = INITIAL_ACTION_STATE,
+  formData: FormData
+): Promise<ImportProxyHostsActionState> {
+  void _prevState;
+  try {
+    const session = await requireAdmin();
+    const userId = Number(session.user.id);
+
+    const rawText = String(formData.get("rawText") ?? "");
+    if (rawText.length === 0) {
+      return { ...actionError(new Error("No input provided"), "No input provided") };
+    }
+    if (rawText.length > MAX_IMPORT_BYTES) {
+      return {
+        ...actionError(
+          new Error(`Input too large (${rawText.length} > ${MAX_IMPORT_BYTES} bytes)`),
+          "Input too large"
+        ),
+      };
+    }
+
+    const parsed = parseCaddyfile(rawText);
+
+    // Note: this snapshot is not atomic with createProxyHost. Concurrent imports
+    // or manual creates in another session can still create duplicate domains —
+    // the proxy_hosts table has no UNIQUE constraint on the JSON-encoded domains
+    // column. This is an inherent model-layer limitation, not specific to import.
+    // Build the set of domains already in use.
+    const existingHosts = await listProxyHosts();
+    const usedDomains = new Set<string>();
+    for (const host of existingHosts) {
+      for (const domain of host.domains) {
+        usedDomains.add(domain.toLowerCase());
+      }
+    }
+
+    const created: ImportProxyHostsResult["created"] = [];
+    const skipped: ImportProxyHostsResult["skipped"] = [];
+
+    for (const draft of parsed.drafts) {
+      const conflict = draft.domains.find((d) => usedDomains.has(d.toLowerCase()));
+      if (conflict) {
+        skipped.push({
+          domains: draft.domains,
+          reason: `Domain already in use: ${conflict}`,
+        });
+        continue;
+      }
+
+      try {
+        const host = await createProxyHost(
+          {
+            name: draft.domains[0],
+            domains: draft.domains,
+            upstreams: [draft.upstream],
+            enabled: true,
+            hstsSubdomains: true,
+          },
+          userId
+        );
+        created.push({ id: host.id, primaryDomain: host.domains[0] });
+        // Reserve these domains for the rest of this import run.
+        for (const d of draft.domains) {
+          usedDomains.add(d.toLowerCase());
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "create failed";
+        skipped.push({
+          domains: draft.domains,
+          reason: `Create failed: ${message}`,
+        });
+        // Reserve anyway to prevent sibling drafts from attempting the same domains.
+        for (const d of draft.domains) {
+          usedDomains.add(d.toLowerCase());
+        }
+      }
+    }
+
+    if (created.length > 0) {
+      revalidatePath("/proxy-hosts");
+    }
+
+    const summary = `Imported ${created.length} proxy host(s). Skipped ${skipped.length}. Parse errors: ${parsed.errors.length}.`;
+    return {
+      ...actionSuccess(summary),
+      result: {
+        created,
+        skipped,
+        errors: parsed.errors,
+      },
+    };
+  } catch (error) {
+    console.error("Failed to import proxy hosts:", error);
+    return actionError(error, "Failed to import proxy hosts. Please check the logs for details.");
   }
 }

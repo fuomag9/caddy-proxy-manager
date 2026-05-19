@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Globe, MoreHorizontal, ArrowRight, Shield, Bug, MapPin, Scale, KeyRound, UserCheck, CornerRightDown, Replace } from "lucide-react";
+import { Globe, MoreHorizontal, ArrowRight, Shield, Bug, MapPin, Scale, KeyRound, UserCheck, CornerRightDown, Replace, FileUp } from "lucide-react";
 import type { AccessList } from "@/lib/models/access-lists";
 import type { Certificate } from "@/lib/models/certificates";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
@@ -16,6 +16,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { DataTable } from "@/components/ui/DataTable";
 import { StatusChip } from "@/components/ui/StatusChip";
 import { CreateHostDialog, EditHostDialog, DeleteHostDialog } from "@/components/proxy-hosts/HostDialogs";
+import { ImportProxyHostsDialog } from "./ImportProxyHostsDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -50,6 +51,7 @@ type Props = {
 
 export default function ProxyHostsClient({ hosts, certificates, accessLists, caCertificates, authentikDefaults, pagination, initialSearch, initialSort, mtlsRoles, issuedClientCerts, forwardAuthUsers, forwardAuthGroups, forwardAuthAccessMap }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [duplicateHost, setDuplicateHost] = useState<ProxyHost | null>(null);
   const [editHost, setEditHost] = useState<ProxyHost | null>(null);
   const [deleteHost, setDeleteHost] = useState<ProxyHost | null>(null);
@@ -286,6 +288,10 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           onChange={(e) => handleSearchChange(e.target.value)}
           placeholder="Search hosts..."
         />
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <FileUp className="h-4 w-4 mr-2" />
+          Import
+        </Button>
       </div>
 
       <DataTable
@@ -312,6 +318,12 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
         issuedClientCerts={issuedClientCerts ?? []}
         forwardAuthUsers={forwardAuthUsers ?? []}
         forwardAuthGroups={forwardAuthGroups ?? []}
+      />
+
+      <ImportProxyHostsDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        existingHosts={hosts}
       />
 
       {editHost && (
