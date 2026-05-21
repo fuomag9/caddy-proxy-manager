@@ -10,10 +10,10 @@ export async function POST(
     const { userId } = await requireApiAdmin(request);
     const { id } = await params;
     const body = await request.json();
-    if (!body.certificate_id || typeof body.certificate_id !== "number") {
-      return NextResponse.json({ error: "certificate_id is required" }, { status: 400 });
+    if (!body.certificateId || typeof body.certificateId !== "number") {
+      return NextResponse.json({ error: "certificateId is required" }, { status: 400 });
     }
-    await assignRoleToCertificate(Number(id), body.certificate_id, userId);
+    await assignRoleToCertificate(Number(id), body.certificateId, userId);
     const role = await getMtlsRole(Number(id));
     return NextResponse.json(role, { status: 201 });
   } catch (error) {

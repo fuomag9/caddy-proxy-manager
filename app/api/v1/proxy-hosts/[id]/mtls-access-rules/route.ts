@@ -24,11 +24,11 @@ export async function POST(
     const { userId } = await requireApiAdmin(request);
     const { id } = await params;
     const body = await request.json();
-    if (!body.path_pattern || typeof body.path_pattern !== "string" || !body.path_pattern.trim()) {
-      return NextResponse.json({ error: "path_pattern is required" }, { status: 400 });
+    if (!body.pathPattern || typeof body.pathPattern !== "string" || !body.pathPattern.trim()) {
+      return NextResponse.json({ error: "pathPattern is required" }, { status: 400 });
     }
     const rule = await createMtlsAccessRule(
-      { ...body, proxy_host_id: Number(id) },
+      { ...body, proxyHostId: Number(id) },
       userId
     );
     return NextResponse.json(rule, { status: 201 });
