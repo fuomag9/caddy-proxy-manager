@@ -256,6 +256,65 @@ test.describe('Proxy Hosts', () => {
     }
   });
 
+  /**
+   * Regression: per-host geoblock "Override global" toggle was silently dropped.
+   *
+   * The form action's `parseGeoBlockConfig` returned `geoblock_mode` (snake_case)
+   * while ProxyHostInput uses `geoblockMode` (camelCase), so the spread into
+   * createProxyHost / updateProxyHost dropped the field and the host always
+   * stayed in merge mode regardless of UI state.
+   */
+  test('per-host geoblock override mode persists after save', async ({ page }) => {
+    await page.getByRole('button', { name: /create host/i }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    await page.getByLabel('Name').fill('Geoblock Override Host');
+    await page.getByLabel(/domains/i).fill('geoblock-override.local');
+    await page.getByPlaceholder('10.0.0.5:8080').fill('localhost:9991');
+
+    // Enable per-host geoblock (the rose-colored card with a Switch).
+    const dialog = page.getByRole('dialog');
+    const geoCard = dialog.locator('div:has(> input[name="geoblockPresent"])');
+    await geoCard.scrollIntoViewIfNeeded();
+    const geoSwitch = geoCard.getByRole('switch').first();
+    await geoSwitch.click();
+    await expect(geoSwitch).toHaveAttribute('data-state', 'checked');
+
+    // Pick "Override global" from the two-tile mode selector.
+    await geoCard.getByText('Override global').click();
+
+    await dialog.getByRole('button', { name: /^create$/i }).click();
+    await expect(dialog).not.toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('table').getByText('Geoblock Override Host')).toBeVisible({ timeout: 10000 });
+
+    // Verify the API reflects the override mode (this is what was broken).
+    const listResp = await page.request.get(API_PROXY_HOSTS);
+    const hosts = (await listResp.json()) as Array<{ id: number; name: string; geoblockMode: string }>;
+    const created = hosts.find((h) => h.name === 'Geoblock Override Host');
+    expect(created).toBeDefined();
+    expect(created!.geoblockMode).toBe('override');
+
+    // Reopen the edit dialog and confirm the mode tile is still selected.
+    const row = page.locator('tr', { hasText: 'Geoblock Override Host' });
+    await row.getByRole('button').first().click();
+    await page.getByRole('menuitem', { name: /edit/i }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    const editGeoCard = page.getByRole('dialog').locator('div:has(> input[name="geoblockPresent"])');
+    // Selected mode tile carries the highlighted "border-yellow-500" class.
+    await expect(editGeoCard.locator('div.border-yellow-500', { hasText: 'Override global' })).toBeVisible();
+
+    // Switch back to merge and verify that round-trips too.
+    await editGeoCard.getByText('Merge with global').click();
+    await page.getByRole('dialog').getByRole('button', { name: /save changes/i }).click();
+    await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
+
+    const listResp2 = await page.request.get(API_PROXY_HOSTS);
+    const hosts2 = (await listResp2.json()) as Array<{ name: string; geoblockMode: string }>;
+    const updated = hosts2.find((h) => h.name === 'Geoblock Override Host');
+    expect(updated!.geoblockMode).toBe('merge');
+  });
+
   test('delete proxy host removes it from table', async ({ page }) => {
     // Create one to delete
     await page.getByRole('button', { name: /create host/i }).click();

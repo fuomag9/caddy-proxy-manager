@@ -598,7 +598,9 @@ export async function updateL4ProxyHost(id: number, input: Partial<L4ProxyHostIn
           input.meta !== undefined ||
           input.loadBalancer !== undefined ||
           input.dnsResolver !== undefined ||
-          input.upstreamDnsResolution !== undefined;
+          input.upstreamDnsResolution !== undefined ||
+          input.geoblock !== undefined ||
+          input.geoblockMode !== undefined;
         if (!hasMetaChanges) return {};
 
         // Start from existing meta

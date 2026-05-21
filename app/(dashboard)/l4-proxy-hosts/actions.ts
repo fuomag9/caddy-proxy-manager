@@ -110,9 +110,9 @@ function parseL4UpstreamDnsResolutionConfig(formData: FormData): Partial<L4Upstr
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-function parseL4GeoBlockConfig(formData: FormData): { geoblock: L4GeoBlockConfig | null; geoblock_mode: L4GeoBlockMode } {
+function parseL4GeoBlockConfig(formData: FormData): { geoblock: L4GeoBlockConfig | null; geoblockMode: L4GeoBlockMode } {
   if (!formData.has("geoblockPresent")) {
-    return { geoblock: null, geoblock_mode: "merge" };
+    return { geoblock: null, geoblockMode: "merge" };
   }
   const enabled = parseCheckbox(formData.get("geoblockEnabled"));
   const rawMode = formData.get("geoblockMode");
@@ -140,7 +140,7 @@ function parseL4GeoBlockConfig(formData: FormData): { geoblock: L4GeoBlockConfig
     allow_cidrs: parseStringList("geoblockAllowCidrs"),
     allow_ips: parseStringList("geoblockAllowIps"),
   };
-  return { geoblock: config, geoblock_mode: mode };
+  return { geoblock: config, geoblockMode: mode };
 }
 
 function parseProtocol(formData: FormData): L4Protocol {

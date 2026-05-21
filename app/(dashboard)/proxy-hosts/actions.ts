@@ -271,10 +271,10 @@ function parseLoadBalancerConfig(formData: FormData): LoadBalancerInput | undefi
 
 function parseGeoBlockConfig(formData: FormData): {
   geoblock: GeoBlockSettings | null;
-  geoblock_mode: GeoBlockMode;
+  geoblockMode: GeoBlockMode;
 } {
   if (!formData.has("geoblockPresent")) {
-    return { geoblock: null, geoblock_mode: "merge" };
+    return { geoblock: null, geoblockMode: "merge" };
   }
 
   const enabled = parseCheckbox(formData.get("geoblockEnabled"));
@@ -318,7 +318,7 @@ function parseGeoBlockConfig(formData: FormData): {
     redirect_url: parseRedirectUrl(formData.get("geoblockRedirectUrl")),
   };
 
-  return { geoblock: config, geoblock_mode: mode };
+  return { geoblock: config, geoblockMode: mode };
 }
 
 // Helper: parse response headers from geoblock_response_headers_keys[] and geoblock_response_headers_values[]
