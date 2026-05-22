@@ -36,10 +36,14 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
       return;
     }
 
-    const { error } = await authClient.signIn.username({
-      username,
-      password,
-    });
+    // `signIn.username` is added at runtime by the usernameClient plugin. The plugin's
+    // $InferServerPlugin types fail to merge into the client signature in some environments,
+    // so we cast a stable shape here.
+    type SignInUsername = (input: { username: string; password: string }) => Promise<{
+      error: { status?: number; message?: string } | null;
+    }>;
+    const signInUsername = (authClient.signIn as unknown as { username: SignInUsername }).username;
+    const { error } = await signInUsername({ username, password });
 
     if (error) {
       let message: string | null = null;

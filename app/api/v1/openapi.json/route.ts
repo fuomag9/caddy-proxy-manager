@@ -1617,6 +1617,25 @@ export const spec = {
         },
         required: ["path", "upstreams"],
       },
+      PathBlockRule: {
+        type: "object",
+        description: "Block a request path with a static response (no proxying)",
+        properties: {
+          path: { type: "string", example: "/dns-query", description: "Caddy path pattern to match" },
+          status: { type: "integer", enum: [400, 401, 403, 404, 410, 418, 451, 500, 502, 503], example: 403 },
+          body: { type: "string", example: "Forbidden", description: "Optional response body" },
+        },
+        required: ["path", "status"],
+      },
+      PathRewriteRule: {
+        type: "object",
+        description: "Internally rewrite the request URI before proxying (client URL is unchanged)",
+        properties: {
+          from: { type: "string", example: "/secretpath", description: "Caddy path pattern to match" },
+          to: { type: "string", example: "/dns-query", description: "Internal target URI" },
+        },
+        required: ["from", "to"],
+      },
 
       // ── Main resource schemas ───────────────────────────────────
       ProxyHost: {
@@ -1651,6 +1670,8 @@ export const spec = {
           redirects: { type: "array", items: { $ref: "#/components/schemas/RedirectRule" } },
           rewrite: { oneOf: [{ $ref: "#/components/schemas/RewriteConfig" }, { type: "null" }] },
           locationRules: { type: "array", items: { $ref: "#/components/schemas/LocationRule" }, description: "Path-based routing rules (routes specific paths to different upstreams)" },
+          pathBlocks: { type: "array", items: { $ref: "#/components/schemas/PathBlockRule" }, description: "Paths blocked with a static response" },
+          pathRewrites: { type: "array", items: { $ref: "#/components/schemas/PathRewriteRule" }, description: "Internal URI rewrites applied before proxying" },
         },
         required: ["id", "name", "domains", "upstreams", "enabled", "createdAt", "updatedAt"],
       },
@@ -1683,6 +1704,8 @@ export const spec = {
           redirects: { type: "array", items: { $ref: "#/components/schemas/RedirectRule" } },
           rewrite: { oneOf: [{ $ref: "#/components/schemas/RewriteConfig" }, { type: "null" }] },
           locationRules: { type: "array", items: { $ref: "#/components/schemas/LocationRule" }, description: "Path-based routing rules (routes specific paths to different upstreams)" },
+          pathBlocks: { type: "array", items: { $ref: "#/components/schemas/PathBlockRule" }, description: "Paths blocked with a static response" },
+          pathRewrites: { type: "array", items: { $ref: "#/components/schemas/PathRewriteRule" }, description: "Internal URI rewrites applied before proxying" },
         },
         required: ["name", "domains", "upstreams"],
       },

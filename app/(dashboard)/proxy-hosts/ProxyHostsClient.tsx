@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Globe, MoreHorizontal, ArrowRight, Shield, Bug, MapPin, Scale, KeyRound, UserCheck, CornerRightDown, Replace } from "lucide-react";
+import { Globe, MoreHorizontal, ArrowRight, Shield, Bug, MapPin, Scale, KeyRound, UserCheck, CornerRightDown, Replace, Ban, GitBranch } from "lucide-react";
 import type { AccessList } from "@/lib/models/access-lists";
 import type { Certificate } from "@/lib/models/certificates";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
@@ -174,6 +174,16 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           host.rewrite && (
             <Badge key="rewrite" variant="secondary" className="text-[10px] px-1.5 py-0">
               <Replace className="h-2.5 w-2.5 mr-0.5" />Rewrite
+            </Badge>
+          ),
+          host.pathBlocks?.length > 0 && (
+            <Badge key="path-blocks" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <Ban className="h-2.5 w-2.5 mr-0.5" />Blocks
+            </Badge>
+          ),
+          host.pathRewrites?.length > 0 && (
+            <Badge key="path-rewrites" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <GitBranch className="h-2.5 w-2.5 mr-0.5" />Path Rewrites
             </Badge>
           ),
         ].filter(Boolean);

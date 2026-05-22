@@ -59,6 +59,20 @@ export type LocationRule = {
   upstreams: string[]; // e.g. ["backend:8080", "backend2:8080"]
 };
 
+export const PATH_BLOCK_STATUS_CODES = [400, 401, 403, 404, 410, 418, 451, 500, 502, 503] as const;
+export type PathBlockStatusCode = (typeof PATH_BLOCK_STATUS_CODES)[number];
+
+export type PathBlockRule = {
+  path: string;                    // Caddy path pattern, e.g. "/dns-query"
+  status: PathBlockStatusCode;     // status code to return, e.g. 403
+  body?: string;                   // optional response body, e.g. "Forbidden"
+};
+
+export type PathRewriteRule = {
+  from: string;   // path pattern, e.g. "/secretpath"
+  to: string;     // internal target URI, e.g. "/dns-query"
+};
+
 export type WafHostConfig = {
   enabled?: boolean;
   mode?: 'Off' | 'On';
@@ -325,6 +339,8 @@ type ProxyHostMeta = {
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
   location_rules?: LocationRule[];
+  path_blocks?: PathBlockRule[];
+  path_rewrites?: PathRewriteRule[];
 };
 
 export type ProxyHost = {
@@ -357,6 +373,8 @@ export type ProxyHost = {
   redirects: RedirectRule[];
   rewrite: RewriteConfig | null;
   locationRules: LocationRule[];
+  pathBlocks: PathBlockRule[];
+  pathRewrites: PathRewriteRule[];
 };
 
 export type ProxyHostInput = {
@@ -386,6 +404,8 @@ export type ProxyHostInput = {
   redirects?: RedirectRule[] | null;
   rewrite?: RewriteConfig | null;
   locationRules?: LocationRule[] | null;
+  pathBlocks?: PathBlockRule[] | null;
+  pathRewrites?: PathRewriteRule[] | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -716,6 +736,14 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.location_rules = meta.location_rules;
   }
 
+  if (meta.path_blocks && meta.path_blocks.length > 0) {
+    normalized.path_blocks = meta.path_blocks;
+  }
+
+  if (meta.path_rewrites && meta.path_rewrites.length > 0) {
+    normalized.path_rewrites = meta.path_rewrites;
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
 }
 
@@ -743,6 +771,55 @@ function sanitizeRewriteConfig(value: unknown): RewriteConfig | null {
   const prefix = typeof v.path_prefix === "string" ? v.path_prefix.trim() : null;
   if (!prefix) return null;
   return { path_prefix: prefix };
+}
+
+function sanitizePathBlocks(value: unknown): PathBlockRule[] {
+  if (!Array.isArray(value)) return [];
+  const valid: PathBlockRule[] = [];
+  for (const item of value) {
+    if (
+      item &&
+      typeof item === "object" &&
+      typeof item.path === "string" && item.path.trim() &&
+      typeof item.status === "number" &&
+      (PATH_BLOCK_STATUS_CODES as readonly number[]).includes(item.status)
+    ) {
+      const rule: PathBlockRule = {
+        // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
+        path: item.path.trim().replace(/\{[^}]*\}/g, ""),
+        status: item.status as PathBlockStatusCode,
+      };
+      if (typeof item.body === "string" && item.body.length > 0) {
+        rule.body = item.body.slice(0, 4096);
+      }
+      if (rule.path) {
+        valid.push(rule);
+      }
+    }
+  }
+  return valid;
+}
+
+function sanitizePathRewrites(value: unknown): PathRewriteRule[] {
+  if (!Array.isArray(value)) return [];
+  const valid: PathRewriteRule[] = [];
+  for (const item of value) {
+    if (
+      item &&
+      typeof item === "object" &&
+      typeof item.from === "string" && item.from.trim() &&
+      typeof item.to === "string" && item.to.trim()
+    ) {
+      // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
+      const from = item.from.trim().replace(/\{[^}]*\}/g, "");
+      // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
+      const to = item.to.trim().replace(/\{[^}]*\}/g, "");
+      if (from && to) {
+        valid.push({ from, to });
+      }
+    }
+  }
+  return valid;
 }
 
 function sanitizeLocationRules(value: unknown): LocationRule[] {
@@ -787,6 +864,8 @@ function parseMeta(value: string | null): ProxyHostMeta {
       redirects: sanitizeRedirectRules(parsed.redirects),
       rewrite: sanitizeRewriteConfig(parsed.rewrite) ?? undefined,
       location_rules: sanitizeLocationRules(parsed.location_rules),
+      path_blocks: sanitizePathBlocks(parsed.path_blocks),
+      path_rewrites: sanitizePathRewrites(parsed.path_rewrites),
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -1317,6 +1396,24 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
+  if (input.pathBlocks !== undefined) {
+    const rules = sanitizePathBlocks(input.pathBlocks ?? []);
+    if (rules.length > 0) {
+      next.path_blocks = rules;
+    } else {
+      delete next.path_blocks;
+    }
+  }
+
+  if (input.pathRewrites !== undefined) {
+    const rules = sanitizePathRewrites(input.pathRewrites ?? []);
+    if (rules.length > 0) {
+      next.path_rewrites = rules;
+    } else {
+      delete next.path_rewrites;
+    }
+  }
+
   return serializeMeta(next);
 }
 
@@ -1656,6 +1753,8 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     redirects: meta.redirects ?? [],
     rewrite: meta.rewrite ?? null,
     locationRules: meta.location_rules ?? [],
+    pathBlocks: meta.path_blocks ?? [],
+    pathRewrites: meta.path_rewrites ?? [],
   };
 }
 
@@ -1801,6 +1900,8 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     ...(existing.redirects && existing.redirects.length > 0 ? { redirects: existing.redirects } : {}),
     ...(existing.rewrite ? { rewrite: existing.rewrite } : {}),
     ...(existing.locationRules && existing.locationRules.length > 0 ? { location_rules: existing.locationRules } : {}),
+    ...(existing.pathBlocks && existing.pathBlocks.length > 0 ? { path_blocks: existing.pathBlocks } : {}),
+    ...(existing.pathRewrites && existing.pathRewrites.length > 0 ? { path_rewrites: existing.pathRewrites } : {}),
   };
   const meta = buildMeta(existingMeta, input);
 

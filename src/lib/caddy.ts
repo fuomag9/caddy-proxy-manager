@@ -51,7 +51,7 @@ import {
   proxyHosts,
   l4ProxyHosts
 } from "./db/schema";
-import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule } from "./models/proxy-hosts";
+import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule, type PathBlockRule, type PathRewriteRule } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildFingerprintCelExpression, buildValidClientCertCelExpression, resolveAllowedFingerprints, type MtlsAccessRuleLike } from "./caddy-mtls";
 import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
 import { getAccessRulesForHosts } from "./models/mtls-access-rules";
@@ -137,6 +137,8 @@ type ProxyHostMeta = {
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
   location_rules?: LocationRule[];
+  path_blocks?: PathBlockRule[];
+  path_rewrites?: PathRewriteRule[];
 };
 
 type L4Meta = {
@@ -770,6 +772,50 @@ async function buildProxyRoutes(
             }
           ],
           terminal: true
+        });
+      }
+    }
+
+    // Path blocks (terminal static responses) and path rewrites (internal URI rewrites).
+    // Emitted before redirects/auth so blocks always win and rewrites apply before any
+    // downstream processing.
+    const pathBlocks = meta.path_blocks ?? [];
+    const pathRewrites = meta.path_rewrites ?? [];
+    if (pathBlocks.length > 0 || pathRewrites.length > 0) {
+      const pathRoutes: CaddyHttpRoute[] = [];
+      for (const block of pathBlocks) {
+        // Sanitize path to prevent Caddy placeholder injection
+        const safePath = block.path.replace(/\{[^}]*\}/g, '');
+        if (!safePath) continue;
+        const handle: Record<string, unknown> = {
+          handler: "static_response",
+          status_code: block.status,
+        };
+        if (block.body) {
+          handle.body = block.body;
+        }
+        pathRoutes.push({
+          match: [{ path: [safePath] }],
+          handle: [handle],
+          terminal: true,
+        });
+      }
+      for (const rw of pathRewrites) {
+        const safeFrom = rw.from.replace(/\{[^}]*\}/g, '');
+        const safeTo = rw.to.replace(/\{[^}]*\}/g, '');
+        if (!safeFrom || !safeTo) continue;
+        pathRoutes.push({
+          match: [{ path: [safeFrom] }],
+          handle: [{
+            handler: "rewrite",
+            uri: safeTo,
+          }],
+        });
+      }
+      if (pathRoutes.length > 0) {
+        handlers.push({
+          handler: "subroute",
+          routes: pathRoutes,
         });
       }
     }

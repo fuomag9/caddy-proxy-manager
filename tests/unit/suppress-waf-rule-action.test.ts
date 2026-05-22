@@ -9,9 +9,13 @@ vi.mock('@/src/lib/auth', () => ({
   requireAdmin: vi.fn(async () => ({ user: { id: '1' } })),
 }));
 
+type UpdateProxyHostMock = (id: number, input: unknown, userId: number) => Promise<object>;
+
 const { listProxyHostsMock, updateProxyHostMock } = vi.hoisted(() => ({
   listProxyHostsMock: vi.fn(async () => [] as unknown[]),
-  updateProxyHostMock: vi.fn(async () => ({})),
+  // Type-only signature mirrors updateProxyHost(id, input, actorUserId) so mock.calls
+  // preserves the arg tuple without unused-parameter lint noise.
+  updateProxyHostMock: vi.fn<UpdateProxyHostMock>(async () => ({})),
 }));
 
 vi.mock('@/src/lib/models/proxy-hosts', () => ({

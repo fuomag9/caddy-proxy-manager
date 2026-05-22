@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { genericOAuth, username } from "better-auth/plugins";
 import db, { sqlite } from "./db";
 import * as schema from "./db/schema";
@@ -169,10 +169,14 @@ function createAuth(): any {
       },
     },
     plugins: [
+      // Cast via unknown: better-auth's `username` plugin declares
+      // databaseHooks.user.create.before's `email: string` (required) while BetterAuthPlugin
+      // expects `email?: any`. The mismatch surfaces in some environments and not others, so
+      // the cast keeps the typecheck stable across local and Docker builds.
       username({
         maxUsernameLength: 255,
         usernameValidator: (username) => /^[a-zA-Z0-9_.@-]+$/.test(username),
-      }),
+      }) as unknown as BetterAuthPlugin,
       genericOAuth({ config: oauthConfigs }),
     ],
   });
