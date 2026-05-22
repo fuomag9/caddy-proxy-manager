@@ -63,12 +63,12 @@ describe('GET /api/waf-events', () => {
   it('applies preset period filters', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
 
-    await GET(createMockRequest('range=24h&search=fuo.fi'));
+    await GET(createMockRequest('range=24h&search=example.com'));
 
     const expectedTo = 1_700_000_000;
     const expectedFrom = expectedTo - 86400;
-    expect(mockListWafEvents).toHaveBeenCalledWith(50, 0, 'fuo.fi', expectedFrom, expectedTo);
-    expect(mockCountWafEvents).toHaveBeenCalledWith('fuo.fi', expectedFrom, expectedTo);
+    expect(mockListWafEvents).toHaveBeenCalledWith(50, 0, 'example.com', expectedFrom, expectedTo);
+    expect(mockCountWafEvents).toHaveBeenCalledWith('example.com', expectedFrom, expectedTo);
   });
 
   it('applies custom period filters when valid', async () => {

@@ -443,8 +443,9 @@ function EventDetailPanel({
 }) {
   const [pending, startTransition] = useTransition();
 
+  const eventHostBare = event.host ? event.host.replace(/:\d+$/, "") : "";
   const isGloballySuppressed  = event.ruleId != null && globalExcluded.includes(event.ruleId);
-  const isHostOnlySuppressed  = event.ruleId != null && !!event.host && (hostWafMap[event.host] ?? []).includes(event.ruleId);
+  const isHostOnlySuppressed  = event.ruleId != null && !!eventHostBare && (hostWafMap[eventHostBare] ?? []).includes(event.ruleId);
   const isHostSuppressed      = isGloballySuppressed || isHostOnlySuppressed;
 
   useEffect(() => {
@@ -972,7 +973,10 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
                 globalExcluded={localGlobalExcluded}
                 hostWafMap={localHostWafMap}
                 onSuppressGlobal={(ruleId) => setLocalGlobalExcluded((prev) => [...new Set([...prev, ruleId])])}
-                onSuppressHost={(ruleId, host) => setLocalHostWafMap((prev) => ({ ...prev, [host]: [...new Set([...(prev[host] ?? []), ruleId])] }))}
+                onSuppressHost={(ruleId, host) => {
+                  const bare = host.replace(/:\d+$/, "");
+                  setLocalHostWafMap((prev) => ({ ...prev, [bare]: [...new Set([...(prev[bare] ?? []), ruleId])] }));
+                }}
               />
             )}
           </div>

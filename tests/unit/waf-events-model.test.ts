@@ -47,8 +47,8 @@ describe('waf-events ClickHouse fallback', () => {
     mockQueryWafRuleMessages.mockRejectedValueOnce(connectionError);
     mockQueryWafEvents.mockRejectedValueOnce(connectionError);
 
-    await expect(countWafEvents('fuo.fi', 100, 200)).resolves.toBe(0);
-    await expect(getWafEventStats('fuo.fi', 100, 200)).resolves.toEqual({
+    await expect(countWafEvents('example.com', 100, 200)).resolves.toBe(0);
+    await expect(getWafEventStats('example.com', 100, 200)).resolves.toEqual({
       total: 0,
       blocked: 0,
       critical: 0,
@@ -57,7 +57,7 @@ describe('waf-events ClickHouse fallback', () => {
     });
     await expect(getTopWafRulesWithHosts(100, 200)).resolves.toEqual([]);
     await expect(getWafRuleMessages([941100])).resolves.toEqual({});
-    await expect(listWafEvents(50, 0, 'fuo.fi', 100, 200)).resolves.toEqual([]);
+    await expect(listWafEvents(50, 0, 'example.com', 100, 200)).resolves.toEqual([]);
 
     expect(warn).toHaveBeenCalledTimes(5);
     expect(warn).toHaveBeenCalledWith('[waf-events] ClickHouse unavailable during countWafEvents; returning empty WAF analytics.');
@@ -79,7 +79,7 @@ describe('waf-events ClickHouse fallback', () => {
     const error = new Error('syntax error at position 42');
     mockQueryWafEventStatsWithSearch.mockRejectedValueOnce(error);
 
-    await expect(getWafEventStats('fuo.fi')).rejects.toThrow('syntax error at position 42');
+    await expect(getWafEventStats('example.com')).rejects.toThrow('syntax error at position 42');
     expect(warn).not.toHaveBeenCalled();
   });
 });

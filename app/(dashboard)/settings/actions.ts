@@ -897,7 +897,8 @@ export async function suppressWafRuleForHostAction(ruleId: number, hostname: str
     const session = await requireAdmin();
     const userId = Number(session.user.id);
     const hosts = await listProxyHosts();
-    const host = hosts.find((h) => h.domains.includes(hostname));
+    const bareHostname = hostname.replace(/:\d+$/, "");
+    const host = hosts.find((h) => h.domains.includes(bareHostname));
     if (!host) {
       return { success: false, message: `No proxy host found for ${hostname}.` };
     }

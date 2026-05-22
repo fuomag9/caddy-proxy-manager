@@ -130,7 +130,7 @@ interface CorazaAuditEntry {
   };
 }
 
-function parseLine(line: string, ruleMap: Map<string, RuleInfo>): WafEventRow | null {
+export function parseLine(line: string, ruleMap: Map<string, RuleInfo>): WafEventRow | null {
   let entry: CorazaAuditEntry;
   try {
     entry = JSON.parse(line);

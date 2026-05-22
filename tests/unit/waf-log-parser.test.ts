@@ -21,7 +21,7 @@ vi.mock('node:fs', () => ({
   createReadStream: vi.fn(),
 }));
 
-import { extractBracketField } from '@/src/lib/waf-log-parser';
+import { extractBracketField, parseLine } from '@/src/lib/waf-log-parser';
 
 describe('extractBracketField', () => {
   it('extracts id from [id "941100"]', () => {
@@ -59,5 +59,53 @@ describe('extractBracketField', () => {
 
   it('returns null for empty string input', () => {
     expect(extractBracketField('', 'id')).toBeNull();
+  });
+});
+
+describe('parseLine host header contract', () => {
+  const ruleMap = new Map([
+    ['tx-1', { ruleId: 941100, ruleMessage: 'XSS', severity: 'critical' }],
+  ]);
+
+  function makeAuditLine(hostHeader: string): string {
+    return JSON.stringify({
+      transaction: {
+        id: 'tx-1',
+        client_ip: '1.2.3.4',
+        unix_timestamp: 1_700_000_000_000_000_000,
+        is_interrupted: true,
+        request: {
+          method: 'GET',
+          uri: '/',
+          headers: { host: [hostHeader] },
+        },
+      },
+    });
+  }
+
+  it('stores host header verbatim — bare hostname has no port', () => {
+    const row = parseLine(makeAuditLine('example.com'), ruleMap);
+    expect(row?.host).toBe('example.com');
+  });
+
+  it('stores host header verbatim — port suffix is preserved (downstream must strip)', () => {
+    // Some HTTPS clients (e.g. HTTP/2 :authority, explicit "Host: foo:443" header)
+    // include the port. Suppression code in settings/actions.ts must normalize.
+    const row = parseLine(makeAuditLine('app.example.com:443'), ruleMap);
+    expect(row?.host).toBe('app.example.com:443');
+  });
+
+  it('handles missing host header without throwing', () => {
+    const line = JSON.stringify({
+      transaction: {
+        id: 'tx-1',
+        client_ip: '1.2.3.4',
+        unix_timestamp: 1_700_000_000_000_000_000,
+        is_interrupted: true,
+        request: { method: 'GET', uri: '/', headers: {} },
+      },
+    });
+    const row = parseLine(line, ruleMap);
+    expect(row?.host).toBe('');
   });
 });

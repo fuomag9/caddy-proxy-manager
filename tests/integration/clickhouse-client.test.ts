@@ -77,7 +77,7 @@ describe('clickhouse client analytics enablement', () => {
 
     const { queryWafEventStatsWithSearch } = await import('@/src/lib/clickhouse/client');
 
-    await expect(queryWafEventStatsWithSearch('fuo.fi')).resolves.toEqual({
+    await expect(queryWafEventStatsWithSearch('example.com')).resolves.toEqual({
       total: 5400,
       blocked: 5400,
       critical: 5400,
