@@ -1617,6 +1617,14 @@ export const spec = {
         },
         required: ["path", "upstreams"],
       },
+      PathAllowRule: {
+        type: "object",
+        description: "Allow a request path to bypass any matching Path Block and reach the upstream. Evaluated before blocks.",
+        properties: {
+          path: { type: "string", example: "/secret", description: "Caddy path pattern to allow through" },
+        },
+        required: ["path"],
+      },
       PathBlockRule: {
         type: "object",
         description: "Block a request path with a static response (no proxying)",
@@ -1670,6 +1678,7 @@ export const spec = {
           redirects: { type: "array", items: { $ref: "#/components/schemas/RedirectRule" } },
           rewrite: { oneOf: [{ $ref: "#/components/schemas/RewriteConfig" }, { type: "null" }] },
           locationRules: { type: "array", items: { $ref: "#/components/schemas/LocationRule" }, description: "Path-based routing rules (routes specific paths to different upstreams)" },
+          pathAllows: { type: "array", items: { $ref: "#/components/schemas/PathAllowRule" }, description: "Paths that bypass any matching Path Block and reach the upstream (evaluated first)" },
           pathBlocks: { type: "array", items: { $ref: "#/components/schemas/PathBlockRule" }, description: "Paths blocked with a static response" },
           pathRewrites: { type: "array", items: { $ref: "#/components/schemas/PathRewriteRule" }, description: "Internal URI rewrites applied before proxying" },
         },
@@ -1704,6 +1713,7 @@ export const spec = {
           redirects: { type: "array", items: { $ref: "#/components/schemas/RedirectRule" } },
           rewrite: { oneOf: [{ $ref: "#/components/schemas/RewriteConfig" }, { type: "null" }] },
           locationRules: { type: "array", items: { $ref: "#/components/schemas/LocationRule" }, description: "Path-based routing rules (routes specific paths to different upstreams)" },
+          pathAllows: { type: "array", items: { $ref: "#/components/schemas/PathAllowRule" }, description: "Paths that bypass any matching Path Block and reach the upstream (evaluated first)" },
           pathBlocks: { type: "array", items: { $ref: "#/components/schemas/PathBlockRule" }, description: "Paths blocked with a static response" },
           pathRewrites: { type: "array", items: { $ref: "#/components/schemas/PathRewriteRule" }, description: "Internal URI rewrites applied before proxying" },
         },

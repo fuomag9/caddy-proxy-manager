@@ -73,6 +73,12 @@ export type PathRewriteRule = {
   to: string;     // internal target URI, e.g. "/dns-query"
 };
 
+export type PathAllowRule = {
+  path: string;   // Caddy path pattern, e.g. "/secret" — matches short-circuit the
+                  // subroute (no block applies) and the request falls through to the
+                  // upstream proxy.
+};
+
 export type WafHostConfig = {
   enabled?: boolean;
   mode?: 'Off' | 'On';
@@ -339,6 +345,7 @@ type ProxyHostMeta = {
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
   location_rules?: LocationRule[];
+  path_allows?: PathAllowRule[];
   path_blocks?: PathBlockRule[];
   path_rewrites?: PathRewriteRule[];
 };
@@ -373,6 +380,7 @@ export type ProxyHost = {
   redirects: RedirectRule[];
   rewrite: RewriteConfig | null;
   locationRules: LocationRule[];
+  pathAllows: PathAllowRule[];
   pathBlocks: PathBlockRule[];
   pathRewrites: PathRewriteRule[];
 };
@@ -404,6 +412,7 @@ export type ProxyHostInput = {
   redirects?: RedirectRule[] | null;
   rewrite?: RewriteConfig | null;
   locationRules?: LocationRule[] | null;
+  pathAllows?: PathAllowRule[] | null;
   pathBlocks?: PathBlockRule[] | null;
   pathRewrites?: PathRewriteRule[] | null;
 };
@@ -736,6 +745,10 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.location_rules = meta.location_rules;
   }
 
+  if (meta.path_allows && meta.path_allows.length > 0) {
+    normalized.path_allows = meta.path_allows;
+  }
+
   if (meta.path_blocks && meta.path_blocks.length > 0) {
     normalized.path_blocks = meta.path_blocks;
   }
@@ -771,6 +784,21 @@ function sanitizeRewriteConfig(value: unknown): RewriteConfig | null {
   const prefix = typeof v.path_prefix === "string" ? v.path_prefix.trim() : null;
   if (!prefix) return null;
   return { path_prefix: prefix };
+}
+
+function sanitizePathAllows(value: unknown): PathAllowRule[] {
+  if (!Array.isArray(value)) return [];
+  const valid: PathAllowRule[] = [];
+  for (const item of value) {
+    if (item && typeof item === "object" && typeof item.path === "string" && item.path.trim()) {
+      // codeql[js/polynomial-redos] false positive: [^}]* is linear, no backtracking ambiguity
+      const path = item.path.trim().replace(/\{[^}]*\}/g, "");
+      if (path) {
+        valid.push({ path });
+      }
+    }
+  }
+  return valid;
 }
 
 function sanitizePathBlocks(value: unknown): PathBlockRule[] {
@@ -864,6 +892,7 @@ function parseMeta(value: string | null): ProxyHostMeta {
       redirects: sanitizeRedirectRules(parsed.redirects),
       rewrite: sanitizeRewriteConfig(parsed.rewrite) ?? undefined,
       location_rules: sanitizeLocationRules(parsed.location_rules),
+      path_allows: sanitizePathAllows(parsed.path_allows),
       path_blocks: sanitizePathBlocks(parsed.path_blocks),
       path_rewrites: sanitizePathRewrites(parsed.path_rewrites),
     };
@@ -1396,6 +1425,15 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
+  if (input.pathAllows !== undefined) {
+    const rules = sanitizePathAllows(input.pathAllows ?? []);
+    if (rules.length > 0) {
+      next.path_allows = rules;
+    } else {
+      delete next.path_allows;
+    }
+  }
+
   if (input.pathBlocks !== undefined) {
     const rules = sanitizePathBlocks(input.pathBlocks ?? []);
     if (rules.length > 0) {
@@ -1753,6 +1791,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     redirects: meta.redirects ?? [],
     rewrite: meta.rewrite ?? null,
     locationRules: meta.location_rules ?? [],
+    pathAllows: meta.path_allows ?? [],
     pathBlocks: meta.path_blocks ?? [],
     pathRewrites: meta.path_rewrites ?? [],
   };
@@ -1900,6 +1939,7 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     ...(existing.redirects && existing.redirects.length > 0 ? { redirects: existing.redirects } : {}),
     ...(existing.rewrite ? { rewrite: existing.rewrite } : {}),
     ...(existing.locationRules && existing.locationRules.length > 0 ? { location_rules: existing.locationRules } : {}),
+    ...(existing.pathAllows && existing.pathAllows.length > 0 ? { path_allows: existing.pathAllows } : {}),
     ...(existing.pathBlocks && existing.pathBlocks.length > 0 ? { path_blocks: existing.pathBlocks } : {}),
     ...(existing.pathRewrites && existing.pathRewrites.length > 0 ? { path_rewrites: existing.pathRewrites } : {}),
   };

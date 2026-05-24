@@ -17,6 +17,7 @@ import {
   type MtlsConfig,
   type RedirectRule,
   type RewriteConfig,
+  type PathAllowRule,
   type PathBlockRule,
   type PathRewriteRule,
   type CpmForwardAuthInput,
@@ -480,6 +481,20 @@ function parseRewriteConfig(formData: FormData): RewriteConfig | null {
   return { path_prefix: prefix.trim() };
 }
 
+function parsePathAllowsConfig(formData: FormData): PathAllowRule[] | null {
+  const raw = formData.get("pathAllowsJson");
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter(
+      (r) => r && typeof r.path === "string" && r.path.trim()
+    ) as PathAllowRule[];
+  } catch {
+    return null;
+  }
+}
+
 function parsePathBlocksConfig(formData: FormData): PathBlockRule[] | null {
   const raw = formData.get("pathBlocksJson");
   if (!raw || typeof raw !== "string") return null;
@@ -587,6 +602,7 @@ export async function createProxyHostAction(
         redirects: parseRedirectsConfig(formData),
         rewrite: parseRewriteConfig(formData),
         locationRules: parseLocationRulesConfig(formData),
+        pathAllows: parsePathAllowsConfig(formData),
         pathBlocks: parsePathBlocksConfig(formData),
         pathRewrites: parsePathRewritesConfig(formData),
       },
@@ -675,6 +691,7 @@ export async function updateProxyHostAction(
         redirects: formData.has("redirectsJson") ? parseRedirectsConfig(formData) : undefined,
         rewrite: formData.has("rewritePathPrefix") ? parseRewriteConfig(formData) : undefined,
         locationRules: formData.has("locationRulesJson") ? parseLocationRulesConfig(formData) : undefined,
+        pathAllows: formData.has("pathAllowsJson") ? parsePathAllowsConfig(formData) : undefined,
         pathBlocks: formData.has("pathBlocksJson") ? parsePathBlocksConfig(formData) : undefined,
         pathRewrites: formData.has("pathRewritesJson") ? parsePathRewritesConfig(formData) : undefined,
       },

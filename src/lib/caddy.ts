@@ -51,7 +51,7 @@ import {
   proxyHosts,
   l4ProxyHosts
 } from "./db/schema";
-import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule, type PathBlockRule, type PathRewriteRule } from "./models/proxy-hosts";
+import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule, type PathAllowRule, type PathBlockRule, type PathRewriteRule } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildFingerprintCelExpression, buildValidClientCertCelExpression, resolveAllowedFingerprints, type MtlsAccessRuleLike } from "./caddy-mtls";
 import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
 import { getAccessRulesForHosts } from "./models/mtls-access-rules";
@@ -137,6 +137,7 @@ type ProxyHostMeta = {
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
   location_rules?: LocationRule[];
+  path_allows?: PathAllowRule[];
   path_blocks?: PathBlockRule[];
   path_rewrites?: PathRewriteRule[];
 };
@@ -776,12 +777,23 @@ async function buildProxyRoutes(
       }
     }
 
-    // Path blocks (terminal static responses) and path rewrites (internal URI rewrites).
-    // Emitted before redirects/auth so blocks always win and rewrites apply before any
-    // downstream processing.
+    // Path blocks (terminal static_response) and path rewrites (URI rewrite).
+    //
+    // Path Allows are not emitted as standalone routes — a terminal match with
+    // an empty handle would stop the subroute without falling through to the
+    // reverse_proxy, returning an empty 200. Instead, every allow pattern is
+    // folded into each block's matcher as a `not` clause: a block matches when
+    // the request path matches the block pattern AND does not match any allow
+    // pattern. Allowed requests therefore skip every block and exit the
+    // subroute naturally, continuing to the outer reverse_proxy. Allows do not
+    // affect rewrites — those keep their original matchers.
+    const pathAllows = meta.path_allows ?? [];
     const pathBlocks = meta.path_blocks ?? [];
     const pathRewrites = meta.path_rewrites ?? [];
     if (pathBlocks.length > 0 || pathRewrites.length > 0) {
+      const allowPatterns = pathAllows
+        .map((a) => a.path.replace(/\{[^}]*\}/g, ''))
+        .filter((p) => p.length > 0);
       const pathRoutes: CaddyHttpRoute[] = [];
       for (const block of pathBlocks) {
         // Sanitize path to prevent Caddy placeholder injection
@@ -794,8 +806,12 @@ async function buildProxyRoutes(
         if (block.body) {
           handle.body = block.body;
         }
+        const matcher: Record<string, unknown> = { path: [safePath] };
+        if (allowPatterns.length > 0) {
+          matcher.not = [{ path: allowPatterns }];
+        }
         pathRoutes.push({
-          match: [{ path: [safePath] }],
+          match: [matcher],
           handle: [handle],
           terminal: true,
         });

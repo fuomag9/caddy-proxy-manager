@@ -27,6 +27,7 @@ import { CpmForwardAuthFields } from "./CpmForwardAuthFields";
 import { RedirectsFields } from "./RedirectsFields";
 import { LocationRulesFields } from "./LocationRulesFields";
 import { RewriteFields } from "./RewriteFields";
+import { PathAllowsFields } from "./PathAllowsFields";
 import { PathBlocksFields } from "./PathBlocksFields";
 import { PathRewritesFields } from "./PathRewritesFields";
 import type { CaCertificate } from "@/lib/models/ca-certificates";
@@ -152,6 +153,7 @@ export function CreateHostDialog({
                 <RedirectsFields initialData={initialData?.redirects} />
                 <LocationRulesFields initialData={initialData?.locationRules} />
                 <RewriteFields initialData={initialData?.rewrite} />
+                <PathAllowsFields initialData={initialData?.pathAllows} />
                 <PathBlocksFields initialData={initialData?.pathBlocks} />
                 <PathRewritesFields initialData={initialData?.pathRewrites} />
                 <div>
@@ -305,6 +307,7 @@ export function EditHostDialog({
                 <RedirectsFields initialData={host.redirects} />
                 <LocationRulesFields initialData={host.locationRules} />
                 <RewriteFields initialData={host.rewrite} />
+                <PathAllowsFields initialData={host.pathAllows} />
                 <PathBlocksFields initialData={host.pathBlocks} />
                 <PathRewritesFields initialData={host.pathRewrites} />
                 <div>
