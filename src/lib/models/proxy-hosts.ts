@@ -73,6 +73,16 @@ export type PathRewriteRule = {
   to: string;     // internal target URI, e.g. "/dns-query"
 };
 
+// Suggested status codes for the error-page UI. Any 4xx/5xx code is accepted by
+// the sanitizer; this list only drives the picker.
+export const ERROR_PAGE_STATUS_CODES = [400, 401, 403, 404, 408, 429, 500, 502, 503, 504] as const;
+
+export type ErrorPageRule = {
+  statuses: number[];     // error codes this rule handles, e.g. [502, 503, 504]; empty = all errors
+  body: string;           // response body (HTML/text); the original status code is preserved
+  contentType?: string;   // optional Content-Type, defaults to "text/html; charset=utf-8"
+};
+
 export type PathAllowRule = {
   path: string;   // Caddy path pattern, e.g. "/secret" — matches short-circuit the
                   // subroute (no block applies) and the request falls through to the
@@ -348,6 +358,7 @@ type ProxyHostMeta = {
   path_allows?: PathAllowRule[];
   path_blocks?: PathBlockRule[];
   path_rewrites?: PathRewriteRule[];
+  error_pages?: ErrorPageRule[];
 };
 
 export type ProxyHost = {
@@ -383,6 +394,7 @@ export type ProxyHost = {
   pathAllows: PathAllowRule[];
   pathBlocks: PathBlockRule[];
   pathRewrites: PathRewriteRule[];
+  errorPages: ErrorPageRule[];
 };
 
 export type ProxyHostInput = {
@@ -415,6 +427,7 @@ export type ProxyHostInput = {
   pathAllows?: PathAllowRule[] | null;
   pathBlocks?: PathBlockRule[] | null;
   pathRewrites?: PathRewriteRule[] | null;
+  errorPages?: ErrorPageRule[] | null;
 };
 
 type ProxyHostRow = typeof proxyHosts.$inferSelect;
@@ -850,6 +863,32 @@ function sanitizePathRewrites(value: unknown): PathRewriteRule[] {
   return valid;
 }
 
+const ERROR_PAGE_BODY_MAX = 65536;
+const ERROR_PAGE_CONTENT_TYPE_MAX = 128;
+
+export function sanitizeErrorPageRules(value: unknown): ErrorPageRule[] {
+  if (!Array.isArray(value)) return [];
+  const valid: ErrorPageRule[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const body = typeof item.body === "string" ? item.body : "";
+    if (!body) continue; // a rule with no body would do nothing
+    const rawStatuses: unknown[] = Array.isArray(item.statuses) ? item.statuses : [];
+    const statuses = [...new Set(
+      rawStatuses.filter((s): s is number =>
+        typeof s === "number" && Number.isInteger(s) && s >= 400 && s <= 599)
+    )];
+    const rule: ErrorPageRule = { statuses, body: body.slice(0, ERROR_PAGE_BODY_MAX) };
+    if (typeof item.contentType === "string") {
+      // Strip CR/LF to prevent response header injection.
+      const ct = item.contentType.replace(/[\r\n]/g, "").trim().slice(0, ERROR_PAGE_CONTENT_TYPE_MAX);
+      if (ct) rule.contentType = ct;
+    }
+    valid.push(rule);
+  }
+  return valid;
+}
+
 function sanitizeLocationRules(value: unknown): LocationRule[] {
   if (!Array.isArray(value)) return [];
   const valid: LocationRule[] = [];
@@ -895,6 +934,7 @@ function parseMeta(value: string | null): ProxyHostMeta {
       path_allows: sanitizePathAllows(parsed.path_allows),
       path_blocks: sanitizePathBlocks(parsed.path_blocks),
       path_rewrites: sanitizePathRewrites(parsed.path_rewrites),
+      error_pages: sanitizeErrorPageRules(parsed.error_pages),
     };
   } catch (error) {
     console.warn("Failed to parse proxy host meta", error);
@@ -1452,6 +1492,15 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
     }
   }
 
+  if (input.errorPages !== undefined) {
+    const rules = sanitizeErrorPageRules(input.errorPages ?? []);
+    if (rules.length > 0) {
+      next.error_pages = rules;
+    } else {
+      delete next.error_pages;
+    }
+  }
+
   return serializeMeta(next);
 }
 
@@ -1794,6 +1843,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
     pathAllows: meta.path_allows ?? [],
     pathBlocks: meta.path_blocks ?? [],
     pathRewrites: meta.path_rewrites ?? [],
+    errorPages: meta.error_pages ?? [],
   };
 }
 
@@ -1942,6 +1992,7 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     ...(existing.pathAllows && existing.pathAllows.length > 0 ? { path_allows: existing.pathAllows } : {}),
     ...(existing.pathBlocks && existing.pathBlocks.length > 0 ? { path_blocks: existing.pathBlocks } : {}),
     ...(existing.pathRewrites && existing.pathRewrites.length > 0 ? { path_rewrites: existing.pathRewrites } : {}),
+    ...(existing.errorPages && existing.errorPages.length > 0 ? { error_pages: existing.errorPages } : {}),
   };
   const meta = buildMeta(existingMeta, input);
 

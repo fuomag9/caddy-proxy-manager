@@ -34,6 +34,7 @@ import {
   getUpstreamDnsResolutionSettings,
   getGeoBlockSettings,
   getWafSettings,
+  getErrorPagesSettings,
   setSetting,
   type DnsSettings,
   type UpstreamDnsAddressFamily,
@@ -51,7 +52,7 @@ import {
   proxyHosts,
   l4ProxyHosts
 } from "./db/schema";
-import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule, type PathAllowRule, type PathBlockRule, type PathRewriteRule } from "./models/proxy-hosts";
+import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule, type PathAllowRule, type PathBlockRule, type PathRewriteRule, type ErrorPageRule } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildFingerprintCelExpression, buildValidClientCertCelExpression, resolveAllowedFingerprints, type MtlsAccessRuleLike } from "./caddy-mtls";
 import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
 import { getAccessRulesForHosts } from "./models/mtls-access-rules";
@@ -140,6 +141,7 @@ type ProxyHostMeta = {
   path_allows?: PathAllowRule[];
   path_blocks?: PathBlockRule[];
   path_rewrites?: PathRewriteRule[];
+  error_pages?: ErrorPageRule[];
 };
 
 type L4Meta = {
@@ -686,13 +688,43 @@ export function buildLocationReverseProxy(
   return { safePath, reverseProxyHandler };
 }
 
+// Builds a Caddy server-level error route (handle_errors equivalent) that serves a
+// custom static response while preserving the original error status code. An empty
+// `statuses` list matches every error; `hosts`, when set, scopes the route to a host.
+export function buildErrorPageRoute(rule: ErrorPageRule, hosts?: string[]): CaddyHttpRoute {
+  const matcher: Record<string, unknown> = {};
+  if (hosts && hosts.length > 0) {
+    matcher.host = hosts;
+  }
+  if (rule.statuses.length > 0) {
+    // Mirrors Caddy's documented handle_errors form, e.g. {http.error.status_code} == 404
+    matcher.expression = rule.statuses.map((s) => `{http.error.status_code} == ${s}`).join(" || ");
+  }
+  const route: CaddyHttpRoute = {
+    handle: [
+      {
+        handler: "static_response",
+        status_code: "{http.error.status_code}",
+        body: rule.body,
+        headers: { "Content-Type": [rule.contentType || "text/html; charset=utf-8"] },
+      },
+    ],
+    terminal: true,
+  };
+  if (Object.keys(matcher).length > 0) {
+    route.match = [matcher];
+  }
+  return route;
+}
+
 async function buildProxyRoutes(
   rows: ProxyHostRow[],
   accessAccounts: Map<number, AccessListEntryRow[]>,
   tlsReadyCertificates: Set<number>,
   options: BuildProxyRoutesOptions
-): Promise<CaddyHttpRoute[]> {
+): Promise<{ routes: CaddyHttpRoute[]; errorRoutes: CaddyHttpRoute[] }> {
   const routes: CaddyHttpRoute[] = [];
+  const errorRoutes: CaddyHttpRoute[] = [];
   const validClientCertExpression = buildValidClientCertCelExpression();
 
   for (const row of rows) {
@@ -1670,9 +1702,17 @@ async function buildProxyRoutes(
     }
 
     routes.push(...hostRoutes);
+
+    // Per-host error pages, scoped to this host's domains. Collected separately so
+    // they can be attached to the server-level `errors` block (handle_errors).
+    if (meta.error_pages && meta.error_pages.length > 0) {
+      for (const rule of meta.error_pages) {
+        errorRoutes.push(buildErrorPageRoute(rule, domains));
+      }
+    }
   }
 
-  return sortRoutesByHostPriority(routes);
+  return { routes: sortRoutesByHostPriority(routes), errorRoutes };
 }
 
 function buildTlsConnectionPolicies(
@@ -2360,7 +2400,7 @@ async function buildCaddyDocument() {
     mTlsOptionalAuthDomains
   );
 
-  const httpRoutes: CaddyHttpRoute[] = await buildProxyRoutes(
+  const { routes: httpRoutes, errorRoutes: hostErrorRoutes } = await buildProxyRoutes(
     proxyHostRows,
     accessMap,
     readyCertificates,
@@ -2376,6 +2416,12 @@ async function buildCaddyDocument() {
       },
     }
   );
+
+  // Server-level error routes (Caddy handle_errors): per-host rules first so they
+  // take precedence, then global rules act as a fallback for any unmatched host/status.
+  const globalErrorPages = await getErrorPagesSettings();
+  const globalErrorRoutes = (globalErrorPages?.rules ?? []).map((rule) => buildErrorPageRoute(rule));
+  const errorRoutes: CaddyHttpRoute[] = [...hostErrorRoutes, ...globalErrorRoutes];
 
   const hasTls = tlsConnectionPolicies.length > 0;
 
@@ -2400,6 +2446,8 @@ async function buildCaddyDocument() {
       // This allows Caddy to handle HTTP-01 challenges for managed certificates
       ...(tlsApp ? {} : { automatic_https: { disable: true } }),
       ...(hasTls ? { tls_connection_policies: tlsConnectionPolicies } : {}),
+      // Custom error pages (handle_errors)
+      ...(errorRoutes.length > 0 ? { errors: { routes: errorRoutes } } : {}),
       // Enable access logging if configured
       ...(loggingEnabled ? { logs: { default_logger_name: "http_access" } } : {})
     };

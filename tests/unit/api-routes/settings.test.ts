@@ -21,6 +21,8 @@ vi.mock('@/src/lib/settings', () => ({
   saveGeoBlockSettings: vi.fn(),
   getWafSettings: vi.fn(),
   saveWafSettings: vi.fn(),
+  getErrorPagesSettings: vi.fn(),
+  saveErrorPagesSettings: vi.fn(),
 }));
 
 vi.mock('@/src/lib/instance-sync', () => ({

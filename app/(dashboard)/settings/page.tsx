@@ -1,5 +1,5 @@
 import SettingsClient from "./SettingsClient";
-import { getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getDnsProviderSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings } from "@/src/lib/settings";
+import { getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getDnsProviderSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings, getErrorPagesSettings } from "@/src/lib/settings";
 import { getInstanceMode, getSlaveLastSync, getSlaveMasterToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvSlaveInstances } from "@/src/lib/instance-sync";
 import { listInstances } from "@/src/lib/models/instances";
 import { listOAuthProviders } from "@/src/lib/models/oauth-providers";
@@ -14,7 +14,7 @@ export default async function SettingsPage() {
   const modeFromEnv = isInstanceModeFromEnv();
   const tokenFromEnv = isSyncTokenFromEnv();
 
-  const [general, dnsProvider, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode, globalGeoBlock, oauthProviders] = await Promise.all([
+  const [general, dnsProvider, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode, globalGeoBlock, globalErrorPages, oauthProviders] = await Promise.all([
     getGeneralSettings(),
     getDnsProviderSettings(),
     getAuthentikSettings(),
@@ -24,6 +24,7 @@ export default async function SettingsPage() {
     getUpstreamDnsResolutionSettings(),
     getInstanceMode(),
     getGeoBlockSettings(),
+    getErrorPagesSettings(),
     listOAuthProviders(),
   ]);
 
@@ -58,6 +59,7 @@ export default async function SettingsPage() {
       dns={dns}
       upstreamDnsResolution={upstreamDnsResolution}
       globalGeoBlock={globalGeoBlock}
+      globalErrorPages={globalErrorPages}
       oauthProviders={oauthProviders}
       baseUrl={config.baseUrl}
       instanceSync={{

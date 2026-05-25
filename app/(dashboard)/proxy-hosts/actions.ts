@@ -20,8 +20,10 @@ import {
   type PathAllowRule,
   type PathBlockRule,
   type PathRewriteRule,
+  type ErrorPageRule,
   type CpmForwardAuthInput,
-  PATH_BLOCK_STATUS_CODES
+  PATH_BLOCK_STATUS_CODES,
+  sanitizeErrorPageRules
 } from "@/src/lib/models/proxy-hosts";
 import { getCertificate } from "@/src/lib/models/certificates";
 import { setForwardAuthAccess } from "@/src/lib/models/forward-auth";
@@ -528,6 +530,16 @@ function parsePathRewritesConfig(formData: FormData): PathRewriteRule[] | null {
   }
 }
 
+function parseErrorPagesConfig(formData: FormData): ErrorPageRule[] | null {
+  const raw = formData.get("errorPagesJson");
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    return sanitizeErrorPageRules(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
 function parseUpstreamDnsResolutionConfig(formData: FormData): UpstreamDnsResolutionInput | undefined {
   if (!formData.has("upstreamDnsResolutionPresent")) {
     return undefined;
@@ -605,6 +617,7 @@ export async function createProxyHostAction(
         pathAllows: parsePathAllowsConfig(formData),
         pathBlocks: parsePathBlocksConfig(formData),
         pathRewrites: parsePathRewritesConfig(formData),
+        errorPages: parseErrorPagesConfig(formData),
       },
       userId
     );
@@ -694,6 +707,7 @@ export async function updateProxyHostAction(
         pathAllows: formData.has("pathAllowsJson") ? parsePathAllowsConfig(formData) : undefined,
         pathBlocks: formData.has("pathBlocksJson") ? parsePathBlocksConfig(formData) : undefined,
         pathRewrites: formData.has("pathRewritesJson") ? parsePathRewritesConfig(formData) : undefined,
+        errorPages: formData.has("errorPagesJson") ? parseErrorPagesConfig(formData) : undefined,
       },
       userId
     );

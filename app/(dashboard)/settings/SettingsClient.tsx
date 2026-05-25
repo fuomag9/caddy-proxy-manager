@@ -4,7 +4,7 @@ import { useState, useActionState, useEffect, type ReactNode } from "react";
 import {
   Cloud, Globe, Network, Pin, Activity,
   ScrollText, Settings2, UserCheck, MapPin, KeyRound,
-  Search, ChevronRight,
+  Search, ChevronRight, FileWarning,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -33,9 +33,11 @@ import type {
   DnsProviderSettings,
   UpstreamDnsResolutionSettings,
   GeoBlockSettings,
+  ErrorPagesSettings,
 } from "@/lib/settings";
 import type { DnsProviderDefinition } from "@/src/lib/dns-providers";
 import { GeoBlockFields } from "@/components/proxy-hosts/GeoBlockFields";
+import { ErrorPagesFields } from "@/components/proxy-hosts/ErrorPagesFields";
 import OAuthProvidersSection from "./OAuthProvidersSection";
 import type { OAuthProvider } from "@/src/lib/models/oauth-providers";
 import {
@@ -53,6 +55,7 @@ import {
   toggleSlaveInstanceAction,
   syncSlaveInstancesAction,
   updateGeoBlockSettingsAction,
+  updateErrorPagesSettingsAction,
 } from "./actions";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +97,7 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
     label: "Security",
     items: [
       { id: "geoblock", name: "Global Geoblocking", desc: "Default geoblock rules across all hosts", icon: <MapPin className="h-4 w-4" /> },
+      { id: "error-pages", name: "Error Pages", desc: "Global custom error responses (fallback for all hosts)", icon: <FileWarning className="h-4 w-4" /> },
       { id: "authentik", name: "Authentik Defaults", desc: "Forward-auth defaults for new proxy hosts", icon: <UserCheck className="h-4 w-4" /> },
       { id: "oauth", name: "OAuth Providers", desc: "OAuth/OIDC SSO providers", icon: <KeyRound className="h-4 w-4" /> },
     ],
@@ -376,6 +380,7 @@ type Props = {
   dns: DnsSettings | null;
   upstreamDnsResolution: UpstreamDnsResolutionSettings | null;
   globalGeoBlock?: GeoBlockSettings | null;
+  globalErrorPages?: ErrorPagesSettings | null;
   oauthProviders: OAuthProvider[];
   baseUrl: string;
   instanceSync: {
@@ -425,6 +430,7 @@ export default function SettingsClient({
   dns,
   upstreamDnsResolution,
   globalGeoBlock,
+  globalErrorPages,
   oauthProviders,
   baseUrl,
   instanceSync,
@@ -461,6 +467,7 @@ export default function SettingsClient({
   const [slaveInstanceState, slaveInstanceFormAction] = useActionState(createSlaveInstanceAction, null);
   const [syncState, syncFormAction] = useActionState(syncSlaveInstancesAction, null);
   const [geoBlockState, geoBlockFormAction] = useActionState(updateGeoBlockSettingsAction, null);
+  const [errorPagesState, errorPagesFormAction] = useActionState(updateErrorPagesSettingsAction, null);
 
   const isSlave = instanceSync.mode === "slave";
   const isMaster = instanceSync.mode === "master";
@@ -561,6 +568,13 @@ export default function SettingsClient({
                   globalGeoBlock={globalGeoBlock}
                   geoBlockState={geoBlockState}
                   geoBlockFormAction={geoBlockFormAction}
+                />
+              )}
+              {active === "error-pages" && (
+                <ErrorPagesSection
+                  globalErrorPages={globalErrorPages}
+                  errorPagesState={errorPagesState}
+                  errorPagesFormAction={errorPagesFormAction}
                 />
               )}
               {active === "authentik" && (
@@ -1252,6 +1266,36 @@ function GeoBlockSection({
         />
         <div className="flex justify-end">
           <Button type="submit" size="sm">Save geoblocking settings</Button>
+        </div>
+      </form>
+    </FormCard>
+  );
+}
+
+// ─── Section: Error Pages ────────────────────────────────────────────────────
+
+function ErrorPagesSection({
+  globalErrorPages,
+  errorPagesState,
+  errorPagesFormAction,
+}: {
+  globalErrorPages?: ErrorPagesSettings | null;
+  errorPagesState: { success: boolean; message?: string } | null;
+  errorPagesFormAction: (payload: FormData) => void;
+}) {
+  return (
+    <FormCard>
+      <form action={errorPagesFormAction} className="flex flex-col gap-3">
+        {errorPagesState?.message && (
+          <StatusAlert message={errorPagesState.message} success={errorPagesState.success} />
+        )}
+        <p className="text-sm text-muted-foreground">
+          These error pages apply to every proxy host as a fallback. A per-host error page for the
+          same status code takes precedence.
+        </p>
+        <ErrorPagesFields initialData={globalErrorPages?.rules ?? []} />
+        <div className="flex justify-end">
+          <Button type="submit" size="sm">Save error pages</Button>
         </div>
       </form>
     </FormCard>
