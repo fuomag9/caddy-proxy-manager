@@ -64,6 +64,64 @@ describe('clickhouse client analytics enablement', () => {
     expect(createClient).not.toHaveBeenCalled();
   });
 
+  it('defaults retention to 30 days and creates tables with a 30-day TTL', async () => {
+    vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
+    vi.stubEnv('CLICKHOUSE_RETENTION_DAYS', '');
+
+    const commands: string[] = [];
+    const command = vi.fn(async ({ query }: { query: string }) => { commands.push(query); });
+    // ensureRetentionTtl reads the live TTL; report it already matches 30 days.
+    const query = vi.fn(async () => ({ json: async () => [{ create_table_query: 'TTL ts + toIntervalDay(30)' }] }));
+
+    vi.doMock('@clickhouse/client', () => ({
+      createClient: vi.fn(() => ({ query, command, insert: vi.fn(), close: vi.fn() })),
+    }));
+
+    const { getRetentionDays, initClickHouse } = await import('@/src/lib/clickhouse/client');
+    expect(getRetentionDays()).toBe(30);
+
+    await initClickHouse();
+
+    const trafficDdl = commands.find(q => q.includes('CREATE TABLE IF NOT EXISTS traffic_events'));
+    const wafDdl = commands.find(q => q.includes('CREATE TABLE IF NOT EXISTS waf_events'));
+    expect(trafficDdl).toContain('TTL ts + INTERVAL 30 DAY DELETE');
+    expect(wafDdl).toContain('TTL ts + INTERVAL 30 DAY DELETE');
+    // TTL already matches → no MODIFY TTL migration issued.
+    expect(commands.some(q => q.includes('MODIFY TTL'))).toBe(false);
+  });
+
+  it('honors a custom retention value and migrates an existing table whose TTL differs', async () => {
+    vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
+    vi.stubEnv('CLICKHOUSE_RETENTION_DAYS', '7');
+
+    const commands: string[] = [];
+    const command = vi.fn(async ({ query }: { query: string }) => { commands.push(query); });
+    // Existing tables were created under the old 90-day TTL.
+    const query = vi.fn(async () => ({ json: async () => [{ create_table_query: 'TTL ts + toIntervalDay(90)' }] }));
+
+    vi.doMock('@clickhouse/client', () => ({
+      createClient: vi.fn(() => ({ query, command, insert: vi.fn(), close: vi.fn() })),
+    }));
+
+    const { getRetentionDays, initClickHouse } = await import('@/src/lib/clickhouse/client');
+    expect(getRetentionDays()).toBe(7);
+
+    await initClickHouse();
+
+    expect(commands.find(q => q.includes('CREATE TABLE IF NOT EXISTS traffic_events')))
+      .toContain('TTL ts + INTERVAL 7 DAY DELETE');
+    const modifies = commands.filter(q => /ALTER TABLE \w+ MODIFY TTL ts \+ INTERVAL 7 DAY DELETE/.test(q));
+    expect(modifies).toHaveLength(2);
+  });
+
+  it('throws when CLICKHOUSE_RETENTION_DAYS is not a positive integer', async () => {
+    vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
+    vi.stubEnv('CLICKHOUSE_RETENTION_DAYS', 'not-a-number');
+    vi.doMock('@clickhouse/client', () => ({ createClient: vi.fn() }));
+
+    await expect(import('@/src/lib/clickhouse/client')).rejects.toThrow(/CLICKHOUSE_RETENTION_DAYS/);
+  });
+
   it('returns full WAF stats for the filtered result set', async () => {
     vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
 

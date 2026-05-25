@@ -1,6 +1,10 @@
 -- Reference DDL for ClickHouse analytics tables.
 -- Tables are created programmatically by client.ts initClickHouse().
 -- This file is for documentation only.
+--
+-- The TTL retention window below is the default (30 days). At runtime it is
+-- driven by the CLICKHOUSE_RETENTION_DAYS environment variable, and existing
+-- tables are migrated to the configured value on startup.
 
 CREATE TABLE IF NOT EXISTS traffic_events (
     ts           DateTime          CODEC(Delta, ZSTD),
@@ -17,7 +21,7 @@ CREATE TABLE IF NOT EXISTS traffic_events (
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ts)
 ORDER BY (host, ts)
-TTL ts + INTERVAL 90 DAY DELETE
+TTL ts + INTERVAL 30 DAY DELETE
 SETTINGS index_granularity = 8192;
 
 CREATE TABLE IF NOT EXISTS waf_events (
@@ -35,5 +39,5 @@ CREATE TABLE IF NOT EXISTS waf_events (
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ts)
 ORDER BY (host, ts)
-TTL ts + INTERVAL 90 DAY DELETE
+TTL ts + INTERVAL 30 DAY DELETE
 SETTINGS index_granularity = 8192;

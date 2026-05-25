@@ -12,7 +12,7 @@ Web interface for managing [Caddy Server](https://caddyserver.com/) reverse prox
 
 ## Overview
 
-This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a shadcn/ui interface. Built with Next.js 16, React 19, shadcn/ui, Tailwind CSS, Drizzle ORM, and TypeScript. Analytics data (traffic events, WAF events) is stored in ClickHouse for fast aggregation queries, with automatic 90-day retention via TTL.
+This project provides a web UI for Caddy Server, eliminating the need to manually edit JSON configurations or Caddyfiles. It handles reverse proxies, access lists, and certificate management through a shadcn/ui interface. Built with Next.js 16, React 19, shadcn/ui, Tailwind CSS, Drizzle ORM, and TypeScript. Analytics data (traffic events, WAF events) is stored in ClickHouse for fast aggregation queries, with automatic retention via TTL (30 days by default, configurable).
 
 ---
 
@@ -203,7 +203,7 @@ The databases are stored in the `geoip-data` Docker volume and shared between th
 
 ## Analytics
 
-Analytics uses a bundled ClickHouse instance for storing and querying traffic events and WAF events. Data is retained for **90 days** via ClickHouse's TTL.
+Analytics uses a bundled ClickHouse instance for storing and querying traffic events and WAF events. Data is retained for **30 days** by default via ClickHouse's TTL. Change the window with the `CLICKHOUSE_RETENTION_DAYS` environment variable — on the next startup the existing tables' TTL is migrated to the new value and expired data is purged.
 
 ### Enabling analytics (recommended)
 
