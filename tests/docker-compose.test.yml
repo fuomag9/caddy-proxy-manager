@@ -22,6 +22,9 @@ services:
   clickhouse:
     environment:
       CLICKHOUSE_PASSWORD: "test-clickhouse-password-2026"
+    # Expose the HTTP interface so retention/TTL e2e tests can query directly.
+    ports:
+      - "8123:8123"
   caddy:
     ports:
       - "80:80"

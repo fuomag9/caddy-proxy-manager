@@ -58,6 +58,8 @@ services:
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-cpm}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
+      # Days of analytics data to keep before TTL deletes it (default 30)
+      CLICKHOUSE_RETENTION_DAYS: ${CLICKHOUSE_RETENTION_DAYS:-30}
     group_add:
       - "${CADDY_GID:-10000}"  # caddy's GID — lets the web user read /logs/access.log
     volumes:

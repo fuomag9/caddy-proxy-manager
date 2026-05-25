@@ -12,6 +12,21 @@ if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(CH_DB)) {
   throw new Error(`CLICKHOUSE_DB contains invalid characters: ${CH_DB}`);
 }
 
+const DEFAULT_RETENTION_DAYS = 30;
+
+/** Parse CLICKHOUSE_RETENTION_DAYS into a positive integer number of days. */
+function parseRetentionDays(raw: string | undefined): number {
+  if (raw == null || raw.trim() === '') return DEFAULT_RETENTION_DAYS;
+  const n = Number(raw.trim());
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error(`CLICKHOUSE_RETENTION_DAYS must be a positive integer (got: ${raw})`);
+  }
+  return n;
+}
+
+// Number of days analytics events are kept before ClickHouse's TTL deletes them.
+const CH_RETENTION_DAYS = parseRetentionDays(process.env.CLICKHOUSE_RETENTION_DAYS);
+
 // ── Analytics state ─────────────────────────────────────────────────────────
 
 const analyticsConfigured = CH_PASS.trim().length > 0;
@@ -19,6 +34,11 @@ const analyticsConfigured = CH_PASS.trim().length > 0;
 /** Returns true when ClickHouse analytics is configured for this process. */
 export function isAnalyticsEnabled(): boolean {
   return analyticsConfigured;
+}
+
+/** Number of days analytics events are retained before TTL deletion. */
+export function getRetentionDays(): number {
+  return CH_RETENTION_DAYS;
 }
 
 // ── Singleton client ────────────────────────────────────────────────────────
@@ -63,7 +83,7 @@ CREATE TABLE IF NOT EXISTS traffic_events (
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ts)
 ORDER BY (host, ts)
-TTL ts + INTERVAL 90 DAY DELETE
+TTL ts + INTERVAL ${CH_RETENTION_DAYS} DAY DELETE
 SETTINGS index_granularity = 8192
 `;
 
@@ -83,7 +103,7 @@ CREATE TABLE IF NOT EXISTS waf_events (
 ) ENGINE = MergeTree()
 PARTITION BY toYYYYMM(ts)
 ORDER BY (host, ts)
-TTL ts + INTERVAL 90 DAY DELETE
+TTL ts + INTERVAL ${CH_RETENTION_DAYS} DAY DELETE
 SETTINGS index_granularity = 8192
 `;
 
@@ -112,6 +132,41 @@ const WAF_EVENTS_MIGRATIONS = [
   `ALTER TABLE waf_events MODIFY COLUMN raw_data Nullable(String) CODEC(ZSTD(3))`,
 ];
 
+const RETENTION_TABLES = ['traffic_events', 'waf_events'] as const;
+
+/** Extract the retention (in days) from a table's TTL clause, if present. */
+function ttlDaysFromCreateQuery(createQuery: string): number | null {
+  // ClickHouse normalizes `INTERVAL N DAY` to `toIntervalDay(N)` in create_table_query,
+  // but older servers may report the literal form — match both.
+  const match =
+    createQuery.match(/TTL\s+ts\s*\+\s*toIntervalDay\((\d+)\)/i) ??
+    createQuery.match(/TTL\s+ts\s*\+\s*INTERVAL\s+(\d+)\s+DAY/i);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Bring an existing table's TTL in line with CH_RETENTION_DAYS.
+ *
+ * `CREATE TABLE IF NOT EXISTS` never alters an existing table, so deployments
+ * created under a different retention keep their old TTL forever unless we
+ * issue an explicit MODIFY TTL. We only do so when the current TTL differs,
+ * since MODIFY TTL materializes a mutation that rewrites parts to drop expired
+ * rows — cheap to skip, wasteful to repeat on every restart.
+ */
+async function ensureRetentionTtl(ch: ClickHouseClient, table: (typeof RETENTION_TABLES)[number]): Promise<void> {
+  const result = await ch.query({
+    query: `SELECT create_table_query FROM system.tables WHERE database = {db:String} AND name = {tbl:String}`,
+    query_params: { db: CH_DB, tbl: table },
+    format: 'JSONEachRow',
+  });
+  const rows = await result.json<{ create_table_query: string }>();
+  const current = ttlDaysFromCreateQuery(rows[0]?.create_table_query ?? '');
+  if (current === CH_RETENTION_DAYS) return;
+  await ch.command({
+    query: `ALTER TABLE ${table} MODIFY TTL ts + INTERVAL ${CH_RETENTION_DAYS} DAY DELETE`,
+  });
+}
+
 export async function initClickHouse(): Promise<void> {
   if (!analyticsConfigured) {
     console.log('ClickHouse analytics disabled (CLICKHOUSE_PASSWORD not set)');
@@ -123,6 +178,9 @@ export async function initClickHouse(): Promise<void> {
   await ch.command({ query: WAF_EVENTS_DDL });
   for (const q of [...TRAFFIC_EVENTS_MIGRATIONS, ...WAF_EVENTS_MIGRATIONS]) {
     await ch.command({ query: q });
+  }
+  for (const table of RETENTION_TABLES) {
+    await ensureRetentionTtl(ch, table);
   }
 }
 
