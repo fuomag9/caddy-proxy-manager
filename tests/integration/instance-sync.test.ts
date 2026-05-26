@@ -274,6 +274,7 @@ describe('applySyncPayload', () => {
         upstream_dns_resolution: null,
         waf: null,
         geoblock: null,
+        error_pages: null,
       },
       data: {
         certificates: [],

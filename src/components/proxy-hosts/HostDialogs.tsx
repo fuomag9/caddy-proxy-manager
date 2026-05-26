@@ -30,6 +30,7 @@ import { RewriteFields } from "./RewriteFields";
 import { PathAllowsFields } from "./PathAllowsFields";
 import { PathBlocksFields } from "./PathBlocksFields";
 import { PathRewritesFields } from "./PathRewritesFields";
+import { ErrorPagesFields } from "./ErrorPagesFields";
 import type { CaCertificate } from "@/lib/models/ca-certificates";
 import type { MtlsRole } from "@/lib/models/mtls-roles";
 import type { IssuedClientCertificate } from "@/lib/models/issued-client-certificates";
@@ -156,6 +157,7 @@ export function CreateHostDialog({
                 <PathAllowsFields initialData={initialData?.pathAllows} />
                 <PathBlocksFields initialData={initialData?.pathBlocks} />
                 <PathRewritesFields initialData={initialData?.pathRewrites} />
+                <ErrorPagesFields initialData={initialData?.errorPages} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
                     <Textarea
@@ -310,6 +312,7 @@ export function EditHostDialog({
                 <PathAllowsFields initialData={host.pathAllows} />
                 <PathBlocksFields initialData={host.pathBlocks} />
                 <PathRewritesFields initialData={host.pathRewrites} />
+                <ErrorPagesFields initialData={host.errorPages} />
                 <div>
                     <label className="text-sm font-medium mb-1 block">Custom Pre-Handlers (JSON)</label>
                     <Textarea

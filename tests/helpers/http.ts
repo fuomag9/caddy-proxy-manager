@@ -78,6 +78,35 @@ export async function waitForStatus(domain: string, expectedStatus: number, time
   throw new Error(`Route for "${domain}" did not return ${expectedStatus} after ${timeoutMs}ms (last status: ${lastStatus})`);
 }
 
+/**
+ * Poll until the response body for a route contains the given substring.
+ *
+ * Needed for error-page tests: when the upstream is down the status stays 502
+ * both before the config reload (default Caddy body) and after (custom body),
+ * so waiting on status alone can't tell the config has applied — wait on the
+ * body instead.
+ */
+export async function waitForBody(domain: string, substring: string, path = '/', timeoutMs = 25_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastStatus = 0;
+  let lastBody = '';
+  while (Date.now() < deadline) {
+    try {
+      const res = await httpGet(domain, path);
+      lastStatus = res.status;
+      lastBody = res.body;
+      if (res.body.includes(substring)) return;
+    } catch {
+      // Connection refused — Caddy not ready yet
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error(
+    `Body for "${domain}${path}" never contained "${substring}" within ${timeoutMs}ms ` +
+    `(last status: ${lastStatus}, body: ${JSON.stringify(lastBody.slice(0, 200))})`
+  );
+}
+
 /** Inject hidden form fields into #create-host-form before submitting. */
 export async function injectFormFields(page: Page, fields: Record<string, string>): Promise<void> {
   await page.evaluate((f) => {

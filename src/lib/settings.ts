@@ -1,6 +1,7 @@
 import db, { nowIso } from "./db";
 import { settings } from "./db/schema";
 import { eq } from "drizzle-orm";
+import { sanitizeErrorPageRules, type ErrorPageRule } from "./models/proxy-hosts";
 
 export type SettingValue<T> = T | null;
 
@@ -251,4 +252,18 @@ export async function getWafSettings(): Promise<WafSettings | null> {
 
 export async function saveWafSettings(s: WafSettings): Promise<void> {
   await setSetting("waf", s);
+}
+
+// Global error pages, applied as fallback error routes across every proxy host.
+// Per-host error pages take precedence over these.
+export type ErrorPagesSettings = {
+  rules: ErrorPageRule[];
+};
+
+export async function getErrorPagesSettings(): Promise<ErrorPagesSettings | null> {
+  return await getEffectiveSetting<ErrorPagesSettings>("error_pages");
+}
+
+export async function saveErrorPagesSettings(s: ErrorPagesSettings): Promise<void> {
+  await setSetting("error_pages", { rules: sanitizeErrorPageRules(s?.rules) });
 }
