@@ -122,6 +122,85 @@ describe('clickhouse client analytics enablement', () => {
     await expect(import('@/src/lib/clickhouse/client')).rejects.toThrow(/CLICKHOUSE_RETENTION_DAYS/);
   });
 
+  // The drop step first enumerates matching tables from system.tables, then drops
+  // each. This mock answers the enumeration query with `liveTables` and every
+  // other query (the retention create_table_query read) with a matching 30-day TTL.
+  function mockClient(liveTables: string[], commandImpl?: (q: string) => void) {
+    const calls: { command: string[]; queries: { query: string; params?: Record<string, unknown> }[] } = {
+      command: [],
+      queries: [],
+    };
+    const command = vi.fn(async ({ query }: { query: string }) => {
+      calls.command.push(query);
+      commandImpl?.(query);
+    });
+    const query = vi.fn(async ({ query, query_params }: { query: string; query_params?: Record<string, unknown> }) => {
+      calls.queries.push({ query, params: query_params });
+      if (query.includes('FROM system.tables') && query.includes('match(name')) {
+        return { json: async () => liveTables.map((name) => ({ name })) };
+      }
+      return { json: async () => [{ create_table_query: 'TTL ts + toIntervalDay(30)' }] };
+    });
+    vi.doMock('@clickhouse/client', () => ({
+      createClient: vi.fn(() => ({ query, command, insert: vi.fn(), close: vi.fn() })),
+    }));
+    return calls;
+  }
+
+  it('drops every disabled system-log table that exists, including numbered upgrade leftovers', async () => {
+    vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
+
+    // What system.tables would return: live tables, numbered _N copies from past
+    // upgrades, and the newly-disabled histogram_metric_log.
+    const liveTables = ['trace_log', 'trace_log_3', 'trace_log_5', 'metric_log', 'metric_log_0', 'histogram_metric_log'];
+    const calls = mockClient(liveTables);
+
+    const { initClickHouse } = await import('@/src/lib/clickhouse/client');
+    await initClickHouse();
+
+    // The enumeration matches the disabled families plus an optional _<N> suffix,
+    // and now includes histogram_metric_log.
+    const enumeration = calls.queries.find((q) => q.query.includes('match(name'));
+    expect(enumeration?.params?.pattern).toBe(
+      '^(metric_log|asynchronous_metric_log|trace_log|query_log|query_thread_log|query_views_log|' +
+      'part_log|processors_profile_log|text_log|session_log|opentelemetry_span_log|blob_storage_log|' +
+      'backup_log|histogram_metric_log)(_[0-9]+)?$',
+    );
+
+    // Exactly the tables that exist are dropped — the _N leftovers included.
+    for (const name of liveTables) {
+      expect(calls.command).toContain(`DROP TABLE IF EXISTS system.${name} SYNC`);
+    }
+    const drops = calls.command.filter((q) => q.startsWith('DROP TABLE IF EXISTS system.'));
+    expect(drops).toHaveLength(liveTables.length);
+  });
+
+  it('does not abort init when dropping system-log tables fails (insufficient privileges)', async () => {
+    vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
+
+    const dropAttempts: string[] = [];
+    const calls = mockClient(['trace_log', 'metric_log', 'part_log'], (q) => {
+      if (q.startsWith('DROP TABLE IF EXISTS system.')) {
+        dropAttempts.push(q);
+        throw new Error('Not enough privileges. To execute this query, it is necessary to have the grant DROP TABLE');
+      }
+    });
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { initClickHouse } = await import('@/src/lib/clickhouse/client');
+    // Best-effort: a privilege error must not reject and abort startup.
+    await expect(initClickHouse()).resolves.toBeUndefined();
+
+    // Bails out after the first failure rather than spamming a warning per table.
+    expect(dropAttempts).toHaveLength(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('could not drop disabled system log tables');
+    void calls;
+
+    warn.mockRestore();
+  });
+
   it('returns full WAF stats for the filtered result set', async () => {
     vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
 

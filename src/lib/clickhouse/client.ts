@@ -167,6 +167,74 @@ async function ensureRetentionTtl(ch: ClickHouseClient, table: (typeof RETENTION
   });
 }
 
+// Diagnostic system-log tables that docker/clickhouse/config.d/low-disk-write.xml
+// turns off. On stock ClickHouse these flush every few seconds regardless of
+// traffic, so a deployment that ran before the override accumulated gigabytes we
+// can now reclaim. Disabling only stops new writes; the old data lingers until
+// the tables are dropped, which is what this list drives.
+const DISABLED_SYSTEM_LOGS = [
+  'metric_log',
+  'asynchronous_metric_log',
+  'trace_log',
+  'query_log',
+  'query_thread_log',
+  'query_views_log',
+  'part_log',
+  'processors_profile_log',
+  'text_log',
+  'session_log',
+  'opentelemetry_span_log',
+  'blob_storage_log',
+  'backup_log',
+  'histogram_metric_log',
+] as const;
+
+// Matches a disabled log table and its numbered upgrade leftovers. When a
+// ClickHouse upgrade changes a system-log table's schema, the server renames
+// the old table to `<name>_<N>` (e.g. trace_log_3) and creates a fresh one;
+// those frozen copies are never cleaned up and, on long-lived deployments,
+// dwarf the live table. An exact-name drop misses them, so we match the
+// `_<N>` suffix too. Anchored to full names built from the trusted constant
+// list above — no user input reaches this regex.
+const DISABLED_SYSTEM_LOG_PATTERN = `^(${DISABLED_SYSTEM_LOGS.join('|')})(_[0-9]+)?$`;
+
+/**
+ * Drop the diagnostic system-log tables we disable via config — including the
+ * numbered `_<N>` copies left behind by past version upgrades — so their
+ * already-written data is reclaimed. Best-effort: the analytics user often
+ * lacks DROP on the `system` database, so a failure is logged once and ignored
+ * rather than aborting startup.
+ */
+async function dropDisabledSystemLogs(ch: ClickHouseClient): Promise<void> {
+  let names: string[];
+  try {
+    const result = await ch.query({
+      query: `SELECT name FROM system.tables WHERE database = 'system' AND match(name, {pattern:String})`,
+      query_params: { pattern: DISABLED_SYSTEM_LOG_PATTERN },
+      format: 'JSONEachRow',
+    });
+    names = (await result.json<{ name: string }>())
+      .map((row) => row.name)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0);
+  } catch (err) {
+    console.warn(`[clickhouse] could not list disabled system log tables to drop: ${(err as Error).message}`);
+    return;
+  }
+
+  for (const name of names) {
+    try {
+      await ch.command({ query: `DROP TABLE IF EXISTS system.${name} SYNC` });
+    } catch (err) {
+      console.warn(
+        `[clickhouse] could not drop disabled system log tables (insufficient privileges?); ` +
+        `they will stop growing once the config override is applied, but existing data must be ` +
+        `cleared manually. Reason: ${(err as Error).message}`,
+      );
+      return;
+    }
+  }
+}
+
 export async function initClickHouse(): Promise<void> {
   if (!analyticsConfigured) {
     console.log('ClickHouse analytics disabled (CLICKHOUSE_PASSWORD not set)');
@@ -182,6 +250,7 @@ export async function initClickHouse(): Promise<void> {
   for (const table of RETENTION_TABLES) {
     await ensureRetentionTtl(ch, table);
   }
+  await dropDisabledSystemLogs(ch);
 }
 
 export async function closeClickHouse(): Promise<void> {
