@@ -22,6 +22,7 @@ const DISABLED_SYSTEM_LOGS = [
   'opentelemetry_span_log',
   'blob_storage_log',
   'backup_log',
+  'histogram_metric_log',
 ] as const;
 
 // ClickHouse HTTP port is exposed to the host by tests/docker-compose.test.yml.

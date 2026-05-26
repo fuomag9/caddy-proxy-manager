@@ -12,6 +12,7 @@
 <clickhouse>
     <asynchronous_metric_log remove="1"/>
     <metric_log remove="1"/>
+    <histogram_metric_log remove="1"/>
     <trace_log remove="1"/>
     <query_log remove="1"/>
     <query_thread_log remove="1"/>

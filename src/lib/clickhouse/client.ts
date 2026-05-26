@@ -186,16 +186,42 @@ const DISABLED_SYSTEM_LOGS = [
   'opentelemetry_span_log',
   'blob_storage_log',
   'backup_log',
+  'histogram_metric_log',
 ] as const;
 
+// Matches a disabled log table and its numbered upgrade leftovers. When a
+// ClickHouse upgrade changes a system-log table's schema, the server renames
+// the old table to `<name>_<N>` (e.g. trace_log_3) and creates a fresh one;
+// those frozen copies are never cleaned up and, on long-lived deployments,
+// dwarf the live table. An exact-name drop misses them, so we match the
+// `_<N>` suffix too. Anchored to full names built from the trusted constant
+// list above — no user input reaches this regex.
+const DISABLED_SYSTEM_LOG_PATTERN = `^(${DISABLED_SYSTEM_LOGS.join('|')})(_[0-9]+)?$`;
+
 /**
- * Drop the diagnostic system-log tables we disable via config so their
+ * Drop the diagnostic system-log tables we disable via config — including the
+ * numbered `_<N>` copies left behind by past version upgrades — so their
  * already-written data is reclaimed. Best-effort: the analytics user often
  * lacks DROP on the `system` database, so a failure is logged once and ignored
  * rather than aborting startup.
  */
 async function dropDisabledSystemLogs(ch: ClickHouseClient): Promise<void> {
-  for (const name of DISABLED_SYSTEM_LOGS) {
+  let names: string[];
+  try {
+    const result = await ch.query({
+      query: `SELECT name FROM system.tables WHERE database = 'system' AND match(name, {pattern:String})`,
+      query_params: { pattern: DISABLED_SYSTEM_LOG_PATTERN },
+      format: 'JSONEachRow',
+    });
+    names = (await result.json<{ name: string }>())
+      .map((row) => row.name)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0);
+  } catch (err) {
+    console.warn(`[clickhouse] could not list disabled system log tables to drop: ${(err as Error).message}`);
+    return;
+  }
+
+  for (const name of names) {
     try {
       await ch.command({ query: `DROP TABLE IF EXISTS system.${name} SYNC` });
     } catch (err) {
