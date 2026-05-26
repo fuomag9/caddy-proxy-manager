@@ -183,6 +183,7 @@ services:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     volumes:
       - clickhouse-data:/var/lib/clickhouse
+      - ./docker/clickhouse/config.d:/etc/clickhouse-server/config.d:ro
     networks:
       - caddy-network
     healthcheck:
