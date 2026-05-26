@@ -167,6 +167,48 @@ async function ensureRetentionTtl(ch: ClickHouseClient, table: (typeof RETENTION
   });
 }
 
+// Diagnostic system-log tables that docker/clickhouse/config.d/low-disk-write.xml
+// turns off. On stock ClickHouse these flush every few seconds regardless of
+// traffic, so a deployment that ran before the override accumulated gigabytes we
+// can now reclaim. Disabling only stops new writes; the old data lingers until
+// the tables are dropped, which is what this list drives.
+const DISABLED_SYSTEM_LOGS = [
+  'metric_log',
+  'asynchronous_metric_log',
+  'trace_log',
+  'query_log',
+  'query_thread_log',
+  'query_views_log',
+  'part_log',
+  'processors_profile_log',
+  'text_log',
+  'session_log',
+  'opentelemetry_span_log',
+  'blob_storage_log',
+  'backup_log',
+] as const;
+
+/**
+ * Drop the diagnostic system-log tables we disable via config so their
+ * already-written data is reclaimed. Best-effort: the analytics user often
+ * lacks DROP on the `system` database, so a failure is logged once and ignored
+ * rather than aborting startup.
+ */
+async function dropDisabledSystemLogs(ch: ClickHouseClient): Promise<void> {
+  for (const name of DISABLED_SYSTEM_LOGS) {
+    try {
+      await ch.command({ query: `DROP TABLE IF EXISTS system.${name} SYNC` });
+    } catch (err) {
+      console.warn(
+        `[clickhouse] could not drop disabled system log tables (insufficient privileges?); ` +
+        `they will stop growing once the config override is applied, but existing data must be ` +
+        `cleared manually. Reason: ${(err as Error).message}`,
+      );
+      return;
+    }
+  }
+}
+
 export async function initClickHouse(): Promise<void> {
   if (!analyticsConfigured) {
     console.log('ClickHouse analytics disabled (CLICKHOUSE_PASSWORD not set)');
@@ -182,6 +224,7 @@ export async function initClickHouse(): Promise<void> {
   for (const table of RETENTION_TABLES) {
     await ensureRetentionTtl(ch, table);
   }
+  await dropDisabledSystemLogs(ch);
 }
 
 export async function closeClickHouse(): Promise<void> {
