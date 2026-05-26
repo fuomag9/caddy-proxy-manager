@@ -122,6 +122,60 @@ describe('clickhouse client analytics enablement', () => {
     await expect(import('@/src/lib/clickhouse/client')).rejects.toThrow(/CLICKHOUSE_RETENTION_DAYS/);
   });
 
+  it('drops the disabled diagnostic system-log tables on init to reclaim their data', async () => {
+    vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
+
+    const commands: string[] = [];
+    const command = vi.fn(async ({ query }: { query: string }) => { commands.push(query); });
+    const query = vi.fn(async () => ({ json: async () => [{ create_table_query: 'TTL ts + toIntervalDay(30)' }] }));
+
+    vi.doMock('@clickhouse/client', () => ({
+      createClient: vi.fn(() => ({ query, command, insert: vi.fn(), close: vi.fn() })),
+    }));
+
+    const { initClickHouse } = await import('@/src/lib/clickhouse/client');
+    await initClickHouse();
+
+    const expected = [
+      'metric_log', 'asynchronous_metric_log', 'trace_log', 'query_log', 'query_thread_log',
+      'query_views_log', 'part_log', 'processors_profile_log', 'text_log', 'session_log',
+      'opentelemetry_span_log', 'blob_storage_log', 'backup_log',
+    ];
+    for (const name of expected) {
+      expect(commands).toContain(`DROP TABLE IF EXISTS system.${name} SYNC`);
+    }
+  });
+
+  it('does not abort init when dropping system-log tables fails (insufficient privileges)', async () => {
+    vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
+
+    const dropAttempts: string[] = [];
+    const command = vi.fn(async ({ query }: { query: string }) => {
+      if (query.startsWith('DROP TABLE IF EXISTS system.')) {
+        dropAttempts.push(query);
+        throw new Error('Not enough privileges. To execute this query, it is necessary to have the grant DROP TABLE');
+      }
+    });
+    const query = vi.fn(async () => ({ json: async () => [{ create_table_query: 'TTL ts + toIntervalDay(30)' }] }));
+
+    vi.doMock('@clickhouse/client', () => ({
+      createClient: vi.fn(() => ({ query, command, insert: vi.fn(), close: vi.fn() })),
+    }));
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const { initClickHouse } = await import('@/src/lib/clickhouse/client');
+    // Best-effort: a privilege error must not reject and abort startup.
+    await expect(initClickHouse()).resolves.toBeUndefined();
+
+    // Bails out after the first failure rather than spamming a warning per table.
+    expect(dropAttempts).toHaveLength(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('could not drop disabled system log tables');
+
+    warn.mockRestore();
+  });
+
   it('returns full WAF stats for the filtered result set', async () => {
     vi.stubEnv('CLICKHOUSE_PASSWORD', 'test-clickhouse-password');
 

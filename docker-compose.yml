@@ -183,7 +183,11 @@ services:
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      - ./docker/clickhouse/config.d:/etc/clickhouse-server/config.d:ro
+      # Mount only our single override file, not the whole config.d directory.
+      # Bind-mounting the directory would shadow the image's docker_related_config.xml
+      # (which sets listen_host to ::/0.0.0.0), leaving ClickHouse bound to loopback
+      # only so the web container could no longer reach it.
+      - ./docker/clickhouse/config.d/low-disk-write.xml:/etc/clickhouse-server/config.d/low-disk-write.xml:ro
     networks:
       - caddy-network
     healthcheck:
