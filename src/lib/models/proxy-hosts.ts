@@ -770,6 +770,13 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.path_rewrites = meta.path_rewrites;
   }
 
+  if (meta.error_pages && meta.error_pages.length > 0) {
+    const errorPages = sanitizeErrorPageRules(meta.error_pages);
+    if (errorPages.length > 0) {
+      normalized.error_pages = errorPages;
+    }
+  }
+
   return Object.keys(normalized).length > 0 ? JSON.stringify(normalized) : null;
 }
 
