@@ -79,8 +79,15 @@ export async function getAnalyticsBlocked(from: number, to: number, hosts: strin
 
 // ── Hosts ────────────────────────────────────────────────────────────────────
 
-export async function getAnalyticsHosts(): Promise<string[]> {
+export interface AnalyticsHost {
+  host: string;
+  /** true when this host matches a domain configured on a proxy host in Caddy */
+  configured: boolean;
+}
+
+export async function getAnalyticsHosts(): Promise<AnalyticsHost[]> {
   const hostSet = new Set<string>();
+  const configured = new Set<string>();
 
   // Hosts from ClickHouse traffic events
   const chHosts = await queryDistinctHosts();
@@ -93,11 +100,17 @@ export async function getAnalyticsHosts(): Promise<string[]> {
       const domains = JSON.parse(r.domains) as string[];
       for (const d of domains) {
         const trimmed = d?.trim().toLowerCase();
-        if (trimmed) hostSet.add(trimmed);
+        if (trimmed) {
+          hostSet.add(trimmed);
+          configured.add(trimmed);
+        }
       }
     } catch { /* ignore malformed rows */ }
   }
 
   const isIp = (h: string) => /^\d{1,3}(\.\d{1,3}){3}(:\d+)?$/.test(h);
-  return Array.from(hostSet).filter(h => !isIp(h)).sort();
+  return Array.from(hostSet)
+    .filter(h => !isIp(h))
+    .sort()
+    .map(host => ({ host, configured: configured.has(host.toLowerCase()) }));
 }

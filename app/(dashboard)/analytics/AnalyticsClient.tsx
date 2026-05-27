@@ -62,6 +62,8 @@ interface CountryStats { countryCode: string; total: number; blocked: number; }
 interface ProtoStats { proto: string; count: number; percent: number; }
 interface UAStats { userAgent: string; count: number; percent: number; }
 
+interface AnalyticsHost { host: string; configured: boolean; }
+
 interface BlockedEvent {
   id: number; ts: number; clientIp: string; countryCode: string | null;
   method: string; uri: string; status: number; host: string;
@@ -199,16 +201,32 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 
 // ── Hosts multi-select combobox ───────────────────────────────────────────────
 
+const ONLY_CONFIGURED_KEY = 'analytics:onlyConfiguredHosts';
+
 function HostsCombobox({
   allHosts,
   selectedHosts,
   onChange,
 }: {
-  allHosts: string[];
+  allHosts: AnalyticsHost[];
   selectedHosts: string[];
   onChange: (v: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [onlyConfigured, setOnlyConfigured] = useState(false);
+
+  // Restore the persisted "only proxy hosts" preference
+  useEffect(() => {
+    try { setOnlyConfigured(localStorage.getItem(ONLY_CONFIGURED_KEY) === '1'); } catch { /* ignore */ }
+  }, []);
+
+  function setFilter(v: boolean) {
+    setOnlyConfigured(v);
+    try { localStorage.setItem(ONLY_CONFIGURED_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+  }
+
+  const hasUnconfigured = allHosts.some(h => !h.configured);
+  const visibleHosts = (onlyConfigured ? allHosts.filter(h => h.configured) : allHosts).map(h => h.host);
 
   function toggle(host: string) {
     if (selectedHosts.includes(host)) {
@@ -245,7 +263,7 @@ function HostsCombobox({
           <div className="flex items-center gap-1 border-b px-2 py-1">
             <button
               className="text-xs text-muted-foreground hover:text-foreground px-1"
-              onMouseDown={e => { e.preventDefault(); onChange(allHosts); }}
+              onMouseDown={e => { e.preventDefault(); onChange(visibleHosts); }}
             >
               Select all
             </button>
@@ -257,10 +275,23 @@ function HostsCombobox({
               Clear
             </button>
           </div>
+          {hasUnconfigured && (
+            <button
+              className={cn(
+                'flex w-full items-center gap-2 border-b px-2 py-1.5 text-xs transition-colors',
+                onlyConfigured ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+              )}
+              onMouseDown={e => { e.preventDefault(); setFilter(!onlyConfigured); }}
+              title="Hide hosts that aren't configured as proxy hosts in Caddy"
+            >
+              <Check className={cn('h-3 w-3 shrink-0', onlyConfigured ? 'opacity-100' : 'opacity-30')} />
+              <span>Only proxy hosts</span>
+            </button>
+          )}
           <CommandList>
             <CommandEmpty>No hosts found.</CommandEmpty>
             <CommandGroup>
-              {allHosts.map(host => (
+              {visibleHosts.map(host => (
                 <CommandItem key={host} value={host} onSelect={() => toggle(host)} className="text-xs">
                   <Check
                     className={cn('mr-2 h-3 w-3', selectedHosts.includes(host) ? 'opacity-100' : 'opacity-0')}
@@ -303,7 +334,7 @@ function HostsCombobox({
 export default function AnalyticsClient() {
   const [interval, setIntervalVal] = useState<DisplayInterval>('1h');
   const [selectedHosts, setSelectedHosts] = useState<string[]>([]);
-  const [allHosts, setAllHosts] = useState<string[]>([]);
+  const [allHosts, setAllHosts] = useState<AnalyticsHost[]>([]);
 
   // Custom range as Dayjs objects
   const [customFrom, setCustomFrom] = useState<Dayjs | null>(null);
