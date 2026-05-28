@@ -1,12 +1,13 @@
 /**
- * E2E test for issue #171: the analytics host dropdown can be filtered to show
- * only hosts configured as proxy hosts in Caddy, hiding traffic-only hosts
- * (random/scanned domains that merely showed up in ClickHouse traffic).
+ * E2E test for issue #171: the analytics host dropdown hides traffic-only hosts
+ * (random/scanned domains that merely showed up in ClickHouse traffic) by
+ * default and offers an "Include unconfigured hosts" toggle to surface them
+ * again — useful when a proxy host was removed but the user still wants stats.
  *
- * Setup seeds two hosts that both appear in the dropdown:
- *   - a configured proxy host (SQLite, via the v1 API)
+ * Setup seeds two hosts:
+ *   - a configured proxy host (SQLite, via the v1 API) — always listed
  *   - a traffic-only host (ClickHouse traffic_events, no matching proxy host)
- * then verifies the "Only proxy hosts" toggle hides the traffic-only one.
+ * then verifies the toggle reveals the traffic-only one.
  */
 import { test, expect } from '@playwright/test';
 import { createClient, type ClickHouseClient } from '@clickhouse/client';
@@ -29,7 +30,7 @@ function chDateTime(unixSeconds: number): string {
 }
 
 test.describe('Analytics host filter (#171)', () => {
-  test('"Only proxy hosts" toggle hides traffic-only hosts', async ({ page }) => {
+  test('"Include unconfigured hosts" toggle reveals traffic-only hosts', async ({ page }) => {
     const stamp = Date.now();
     const tag = `hostfilter-${stamp}`;
     const configuredHost = `${tag}-configured.example.com`;
@@ -59,9 +60,9 @@ test.describe('Analytics host filter (#171)', () => {
         }],
       });
 
-      // Start with the filter off regardless of any persisted preference.
+      // Start with the toggle off regardless of any persisted preference.
       await page.addInitScript(() => {
-        try { localStorage.removeItem('analytics:onlyConfiguredHosts'); } catch { /* ignore */ }
+        try { localStorage.removeItem('analytics:includeUnconfiguredHosts'); } catch { /* ignore */ }
       });
       await page.goto('/analytics');
       await expect(page.getByText('Total Requests', { exact: true })).toBeVisible({ timeout: 15_000 });
@@ -75,15 +76,15 @@ test.describe('Analytics host filter (#171)', () => {
       const configuredOption = page.getByRole('option', { name: configuredHost });
       const unconfiguredOption = page.getByRole('option', { name: unconfiguredHost });
 
-      // Before filtering, both the configured and the traffic-only host are listed.
+      // By default only configured proxy hosts are listed.
       await expect(configuredOption).toBeVisible({ timeout: 10_000 });
-      await expect(unconfiguredOption).toBeVisible();
+      await expect(unconfiguredOption).not.toBeVisible();
 
-      // Enable "Only proxy hosts": the traffic-only host disappears, configured stays.
-      await page.getByRole('button', { name: /only proxy hosts/i }).click();
+      // Enable "Include unconfigured hosts": the traffic-only host appears.
+      await page.getByRole('button', { name: /include unconfigured hosts/i }).click();
 
       await expect(configuredOption).toBeVisible();
-      await expect(unconfiguredOption).not.toBeVisible();
+      await expect(unconfiguredOption).toBeVisible();
     } finally {
       if (proxyHostId != null) {
         await page.request.delete(`${API_PROXY_HOSTS}/${proxyHostId}`, { headers: { Origin: ORIGIN } }).catch(() => { /* best-effort cleanup */ });

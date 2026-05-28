@@ -201,7 +201,7 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 
 // ── Hosts multi-select combobox ───────────────────────────────────────────────
 
-const ONLY_CONFIGURED_KEY = 'analytics:onlyConfiguredHosts';
+const INCLUDE_UNCONFIGURED_KEY = 'analytics:includeUnconfiguredHosts';
 
 function HostsCombobox({
   allHosts,
@@ -213,20 +213,20 @@ function HostsCombobox({
   onChange: (v: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [onlyConfigured, setOnlyConfigured] = useState(false);
+  const [includeUnconfigured, setIncludeUnconfigured] = useState(false);
 
-  // Restore the persisted "only proxy hosts" preference
+  // Restore the persisted "include unconfigured hosts" preference
   useEffect(() => {
-    try { setOnlyConfigured(localStorage.getItem(ONLY_CONFIGURED_KEY) === '1'); } catch { /* ignore */ }
+    try { setIncludeUnconfigured(localStorage.getItem(INCLUDE_UNCONFIGURED_KEY) === '1'); } catch { /* ignore */ }
   }, []);
 
   function setFilter(v: boolean) {
-    setOnlyConfigured(v);
-    try { localStorage.setItem(ONLY_CONFIGURED_KEY, v ? '1' : '0'); } catch { /* ignore */ }
+    setIncludeUnconfigured(v);
+    try { localStorage.setItem(INCLUDE_UNCONFIGURED_KEY, v ? '1' : '0'); } catch { /* ignore */ }
   }
 
   const hasUnconfigured = allHosts.some(h => !h.configured);
-  const visibleHosts = (onlyConfigured ? allHosts.filter(h => h.configured) : allHosts).map(h => h.host);
+  const visibleHosts = (includeUnconfigured ? allHosts : allHosts.filter(h => h.configured)).map(h => h.host);
 
   function toggle(host: string) {
     if (selectedHosts.includes(host)) {
@@ -279,13 +279,13 @@ function HostsCombobox({
             <button
               className={cn(
                 'flex w-full items-center gap-2 border-b px-2 py-1.5 text-xs transition-colors',
-                onlyConfigured ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                includeUnconfigured ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
               )}
-              onMouseDown={e => { e.preventDefault(); setFilter(!onlyConfigured); }}
-              title="Hide hosts that aren't configured as proxy hosts in Caddy"
+              onMouseDown={e => { e.preventDefault(); setFilter(!includeUnconfigured); }}
+              title="Show hosts that received traffic but aren't configured as proxy hosts in Caddy"
             >
-              <Check className={cn('h-3 w-3 shrink-0', onlyConfigured ? 'opacity-100' : 'opacity-30')} />
-              <span>Only proxy hosts</span>
+              <Check className={cn('h-3 w-3 shrink-0', includeUnconfigured ? 'opacity-100' : 'opacity-30')} />
+              <span>Include unconfigured hosts</span>
             </button>
           )}
           <CommandList>
