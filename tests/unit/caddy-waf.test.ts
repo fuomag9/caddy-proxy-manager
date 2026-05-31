@@ -61,6 +61,34 @@ describe('buildWafHandler — without OWASP CRS', () => {
     // The directives string should end with the last standard directive
     expect((handler.directives as string).trimEnd()).not.toMatch(/\s+$/);
   });
+
+  it('allows request body limit directives from custom directives', () => {
+    const directives = [
+      'SecRequestBodyLimit 10737418240',
+      'SecRequestBodyNoFilesLimit 10737418240',
+    ].join('\n');
+    const handler = buildWafHandler({ ...baseWaf, custom_directives: directives });
+    expect(handler.directives).toContain('SecRequestBodyLimit 10737418240');
+    expect(handler.directives).toContain('SecRequestBodyNoFilesLimit 10737418240');
+  });
+
+  it('allows related constrained request body limit directives', () => {
+    const directives = [
+      'SecRequestBodyInMemoryLimit 131072',
+      'SecRequestBodyLimitAction ProcessPartial',
+    ].join('\n');
+    const handler = buildWafHandler({ ...baseWaf, custom_directives: directives });
+    expect(handler.directives).toContain('SecRequestBodyInMemoryLimit 131072');
+    expect(handler.directives).toContain('SecRequestBodyLimitAction ProcessPartial');
+  });
+
+  it('still rejects request body directives that can disable inspection', () => {
+    const handler = buildWafHandler({
+      ...baseWaf,
+      custom_directives: 'SecRequestBodyAccess Off',
+    });
+    expect(handler.directives).not.toContain('SecRequestBodyAccess Off');
+  });
 });
 
 // ---------------------------------------------------------------------------

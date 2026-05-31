@@ -141,6 +141,12 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
       /^SecMarker\s/,
       /^SecDefaultAction\s/,
     ];
+    const allowedBodyLimitDirectives = [
+      /^SecRequestBodyLimit\s+\d+\s*$/i,
+      /^SecRequestBodyNoFilesLimit\s+\d+\s*$/i,
+      /^SecRequestBodyInMemoryLimit\s+\d+\s*$/i,
+      /^SecRequestBodyLimitAction\s+(?:Reject|ProcessPartial)\s*$/i,
+    ];
     // SecRule* variants that are NOT plain SecRule (must be rejected)
     const blockedSecRulePrefixes = [
       /^SecRuleEngine\s/i,
@@ -158,7 +164,9 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
       // Reject Include directives (prevents file inclusion from container filesystem)
       if (/^Include\s/i.test(trimmed)) return false;
       // Check against allowlist
-      const matchesAllowed = allowedPrefixes.some(pattern => pattern.test(trimmed));
+      const matchesAllowed =
+        allowedPrefixes.some(pattern => pattern.test(trimmed)) ||
+        allowedBodyLimitDirectives.some(pattern => pattern.test(trimmed));
       if (!matchesAllowed) return false;
       // Reject blocked SecRule* variants (e.g. SecRuleEngine)
       if (blockedSecRulePrefixes.some(pattern => pattern.test(trimmed))) return false;
