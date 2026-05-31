@@ -57,7 +57,7 @@ export default async function middleware(req: NextRequest) {
 
   // Redirect unauthenticated users to login
   if (!isAuthenticated && !pathname.startsWith("/login")) {
-    const loginUrl = new URL("/login", req.url);
+    const loginUrl = new URL("login", req.url);
     return NextResponse.redirect(loginUrl);
   }
 

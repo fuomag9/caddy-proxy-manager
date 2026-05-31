@@ -11,7 +11,7 @@ export default async function ProfilePage() {
 
   const user = await getUserById(userId);
   if (!user) {
-    redirect("/login");
+    redirect("login");
   }
 
   const [enabledProviders, apiTokens] = await Promise.all([
