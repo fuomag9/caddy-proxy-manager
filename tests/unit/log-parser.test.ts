@@ -28,7 +28,7 @@ vi.mock('@/src/lib/clickhouse/client', () => ({
   insertTrafficEvents: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { parseLine, collectBlockedSignatures } from '@/src/lib/log-parser';
+import { parseLine, collectBlockedSignatures, pruneBlockedSignatures } from '@/src/lib/log-parser';
 
 describe('log-parser', () => {
   describe('collectBlockedSignatures', () => {
@@ -196,6 +196,59 @@ describe('log-parser', () => {
       });
       const result = parseLine(entry, emptyBlocked);
       expect(result!.country_code).toBeNull();
+    });
+  });
+
+  describe('cross-pass blocked signature carry-over', () => {
+    it('merges new signatures onto an existing (carried-over) map', () => {
+      const ts = 1700000500;
+      const pending = collectBlockedSignatures([
+        JSON.stringify({ ts, msg: 'request blocked', plugin: 'caddy-blocker', client_ip: '1.1.1.1', method: 'GET', uri: '/a' }),
+      ]);
+      // Second pass merges a new signature into the carried-over map.
+      const merged = collectBlockedSignatures([
+        JSON.stringify({ ts, msg: 'request blocked', plugin: 'caddy-blocker', client_ip: '2.2.2.2', method: 'GET', uri: '/b' }),
+      ], pending);
+      expect(merged).toBe(pending);
+      expect(merged.size).toBe(2);
+      expect(merged.get(`${ts}|1.1.1.1|GET|/a`)).toBe(1);
+      expect(merged.get(`${ts}|2.2.2.2|GET|/b`)).toBe(1);
+    });
+
+    it('marks a handled request whose block signature arrived in a previous pass', () => {
+      const ts = 1700000600;
+      // Pass 1: only the "request blocked" line is present (the tick boundary
+      // fell before the "handled request" row was written).
+      const carried = collectBlockedSignatures([
+        JSON.stringify({ ts, msg: 'request blocked', plugin: 'caddy-blocker', client_ip: '3.3.3.3', method: 'GET', uri: '/x' }),
+      ]);
+      const handled = JSON.stringify({
+        ts, msg: 'handled request', status: 403,
+        request: { client_ip: '3.3.3.3', method: 'GET', uri: '/x', host: 'x.com' },
+      });
+      // Pass 2: the handled request consumes the carried-over signature.
+      const pass2 = collectBlockedSignatures([], carried);
+      expect(parseLine(handled, pass2)!.is_blocked).toBe(true);
+    });
+  });
+
+  describe('pruneBlockedSignatures', () => {
+    it('drops signatures older than the carry-over window, keeps recent ones', () => {
+      const now = 1700001000;
+      const blocked = new Map<string, number>([
+        [`${now - 10}|1.1.1.1|GET|/recent`, 1],   // within 120s window
+        [`${now - 500}|2.2.2.2|GET|/stale`, 1],    // older than window
+      ]);
+      pruneBlockedSignatures(blocked, now);
+      expect(blocked.has(`${now - 10}|1.1.1.1|GET|/recent`)).toBe(true);
+      expect(blocked.has(`${now - 500}|2.2.2.2|GET|/stale`)).toBe(false);
+    });
+
+    it('drops fully-consumed (count <= 0) entries', () => {
+      const now = 1700001000;
+      const blocked = new Map<string, number>([[`${now}|1.1.1.1|GET|/done`, 0]]);
+      pruneBlockedSignatures(blocked, now);
+      expect(blocked.size).toBe(0);
     });
   });
 });
