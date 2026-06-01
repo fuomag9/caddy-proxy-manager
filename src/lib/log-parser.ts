@@ -81,23 +81,36 @@ interface CaddyLogEntry {
   };
 }
 
-// Build a set of signatures from caddy-blocker's "request blocked" entries so we
+type BlockedSignatures = Set<string> | Map<string, number>;
+
+function consumeBlockedSignature(blocked: BlockedSignatures, key: string): boolean {
+  if (blocked instanceof Map) {
+    const count = blocked.get(key) ?? 0;
+    if (count <= 0) return false;
+    if (count === 1) blocked.delete(key);
+    else blocked.set(key, count - 1);
+    return true;
+  }
+  return blocked.has(key);
+}
+
+// Build counted signatures from caddy-blocker's "request blocked" entries so we
 // can mark the corresponding "handled request" rows correctly instead of using
 // status === 403 (which would also catch legitimate upstream 403s).
-export function collectBlockedSignatures(lines: string[]): Set<string> {
-  const blocked = new Set<string>();
+export function collectBlockedSignatures(lines: string[]): Map<string, number> {
+  const blocked = new Map<string, number>();
   for (const line of lines) {
     let entry: CaddyLogEntry;
     try { entry = JSON.parse(line.trim()); } catch { continue; }
     if (entry.msg !== 'request blocked' || entry.plugin !== 'caddy-blocker') continue;
     const ts = Math.floor(entry.ts ?? 0);
     const key = `${ts}|${entry.client_ip ?? ''}|${entry.method ?? ''}|${entry.uri ?? ''}`;
-    blocked.add(key);
+    blocked.set(key, (blocked.get(key) ?? 0) + 1);
   }
   return blocked;
 }
 
-export function parseLine(line: string, blocked: Set<string>): TrafficEventRow | null {
+export function parseLine(line: string, blocked: BlockedSignatures): TrafficEventRow | null {
   let entry: CaddyLogEntry;
   try {
     entry = JSON.parse(line);
@@ -128,7 +141,7 @@ export function parseLine(line: string, blocked: Set<string>): TrafficEventRow |
     proto: req.proto ?? '',
     bytes_sent: entry.size ?? 0,
     user_agent: req.headers?.['User-Agent']?.[0] ?? '',
-    is_blocked: blocked.has(key),
+    is_blocked: consumeBlockedSignature(blocked, key),
   };
 }
 

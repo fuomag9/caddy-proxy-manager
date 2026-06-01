@@ -160,6 +160,22 @@ describe('log-parser', () => {
       expect(result!.is_blocked).toBe(true);
     });
 
+    it('consumes collected blocked signatures once to avoid over-marking duplicates', () => {
+      const ts = 1700000200;
+      const blocked = collectBlockedSignatures([
+        JSON.stringify({ ts, msg: 'request blocked', plugin: 'caddy-blocker', client_ip: '1.2.3.4', method: 'GET', uri: '/repeat' }),
+      ]);
+      const entry = JSON.stringify({
+        ts,
+        msg: 'handled request',
+        status: 200,
+        request: { client_ip: '1.2.3.4', method: 'GET', uri: '/repeat', host: 'x.com' },
+      });
+
+      expect(parseLine(entry, blocked)!.is_blocked).toBe(true);
+      expect(parseLine(entry, blocked)!.is_blocked).toBe(false);
+    });
+
     it('uses remote_ip as fallback when client_ip is missing', () => {
       const entry = JSON.stringify({
         ts: 1700000300,

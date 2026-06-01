@@ -413,7 +413,7 @@ export default function AnalyticsClient() {
   const timelineLabels = timeline.map(b => formatTs(b.ts, rangeSeconds));
   const timelineOptions: ApexOptions = {
     ...DARK_CHART,
-    chart: { ...DARK_CHART.chart, type: 'area', stacked: true, id: 'timeline' },
+    chart: { ...DARK_CHART.chart, type: 'area', stacked: false, id: 'timeline' },
     colors: ['#3b82f6', '#ef4444'],
     fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.45, opacityTo: 0.05 } },
     stroke: { curve: 'smooth', width: 2 },
@@ -600,7 +600,8 @@ export default function AnalyticsClient() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-muted-foreground">Country</TableHead>
-                      <TableHead className="text-muted-foreground text-right">Requests</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Total</TableHead>
+                      <TableHead className="text-muted-foreground text-right">Allowed</TableHead>
                       <TableHead className="text-muted-foreground text-right">WAF</TableHead>
                       <TableHead className="text-muted-foreground text-right">Blocked</TableHead>
                     </TableRow>
@@ -608,6 +609,7 @@ export default function AnalyticsClient() {
                   <TableBody>
                     {countries.slice(0, 10).map(c => {
                       const wafCount = wafByCountry.get(c.countryCode) ?? 0;
+                      const allowedCount = Math.max(0, c.total - c.blocked);
                       return (
                         <TableRow
                           key={c.countryCode}
@@ -624,6 +626,7 @@ export default function AnalyticsClient() {
                             </div>
                           </TableCell>
                           <TableCell className="text-right text-sm">{c.total.toLocaleString()}</TableCell>
+                          <TableCell className="text-right text-sm">{allowedCount.toLocaleString()}</TableCell>
                           <TableCell className={cn('text-right text-sm', wafCount > 0 ? 'text-yellow-400' : 'text-muted-foreground')}>
                             {wafCount > 0 ? wafCount.toLocaleString() : '—'}
                           </TableCell>
