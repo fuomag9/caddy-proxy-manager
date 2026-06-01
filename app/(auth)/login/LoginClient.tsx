@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { authClient } from "@/src/lib/auth-client";
+import { useBasePath } from "@/src/hooks/useBasePath";
 import { LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ interface LoginClientProps {
 
 export default function LoginClient({ enabledProviders = [] }: LoginClientProps) {
   const router = useRouter();
+  const basePath = useBasePath();
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginPending, setLoginPending] = useState(false);
   const [oauthPending, setOauthPending] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
       return;
     }
 
-    router.replace("/");
+    router.replace(`${basePath}/`);
     router.refresh();
   };
 
@@ -65,7 +67,7 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
     setLoginError(null);
     setOauthPending(providerId);
     try {
-      await authClient.signIn.social({ provider: providerId, callbackURL: "/" });
+      await authClient.signIn.social({ provider: providerId, callbackURL: `${basePath}/` });
     } catch {
       setLoginError("Failed to sign in with OAuth");
       setOauthPending(null);

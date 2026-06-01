@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/src/lib/auth-client";
+import { useBasePath } from "@/src/hooks/useBasePath";
 import { Camera, Check, Clock, Copy, Key, Link, LogIn, Lock, Plus, Trash2, Unlink, User, AlertTriangle } from "lucide-react";
 import type { ApiToken } from "@/lib/models/api-tokens";
 import { createApiTokenAction, deleteApiTokenAction } from "../api-tokens/actions";
@@ -40,6 +41,7 @@ interface ProfileClientProps {
 }
 
 export default function ProfileClient({ user, enabledProviders, apiTokens }: ProfileClientProps) {
+  const basePath = useBasePath();
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -158,7 +160,7 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
       }
 
       // Now initiate OAuth flow
-      await authClient.signIn.social({ provider: providerId, callbackURL: "/profile" });
+      await authClient.signIn.social({ provider: providerId, callbackURL: `${basePath}/profile` });
     } catch {
       setError("An error occurred while linking OAuth");
       setLoading(false);

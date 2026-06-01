@@ -12,6 +12,7 @@ import { auth } from "@/src/lib/auth";
  */
 
 const isDev = process.env.NODE_ENV === "development";
+const BASE_PATH = (process.env.BASE_PATH ?? "").replace(/\/$/, "");
 
 /**
  * Build a nonce-based Content-Security-Policy per request.
@@ -40,13 +41,13 @@ export default async function middleware(req: NextRequest) {
 
   // Allow public routes
   if (
-    pathname === "/login" ||
-    pathname === "/portal" ||
-    pathname.startsWith("/api/auth") ||
-    pathname === "/api/health" ||
-    pathname === "/api/instances/sync" ||
-    pathname.startsWith("/api/v1/") ||
-    pathname.startsWith("/api/forward-auth/")
+    pathname === `${BASE_PATH}/login` ||
+    pathname === `${BASE_PATH}/portal` ||
+    pathname.startsWith(`${BASE_PATH}/api/auth`) ||
+    pathname === `${BASE_PATH}/api/health` ||
+    pathname === `${BASE_PATH}/api/instances/sync` ||
+    pathname.startsWith(`${BASE_PATH}/api/v1/`) ||
+    pathname.startsWith(`${BASE_PATH}/api/forward-auth/`)
   ) {
     return NextResponse.next();
   }
@@ -56,9 +57,8 @@ export default async function middleware(req: NextRequest) {
   const isAuthenticated = !!session?.user;
 
   // Redirect unauthenticated users to login
-  if (!isAuthenticated && !pathname.startsWith("/login")) {
-    const loginUrl = new URL("/login", req.url);
-    return NextResponse.redirect(loginUrl);
+  if (!isAuthenticated) {
+    return NextResponse.redirect(new URL(`${BASE_PATH}/login`, req.url));
   }
 
   // Generate per-request nonce for CSP

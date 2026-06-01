@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/src/lib/auth-client";
+import { useBasePath } from "@/src/hooks/useBasePath";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,7 @@ export default function LinkAccountClient({
   linkingId
 }: LinkAccountClientProps) {
   const router = useRouter();
+  const basePath = useBasePath();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -45,7 +47,7 @@ export default function LinkAccountClient({
         return;
       }
 
-      await authClient.signIn.social({ provider, callbackURL: "/" });
+      await authClient.signIn.social({ provider, callbackURL: `${basePath}/` });
     } catch {
       setError("An error occurred while linking your account");
       setLoading(false);
@@ -53,7 +55,7 @@ export default function LinkAccountClient({
   };
 
   const handleUsePassword = () => {
-    router.push("/login");
+    router.push(`${basePath}/login`);
   };
 
   const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);

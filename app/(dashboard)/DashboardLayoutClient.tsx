@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { useBasePath } from "@/src/hooks/useBasePath";
 
 type User = {
   id: string;
@@ -60,6 +61,7 @@ function NavContent({ pathname, user, onNavigate }: {
   onNavigate?: () => void;
 }) {
   const router = useRouter();
+  const basePath = useBasePath();
   const isAdmin = user.role === "admin";
   const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
@@ -109,7 +111,7 @@ function NavContent({ pathname, user, onNavigate }: {
           <Button
             variant="ghost"
             className="flex-1 justify-start gap-3 px-2 h-auto py-2 min-w-0"
-            onClick={() => { router.push("/profile"); onNavigate?.(); }}
+            onClick={() => { router.push(`${basePath}/profile`); onNavigate?.(); }}
           >
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarImage src={user.image ?? undefined} alt={user.name ?? "User"} />
@@ -146,6 +148,7 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const basePath = useBasePath();
 
   return (
     <div className="flex min-h-screen">
@@ -162,7 +165,7 @@ export default function DashboardLayoutClient({ user, children }: { user: User; 
         <span className="font-semibold text-sm">Caddy Proxy Manager</span>
         <div className="flex items-center gap-1">
           <ThemeToggle />
-          <Button variant="ghost" size="icon" aria-label="Go to profile" onClick={() => router.push("/profile")}>
+          <Button variant="ghost" size="icon" aria-label="Go to profile" onClick={() => router.push(`${basePath}/profile`)}>
             <Avatar className="h-6 w-6">
               <AvatarImage src={user.image ?? undefined} />
               <AvatarFallback className="text-[10px] bg-primary text-primary-foreground">

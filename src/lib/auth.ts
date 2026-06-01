@@ -89,7 +89,8 @@ export async function requireUser(): Promise<Session> {
   const session = await auth();
   if (!session?.user) {
     const { redirect } = await import("next/navigation");
-    redirect("/login");
+    const { config } = await import("./config");
+    redirect(`${config.basePath}/login`);
     throw new Error("Redirecting to login"); // TypeScript doesn't know redirect() never returns
   }
   return session;

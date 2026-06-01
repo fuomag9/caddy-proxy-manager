@@ -11,5 +11,5 @@ export async function POST(request: NextRequest) {
   if (originCheck) return originCheck;
 
   await getAuth().api.signOut({ headers: await headers() });
-  return NextResponse.redirect(new URL("/login", config.baseUrl));
+  return NextResponse.redirect(new URL(`${config.basePath}/login`, config.baseUrl));
 }

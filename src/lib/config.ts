@@ -161,6 +161,7 @@ export const config = {
   },
   caddyApiUrl: process.env.CADDY_API_URL ?? DEFAULT_CADDY_URL,
   baseUrl: process.env.BASE_URL ?? "http://localhost:3000",
+  basePath: (process.env.BASE_PATH ?? "").replace(/\/$/, ""),
   get adminUsername() {
     return getAdminCredentials().username;
   },

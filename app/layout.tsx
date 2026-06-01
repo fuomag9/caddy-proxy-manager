@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import "./globals.css";
 import Providers from "./providers";
+import { config } from "@/src/lib/config";
 
 function getNonce(csp: string | null): string | undefined {
   if (!csp) return undefined;
@@ -16,7 +17,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Providers nonce={nonce}>{children}</Providers>
+        <Providers nonce={nonce} basePath={config.basePath}>{children}</Providers>
       </body>
     </html>
   );
