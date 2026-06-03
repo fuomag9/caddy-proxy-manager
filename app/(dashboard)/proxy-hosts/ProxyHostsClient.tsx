@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Globe, MoreHorizontal, ArrowRight, Shield, Bug, MapPin, Scale, KeyRound, UserCheck, CornerRightDown, Replace, Ban, GitBranch, ShieldCheck } from "lucide-react";
+import { Globe, MoreHorizontal, ArrowRight, Shield, Bug, MapPin, Scale, KeyRound, UserCheck, CornerRightDown, Replace, Ban, GitBranch, ShieldCheck, LogIn } from "lucide-react";
 import type { AccessList } from "@/lib/models/access-lists";
 import type { Certificate } from "@/lib/models/certificates";
 import type { ProxyHost } from "@/lib/models/proxy-hosts";
@@ -144,6 +144,11 @@ export default function ProxyHostsClient({ hosts, certificates, accessLists, caC
           host.authentik?.enabled && (
             <Badge key="authentik" variant="secondary" className="text-[10px] px-1.5 py-0">
               <UserCheck className="h-2.5 w-2.5 mr-0.5" />Authentik
+            </Badge>
+          ),
+          host.cpmForwardAuth?.enabled && (
+            <Badge key="forward-auth" variant="secondary" className="text-[10px] px-1.5 py-0">
+              <LogIn className="h-2.5 w-2.5 mr-0.5" />Forward Auth
             </Badge>
           ),
           host.waf?.enabled && (

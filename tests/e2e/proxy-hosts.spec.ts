@@ -341,4 +341,56 @@ test.describe('Proxy Hosts', () => {
     await expect(page.getByRole('dialog')).not.toBeVisible({ timeout: 10000 });
     await expect(page.locator('tbody').getByText('Host To Delete')).not.toBeVisible({ timeout: 5000 });
   });
+
+  /**
+   * The Features column renders a "Forward Auth" badge when a host has CPM
+   * forward auth enabled. This badge was previously missing even though the
+   * feature was fully supported by the data model and edit dialog.
+   */
+  test('Forward Auth feature badge shows for hosts with CPM forward auth enabled', async ({ page }) => {
+    const origin = new URL(page.url()).origin;
+
+    // Host WITH forward auth enabled. Note: names deliberately avoid the
+    // substring "Forward Auth" so the badge assertions match the badge text
+    // (asserted with exact:true) and never the host's name cell.
+    const withResp = await page.request.post(API_PROXY_HOSTS, {
+      headers: { Origin: origin },
+      data: {
+        name: 'FwdAuth Badge Host',
+        domains: ['fwdauth-badge.local'],
+        upstreams: ['localhost:9777'],
+        cpmForwardAuth: { enabled: true },
+      },
+    });
+    expect(withResp.ok()).toBeTruthy();
+    const withHost = await withResp.json() as { id: number; cpmForwardAuth: { enabled: boolean } | null };
+    expect(withHost.cpmForwardAuth?.enabled).toBe(true);
+
+    // Host WITHOUT forward auth — used to confirm the badge is conditional
+    const withoutResp = await page.request.post(API_PROXY_HOSTS, {
+      headers: { Origin: origin },
+      data: {
+        name: 'Plain Proxy Host',
+        domains: ['plain-proxy.local'],
+        upstreams: ['localhost:9778'],
+      },
+    });
+    expect(withoutResp.ok()).toBeTruthy();
+    const withoutHost = await withoutResp.json() as { id: number };
+
+    try {
+      await page.reload();
+
+      const enabledRow = page.locator('tr', { hasText: 'FwdAuth Badge Host' });
+      await expect(enabledRow.getByText('Forward Auth', { exact: true })).toBeVisible({ timeout: 10000 });
+
+      // The host without forward auth must NOT render the badge.
+      const disabledRow = page.locator('tr', { hasText: 'Plain Proxy Host' });
+      await expect(disabledRow).toBeVisible({ timeout: 10000 });
+      await expect(disabledRow.getByText('Forward Auth', { exact: true })).toHaveCount(0);
+    } finally {
+      await page.request.delete(`${API_PROXY_HOSTS}/${withHost.id}`, { headers: { Origin: origin } });
+      await page.request.delete(`${API_PROXY_HOSTS}/${withoutHost.id}`, { headers: { Origin: origin } });
+    }
+  });
 });

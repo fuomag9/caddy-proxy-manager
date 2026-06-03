@@ -185,7 +185,7 @@ export async function readLines(startOffset: number, file: string = LOG_FILE): P
     });
     stream.on('data', (chunk: Buffer) => {
       totalBytes += chunk.length;
-      let buf = pending.length ? Buffer.concat([pending, chunk]) : chunk;
+      const buf = pending.length ? Buffer.concat([pending, chunk]) : chunk;
       let start = 0;
       let nl: number;
       while ((nl = buf.indexOf(0x0a, start)) !== -1) {

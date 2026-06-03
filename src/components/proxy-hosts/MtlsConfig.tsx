@@ -38,7 +38,11 @@ export function MtlsFields({ value, caCertificates, issuedClientCerts = [], prox
   const [editRule, setEditRule] = useState<MtlsAccessRule | null>(null);
 
   const isEditMode = !!proxyHostId;
-  const activeCerts = issuedClientCerts.filter(c => !c.revokedAt);
+  // Only consider certs that are not revoked AND whose issuing CA still exists.
+  // Deleting a CA should remove its issued certs, but legacy/orphaned rows must
+  // never resurface as selectable here.
+  const knownCaIds = new Set(caCertificates.map(c => c.id));
+  const activeCerts = issuedClientCerts.filter(c => !c.revokedAt && knownCaIds.has(c.caCertificateId));
 
   const certsByCA = new Map<number, IssuedClientCertificate[]>();
   for (const cert of activeCerts) {
