@@ -200,6 +200,17 @@ export const DNS_PROVIDERS: DnsProviderDefinition[] = [
       { key: "api_token", label: "API Token", type: "password", required: true },
     ],
   },
+  {
+    name: "spaceship",
+    displayName: "Spaceship",
+    description: "Spaceship DNS API",
+    docsUrl: "https://github.com/caddy-dns/spaceship",
+    modulePath: "github.com/caddy-dns/spaceship",
+    fields: [
+      { key: "api_key", label: "API Key", type: "password", required: true },
+      { key: "api_secret", label: "API Secret", type: "password", required: true },
+    ],
+  },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

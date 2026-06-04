@@ -29,6 +29,7 @@ RUN GOOS=$TARGETOS GOARCH=$TARGETARCH xcaddy build master \
     --with github.com/caddy-dns/ionos \
     --with github.com/caddy-dns/linode \
     --with github.com/caddy-dns/njalla \
+    --with github.com/caddy-dns/spaceship \
     --with github.com/mholt/caddy-l4 \
     --with github.com/fuomag9/caddy-blocker-plugin \
     --with github.com/corazawaf/coraza-caddy/v2 \
