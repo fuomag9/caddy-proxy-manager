@@ -90,6 +90,7 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `OAUTH_USERINFO_URL` | Optional OAuth userinfo endpoint override | Auto-discovered from `OAUTH_ISSUER` | No |
 | `OAUTH_ALLOW_AUTO_LINKING` | Allow auto-linking OAuth identities to existing users | `false` | No |
 | `AUTH_TRUST_HOST` | Trust the Host header for URL construction (only behind proxies that rewrite Host) | `false` | No |
+| `AUTH_ALLOW_SELF_REGISTRATION` | Allow public email/password account registration | `false` | No |
 | `AUTH_RATE_LIMIT_ENABLED` | Enable Better Auth rate limiting | `true` | No |
 | `AUTH_RATE_LIMIT_WINDOW` | Rate limit window in seconds | `60` | No |
 | `AUTH_RATE_LIMIT_MAX` | Max requests per window | `5` | No |

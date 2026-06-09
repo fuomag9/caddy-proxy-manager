@@ -42,6 +42,9 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:?ERROR - ADMIN_USERNAME is required}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ERROR - ADMIN_PASSWORD is required}
 
+      # Email/password self-registration is disabled unless explicitly enabled
+      AUTH_ALLOW_SELF_REGISTRATION: ${AUTH_ALLOW_SELF_REGISTRATION:-false}
+
       # OAuth2/OIDC Authentication (Optional - works with Authentik, Authelia, Keycloak, etc.)
       OAUTH_ENABLED: ${OAUTH_ENABLED:-false}
       OAUTH_PROVIDER_NAME: ${OAUTH_PROVIDER_NAME:-OAuth2}

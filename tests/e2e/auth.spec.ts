@@ -70,4 +70,55 @@ test.describe('Authentication', () => {
     // 422 = username rejected by validator → bug
     expect(res.status()).toBe(401);
   });
+
+  test('email self-registration is disabled by default', async ({ page }) => {
+    const res = await page.request.post('http://localhost:3000/api/auth/sign-up/email', {
+      data: {
+        name: 'Self Registration Test',
+        email: `self-registration-${Date.now()}@test.invalid`,
+        password: 'SelfRegistration2026!',
+      },
+      headers: { 'Content-Type': 'application/json', 'Origin': 'http://localhost:3000' },
+    });
+
+    expect(res.status()).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      code: 'EMAIL_PASSWORD_SIGN_UP_DISABLED',
+    });
+  });
+
+  test('email self-registration can be enabled with AUTH_ALLOW_SELF_REGISTRATION', async ({ playwright }) => {
+    const request = await playwright.request.newContext({
+      baseURL: 'http://localhost:3001',
+      extraHTTPHeaders: { Origin: 'http://localhost:3001' },
+    });
+    const email = `self-registration-enabled-${Date.now()}@test.invalid`;
+
+    try {
+      const signup = await request.post('/api/auth/sign-up/email', {
+        data: {
+          name: 'Enabled Self Registration Test',
+          email,
+          password: 'SelfRegistration2026!',
+        },
+      });
+
+      expect(signup.status()).toBe(200);
+      await expect(signup.json()).resolves.toMatchObject({
+        user: {
+          email,
+          role: 'user',
+          status: 'active',
+        },
+      });
+
+      const session = await request.get('/api/auth/get-session');
+      expect(session.status()).toBe(200);
+      await expect(session.json()).resolves.toMatchObject({
+        user: { email },
+      });
+    } finally {
+      await request.dispose();
+    }
+  });
 });

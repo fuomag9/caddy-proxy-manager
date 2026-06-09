@@ -117,6 +117,7 @@ function createAuth(): any {
     verification: { modelName: "verifications" },
     emailAndPassword: {
       enabled: true,
+      disableSignUp: !config.auth.allowSelfRegistration,
       password: {
         async hash(password: string) {
           const bcrypt = await import("bcryptjs");

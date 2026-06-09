@@ -167,6 +167,9 @@ export const config = {
   get adminPassword() {
     return getAdminCredentials().password;
   },
+  auth: {
+    allowSelfRegistration: process.env.AUTH_ALLOW_SELF_REGISTRATION === "true",
+  },
   oauth: {
     enabled: process.env.OAUTH_ENABLED === "true",
     providerName: process.env.OAUTH_PROVIDER_NAME ?? "OAuth2",
