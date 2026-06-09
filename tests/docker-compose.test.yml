@@ -19,6 +19,39 @@ services:
       OAUTH_ALLOW_AUTO_LINKING: "true"
       # Disable Better Auth rate limiting for E2E tests (many rapid auth requests)
       AUTH_RATE_LIMIT_ENABLED: "false"
+
+  web-registration-enabled:
+    container_name: caddy-proxy-manager-web-registration-enabled
+    image: ghcr.io/fuomag9/caddy-proxy-manager-web:latest
+    ports:
+      - "3001:3000"
+    environment:
+      NODE_ENV: production
+      SESSION_SECRET: "test-registration-session-secret-32chars!xxxY"
+      ADMIN_USERNAME: testadmin
+      ADMIN_PASSWORD: "TestPassword2026!"
+      BASE_URL: http://localhost:3001
+      NEXTAUTH_URL: http://localhost:3001
+      DATABASE_PATH: /app/data/caddy-proxy-manager.db
+      DATABASE_URL: file:/app/data/caddy-proxy-manager.db
+      CADDY_API_URL: http://caddy:2019
+      AUTH_ALLOW_SELF_REGISTRATION: "true"
+      AUTH_RATE_LIMIT_ENABLED: "false"
+      OAUTH_ENABLED: "false"
+      CLICKHOUSE_PASSWORD: ""
+    volumes:
+      - caddy-manager-registration-data:/app/data
+    depends_on:
+      caddy:
+        condition: service_healthy
+    networks:
+      - caddy-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
   clickhouse:
     environment:
       CLICKHOUSE_PASSWORD: "test-clickhouse-password-2026"
@@ -91,6 +124,8 @@ services:
 volumes:
   caddy-manager-data:
     name: caddy-manager-data-test
+  caddy-manager-registration-data:
+    name: caddy-manager-registration-data-test
   caddy-data:
     name: caddy-data-test
   caddy-config:
