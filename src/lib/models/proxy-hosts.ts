@@ -319,6 +319,17 @@ function sanitizeMtlsMeta(meta: MtlsConfig | undefined): MtlsConfig | undefined 
     }
   }
 
+  // Reject enabling mTLS with no trust material at all. Such a config would
+  // otherwise fail open (no client_authentication block is emitted for the
+  // host). Note this cannot catch a role that is later emptied via revocation —
+  // the config still references a valid role — which is why Caddy config
+  // generation also fails closed for the zero-resolved-trust case.
+  if (!normalized.trusted_client_cert_ids && !normalized.trusted_role_ids && !normalized.ca_certificate_ids) {
+    throw new Error(
+      "mTLS is enabled but no trusted client certificates, roles, or CA certificates are selected. Select at least one or disable mTLS."
+    );
+  }
+
   return normalized;
 }
 

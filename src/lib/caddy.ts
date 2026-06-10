@@ -1294,6 +1294,27 @@ async function buildProxyRoutes(
           "X-CPM-User-Id"
         ];
 
+        // Security: strip any client-supplied CPM identity headers from the
+        // inbound request before it ever reaches the upstream. These headers
+        // are injected solely by CPM from the verify response; accepting them
+        // from the client would let a caller spoof their identity / group
+        // membership to upstream apps. This must run on EVERY route — protected,
+        // unprotected catch-all, excluded, and location — because on routes
+        // without the auth handler nothing else would remove them, and on
+        // authenticated routes the copy step below only overwrites a header
+        // when the verify response value is non-empty (e.g. a user in no group
+        // returns an empty X-CPM-Groups, which would otherwise leave the
+        // client's forged value intact).
+        const cpmStripHeadersHandler: Record<string, unknown> = {
+          handler: "headers",
+          request: {
+            delete: [...CPM_COPY_HEADERS]
+          }
+        };
+        // Prepend the strip handler to the shared handler chain for all CPM
+        // forward-auth routes.
+        const cpmHandlers = [cpmStripHeadersHandler, ...handlers];
+
         // Build handle_response routes for copying user headers on 2xx
         const cpmHandleResponseRoutes: Record<string, unknown>[] = [
           { handle: [{ handler: "vars" }] }
@@ -1397,7 +1418,7 @@ async function buildProxyRoutes(
 
             // Protected paths
             for (const protectedPath of cpmForwardAuth.protected_paths) {
-              const protectedHandlers: Record<string, unknown>[] = [...handlers];
+              const protectedHandlers: Record<string, unknown>[] = [...cpmHandlers];
               const protectedReverseProxy = JSON.parse(JSON.stringify(reverseProxyHandler));
               protectedHandlers.push(cpmForwardAuthHandler);
               protectedHandlers.push(protectedReverseProxy);
@@ -1419,7 +1440,7 @@ async function buildProxyRoutes(
               if (!safePath) continue;
               hostRoutes.push({
                 match: [{ host: domainGroup, path: [safePath] }],
-                handle: [...handlers, locationProxy],
+                handle: [...cpmHandlers, locationProxy],
                 terminal: true
               });
             }
@@ -1427,7 +1448,7 @@ async function buildProxyRoutes(
             // Unprotected catch-all
             hostRoutes.push({
               match: [{ host: domainGroup }],
-              handle: [...handlers, reverseProxyHandler],
+              handle: [...cpmHandlers, reverseProxyHandler],
               terminal: true
             });
           }
@@ -1444,7 +1465,7 @@ async function buildProxyRoutes(
             for (const excludedPath of cpmForwardAuth.excluded_paths) {
               hostRoutes.push({
                 match: [{ host: domainGroup, path: [excludedPath] }],
-                handle: [...handlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
+                handle: [...cpmHandlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
                 terminal: true
               });
             }
@@ -1459,7 +1480,7 @@ async function buildProxyRoutes(
               if (!safePath) continue;
               hostRoutes.push({
                 match: [{ host: domainGroup, path: [safePath] }],
-                handle: [...handlers, cpmForwardAuthHandler, locationProxy],
+                handle: [...cpmHandlers, cpmForwardAuthHandler, locationProxy],
                 terminal: true
               });
             }
@@ -1467,7 +1488,7 @@ async function buildProxyRoutes(
             // Catch-all with auth (everything not excluded)
             hostRoutes.push({
               match: [{ host: domainGroup }],
-              handle: [...handlers, cpmForwardAuthHandler, reverseProxyHandler],
+              handle: [...cpmHandlers, cpmForwardAuthHandler, reverseProxyHandler],
               terminal: true
             });
           }
@@ -1490,7 +1511,7 @@ async function buildProxyRoutes(
               if (!safePath) continue;
               hostRoutes.push({
                 match: [{ host: domainGroup, path: [safePath] }],
-                handle: [...handlers, cpmForwardAuthHandler, locationProxy],
+                handle: [...cpmHandlers, cpmForwardAuthHandler, locationProxy],
                 terminal: true
               });
             }
@@ -1498,7 +1519,7 @@ async function buildProxyRoutes(
             // Main route with forward auth
             hostRoutes.push({
               match: [{ host: domainGroup }],
-              handle: [...handlers, cpmForwardAuthHandler, reverseProxyHandler],
+              handle: [...cpmHandlers, cpmForwardAuthHandler, reverseProxyHandler],
               terminal: true
             });
           }
@@ -2170,7 +2191,7 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
   return servers;
 }
 
-async function buildCaddyDocument() {
+export async function buildCaddyDocument() {
   const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows, allIssuedCaCertIds, allIssuedCertCaMap] = await Promise.all([
     db
       .select({
@@ -2346,24 +2367,46 @@ async function buildCaddyDocument() {
       if (derivedCaIds.size === 0) {
         // All referenced certs are revoked — derive CAs from the full cert map
         // (including revoked) so the domain stays in mTlsDomainMap and gets a
-        // fail-closed mTLS policy via buildClientAuthentication.
+        // fail-closed mTLS policy via buildClientAuthentication. If none can be
+        // derived (e.g. the cert rows were deleted), fall through with an empty
+        // CA set rather than `continue` — leaving the domain in the map forces a
+        // deny-all/drop policy instead of silently failing open.
         for (const certId of allCertIds) {
           const caId = certIdToCaId.get(certId);
           if (caId !== undefined) derivedCaIds.add(caId);
         }
-        if (derivedCaIds.size === 0) continue;
       }
       const caIdArr = Array.from(derivedCaIds);
       for (const domain of domains) {
         mTlsDomainMap.set(domain, caIdArr);
         if (leafPems.length > 0) {
           mTlsDomainLeafOverride.set(domain, leafPems);
+        } else {
+          // No active leaf cert resolved (all revoked / deleted). Optional
+          // ("request") mode would accept ANY presented cert without CA
+          // verification, so force require_and_verify — with an empty or
+          // CA-only trust set this denies every client (fail closed) instead of
+          // leaving the backend reachable.
+          mTlsOptionalAuthDomains.delete(domain);
         }
       }
     } else if (meta.mtls.ca_certificate_ids?.length) {
       // Legacy model: trust entire CAs (backward compat)
       for (const domain of domains) {
         mTlsDomainMap.set(domain, meta.mtls.ca_certificate_ids);
+      }
+    } else {
+      // mTLS is enabled but no trust resolved — e.g. trust is role-only and
+      // every cert in those roles was revoked or the role is empty, or nothing
+      // was selected — and there is no legacy CA trust. FAIL CLOSED: keep the
+      // domain in the mTLS map with an empty CA set (buildClientAuthentication
+      // returns null → buildTlsConnectionPolicies emits a drop-all policy) and
+      // force require_and_verify so even protected/excluded-path hosts reject
+      // all connections rather than silently serving the backend with no client
+      // certificate required.
+      for (const domain of domains) {
+        mTlsDomainMap.set(domain, []);
+        mTlsOptionalAuthDomains.delete(domain);
       }
     }
   }
