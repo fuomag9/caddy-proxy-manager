@@ -18,9 +18,46 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/src/lib/auth-client";
-import { Camera, Check, Clock, Copy, Key, Link, LogIn, Lock, Plus, Trash2, Unlink, User, AlertTriangle } from "lucide-react";
+import { Camera, Check, Clock, Copy, Key, Link, LogIn, Lock, LogOut, Monitor, Plus, Trash2, Unlink, User, AlertTriangle } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import type { ApiToken } from "@/lib/models/api-tokens";
 import { createApiTokenAction, deleteApiTokenAction } from "../api-tokens/actions";
+import { revokeSessionAction, revokeOtherSessionsAction } from "./session-actions";
+
+interface ActiveSession {
+  id: number;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  current: boolean;
+}
+
+/** Best-effort friendly device label from a User-Agent string. */
+function describeDevice(ua: string | null): string {
+  if (!ua) return "Unknown device";
+  const browser = /Edg\//.test(ua) ? "Edge"
+    : /Chrome\//.test(ua) ? "Chrome"
+    : /Firefox\//.test(ua) ? "Firefox"
+    : /Safari\//.test(ua) ? "Safari"
+    : "Browser";
+  const os = /Windows/.test(ua) ? "Windows"
+    : /Mac OS X|Macintosh/.test(ua) ? "macOS"
+    : /Android/.test(ua) ? "Android"
+    : /iPhone|iPad|iOS/.test(ua) ? "iOS"
+    : /Linux/.test(ua) ? "Linux"
+    : "";
+  return os ? `${browser} on ${os}` : browser;
+}
+
+function relativeTime(iso: string): string {
+  try {
+    return formatDistanceToNow(new Date(iso), { addSuffix: true });
+  } catch {
+    return iso;
+  }
+}
 
 interface UserData {
   id: number;
@@ -37,9 +74,10 @@ interface ProfileClientProps {
   user: UserData;
   enabledProviders: Array<{ id: string; name: string }>;
   apiTokens: ApiToken[];
+  sessions: ActiveSession[];
 }
 
-export default function ProfileClient({ user, enabledProviders, apiTokens }: ProfileClientProps) {
+export default function ProfileClient({ user, enabledProviders, apiTokens, sessions }: ProfileClientProps) {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -423,6 +461,75 @@ export default function ProfileClient({ user, enabledProviders, apiTokens }: Pro
                 </Button>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Active Sessions */}
+        <Card>
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Monitor className="h-5 w-5 text-primary" />
+                <h2 className="text-lg font-semibold">Active Sessions</h2>
+              </div>
+              {sessions.some((s) => !s.current) && (
+                <form action={revokeOtherSessionsAction}>
+                  <Button type="submit" variant="outline" size="sm" className="text-destructive border-destructive/40">
+                    <LogOut className="h-3.5 w-3.5 mr-1.5" />
+                    Sign out all other sessions
+                  </Button>
+                </form>
+              )}
+            </div>
+
+            <Separator />
+
+            <p className="text-sm text-muted-foreground">
+              Devices currently signed in to your account. Revoke any you don&apos;t recognise.
+            </p>
+
+            <div className="flex flex-col divide-y divide-border rounded-md border overflow-hidden">
+              {sessions.map((s) => (
+                <div key={s.id} className="flex items-center justify-between px-4 py-3 bg-muted/20">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{describeDevice(s.userAgent)}</p>
+                        {s.current && (
+                          <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                            This device
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          Signed in {relativeTime(s.createdAt)}
+                        </p>
+                        {s.ipAddress && (
+                          <p className="text-xs text-muted-foreground">IP {s.ipAddress}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground">Expires {formatDate(s.expiresAt)}</p>
+                      </div>
+                    </div>
+                  </div>
+                  {!s.current && (
+                    <form action={revokeSessionAction.bind(null, s.id)}>
+                      <Button
+                        type="submit"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        title="Revoke session"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </form>
+                  )}
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 

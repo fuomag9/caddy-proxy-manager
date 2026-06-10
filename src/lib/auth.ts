@@ -83,6 +83,23 @@ export async function getSession(): Promise<Session | null> {
 }
 
 /**
+ * Returns the DB id of the caller's current better-auth session, or null when
+ * there is no session-cookie auth (e.g. a Bearer-token API call). Used to mark
+ * the "current" session and to exclude it from "revoke other sessions".
+ */
+export async function getCurrentSessionId(req?: NextRequest): Promise<number | null> {
+  const hdrs = req ? req.headers : (await import("next/headers")).headers();
+  const resolvedHeaders = hdrs instanceof Promise ? await hdrs : hdrs;
+  try {
+    const result = await getAuth().api.getSession({ headers: resolvedHeaders });
+    const id = result?.session?.id;
+    return id != null ? Number(id) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Require authentication. Redirects to /login if not authenticated.
  */
 export async function requireUser(): Promise<Session> {

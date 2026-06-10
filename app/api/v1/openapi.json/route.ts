@@ -27,6 +27,7 @@ export const spec = {
     { name: "Forward Auth", description: "Forward auth sessions and per-host access control" },
     { name: "Audit Log", description: "Audit log" },
     { name: "Caddy", description: "Caddy server operations" },
+    { name: "Sessions", description: "Your active management-UI sessions" },
   ],
   paths: {
     // ── Tokens ──────────────────────────────────────────────────────
@@ -95,6 +96,74 @@ export const spec = {
         parameters: [{ $ref: "#/components/parameters/IdPath" }],
         responses: {
           "200": { $ref: "#/components/responses/Ok" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+
+    // ── Sessions ────────────────────────────────────────────────────
+    "/api/v1/sessions": {
+      get: {
+        tags: ["Sessions"],
+        summary: "List your active sessions",
+        operationId: "listSessions",
+        responses: {
+          "200": {
+            description: "Active sessions for the authenticated user",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      id: { type: "integer" },
+                      createdAt: { type: "string" },
+                      updatedAt: { type: "string" },
+                      expiresAt: { type: "string" },
+                      ipAddress: { type: "string", nullable: true },
+                      userAgent: { type: "string", nullable: true },
+                      current: { type: "boolean", description: "True for the session making this request" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+      delete: {
+        tags: ["Sessions"],
+        summary: "Revoke all of your other sessions",
+        operationId: "revokeOtherSessions",
+        responses: {
+          "200": {
+            description: "Count of revoked sessions",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { revoked: { type: "integer" } },
+                  required: ["revoked"],
+                },
+              },
+            },
+          },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/api/v1/sessions/{id}": {
+      delete: {
+        tags: ["Sessions"],
+        summary: "Revoke one of your sessions",
+        operationId: "revokeSession",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "400": { $ref: "#/components/responses/BadRequest" },
           "401": { $ref: "#/components/responses/Unauthorized" },
           "404": { $ref: "#/components/responses/NotFound" },
         },

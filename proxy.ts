@@ -48,7 +48,15 @@ export default async function middleware(req: NextRequest) {
     pathname.startsWith("/api/v1/") ||
     pathname.startsWith("/api/forward-auth/")
   ) {
-    return NextResponse.next();
+    const publicResponse = NextResponse.next();
+    // Anti-clickjacking for public pages (/login, /portal): the authenticated
+    // branch below sets the full security-header set, but public pages returned
+    // here previously carried none, leaving the login and forward-auth portal
+    // forms framable. Apply the framing protections to every public response.
+    publicResponse.headers.set("X-Frame-Options", "DENY");
+    publicResponse.headers.set("Content-Security-Policy", "frame-ancestors 'none'");
+    publicResponse.headers.set("X-Content-Type-Options", "nosniff");
+    return publicResponse;
   }
 
   // Check authentication for protected routes
