@@ -83,6 +83,21 @@ services:
       - "5556:5556"
     networks:
       - caddy-network
+  # Hostile mock OIDC provider for the OAuth role-injection (H3) test.
+  # Dex cannot emit custom claims, so this mock injects a `role: admin` claim
+  # into every issued token to verify the app never lets an IdP set privileged
+  # fields. Browser reaches it at localhost:5557; the web container reaches it at
+  # mock-oidc:8080 (which is also the token `iss`, matching the provider issuer).
+  mock-oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    environment:
+      JSON_CONFIG_PATH: /config.json
+    volumes:
+      - ./tests/mock-oidc/config.json:/config.json:ro
+    ports:
+      - "5557:8080"
+    networks:
+      - caddy-network
   # Lightweight echo server reachable by Caddy as "echo-server:8080".
   # Returns a fixed body so tests can assert the proxy routed the request.
   echo-server:

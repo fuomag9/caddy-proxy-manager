@@ -1,0 +1,22 @@
+{
+  "interactiveLogin": false,
+  "httpServer": "NettyWrapper",
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "requestMappings": [
+        {
+          "requestParam": "grant_type",
+          "match": "authorization_code",
+          "claims": {
+            "sub": "evil-oauth-user",
+            "email": "evil@idp.example",
+            "email_verified": true,
+            "name": "Evil OAuth User",
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  ]
+}

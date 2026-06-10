@@ -72,6 +72,24 @@ function loadProvidersSync(): GenericOAuthConfig[] {
   return cachedProviders;
 }
 
+/**
+ * Security: force privileged user fields to safe defaults on every
+ * better-auth-managed user creation (OAuth signup, and credential signup when
+ * enabled). better-auth's generic-OAuth signup spreads the raw IdP profile
+ * claims into the new user record (createOAuthUser({...restUserInfo})) and does
+ * NOT honour the `input:false` flags declared on these additionalFields, so
+ * without this a permissive or attacker-influenced IdP returning a `role` (or
+ * `status`) claim could self-provision an admin account.
+ *
+ * Admin-initiated user creation goes through models/user.ts (a direct insert
+ * that bypasses better-auth's database hooks), so legitimate role assignment is
+ * unaffected. `provider`/`subject` are informational, not access-control, and
+ * are intentionally left untouched.
+ */
+export function enforceSafeUserDefaults<T extends object>(user: T): T & { role: string; status: string } {
+  return { ...user, role: "user", status: "active" };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createAuth(): any {
   const oauthConfigs = loadProvidersSync();
@@ -130,6 +148,15 @@ function createAuth(): any {
       },
     },
     databaseHooks: {
+      user: {
+        create: {
+          // Never let an external IdP set privileged fields (role/status) on a
+          // newly federated user — see enforceSafeUserDefaults above.
+          before: async (user: Record<string, unknown>) => {
+            return { data: enforceSafeUserDefaults(user) };
+          },
+        },
+      },
       account: {
         create: {
           before: async (account) => {
