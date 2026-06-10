@@ -34,8 +34,10 @@ test.describe('Active session management', () => {
 
   test('lists sessions, marks the current one, and revoking another logs it out', async ({ page, browser }) => {
     // `page` carries the admin storageState (session #1). Create a second,
-    // independent session in a clean context.
-    const ctx2 = await browser.newContext();
+    // independent session in a CLEAN context. The empty storageState is
+    // required — browser.newContext() otherwise inherits the project's admin
+    // storageState, so /login would redirect to "/" instead of showing the form.
+    const ctx2 = await browser.newContext({ storageState: { cookies: [], origins: [] } });
     await loginViaUi(ctx2);
 
     try {

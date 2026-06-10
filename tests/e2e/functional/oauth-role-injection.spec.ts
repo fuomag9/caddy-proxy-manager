@@ -63,8 +63,10 @@ test.describe('OAuth — a hostile IdP cannot inject a privileged role', () => {
     let createdUserId: number | undefined;
     try {
       // 2. Complete an OAuth sign-in in a CLEAN context (no admin session), so
-      //    we exercise real federated signup, not the admin session.
-      const ctx = await browser.newContext();
+      //    we exercise real federated signup, not the admin session. The empty
+      //    storageState is required — browser.newContext() otherwise inherits
+      //    the project's admin storageState and /login redirects to "/".
+      const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
       const oauthPage = await ctx.newPage();
       try {
         await oauthPage.goto(`${BASE_URL}/login`);
