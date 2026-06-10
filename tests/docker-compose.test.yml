@@ -17,6 +17,10 @@ services:
       OAUTH_TOKEN_URL: http://dex:5556/dex/token
       OAUTH_USERINFO_URL: http://dex:5556/dex/userinfo
       OAUTH_ALLOW_AUTO_LINKING: "true"
+      # Allow OAuth sign-in to create new accounts — the OAuth e2e tests
+      # (forward-auth-oauth, oauth-role-injection) exercise federated signup.
+      # Closed by default in production (see config.auth.allowOauthRegistration).
+      AUTH_ALLOW_OAUTH_REGISTRATION: "true"
       # Disable Better Auth rate limiting for E2E tests (many rapid auth requests)
       AUTH_RATE_LIMIT_ENABLED: "false"
 

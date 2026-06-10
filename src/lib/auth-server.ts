@@ -12,13 +12,19 @@ import type { GenericOAuthConfig } from "better-auth/plugins";
 let cachedAuth: any = null;
 let cachedProviders: GenericOAuthConfig[] | null = null;
 
-function mapOAuthProvider(p: OAuthProvider): GenericOAuthConfig {
+export function mapOAuthProvider(p: OAuthProvider): GenericOAuthConfig {
   const cfg: GenericOAuthConfig = {
     providerId: p.id,
     clientId: p.clientId,
     clientSecret: p.clientSecret,
     scopes: p.scopes ? p.scopes.split(/[\s,]+/).filter(Boolean) : undefined,
     pkce: true,
+    // Security: do not let an OAuth sign-in implicitly create a brand-new
+    // account unless OAuth self-registration is explicitly enabled. Existing
+    // users and (where configured) account linking still work — only first-time
+    // auto-provisioning of an unknown identity is gated. Controlled by its own
+    // flag, independent of credential self-registration.
+    disableImplicitSignUp: !config.auth.allowOauthRegistration,
   };
   if (p.authorizationUrl) cfg.authorizationUrl = p.authorizationUrl;
   if (p.tokenUrl) cfg.tokenUrl = p.tokenUrl;

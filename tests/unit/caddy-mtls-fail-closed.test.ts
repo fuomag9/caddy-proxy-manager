@@ -162,4 +162,48 @@ describe('mTLS fail-closed when trust resolves to zero active certs', () => {
       expect(policy.client_authentication).toBeUndefined();
     }
   });
+
+  // M4: revoking the host's only directly-trusted cert must NOT broaden trust to
+  // other active certs of the same CA that were never assigned to the host.
+  it('does not fall back to whole-CA trust when the directly-trusted cert is revoked', async () => {
+    const now = new Date().toISOString();
+    const later = new Date(Date.now() + 86_400_000).toISOString();
+    await ctx.db.delete(schema.issuedClientCertificates).catch(() => {});
+    await ctx.db.delete(schema.caCertificates).catch(() => {});
+    await ctx.db.insert(schema.caCertificates).values({
+      id: 1, name: 'CA X', certificatePem: '-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----',
+      privateKeyPem: null, createdAt: now, updatedAt: now,
+    });
+    // Cert A: assigned to the host, then REVOKED.
+    await ctx.db.insert(schema.issuedClientCertificates).values({
+      id: 1, caCertificateId: 1, commonName: 'alice', serialNumber: '01', fingerprintSha256: 'aa',
+      certificatePem: '-----BEGIN CERTIFICATE-----\nA\n-----END CERTIFICATE-----',
+      validFrom: now, validTo: later, revokedAt: now, createdAt: now, updatedAt: now,
+    });
+    // Cert B: a sibling cert of the SAME CA, still active, never assigned here.
+    await ctx.db.insert(schema.issuedClientCertificates).values({
+      id: 2, caCertificateId: 1, commonName: 'bob', serialNumber: '02', fingerprintSha256: 'bb',
+      certificatePem: '-----BEGIN CERTIFICATE-----\nB\n-----END CERTIFICATE-----',
+      validFrom: now, validTo: later, revokedAt: null, createdAt: now, updatedAt: now,
+    });
+
+    const domain = 'm4.example.com';
+    await createProxyHost(
+      {
+        name: 'm4-host',
+        domains: [domain],
+        upstreams: ['10.0.0.5:8080'],
+        mtls: { enabled: true, trusted_client_cert_ids: [1] },
+      },
+      1
+    );
+
+    const doc = await buildCaddyDocument();
+    const policy = policyForDomain(doc, domain);
+
+    expect(policy, 'domain must still have a policy').toBeDefined();
+    // Must fail closed (drop) — NOT trust sibling cert B via a whole-CA fallback.
+    expect(policy!.drop).toBe(true);
+    expect(JSON.stringify(policy)).not.toContain('CERTIFICATE'); // no trusted leaf/CA certs leaked in
+  });
 });

@@ -44,7 +44,8 @@ vi.mock('better-auth/plugins', () => ({
   username: () => ({}),
 }));
 
-import { enforceSafeUserDefaults, getAuth } from '../../src/lib/auth-server';
+import { enforceSafeUserDefaults, getAuth, mapOAuthProvider } from '../../src/lib/auth-server';
+import type { OAuthProvider } from '../../src/lib/models/oauth-providers';
 
 describe('enforceSafeUserDefaults', () => {
   it('forces role and status to safe defaults', () => {
@@ -101,5 +102,32 @@ describe('better-auth user.create.before hook (wired into the real config)', () 
     expect(result.data.role).toBe('user');
     expect(result.data.status).toBe('active');
     expect(result.data.email).toBe('attacker@evil-idp.example'); // identity preserved
+  });
+});
+
+describe('mapOAuthProvider — OAuth self-registration gating (M2)', () => {
+  const sampleProvider: OAuthProvider = {
+    id: 'p1',
+    name: 'Some IdP',
+    type: 'oidc',
+    clientId: 'cid',
+    clientSecret: 'secret',
+    issuer: 'https://idp.example/',
+    authorizationUrl: null,
+    tokenUrl: null,
+    userinfoUrl: null,
+    scopes: 'openid email profile',
+    autoLink: false,
+    enabled: true,
+    source: 'ui',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('disables implicit signup by default (AUTH_ALLOW_OAUTH_REGISTRATION unset)', () => {
+    // The test env does not set AUTH_ALLOW_OAUTH_REGISTRATION, so OAuth signup
+    // must be closed: an unknown IdP identity cannot self-provision an account.
+    const cfg = mapOAuthProvider(sampleProvider);
+    expect(cfg.disableImplicitSignUp).toBe(true);
   });
 });

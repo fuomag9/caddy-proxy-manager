@@ -169,6 +169,9 @@ export const config = {
   },
   auth: {
     allowSelfRegistration: process.env.AUTH_ALLOW_SELF_REGISTRATION === "true",
+    // Separate from credential self-registration: gates whether an OAuth
+    // sign-in may implicitly create a brand-new account. Defaults to closed.
+    allowOauthRegistration: process.env.AUTH_ALLOW_OAUTH_REGISTRATION === "true",
   },
   oauth: {
     enabled: process.env.OAUTH_ENABLED === "true",

@@ -2192,7 +2192,7 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
 }
 
 export async function buildCaddyDocument() {
-  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows, allIssuedCaCertIds, allIssuedCertCaMap] = await Promise.all([
+  const [proxyHostRecords, certRows, accessListEntryRecords, caCertRows, issuedClientCertRows, allIssuedCaCertIds] = await Promise.all([
     db
       .select({
         id: proxyHosts.id,
@@ -2249,15 +2249,6 @@ export async function buildCaddyDocument() {
     // (trust any cert signed by that CA).
     db
       .selectDistinct({ caCertificateId: issuedClientCertificates.caCertificateId })
-      .from(issuedClientCertificates),
-    // All issued certs (including revoked) — cert ID → CA ID only.
-    // Used to derive CA IDs for the new trust model even when all certs are revoked,
-    // so the domain stays in mTlsDomainMap and gets a fail-closed mTLS policy.
-    db
-      .select({
-        id: issuedClientCertificates.id,
-        caCertificateId: issuedClientCertificates.caCertificateId
-      })
       .from(issuedClientCertificates)
   ]);
 
@@ -2314,8 +2305,6 @@ export async function buildCaddyDocument() {
 
   // Build a lookup: issued cert ID → { id, caCertificateId, certificatePem } (active only)
   const issuedCertById = new Map(issuedClientCertRows.map(r => [r.id, r]));
-  // Cert ID → CA ID for ALL certs (including revoked), used to derive CA IDs for fail-closed
-  const certIdToCaId = new Map(allIssuedCertCaMap.map(r => [r.id, r.caCertificateId]));
 
   // Resolve role IDs → cert IDs for trusted_role_ids in mTLS config
   const roleCertIdMap = await buildRoleCertIdMap();
@@ -2354,7 +2343,8 @@ export async function buildCaddyDocument() {
     }
 
     if (allCertIds.size > 0) {
-      // New model: derive CAs from resolved cert IDs and collect leaf PEMs
+      // New model: pin trust to the explicitly-selected client certs — derive
+      // their CAs for chain validation and collect the leaf PEMs for pinning.
       const derivedCaIds = new Set<number>();
       const leafPems: string[] = [];
       for (const certId of allCertIds) {
@@ -2364,29 +2354,22 @@ export async function buildCaddyDocument() {
           leafPems.push(cert.certificatePem);
         }
       }
-      if (derivedCaIds.size === 0) {
-        // All referenced certs are revoked — derive CAs from the full cert map
-        // (including revoked) so the domain stays in mTlsDomainMap and gets a
-        // fail-closed mTLS policy via buildClientAuthentication. If none can be
-        // derived (e.g. the cert rows were deleted), fall through with an empty
-        // CA set rather than `continue` — leaving the domain in the map forces a
-        // deny-all/drop policy instead of silently failing open.
-        for (const certId of allCertIds) {
-          const caId = certIdToCaId.get(certId);
-          if (caId !== undefined) derivedCaIds.add(caId);
-        }
-      }
-      const caIdArr = Array.from(derivedCaIds);
-      for (const domain of domains) {
-        mTlsDomainMap.set(domain, caIdArr);
-        if (leafPems.length > 0) {
+      if (leafPems.length > 0) {
+        const caIdArr = Array.from(derivedCaIds);
+        for (const domain of domains) {
+          mTlsDomainMap.set(domain, caIdArr);
           mTlsDomainLeafOverride.set(domain, leafPems);
-        } else {
-          // No active leaf cert resolved (all revoked / deleted). Optional
-          // ("request") mode would accept ANY presented cert without CA
-          // verification, so force require_and_verify — with an empty or
-          // CA-only trust set this denies every client (fail closed) instead of
-          // leaving the backend reachable.
+        }
+      } else {
+        // Every explicitly-selected cert/role resolved to ZERO active leaves
+        // (all revoked or deleted). FAIL CLOSED with a deny-all (drop) policy.
+        // Do NOT derive the CA and fall back to whole-CA trust: that would trust
+        // other active certs of the same CA that were never assigned to this
+        // host (and "request" mode would accept any presented cert). Force
+        // require_and_verify with an empty trust set → buildClientAuthentication
+        // returns null → buildTlsConnectionPolicies emits a drop-all policy.
+        for (const domain of domains) {
+          mTlsDomainMap.set(domain, []);
           mTlsOptionalAuthDomains.delete(domain);
         }
       }
