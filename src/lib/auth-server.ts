@@ -156,9 +156,14 @@ function createAuth(): any {
     databaseHooks: {
       user: {
         create: {
-          // Never let an external IdP set privileged fields (role/status) on a
-          // newly federated user — see enforceSafeUserDefaults above.
+          // By default, never let an external IdP set privileged fields
+          // (role/status) on a newly federated user — see enforceSafeUserDefaults
+          // above. Operators who trust their IdP to manage roles can opt out
+          // with AUTH_ALLOW_OAUTH_ROLE_FROM_CLAIMS=true.
           before: async (user: Record<string, unknown>) => {
+            if (config.auth.allowOauthRoleFromClaims) {
+              return { data: user };
+            }
             return { data: enforceSafeUserDefaults(user) };
           },
         },

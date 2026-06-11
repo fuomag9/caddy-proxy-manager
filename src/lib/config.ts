@@ -172,6 +172,10 @@ export const config = {
     // Separate from credential self-registration: gates whether an OAuth
     // sign-in may implicitly create a brand-new account. Defaults to closed.
     allowOauthRegistration: process.env.AUTH_ALLOW_OAUTH_REGISTRATION === "true",
+    // When true, an OAuth IdP's profile claims may set a new user's role/status.
+    // Defaults to false: role/status are forced to safe defaults regardless of
+    // claims. Only enable if you control the IdP and want it to manage roles.
+    allowOauthRoleFromClaims: process.env.AUTH_ALLOW_OAUTH_ROLE_FROM_CLAIMS === "true",
   },
   oauth: {
     enabled: process.env.OAUTH_ENABLED === "true",
