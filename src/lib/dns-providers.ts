@@ -211,6 +211,16 @@ export const DNS_PROVIDERS: DnsProviderDefinition[] = [
       { key: "api_secret", label: "API Secret", type: "password", required: true },
     ],
   },
+  {
+    name: "desec",
+    displayName: "deSEC",
+    description: "deSEC DNS API",
+    docsUrl: "https://github.com/caddy-dns/desec",
+    modulePath: "github.com/caddy-dns/desec",
+    fields: [
+      { key: "token", label: "API Token", type: "password", required: true },
+    ],
+  },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

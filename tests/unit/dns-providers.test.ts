@@ -84,4 +84,37 @@ describe("DNS provider registry", () => {
       resolvers: ["1.1.1.1"],
     });
   });
+
+  it("registers deSEC with the Caddy module path and API token field", () => {
+    const provider = getProviderDefinition("desec");
+
+    expect(provider).toMatchObject({
+      name: "desec",
+      displayName: "deSEC",
+      docsUrl: "https://github.com/caddy-dns/desec",
+      modulePath: "github.com/caddy-dns/desec",
+    });
+    expect(provider?.fields).toEqual([
+      { key: "token", label: "API Token", type: "password", required: true },
+    ]);
+    expect(DNS_PROVIDERS.map((p) => p.name)).toContain("desec");
+  });
+
+  it("encrypts, decrypts, and emits deSEC credentials for Caddy DNS challenges", () => {
+    const encrypted = encryptProviderCredentials("desec", {
+      token: "desec-token",
+    });
+
+    expect(isEncryptedSecret(encrypted.token)).toBe(true);
+    expect(decryptProviderCredentials("desec", encrypted)).toEqual({
+      token: "desec-token",
+    });
+    expect(buildDnsChallengeConfig("desec", encrypted, ["1.1.1.1"])).toEqual({
+      provider: {
+        name: "desec",
+        token: "desec-token",
+      },
+      resolvers: ["1.1.1.1"],
+    });
+  });
 });
