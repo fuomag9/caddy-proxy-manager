@@ -852,6 +852,7 @@ export const spec = {
               type: "string",
               enum: [
                 "general",
+                "acme",
                 "cloudflare",
                 "dns-provider",
                 "authentik",
@@ -861,6 +862,7 @@ export const spec = {
                 "upstream-dns",
                 "geoblock",
                 "waf",
+                "error-pages",
                 "instance-mode",
                 "sync-token",
               ],
@@ -906,6 +908,7 @@ export const spec = {
               type: "string",
               enum: [
                 "general",
+                "acme",
                 "cloudflare",
                 "dns-provider",
                 "authentik",
@@ -915,6 +918,7 @@ export const spec = {
                 "upstream-dns",
                 "geoblock",
                 "waf",
+                "error-pages",
                 "instance-mode",
                 "sync-token",
               ],
