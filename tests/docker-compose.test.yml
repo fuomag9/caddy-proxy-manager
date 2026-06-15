@@ -63,6 +63,12 @@ services:
     ports:
       - "8123:8123"
   caddy:
+    # Alias so the Step-CA container can resolve the ACME test domain to Caddy
+    # for HTTP-01 / TLS-ALPN-01 challenge validation (functional/acme-custom-ca.spec.ts).
+    networks:
+      caddy-network:
+        aliases:
+          - acme-e2e.test
     ports:
       - "80:80"
       - "443:443"
@@ -140,6 +146,95 @@ services:
     networks:
       - caddy-network
 
+  # Internal ACME CA (Step-CA) for the custom-ACME functional test (issue #192).
+  # Auto-initializes a root CA + ACME provisioner named "acme" on first boot,
+  # serving its directory at https://step-ca:9000/acme/acme/directory.
+  # Caddy reaches the test domain via the "acme-e2e.test" alias on the caddy
+  # service for HTTP-01 / TLS-ALPN-01 challenge validation.
+  step-ca:
+    container_name: caddy-proxy-manager-step-ca
+    image: smallstep/step-ca:0.27.4
+    environment:
+      DOCKER_STEPCA_INIT_NAME: "CPM E2E Step-CA"
+      DOCKER_STEPCA_INIT_DNS_NAMES: "step-ca,localhost"
+      DOCKER_STEPCA_INIT_ACME: "true"
+      DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT: "false"
+      DOCKER_STEPCA_INIT_PASSWORD: "e2e-step-ca-password"
+    volumes:
+      - step-ca-data:/home/step
+    networks:
+      - caddy-network
+
+  # ── Master/slave pair for the settings-sync functional test (issue #192) ──
+  # Both point CADDY_API_URL at an unreachable address so their startup
+  # applyCaddyConfig() fails harmlessly and they never touch the shared Caddy.
+  # The master pushes settings to the slave over plain HTTP on the compose network.
+  web-master:
+    container_name: caddy-proxy-manager-web-master
+    image: ghcr.io/fuomag9/caddy-proxy-manager-web:latest
+    ports:
+      - "3002:3000"
+    environment:
+      NODE_ENV: production
+      SESSION_SECRET: "test-master-session-secret-32chars!xxY"
+      ADMIN_USERNAME: testadmin
+      ADMIN_PASSWORD: "TestPassword2026!"
+      BASE_URL: http://localhost:3002
+      NEXTAUTH_URL: http://localhost:3002
+      DATABASE_PATH: /app/data/caddy-proxy-manager.db
+      DATABASE_URL: file:/app/data/caddy-proxy-manager.db
+      CADDY_API_URL: http://127.0.0.1:2019
+      OAUTH_ENABLED: "false"
+      AUTH_RATE_LIMIT_ENABLED: "false"
+      CLICKHOUSE_PASSWORD: ""
+      INSTANCE_MODE: master
+      INSTANCE_SYNC_TOKEN: "e2e-sync-token-0123456789abcdef0123456789"
+      INSTANCE_SYNC_ALLOW_HTTP: "true"
+      INSTANCE_SYNC_INTERVAL: "0"
+      INSTANCE_SLAVES: '[{"name":"slave","url":"http://web-slave:3000","token":"e2e-sync-token-0123456789abcdef0123456789"}]'
+    volumes:
+      - web-master-data:/app/data
+    networks:
+      - caddy-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  web-slave:
+    container_name: caddy-proxy-manager-web-slave
+    image: ghcr.io/fuomag9/caddy-proxy-manager-web:latest
+    ports:
+      - "3003:3000"
+    environment:
+      NODE_ENV: production
+      SESSION_SECRET: "test-slave-session-secret-32chars!xxY"
+      ADMIN_USERNAME: testadmin
+      ADMIN_PASSWORD: "TestPassword2026!"
+      BASE_URL: http://localhost:3003
+      NEXTAUTH_URL: http://localhost:3003
+      DATABASE_PATH: /app/data/caddy-proxy-manager.db
+      DATABASE_URL: file:/app/data/caddy-proxy-manager.db
+      CADDY_API_URL: http://127.0.0.1:2019
+      OAUTH_ENABLED: "false"
+      AUTH_RATE_LIMIT_ENABLED: "false"
+      CLICKHOUSE_PASSWORD: ""
+      INSTANCE_MODE: slave
+      INSTANCE_SYNC_TOKEN: "e2e-sync-token-0123456789abcdef0123456789"
+      INSTANCE_SYNC_ALLOW_HTTP: "true"
+    volumes:
+      - web-slave-data:/app/data
+    networks:
+      - caddy-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health',r=>{process.exit(r.statusCode<400?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
 volumes:
   caddy-manager-data:
     name: caddy-manager-data-test
@@ -155,3 +250,11 @@ volumes:
     name: geoip-data-test
   clickhouse-data:
     name: clickhouse-data-test
+  acme-ca:
+    name: acme-ca-test
+  step-ca-data:
+    name: step-ca-data-test
+  web-master-data:
+    name: web-master-data-test
+  web-slave-data:
+    name: web-slave-data-test

@@ -47,6 +47,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/drizzle ./drizzle
 
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
+# Shared volume for the custom ACME CA root PEM (issue #192). The web container
+# writes it here; Caddy mounts the same volume read-only. Mode 0777 so it stays
+# writable regardless of which container (with differing UIDs) initializes the
+# named volume first. The file only ever holds a public CA certificate.
+RUN mkdir -p /acme-ca && chmod 0777 /acme-ca
+
 COPY --chown=nextjs:nodejs docker/web/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

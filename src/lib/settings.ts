@@ -16,6 +16,13 @@ export type GeneralSettings = {
   acmeEmail?: string;
 };
 
+export type AcmeSettings = {
+  /** Custom ACME directory URL (e.g. an internal CA). Empty = Let's Encrypt default. */
+  caUrl?: string;
+  /** PEM-encoded trusted root for the ACME CA's HTTPS endpoint, if not in the system trust store. */
+  caRootPem?: string;
+};
+
 export type AuthentikSettings = {
   outpostDomain: string;
   outpostUpstream: string;
@@ -106,6 +113,15 @@ export async function getSetting<T>(key: string): Promise<SettingValue<T>> {
 }
 
 async function getInstanceModeForSettings(): Promise<InstanceMode> {
+  // Environment variable takes precedence — mirrors getInstanceMode() in
+  // instance-sync.ts. An env-configured slave never writes the mode to the DB
+  // (setInstanceMode refuses when env-set), so reading the DB alone here would
+  // report "standalone" and getEffectiveSetting would never serve synced:* values.
+  const envMode = process.env.INSTANCE_MODE;
+  if (envMode === "master" || envMode === "slave" || envMode === "standalone") {
+    return envMode;
+  }
+
   const stored = await getSetting<string>(INSTANCE_MODE_KEY);
   if (stored === "master" || stored === "slave" || stored === "standalone") {
     return stored;
@@ -169,6 +185,14 @@ export async function getGeneralSettings(): Promise<GeneralSettings | null> {
 
 export async function saveGeneralSettings(settings: GeneralSettings): Promise<void> {
   await setSetting("general", settings);
+}
+
+export async function getAcmeSettings(): Promise<AcmeSettings | null> {
+  return await getEffectiveSetting<AcmeSettings>("acme");
+}
+
+export async function saveAcmeSettings(settings: AcmeSettings): Promise<void> {
+  await setSetting("acme", settings);
 }
 
 export async function getAuthentikSettings(): Promise<AuthentikSettings | null> {

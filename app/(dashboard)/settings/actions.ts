@@ -5,7 +5,7 @@ import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
-import { clearSetting, getSetting, saveCloudflareSettings, getDnsProviderSettings, saveDnsProviderSettings, saveGeneralSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveErrorPagesSettings } from "@/src/lib/settings";
+import { clearSetting, getSetting, saveCloudflareSettings, getDnsProviderSettings, saveDnsProviderSettings, saveGeneralSettings, saveAcmeSettings, saveAuthentikSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveErrorPagesSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost, sanitizeErrorPageRules } from "@/src/lib/models/proxy-hosts";
 import { getWafRuleMessages } from "@/src/lib/models/waf-events";
 import type { CloudflareSettings, DnsProviderSettings, GeoBlockSettings, WafSettings } from "@/src/lib/settings";
@@ -54,6 +54,63 @@ export async function updateGeneralSettingsAction(_prevState: ActionResult | nul
   } catch (error) {
     console.error("Failed to save general settings:", error);
     return { success: false, message: error instanceof Error ? error.message : "Failed to save general settings" };
+  }
+}
+
+export async function updateAcmeSettingsAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mode = await getInstanceMode();
+    const overrideEnabled = formData.get("overrideEnabled") === "on";
+    if (mode === "slave" && !overrideEnabled) {
+      await clearSetting("acme");
+      try {
+        await applyCaddyConfig();
+        revalidatePath("/settings");
+        return { success: true, message: "ACME settings reset to master defaults" };
+      } catch (error) {
+        console.error("Failed to apply Caddy config:", error);
+        revalidatePath("/settings");
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        await syncInstances();
+        return { success: true, message: `Settings reset, but could not apply to Caddy: ${errorMsg}` };
+      }
+    }
+
+    const caUrl = formData.get("caUrl") ? String(formData.get("caUrl")).trim() : "";
+    const caRootPem = formData.get("caRootPem") ? String(formData.get("caRootPem")).trim() : "";
+
+    if (caUrl) {
+      let parsed: URL;
+      try {
+        parsed = new URL(caUrl);
+      } catch {
+        return { success: false, message: "Invalid ACME directory URL." };
+      }
+      if (parsed.protocol !== "https:") {
+        return { success: false, message: "ACME directory URL must use HTTPS." };
+      }
+    }
+
+    await saveAcmeSettings({
+      caUrl: caUrl.length > 0 ? caUrl : undefined,
+      caRootPem: caRootPem.length > 0 ? caRootPem : undefined
+    });
+
+    try {
+      await applyCaddyConfig();
+      revalidatePath("/settings");
+      return { success: true, message: "ACME settings saved successfully" };
+    } catch (error) {
+      console.error("Failed to apply Caddy config:", error);
+      revalidatePath("/settings");
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await syncInstances();
+      return { success: true, message: `Settings saved, but could not apply to Caddy: ${errorMsg}` };
+    }
+  } catch (error) {
+    console.error("Failed to save ACME settings:", error);
+    return { success: false, message: error instanceof Error ? error.message : "Failed to save ACME settings" };
   }
 }
 

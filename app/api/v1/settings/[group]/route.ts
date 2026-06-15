@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiAdmin, apiErrorResponse } from "@/src/lib/api-auth";
 import {
   getGeneralSettings, saveGeneralSettings,
+  getAcmeSettings, saveAcmeSettings,
   getCloudflareSettings, saveCloudflareSettings,
   getAuthentikSettings, saveAuthentikSettings,
   getMetricsSettings, saveMetricsSettings,
@@ -24,6 +25,7 @@ type SettingsHandler = {
 
 const SETTINGS_HANDLERS: Record<string, SettingsHandler> = {
   general: { get: getGeneralSettings, save: saveGeneralSettings as (data: never) => Promise<void>, applyCaddy: true },
+  acme: { get: getAcmeSettings, save: saveAcmeSettings as (data: never) => Promise<void>, applyCaddy: true },
   cloudflare: { get: getCloudflareSettings, save: saveCloudflareSettings as (data: never) => Promise<void>, applyCaddy: true },
   authentik: { get: getAuthentikSettings, save: saveAuthentikSettings as (data: never) => Promise<void>, applyCaddy: true },
   metrics: { get: getMetricsSettings, save: saveMetricsSettings as (data: never) => Promise<void>, applyCaddy: true },

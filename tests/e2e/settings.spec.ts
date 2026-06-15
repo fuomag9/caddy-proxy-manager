@@ -40,11 +40,11 @@ test.describe('Settings — page load & layout', () => {
     await expect(sidebar.getByText('Observability')).toBeVisible();
   });
 
-  test('sidebar shows all 10 navigation items', async ({ page }) => {
+  test('sidebar shows all 11 navigation items', async ({ page }) => {
     await page.goto('/settings');
     const sidebar = page.locator(SETTINGS_SIDEBAR);
     const expectedItems = [
-      'Instance Sync', 'General',
+      'Instance Sync', 'General', 'ACME Server',
       'DNS Providers', 'DNS Resolvers', 'Upstream DNS Pinning',
       'Global Geoblocking', 'Authentik Defaults', 'OAuth Providers',
       'Metrics & Monitoring', 'Access Logging',
@@ -252,6 +252,53 @@ test.describe('Settings — General', () => {
     const emailInput = page.locator('input[name="acmeEmail"]');
     await emailInput.fill('test@example.com');
     await expect(emailInput).toHaveValue('test@example.com');
+  });
+});
+
+// ─── ACME Server section (custom ACME directory URL — issue #192) ─────────────
+
+test.describe('Settings — ACME Server', () => {
+  const API_SETTINGS_ACME = 'http://localhost:3000/api/v1/settings/acme';
+  const CUSTOM_DIR = 'https://ca.internal.example.com/acme/acme/directory';
+
+  test.afterEach(async ({ page }) => {
+    // Reset to the Let's Encrypt default so other tests/runs start clean.
+    await page.request.put(API_SETTINGS_ACME, { data: { caUrl: '', caRootPem: '' } });
+  });
+
+  test('shows the custom directory URL and CA root fields', async ({ page }) => {
+    await goToSection(page, 'ACME Server');
+    await expect(page.locator('input[name="caUrl"]')).toBeVisible();
+    await expect(page.locator('textarea[name="caRootPem"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: /save acme settings/i })).toBeVisible();
+  });
+
+  test('saves a custom directory URL and persists it', async ({ page }) => {
+    await goToSection(page, 'ACME Server');
+    await page.locator('input[name="caUrl"]').fill(CUSTOM_DIR);
+    await page.getByRole('button', { name: /save acme settings/i }).click();
+    await expect(page.getByText(/saved|success/i).first()).toBeVisible({ timeout: 10_000 });
+
+    await goToSection(page, 'ACME Server');
+    await expect(page.locator('input[name="caUrl"]')).toHaveValue(CUSTOM_DIR);
+  });
+
+  test('rejects a non-HTTPS directory URL', async ({ page }) => {
+    await goToSection(page, 'ACME Server');
+    await page.locator('input[name="caUrl"]').fill('http://ca.internal.example.com/directory');
+    await page.getByRole('button', { name: /save acme settings/i }).click();
+    await expect(page.getByText(/must use HTTPS/i)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('UI save is reflected in the REST API', async ({ page }) => {
+    await goToSection(page, 'ACME Server');
+    await page.locator('input[name="caUrl"]').fill(CUSTOM_DIR);
+    await page.getByRole('button', { name: /save acme settings/i }).click();
+    await expect(page.getByText(/saved|success/i).first()).toBeVisible({ timeout: 10_000 });
+
+    const res = await page.request.get(API_SETTINGS_ACME);
+    const data = await res.json();
+    expect(data.caUrl).toBe(CUSTOM_DIR);
   });
 });
 

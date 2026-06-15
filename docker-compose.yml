@@ -69,6 +69,8 @@ services:
       - caddy-manager-data:/app/data
       - geoip-data:/usr/share/GeoIP:ro,z
       - caddy-logs:/logs:ro
+      # Custom ACME CA root PEM written here by web, read by caddy (issue #192)
+      - acme-ca:/acme-ca
     depends_on:
       caddy:
         condition: service_healthy
@@ -115,6 +117,8 @@ services:
       - caddy-config:/config
       - caddy-logs:/logs
       - geoip-data:/usr/share/GeoIP:ro,z
+      # Custom ACME CA root PEM written by web, read here for trusted_roots_pem_files (issue #192)
+      - acme-ca:/acme-ca:ro
     networks:
       - caddy-network
     healthcheck:
@@ -245,3 +249,4 @@ volumes:
   caddy-logs:
   geoip-data:
   clickhouse-data:
+  acme-ca:

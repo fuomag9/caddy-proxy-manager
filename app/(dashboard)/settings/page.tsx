@@ -1,5 +1,5 @@
 import SettingsClient from "./SettingsClient";
-import { getGeneralSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getDnsProviderSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings, getErrorPagesSettings } from "@/src/lib/settings";
+import { getGeneralSettings, getAcmeSettings, getAuthentikSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getDnsProviderSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings, getErrorPagesSettings } from "@/src/lib/settings";
 import { getInstanceMode, getSlaveLastSync, getSlaveMasterToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvSlaveInstances } from "@/src/lib/instance-sync";
 import { listInstances } from "@/src/lib/models/instances";
 import { listOAuthProviders } from "@/src/lib/models/oauth-providers";
@@ -14,8 +14,9 @@ export default async function SettingsPage() {
   const modeFromEnv = isInstanceModeFromEnv();
   const tokenFromEnv = isSyncTokenFromEnv();
 
-  const [general, dnsProvider, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode, globalGeoBlock, globalErrorPages, oauthProviders] = await Promise.all([
+  const [general, acme, dnsProvider, authentik, metrics, logging, dns, upstreamDnsResolution, instanceMode, globalGeoBlock, globalErrorPages, oauthProviders] = await Promise.all([
     getGeneralSettings(),
+    getAcmeSettings(),
     getDnsProviderSettings(),
     getAuthentikSettings(),
     getMetricsSettings(),
@@ -28,10 +29,11 @@ export default async function SettingsPage() {
     listOAuthProviders(),
   ]);
 
-  const [overrideGeneral, overrideDnsProvider, overrideAuthentik, overrideMetrics, overrideLogging, overrideDns, overrideUpstreamDnsResolution] =
+  const [overrideGeneral, overrideAcme, overrideDnsProvider, overrideAuthentik, overrideMetrics, overrideLogging, overrideDns, overrideUpstreamDnsResolution] =
     instanceMode === "slave"
       ? await Promise.all([
           getSetting("general"),
+          getSetting("acme"),
           getSetting("dns_provider"),
           getSetting("authentik"),
           getSetting("metrics"),
@@ -39,7 +41,7 @@ export default async function SettingsPage() {
           getSetting("dns"),
           getSetting("upstream_dns_resolution")
         ])
-      : [null, null, null, null, null, null, null];
+      : [null, null, null, null, null, null, null, null];
 
   const [slaveToken, slaveLastSync] = instanceMode === "slave"
     ? await Promise.all([getSlaveMasterToken(), getSlaveLastSync()])
@@ -51,6 +53,7 @@ export default async function SettingsPage() {
   return (
     <SettingsClient
       general={general}
+      acme={acme}
       dnsProvider={dnsProvider}
       dnsProviderDefinitions={DNS_PROVIDERS}
       authentik={authentik}
@@ -68,6 +71,7 @@ export default async function SettingsPage() {
         tokenFromEnv,
         overrides: {
           general: overrideGeneral !== null,
+          acme: overrideAcme !== null,
           dnsProvider: overrideDnsProvider !== null,
           authentik: overrideAuthentik !== null,
           metrics: overrideMetrics !== null,

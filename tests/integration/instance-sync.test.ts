@@ -164,11 +164,22 @@ describe('buildSyncPayload', () => {
   it('returns null settings when no settings are stored', async () => {
     const payload = await buildSyncPayload();
     expect(payload.settings.general).toBeNull();
+    expect(payload.settings.acme).toBeNull();
     expect(payload.settings.cloudflare).toBeNull();
     expect(payload.settings.authentik).toBeNull();
     expect(payload.settings.dns).toBeNull();
     expect(payload.settings.waf).toBeNull();
     expect(payload.settings.geoblock).toBeNull();
+  });
+
+  it('includes stored ACME settings in the sync payload', async () => {
+    await ctx.db.insert(schema.settings).values({
+      key: 'acme',
+      value: JSON.stringify({ caUrl: 'https://ca.internal.example.com/acme/acme/directory' }),
+      updatedAt: nowIso(),
+    });
+    const payload = await buildSyncPayload();
+    expect(payload.settings.acme).toEqual({ caUrl: 'https://ca.internal.example.com/acme/acme/directory' });
   });
 
   it('includes generated_at as an ISO date string', async () => {
@@ -265,6 +276,7 @@ describe('applySyncPayload', () => {
       generated_at: nowIso(),
       settings: {
         general: null,
+        acme: null,
         cloudflare: null,
         dns_provider: null,
         authentik: null,
@@ -413,6 +425,19 @@ describe('applySyncPayload', () => {
     });
     expect(row).toBeDefined();
     expect(JSON.parse(row!.value)).toEqual({ primaryDomain: 'example.com' });
+  });
+
+  it('stores synced ACME settings with synced: prefix', async () => {
+    const payload = emptyPayload();
+    payload.settings.acme = { caUrl: 'https://ca.internal.example.com/acme/acme/directory' };
+
+    await applySyncPayload(payload);
+
+    const row = await ctx.db.query.settings.findFirst({
+      where: (t, { eq }) => eq(t.key, 'synced:acme'),
+    });
+    expect(row).toBeDefined();
+    expect(JSON.parse(row!.value)).toEqual({ caUrl: 'https://ca.internal.example.com/acme/acme/directory' });
   });
 
   it('stores null settings as JSON null value', async () => {

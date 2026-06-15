@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@/src/lib/settings', () => ({
   getGeneralSettings: vi.fn(),
   saveGeneralSettings: vi.fn(),
+  getAcmeSettings: vi.fn(),
+  saveAcmeSettings: vi.fn(),
   getCloudflareSettings: vi.fn(),
   saveCloudflareSettings: vi.fn(),
   getAuthentikSettings: vi.fn(),
@@ -58,6 +60,7 @@ vi.mock('@/src/lib/api-auth', () => {
 import { GET, PUT } from '@/app/api/v1/settings/[group]/route';
 import {
   getGeneralSettings, saveGeneralSettings,
+  getAcmeSettings, saveAcmeSettings,
   getCloudflareSettings, saveCloudflareSettings,
   getAuthentikSettings, saveAuthentikSettings,
   getMetricsSettings, saveMetricsSettings,
@@ -73,6 +76,8 @@ import { requireApiAdmin } from '@/src/lib/api-auth';
 
 const mockGetGeneral = vi.mocked(getGeneralSettings);
 const mockSaveGeneral = vi.mocked(saveGeneralSettings);
+const mockGetAcme = vi.mocked(getAcmeSettings);
+const mockSaveAcme = vi.mocked(saveAcmeSettings);
 const mockGetCloudflare = vi.mocked(getCloudflareSettings);
 const mockSaveCloudflare = vi.mocked(saveCloudflareSettings);
 const mockGetAuthentik = vi.mocked(getAuthentikSettings);
@@ -246,6 +251,35 @@ describe('PUT /api/v1/settings/[group]', () => {
 
     expect(response.status).toBe(200);
     expect(data).toEqual({ ok: true });
+  });
+});
+
+describe('GET acme settings', () => {
+  it('returns acme settings', async () => {
+    const settings = { caUrl: 'https://ca.internal.example.com/acme/acme/directory' };
+    mockGetAcme.mockResolvedValue(settings as any);
+
+    const response = await GET(createMockRequest(), { params: Promise.resolve({ group: 'acme' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual(settings);
+    expect(mockGetAcme).toHaveBeenCalled();
+  });
+});
+
+describe('PUT acme settings', () => {
+  it('saves acme settings and applies caddy config', async () => {
+    mockSaveAcme.mockResolvedValue(undefined);
+
+    const body = { caUrl: 'https://ca.internal.example.com/acme/acme/directory' };
+    const response = await PUT(createMockRequest({ method: 'PUT', body }), { params: Promise.resolve({ group: 'acme' }) });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({ ok: true });
+    expect(mockSaveAcme).toHaveBeenCalledWith(body);
+    expect(mockApplyCaddyConfig).toHaveBeenCalled();
   });
 });
 

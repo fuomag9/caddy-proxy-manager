@@ -1,6 +1,6 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { Resolver } from "node:dns/promises";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { isIP } from "node:net";
 import crypto from "node:crypto";
 import {
@@ -27,6 +27,7 @@ import { eq, isNull } from "drizzle-orm";
 import { config } from "./config";
 import {
   getGeneralSettings,
+  getAcmeSettings,
   getMetricsSettings,
   getLoggingSettings,
   getDnsSettings,
@@ -36,6 +37,7 @@ import {
   getWafSettings,
   getErrorPagesSettings,
   setSetting,
+  type AcmeSettings,
   type DnsSettings,
   type UpstreamDnsAddressFamily,
   type UpstreamDnsResolutionSettings,
@@ -60,6 +62,41 @@ import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
+
+// Directory shared (via a Docker volume) with the Caddy container, so a
+// custom ACME CA root PEM written here by the web container is readable by
+// Caddy at the same path for `trusted_roots_pem_files`. Read lazily so tests
+// (and non-Docker deployments) can override ACME_CA_ROOT_DIR at runtime.
+function acmeCaRootFile(): string {
+  return join(process.env.ACME_CA_ROOT_DIR || "/acme-ca", "custom-ca-root.pem");
+}
+
+/**
+ * Persist (or clear) the custom ACME CA root PEM to the shared volume and
+ * return the file path Caddy should reference, or null if no root is
+ * configured or the file could not be written (in which case the issuer is
+ * left without `trusted_roots_pem_files` rather than pointing at a missing file).
+ */
+function syncAcmeCaRootFile(caRootPem: string | undefined): string | null {
+  const file = acmeCaRootFile();
+  const pem = caRootPem?.trim();
+  if (!pem) {
+    try {
+      rmSync(file, { force: true });
+    } catch {
+      // best-effort cleanup
+    }
+    return null;
+  }
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, pem.endsWith("\n") ? pem : `${pem}\n`, { mode: 0o644 });
+    return file;
+  } catch (error) {
+    console.error(`Failed to write ACME CA root PEM to ${file}`, error);
+    return null;
+  }
+}
 
 const DEFAULT_AUTHENTIK_HEADERS = [
   "X-Authentik-Username",
@@ -1857,10 +1894,10 @@ function buildTlsConnectionPolicies(
   };
 }
 
-async function buildTlsAutomation(
+export async function buildTlsAutomation(
   usage: Map<number, CertificateUsage>,
   autoManagedDomains: Set<string>,
-  options: { acmeEmail?: string; dnsSettings?: DnsSettings | null }
+  options: { acmeEmail?: string; dnsSettings?: DnsSettings | null; acmeSettings?: AcmeSettings | null }
 ) {
   const managedEntries = Array.from(usage.values()).filter(
     (entry) => entry.certificate.type === "managed" && Boolean(entry.certificate.autoRenew)
@@ -1895,12 +1932,27 @@ async function buildTlsAutomation(
   const managedCertificateIds = new Set<number>();
   const policies: Record<string, unknown>[] = [];
 
+  // Custom ACME directory URL + trusted root for internal CAs (OpenBao, Step-CA, etc.)
+  const acmeSettings = options.acmeSettings ?? await getAcmeSettings();
+  const customAcmeUrl = acmeSettings?.caUrl?.trim() || null;
+  const acmeRootPath = syncAcmeCaRootFile(acmeSettings?.caRootPem);
+
+  const applyAcmeOverrides = (issuer: Record<string, unknown>) => {
+    if (customAcmeUrl) {
+      issuer.ca = customAcmeUrl;
+    }
+    if (acmeRootPath) {
+      issuer.trusted_roots_pem_files = [acmeRootPath];
+    }
+  };
+
   // Add policy for auto-managed domains (certificateId = null)
   if (hasAutoManagedDomains) {
     for (const subjects of groupHostPatternsByPriority(Array.from(autoManagedDomains))) {
       const issuer: Record<string, unknown> = {
         module: "acme"
       };
+      applyAcmeOverrides(issuer);
 
       if (options.acmeEmail) {
         issuer.email = options.acmeEmail;
@@ -1947,6 +1999,7 @@ async function buildTlsAutomation(
       const issuer: Record<string, unknown> = {
         module: "acme"
       };
+      applyAcmeOverrides(issuer);
 
       if (options.acmeEmail) {
         issuer.email = options.acmeEmail;
@@ -2403,8 +2456,9 @@ export async function buildCaddyDocument() {
   ]);
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
-  const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf] = await Promise.all([
+  const [generalSettings, acmeSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf] = await Promise.all([
     getGeneralSettings(),
+    getAcmeSettings(),
     getDnsSettings(),
     getUpstreamDnsResolutionSettings(),
     getGeoBlockSettings(),
@@ -2412,7 +2466,8 @@ export async function buildCaddyDocument() {
   ]);
   const { tlsApp, managedCertificateIds } = await buildTlsAutomation(certificateUsage, autoManagedDomains, {
     acmeEmail: generalSettings?.acmeEmail,
-    dnsSettings
+    dnsSettings,
+    acmeSettings
   });
   const { policies: tlsConnectionPolicies, readyCertificates, importedCertPems } = buildTlsConnectionPolicies(
     certificateUsage,

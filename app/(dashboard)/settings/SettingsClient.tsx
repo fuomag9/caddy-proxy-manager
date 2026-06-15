@@ -4,7 +4,7 @@ import { useState, useActionState, useEffect, type ReactNode } from "react";
 import {
   Cloud, Globe, Network, Pin, Activity,
   ScrollText, Settings2, UserCheck, MapPin, KeyRound,
-  Search, ChevronRight, FileWarning,
+  Search, ChevronRight, FileWarning, ShieldCheck,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -20,12 +20,14 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusChip } from "@/components/ui/StatusChip";
 import type {
   GeneralSettings,
+  AcmeSettings,
   AuthentikSettings,
   MetricsSettings,
   LoggingSettings,
@@ -43,6 +45,7 @@ import type { OAuthProvider } from "@/src/lib/models/oauth-providers";
 import {
   updateDnsProviderSettingsAction,
   updateGeneralSettingsAction,
+  updateAcmeSettingsAction,
   updateAuthentikSettingsAction,
   updateMetricsSettingsAction,
   updateLoggingSettingsAction,
@@ -81,6 +84,7 @@ const SETTINGS_GROUPS: SettingsGroup[] = [
     items: [
       { id: "sync", name: "Instance Sync", desc: "Standalone, master, or slave coordination", icon: <Network className="h-4 w-4" /> },
       { id: "general", name: "General", desc: "Primary domain and ACME contact email", icon: <Settings2 className="h-4 w-4" /> },
+      { id: "acme", name: "ACME Server", desc: "Custom ACME directory URL for internal CAs", icon: <ShieldCheck className="h-4 w-4" /> },
     ],
   },
   {
@@ -372,6 +376,7 @@ function DetailHeader({ activeId }: { activeId: string }) {
 
 type Props = {
   general: GeneralSettings | null;
+  acme: AcmeSettings | null;
   dnsProvider: DnsProviderSettings | null;
   dnsProviderDefinitions: DnsProviderDefinition[];
   authentik: AuthentikSettings | null;
@@ -389,6 +394,7 @@ type Props = {
     tokenFromEnv: boolean;
     overrides: {
       general: boolean;
+      acme: boolean;
       dnsProvider: boolean;
       authentik: boolean;
       metrics: boolean;
@@ -422,6 +428,7 @@ type Props = {
 
 export default function SettingsClient({
   general,
+  acme,
   dnsProvider,
   dnsProviderDefinitions,
   authentik,
@@ -452,6 +459,7 @@ export default function SettingsClient({
 
   // Form action states
   const [generalState, generalFormAction] = useActionState(updateGeneralSettingsAction, null);
+  const [acmeState, acmeFormAction] = useActionState(updateAcmeSettingsAction, null);
   const [dnsProviderState, dnsProviderFormAction] = useActionState(updateDnsProviderSettingsAction, null);
   const [selectedProvider, setSelectedProvider] = useState("none");
   const configuredProviders = dnsProvider?.providers ? Object.keys(dnsProvider.providers) : [];
@@ -472,6 +480,7 @@ export default function SettingsClient({
   const isSlave = instanceSync.mode === "slave";
   const isMaster = instanceSync.mode === "master";
   const [generalOverride, setGeneralOverride] = useState(instanceSync.overrides.general);
+  const [acmeOverride, setAcmeOverride] = useState(instanceSync.overrides.acme);
   const [dnsProviderOverride, setDnsProviderOverride] = useState(instanceSync.overrides.dnsProvider);
   const [authentikOverride, setAuthentikOverride] = useState(instanceSync.overrides.authentik);
   const [metricsOverride, setMetricsOverride] = useState(instanceSync.overrides.metrics);
@@ -527,6 +536,16 @@ export default function SettingsClient({
                   isSlave={isSlave}
                   generalOverride={generalOverride}
                   setGeneralOverride={setGeneralOverride}
+                />
+              )}
+              {active === "acme" && (
+                <AcmeSection
+                  acme={acme}
+                  acmeState={acmeState}
+                  acmeFormAction={acmeFormAction}
+                  isSlave={isSlave}
+                  acmeOverride={acmeOverride}
+                  setAcmeOverride={setAcmeOverride}
                 />
               )}
               {active === "dns-providers" && (
@@ -893,6 +912,75 @@ function GeneralSection({
         </FormRow>
         <div className="flex justify-end">
           <Button type="submit" size="sm">Save general settings</Button>
+        </div>
+      </form>
+    </FormCard>
+  );
+}
+
+// ─── Section: ACME Server ────────────────────────────────────────────────────
+
+function AcmeSection({
+  acme,
+  acmeState,
+  acmeFormAction,
+  isSlave,
+  acmeOverride,
+  setAcmeOverride,
+}: {
+  acme: AcmeSettings | null;
+  acmeState: { success: boolean; message?: string } | null;
+  acmeFormAction: (payload: FormData) => void;
+  isSlave: boolean;
+  acmeOverride: boolean;
+  setAcmeOverride: (v: boolean) => void;
+}) {
+  const disabled = isSlave && !acmeOverride;
+  return (
+    <FormCard title="Custom ACME Directory">
+      <form action={acmeFormAction} className="flex flex-col gap-3">
+        {acmeState?.message && (
+          <StatusAlert message={acmeState.message} success={acmeState.success} />
+        )}
+        {isSlave && (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="acme-override"
+              name="overrideEnabled"
+              checked={acmeOverride}
+              onCheckedChange={(v) => setAcmeOverride(!!v)}
+            />
+            <Label htmlFor="acme-override">Override master settings</Label>
+          </div>
+        )}
+        <FormRow
+          label="ACME directory URL"
+          hint="Leave empty to use the Let's Encrypt default. For an internal CA (OpenBao, Step-CA, Windows ADCS), paste its ACME directory URL — must be HTTPS."
+        >
+          <Input
+            name="caUrl"
+            type="url"
+            placeholder="https://ca.internal.example.com/acme/acme/directory"
+            defaultValue={acme?.caUrl ?? ""}
+            disabled={disabled}
+            className="h-8 text-sm font-mono"
+          />
+        </FormRow>
+        <FormRow
+          label="CA root certificate (PEM)"
+          hint="Optional. If the ACME endpoint's TLS certificate is signed by an internal root not in the system trust store, paste the root (or chain) here so Caddy can connect to it."
+        >
+          <Textarea
+            name="caRootPem"
+            placeholder={"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"}
+            defaultValue={acme?.caRootPem ?? ""}
+            disabled={disabled}
+            rows={6}
+            className="text-xs font-mono"
+          />
+        </FormRow>
+        <div className="flex justify-end">
+          <Button type="submit" size="sm" disabled={disabled}>Save ACME settings</Button>
         </div>
       </form>
     </FormCard>

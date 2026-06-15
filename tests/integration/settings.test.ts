@@ -87,4 +87,14 @@ describe('settings integration', () => {
     const value = await getSetting('delete-me');
     expect(value).toBeNull();
   });
+
+  it('round-trips custom ACME settings under the "acme" key', async () => {
+    const acme = {
+      caUrl: 'https://ca.internal.example.com/acme/acme/directory',
+      caRootPem: '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----',
+    };
+    await setSetting('acme', acme);
+    const stored = await getSetting<typeof acme>('acme');
+    expect(stored).toEqual(acme);
+  });
 });
