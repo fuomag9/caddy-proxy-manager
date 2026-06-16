@@ -12,6 +12,7 @@ import {
   getUpstreamDnsResolutionSettings, saveUpstreamDnsResolutionSettings,
   getGeoBlockSettings, saveGeoBlockSettings,
   getWafSettings, saveWafSettings,
+  getCrowdSecSettings, saveCrowdSecSettings,
   getErrorPagesSettings, saveErrorPagesSettings,
 } from "@/src/lib/settings";
 import { getInstanceMode, setInstanceMode, getSlaveMasterToken, setSlaveMasterToken } from "@/src/lib/instance-sync";
@@ -35,6 +36,7 @@ const SETTINGS_HANDLERS: Record<string, SettingsHandler> = {
   "upstream-dns": { get: getUpstreamDnsResolutionSettings, save: saveUpstreamDnsResolutionSettings as (data: never) => Promise<void>, applyCaddy: true },
   geoblock: { get: getGeoBlockSettings, save: saveGeoBlockSettings as (data: never) => Promise<void>, applyCaddy: true },
   waf: { get: getWafSettings, save: saveWafSettings as (data: never) => Promise<void>, applyCaddy: true },
+  crowdsec: { get: getCrowdSecSettings, save: saveCrowdSecSettings as (data: never) => Promise<void>, applyCaddy: true },
   "error-pages": { get: getErrorPagesSettings, save: saveErrorPagesSettings as (data: never) => Promise<void>, applyCaddy: true },
 };
 
