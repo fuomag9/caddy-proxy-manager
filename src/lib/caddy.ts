@@ -35,6 +35,7 @@ import {
   getUpstreamDnsResolutionSettings,
   getGeoBlockSettings,
   getWafSettings,
+  getCrowdSecSettings,
   getErrorPagesSettings,
   setSetting,
   type AcmeSettings,
@@ -42,7 +43,8 @@ import {
   type UpstreamDnsAddressFamily,
   type UpstreamDnsResolutionSettings,
   type GeoBlockSettings,
-  type WafSettings
+  type WafSettings,
+  type CrowdSecSettings
 } from "./settings";
 import { buildDnsChallengeConfig, type DnsProviderCredentials } from "./dns-providers";
 import { syncInstances } from "./instance-sync";
@@ -2456,13 +2458,14 @@ export async function buildCaddyDocument() {
   ]);
 
   const { usage: certificateUsage, autoManagedDomains } = collectCertificateUsage(proxyHostRows, certificateMap);
-  const [generalSettings, acmeSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf] = await Promise.all([
+  const [generalSettings, dnsSettings, upstreamDnsResolutionSettings, globalGeoBlock, globalWaf, crowdSecSettings] = await Promise.all([
     getGeneralSettings(),
     getAcmeSettings(),
     getDnsSettings(),
     getUpstreamDnsResolutionSettings(),
     getGeoBlockSettings(),
-    getWafSettings()
+    getWafSettings(),
+    getCrowdSecSettings()
   ]);
   const { tlsApp, managedCertificateIds } = await buildTlsAutomation(certificateUsage, autoManagedDomains, {
     acmeEmail: generalSettings?.acmeEmail,
@@ -2595,7 +2598,16 @@ export async function buildCaddyDocument() {
           ...(importedCertPems.length > 0 ? { certificates: { load_pem: importedCertPems } } : {})
         }
       } : {}),
-      ...l4App
+      ...l4App,
+      // CrowdSec app — nur wenn enabled
+      ...(crowdSecSettings?.enabled ? {
+        crowdsec: {
+          api_url: crowdSecSettings.api_url,
+          api_key: crowdSecSettings.api_key,
+          ...(crowdSecSettings.appsec_url ? { appsec_url: crowdSecSettings.appsec_url } : {}),
+          ...(crowdSecSettings.ticker_interval ? { ticker_interval: crowdSecSettings.ticker_interval } : {}),
+        }
+      } : {})
     }
   };
 }

@@ -34,6 +34,7 @@ RUN GOOS=$TARGETOS GOARCH=$TARGETARCH xcaddy build master \
     --with github.com/mholt/caddy-l4 \
     --with github.com/fuomag9/caddy-blocker-plugin \
     --with github.com/corazawaf/coraza-caddy/v2 \
+    --with github.com/hslatman/caddy-crowdsec-bouncer/http \
     --output /usr/bin/caddy
 
 FROM ubuntu:26.04

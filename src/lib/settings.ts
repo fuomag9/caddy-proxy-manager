@@ -278,6 +278,23 @@ export async function saveWafSettings(s: WafSettings): Promise<void> {
   await setSetting("waf", s);
 }
 
+// CrowdSec bouncer settings
+export type CrowdSecSettings = {
+  enabled: boolean;
+  api_url: string;
+  api_key: string;
+  appsec_url?: string;
+  ticker_interval?: string; // default "60s"
+};
+
+export async function getCrowdSecSettings(): Promise<CrowdSecSettings | null> {
+  return await getEffectiveSetting<CrowdSecSettings>("crowdsec");
+}
+
+export async function saveCrowdSecSettings(s: CrowdSecSettings): Promise<void> {
+  await setSetting("crowdsec", s);
+}
+
 // Global error pages, applied as fallback error routes across every proxy host.
 // Per-host error pages take precedence over these.
 export type ErrorPagesSettings = {
