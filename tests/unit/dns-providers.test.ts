@@ -117,4 +117,37 @@ describe("DNS provider registry", () => {
       resolvers: ["1.1.1.1"],
     });
   });
+
+  it("registers Dynu with the Caddy module path and API token field", () => {
+    const provider = getProviderDefinition("dynu");
+
+    expect(provider).toMatchObject({
+      name: "dynu",
+      displayName: "Dynu",
+      docsUrl: "https://github.com/caddy-dns/dynu",
+      modulePath: "github.com/caddy-dns/dynu",
+    });
+    expect(provider?.fields).toEqual([
+      { key: "api_token", label: "API Token", type: "password", required: true },
+    ]);
+    expect(DNS_PROVIDERS.map((p) => p.name)).toContain("dynu");
+  });
+
+  it("encrypts, decrypts, and emits Dynu credentials for Caddy DNS challenges", () => {
+    const encrypted = encryptProviderCredentials("dynu", {
+      api_token: "dynu-token",
+    });
+
+    expect(isEncryptedSecret(encrypted.api_token)).toBe(true);
+    expect(decryptProviderCredentials("dynu", encrypted)).toEqual({
+      api_token: "dynu-token",
+    });
+    expect(buildDnsChallengeConfig("dynu", encrypted, ["1.1.1.1"])).toEqual({
+      provider: {
+        name: "dynu",
+        api_token: "dynu-token",
+      },
+      resolvers: ["1.1.1.1"],
+    });
+  });
 });

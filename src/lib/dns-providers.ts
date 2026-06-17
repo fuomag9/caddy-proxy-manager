@@ -221,6 +221,16 @@ export const DNS_PROVIDERS: DnsProviderDefinition[] = [
       { key: "token", label: "API Token", type: "password", required: true },
     ],
   },
+  {
+    name: "dynu",
+    displayName: "Dynu",
+    description: "Dynu DNS API",
+    docsUrl: "https://github.com/caddy-dns/dynu",
+    modulePath: "github.com/caddy-dns/dynu",
+    fields: [
+      { key: "api_token", label: "API Token", type: "password", required: true },
+    ],
+  },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
