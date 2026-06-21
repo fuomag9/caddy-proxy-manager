@@ -36,7 +36,7 @@ vi.mock('../../src/lib/db', async () => {
 // options object, so getAuth().options is exactly the config createAuth() built
 // — including our real databaseHooks — which is what we want to assert on.
 vi.mock('better-auth', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   betterAuth: (options: any) => ({ options }),
 }));
 vi.mock('better-auth/plugins', () => ({
@@ -81,14 +81,14 @@ describe('enforceSafeUserDefaults', () => {
 
 describe('better-auth user.create.before hook (wired into the real config)', () => {
   it('is configured as a function', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const auth = getAuth() as any;
     const hook = auth.options?.databaseHooks?.user?.create?.before;
     expect(typeof hook).toBe('function');
   });
 
   it('forces role/status to safe defaults on a malicious OAuth-style user create', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const auth = getAuth() as any;
     const hook = auth.options.databaseHooks.user.create.before;
 

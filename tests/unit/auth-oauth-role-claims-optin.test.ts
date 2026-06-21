@@ -34,7 +34,7 @@ vi.mock('../../src/lib/db', async () => {
 });
 
 vi.mock('better-auth', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   betterAuth: (options: any) => ({ options }),
 }));
 vi.mock('better-auth/plugins', () => ({
@@ -46,7 +46,7 @@ import { getAuth } from '../../src/lib/auth-server';
 
 describe('OAuth role-from-claims opt-in (AUTH_ALLOW_OAUTH_ROLE_FROM_CLAIMS=true)', () => {
   it('leaves IdP-provided role/status intact instead of forcing defaults', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const auth = getAuth() as any;
     const hook = auth.options.databaseHooks.user.create.before;
 
