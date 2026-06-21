@@ -58,7 +58,7 @@ import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRu
 import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildFingerprintCelExpression, buildValidClientCertCelExpression, resolveAllowedFingerprints, type MtlsAccessRuleLike } from "./caddy-mtls";
 import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
 import { getAccessRulesForHosts } from "./models/mtls-access-rules";
-import { buildWafHandler, resolveEffectiveWaf } from "./caddy-waf";
+import { buildWafHandlerEntry, resolveEffectiveWaf } from "./caddy-waf";
 
 const CERTS_DIR = process.env.CERTS_DIRECTORY || join(process.cwd(), "data", "certs");
 mkdirSync(CERTS_DIR, { recursive: true, mode: 0o700 });
@@ -808,7 +808,7 @@ async function buildProxyRoutes(
       meta.waf
     );
     if (effectiveWaf?.enabled && effectiveWaf.mode !== 'Off') {
-      handlers.unshift(buildWafHandler(effectiveWaf, Boolean(row.allowWebsocket)));
+      handlers.unshift(buildWafHandlerEntry(effectiveWaf, Boolean(row.allowWebsocket)));
     }
 
     if (row.hstsEnabled) {

@@ -10,7 +10,7 @@
  *   "failed to readfile: open @coraza.conf-recommended: no such file or directory"
  */
 import { describe, it, expect } from 'vitest';
-import { buildWafHandler, resolveEffectiveWaf } from '../../src/lib/caddy-waf';
+import { buildWafHandler, buildWafHandlerEntry, resolveEffectiveWaf } from '../../src/lib/caddy-waf';
 
 const baseWaf = {
   enabled: true,
@@ -281,66 +281,80 @@ describe('resolveEffectiveWaf — override mode', () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildWafHandler — WebSocket bypass
+// buildWafHandlerEntry — WebSocket bypass (issue #195)
+//
+// Regression: enabling WAF on a proxy host mangled WebSocket connections into a
+// corrupt "HTTP/0.9" response. The coraza middleware wraps the response writer
+// to inspect the upstream response, and that wrapper breaks the 101 Switching
+// Protocols connection hijack. The previous `ctl:ruleEngine=off` SecLang bypass
+// did NOT help because it only disables rule evaluation, leaving the response
+// wrapper in place. The fix routes WebSocket upgrades AROUND the WAF handler at
+// the Caddy routing level via a subroute that excludes the upgrade request.
 // ---------------------------------------------------------------------------
 
-describe('buildWafHandler — WebSocket bypass (regression: silent WAF block on WS upgrade)', () => {
-  it('includes WebSocket bypass rule when allowWebsocket=true', () => {
-    const handler = buildWafHandler(baseWaf, true);
-    expect(handler.directives).toContain('Upgrade');
-    expect(handler.directives).toContain('websocket');
-    expect(handler.directives).toContain('ctl:ruleEngine=off');
+// Pull a deeply-nested handler tree apart for assertions
+function subrouteOf(entry: Record<string, unknown>) {
+  return entry as {
+    handler: string;
+    routes: Array<{ match: Array<Record<string, unknown>>; handle: Array<Record<string, unknown>> }>;
+  };
+}
+
+describe('buildWafHandlerEntry — WebSocket bypass', () => {
+  it('returns the bare WAF handler when allowWebsocket=false', () => {
+    const entry = buildWafHandlerEntry(baseWaf, false);
+    expect(entry.handler).toBe('waf');
+    expect(typeof entry.directives).toBe('string');
   });
 
-  it('bypass rule uses case-insensitive regex match for the Upgrade header value', () => {
-    const handler = buildWafHandler(baseWaf, true);
-    // The regex must catch both "websocket" and "WebSocket"
-    expect(handler.directives).toContain('(?i)');
+  it('returns the bare WAF handler when allowWebsocket not provided (default false)', () => {
+    const entry = buildWafHandlerEntry(baseWaf);
+    expect(entry.handler).toBe('waf');
   });
 
-  it('bypass rule is phase:1 so it fires before any OWASP CRS rules', () => {
-    const handler = buildWafHandler(baseWaf, true);
-    expect(handler.directives).toContain('phase:1');
+  it('wraps the WAF handler in a subroute when allowWebsocket=true', () => {
+    const entry = subrouteOf(buildWafHandlerEntry(baseWaf, true));
+    expect(entry.handler).toBe('subroute');
+    expect(entry.routes).toHaveLength(1);
+    // The inner route's only handler is the actual WAF handler
+    expect(entry.routes[0].handle).toHaveLength(1);
+    expect(entry.routes[0].handle[0].handler).toBe('waf');
   });
 
-  it('bypass rule uses nolog,noauditlog to avoid false-positive audit entries', () => {
-    const handler = buildWafHandler(baseWaf, true);
-    expect(handler.directives).toContain('nolog');
-    expect(handler.directives).toContain('noauditlog');
+  it('subroute matches everything EXCEPT WebSocket upgrade requests', () => {
+    const entry = subrouteOf(buildWafHandlerEntry(baseWaf, true));
+    const match = entry.routes[0].match[0];
+    // A `not` matcher on the WebSocket upgrade headers — WAF runs for non-WS only
+    const not = match.not as Array<Record<string, unknown>>;
+    expect(Array.isArray(not)).toBe(true);
+    const header = not[0].header as Record<string, string[]>;
+    expect(header.Connection).toEqual(['*Upgrade*']);
+    expect(header.Upgrade).toEqual(['websocket']);
   });
 
-  it('bypass rule appears BEFORE OWASP CRS includes when both are enabled', () => {
-    const handler = buildWafHandler({ ...baseWaf, load_owasp_crs: true }, true);
-    const directives = handler.directives as string;
-    const wsPos = directives.indexOf('ctl:ruleEngine=off');
-    const crsPos = directives.indexOf('@owasp_crs');
-    expect(wsPos).toBeGreaterThanOrEqual(0);
-    expect(crsPos).toBeGreaterThanOrEqual(0);
-    expect(wsPos).toBeLessThan(crsPos);
+  it('does NOT emit a ctl:ruleEngine=off SecLang bypass (the broken approach)', () => {
+    const entry = subrouteOf(buildWafHandlerEntry(baseWaf, true));
+    const directives = entry.routes[0].handle[0].directives as string;
+    expect(directives).not.toContain('ctl:ruleEngine=off');
   });
 
-  it('does NOT include WebSocket bypass rule when allowWebsocket=false', () => {
-    const handler = buildWafHandler(baseWaf, false);
-    expect(handler.directives).not.toContain('ctl:ruleEngine=off');
+  it('preserves the full WAF directive set inside the bypass subroute', () => {
+    const entry = subrouteOf(buildWafHandlerEntry({ ...baseWaf, load_owasp_crs: true }, true));
+    const wafHandler = entry.routes[0].handle[0];
+    const directives = wafHandler.directives as string;
+    expect(directives).toContain('SecRuleEngine On');
+    expect(directives).toContain('SecAuditEngine RelevantOnly');
+    expect(directives).toContain('Include @owasp_crs/*.conf');
+    // load_owasp_crs flag must survive the wrapping
+    expect(wafHandler.load_owasp_crs).toBe(true);
   });
 
-  it('does NOT include WebSocket bypass rule when allowWebsocket not provided (default false)', () => {
-    const handler = buildWafHandler(baseWaf);
-    expect(handler.directives).not.toContain('ctl:ruleEngine=off');
-  });
-
-  it('still includes all standard directives alongside the bypass rule', () => {
-    const handler = buildWafHandler(baseWaf, true);
-    expect(handler.directives).toContain('SecRuleEngine On');
-    expect(handler.directives).toContain('SecAuditEngine RelevantOnly');
-  });
-
-  it('bypass rule is compatible with custom directives (both present)', () => {
-    const handler = buildWafHandler({
+  it('keeps custom directives inside the bypass subroute', () => {
+    const entry = subrouteOf(buildWafHandlerEntry({
       ...baseWaf,
       custom_directives: 'SecRule ARGS "@contains evil" "id:9001,deny"',
-    }, true);
-    expect(handler.directives).toContain('ctl:ruleEngine=off');
-    expect(handler.directives).toContain('SecRule ARGS "@contains evil"');
+    }, true));
+    const directives = entry.routes[0].handle[0].directives as string;
+    expect(directives).toContain('SecRule ARGS "@contains evil"');
   });
 });

@@ -66,6 +66,19 @@ export function resolveEffectiveWaf(
 }
 
 /**
+ * Caddy request matcher for a WebSocket upgrade handshake — the HTTP GET that
+ * carries `Connection: Upgrade` and `Upgrade: websocket`.  Mirrors Caddy's own
+ * built-in `@websockets` named matcher so detection matches what `reverse_proxy`
+ * itself uses to switch into tunnel mode.
+ */
+export const WEBSOCKET_UPGRADE_MATCHER: Record<string, unknown> = {
+  header: {
+    Connection: ['*Upgrade*'],
+    Upgrade: ['websocket'],
+  },
+};
+
+/**
  * Builds the Caddy `waf` handler object for the given WAF settings.
  *
  * Important: @-prefixed SecLang paths (e.g. @coraza.conf-recommended) resolve
@@ -74,29 +87,9 @@ export function resolveEffectiveWaf(
  * the embedded filesystem is unavailable causes a Caddy config load error:
  *   "failed to readfile: open @coraza.conf-recommended: no such file or directory"
  * Therefore all @-prefixed includes are gated behind load_owasp_crs.
- *
- * @param allowWebsocket - When true, a SecLang rule is prepended that bypasses
- *   WAF inspection for the initial HTTP upgrade request (Upgrade: websocket).
- *   After the protocol switch the connection becomes a WebSocket tunnel that the
- *   WAF cannot inspect anyway, but without this bypass the WAF may silently drop
- *   the upgrade handshake: the block happens before SecAuditEngine captures it,
- *   producing no log entry and an unexplained connection failure.
  */
-export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Record<string, unknown> {
+export function buildWafHandler(waf: WafSettings): Record<string, unknown> {
   const parts: string[] = [];
-
-  if (allowWebsocket) {
-    // WebSocket upgrade is an HTTP GET with Upgrade: websocket.  The WAF sits
-    // first in the handler chain and would process this request.  After the
-    // 101 Switching Protocols response the connection becomes a raw WebSocket
-    // tunnel — the WAF never sees subsequent frames.  Turning the rule engine
-    // off for the upgrade request prevents silent drops while having zero
-    // impact on normal HTTP traffic through the same host.
-    parts.push(
-      'SecRule REQUEST_HEADERS:Upgrade "@rx (?i)^websocket$" ' +
-      '"id:9900,phase:1,pass,nolog,noauditlog,ctl:ruleEngine=off"'
-    );
-  }
 
   if (waf.load_owasp_crs) {
     // @-prefixed paths resolve from the embedded coraza-coreruleset filesystem,
@@ -182,4 +175,46 @@ export function buildWafHandler(waf: WafSettings, allowWebsocket = false): Recor
   const handler: Record<string, unknown> = { handler: 'waf', directives: parts.join('\n') };
   if (waf.load_owasp_crs) handler.load_owasp_crs = true;
   return handler;
+}
+
+/**
+ * Builds the handler-chain entry that applies the WAF for a proxy route.
+ *
+ * When allowWebsocket is true the WAF handler is wrapped in a non-terminal
+ * subroute that only runs for NON-WebSocket requests.  WebSocket upgrades must
+ * bypass the coraza handler ENTIRELY — not merely have the rule engine turned
+ * off via `ctl:ruleEngine=off` (issue #195):
+ *
+ *   The coraza-caddy middleware wraps the response writer to inspect the
+ *   upstream response (SecLang phase 3/4 rules).  That wrapper does not pass
+ *   through the connection hijack that a `101 Switching Protocols` upgrade
+ *   performs, so the raw WebSocket bytes leak out without the HTTP status line.
+ *   The client sees a corrupt "HTTP/0.9" response and the handshake fails.
+ *   Disabling only the rule engine leaves the response wrapper in place, so the
+ *   connection is still mangled — routing around the handler is the only fix.
+ *
+ * Because a Caddy `subroute` compiles its inner routes with the OUTER `next`
+ * handler as their continuation, the WAF handler still wraps the downstream
+ * `reverse_proxy` for ordinary requests (response inspection preserved); only
+ * the matched-out WebSocket upgrade skips it and falls straight through to the
+ * next handler in the chain.
+ *
+ * When allowWebsocket is false the bare WAF handler is returned so WebSocket
+ * upgrades are inspected (and potentially blocked) like any other request.
+ */
+export function buildWafHandlerEntry(
+  waf: WafSettings,
+  allowWebsocket = false
+): Record<string, unknown> {
+  const wafHandler = buildWafHandler(waf);
+  if (!allowWebsocket) return wafHandler;
+  return {
+    handler: 'subroute',
+    routes: [
+      {
+        match: [{ not: [WEBSOCKET_UPGRADE_MATCHER] }],
+        handle: [wafHandler],
+      },
+    ],
+  };
 }

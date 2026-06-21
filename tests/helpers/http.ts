@@ -5,6 +5,8 @@
  * bypassing DNS so test domains don't need to be resolvable.
  */
 import http from 'node:http';
+import net from 'node:net';
+import crypto from 'node:crypto';
 import type { Page } from '@playwright/test';
 
 export interface HttpResponse {
@@ -105,6 +107,96 @@ export async function waitForBody(domain: string, substring: string, path = '/',
     `Body for "${domain}${path}" never contained "${substring}" within ${timeoutMs}ms ` +
     `(last status: ${lastStatus}, body: ${JSON.stringify(lastBody.slice(0, 200))})`
   );
+}
+
+export interface WsHandshakeResult {
+  /** First line of the HTTP response, e.g. "HTTP/1.1 101 Switching Protocols". */
+  statusLine: string;
+  /** Parsed numeric status code, or 0 if the response had no parseable HTTP status line. */
+  statusCode: number;
+  /** Lower-cased response headers. */
+  headers: Record<string, string>;
+  /** Raw response head (everything before the body), latin1-decoded. */
+  raw: string;
+}
+
+/**
+ * Perform a raw WebSocket upgrade handshake against Caddy (localhost:80) over a
+ * plain TCP socket and return the parsed HTTP response head.
+ *
+ * Done at the socket level on purpose: issue #195's symptom was a corrupt
+ * "HTTP/0.9" response — the upstream's body leaking out with no HTTP status
+ * line because the WAF response wrapper broke the 101 connection hijack. A
+ * normal HTTP client would just throw an opaque parse error; reading raw bytes
+ * lets the test assert the handshake actually produced `101 Switching
+ * Protocols` with the expected upgrade headers.
+ */
+export function wsHandshake(
+  domain: string,
+  path = '/echo',
+  extraHeaders: Record<string, string> = {}
+): Promise<WsHandshakeResult> {
+  return new Promise((resolve, reject) => {
+    const key = crypto.randomBytes(16).toString('base64');
+    const socket = net.connect(80, '127.0.0.1');
+    let buf = Buffer.alloc(0);
+
+    const finish = () => {
+      const idx = buf.indexOf('\r\n\r\n');
+      const head = idx === -1 ? buf.toString('latin1') : buf.subarray(0, idx).toString('latin1');
+      const lines = head.split('\r\n');
+      const statusLine = lines[0] ?? '';
+      const match = statusLine.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
+      const headers: Record<string, string> = {};
+      for (const line of lines.slice(1)) {
+        const ci = line.indexOf(':');
+        if (ci > 0) headers[line.slice(0, ci).trim().toLowerCase()] = line.slice(ci + 1).trim();
+      }
+      socket.destroy();
+      resolve({ statusLine, statusCode: match ? parseInt(match[1], 10) : 0, headers, raw: head });
+    };
+
+    const timer = setTimeout(() => {
+      socket.destroy();
+      reject(new Error(`WebSocket handshake to "${domain}${path}" timed out (raw: ${JSON.stringify(buf.toString('latin1').slice(0, 200))})`));
+    }, 10_000);
+
+    socket.on('connect', () => {
+      socket.write(
+        [
+          `GET ${path} HTTP/1.1`,
+          `Host: ${domain}`,
+          'Upgrade: websocket',
+          'Connection: Upgrade',
+          `Sec-WebSocket-Key: ${key}`,
+          'Sec-WebSocket-Version: 13',
+          ...Object.entries(extraHeaders).map(([k, v]) => `${k}: ${v}`),
+          '',
+          '',
+        ].join('\r\n')
+      );
+    });
+
+    socket.on('data', (chunk: Buffer) => {
+      buf = Buffer.concat([buf, chunk]);
+      // Once the full response head has arrived, the handshake outcome is known.
+      if (buf.indexOf('\r\n\r\n') !== -1) {
+        clearTimeout(timer);
+        finish();
+      }
+    });
+
+    // Server closed without a complete header block — the mangled-response case.
+    socket.on('end', () => {
+      clearTimeout(timer);
+      finish();
+    });
+
+    socket.on('error', (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
 }
 
 /** Inject hidden form fields into #create-host-form before submitting. */
