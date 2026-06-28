@@ -3,8 +3,35 @@ import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { proxyHosts } from "../db/schema";
 import { asc, desc, eq, count, like, or } from "drizzle-orm";
-import { type GeoBlockSettings } from "../settings";
+import { type GeoBlockSettings, getDnsProviderSettings } from "../settings";
 import { normalizeProxyHostDomains } from "../proxy-host-domains";
+
+/**
+ * Wildcard certificates (e.g. "*.example.com") can only be issued via the ACME
+ * DNS-01 challenge — HTTP-01/TLS-ALPN-01 cannot satisfy a wildcard. When a host
+ * carries a wildcard domain and relies on auto-managed TLS (no certificate
+ * assigned), Caddy will silently fail to obtain a certificate unless a DNS
+ * provider is configured. Block that misconfiguration up front with a clear error.
+ */
+export async function assertWildcardIssuable(domains: string[], certificateId: number | null) {
+  // An explicitly assigned certificate (imported, or managed with its own
+  // provider) is the admin's responsibility — only guard the auto-managed path.
+  if (certificateId != null) {
+    return;
+  }
+  const wildcardDomains = domains.filter((domain) => domain.startsWith("*."));
+  if (wildcardDomains.length === 0) {
+    return;
+  }
+  const dnsSettings = await getDnsProviderSettings();
+  const hasDnsProvider = Boolean(dnsSettings?.default && dnsSettings.providers[dnsSettings.default]);
+  if (!hasDnsProvider) {
+    throw new Error(
+      `Wildcard domain "${wildcardDomains[0]}" requires a DNS provider for the ACME DNS-01 challenge. ` +
+        `Configure a default DNS provider in settings, or assign a certificate to this host.`
+    );
+  }
+}
 
 // Security: Only the protocol scheme is validated (http/https). Host/IP targets are
 // not restricted — admins intentionally need to proxy to internal services.
@@ -1924,6 +1951,7 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
     throw new Error("At least one upstream must be specified");
   }
   input.upstreams.forEach(validateUpstreamProtocol);
+  await assertWildcardIssuable(domains, input.certificateId ?? null);
 
   const now = nowIso();
   const meta = buildMeta({}, input);
@@ -1979,12 +2007,14 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     throw new Error("Proxy host not found");
   }
 
-  const domains = JSON.stringify(
-    input.domains ? normalizeProxyHostDomains(input.domains) : existing.domains
-  );
+  const domainList = input.domains ? normalizeProxyHostDomains(input.domains) : existing.domains;
+  const domains = JSON.stringify(domainList);
   if (input.upstreams) {
     input.upstreams.forEach(validateUpstreamProtocol);
   }
+  const effectiveCertificateId =
+    input.certificateId !== undefined ? input.certificateId : existing.certificateId;
+  await assertWildcardIssuable(domainList, effectiveCertificateId);
   const upstreams = input.upstreams ? JSON.stringify(Array.from(new Set(input.upstreams))) : JSON.stringify(existing.upstreams);
   const existingMeta: ProxyHostMeta = {
     custom_reverse_proxy_json: existing.customReverseProxyJson ?? undefined,
@@ -2021,7 +2051,7 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
       name: input.name ?? existing.name,
       domains,
       upstreams,
-      certificateId: input.certificateId !== undefined ? input.certificateId : existing.certificateId,
+      certificateId: effectiveCertificateId,
       accessListId: input.accessListId !== undefined ? input.accessListId : existing.accessListId,
       sslForced: input.sslForced ?? existing.sslForced,
       hstsEnabled: input.hstsEnabled ?? existing.hstsEnabled,
