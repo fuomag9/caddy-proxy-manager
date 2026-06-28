@@ -54,7 +54,7 @@ import {
   proxyHosts,
   l4ProxyHosts
 } from "./db/schema";
-import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRule, type PathAllowRule, type PathBlockRule, type PathRewriteRule, type ErrorPageRule } from "./models/proxy-hosts";
+import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRule, type RewriteConfig, type LocationRuleMeta, type PathAllowRule, type PathBlockRule, type PathRewriteRule, type ErrorPageRule } from "./models/proxy-hosts";
 import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildFingerprintCelExpression, buildValidClientCertCelExpression, resolveAllowedFingerprints, type MtlsAccessRuleLike } from "./caddy-mtls";
 import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
 import { getAccessRulesForHosts } from "./models/mtls-access-rules";
@@ -174,7 +174,7 @@ type ProxyHostMeta = {
   mtls?: MtlsMeta;
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
-  location_rules?: LocationRule[];
+  location_rules?: LocationRuleMeta[];
   path_allows?: PathAllowRule[];
   path_blocks?: PathBlockRule[];
   path_rewrites?: PathRewriteRule[];
@@ -694,7 +694,7 @@ type BuildProxyRoutesOptions = {
 };
 
 export function buildLocationReverseProxy(
-  rule: LocationRule,
+  rule: LocationRuleMeta,
   skipHttpsValidation: boolean,
   preserveHostHeader: boolean
 ): { safePath: string; reverseProxyHandler: Record<string, unknown> } {
@@ -720,6 +720,19 @@ export function buildLocationReverseProxy(
       protocol: "http",
       tls: skipHttpsValidation ? { insecure_skip_verify: true } : {},
     };
+  }
+
+  // Per-rule load balancing / health checks (mirrors the host-level config).
+  const lbConfig = parseLoadBalancerConfig(rule.load_balancer);
+  if (lbConfig) {
+    const loadBalancing = buildLoadBalancingConfig(lbConfig);
+    if (loadBalancing) {
+      reverseProxyHandler.load_balancing = loadBalancing;
+    }
+    const healthChecks = buildHealthChecksConfig(lbConfig);
+    if (healthChecks) {
+      reverseProxyHandler.health_checks = healthChecks;
+    }
   }
 
   return { safePath, reverseProxyHandler };

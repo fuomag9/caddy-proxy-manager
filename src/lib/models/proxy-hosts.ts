@@ -84,6 +84,21 @@ export type RewriteConfig = {
 export type LocationRule = {
   path: string;      // Caddy path pattern, e.g. "/ws/*", "/api/*"
   upstreams: string[]; // e.g. ["backend:8080", "backend2:8080"]
+  loadBalancer: LoadBalancerConfig | null; // optional per-rule load balancing / health checks
+};
+
+export type LocationRuleInput = {
+  path: string;
+  upstreams: string[];
+  loadBalancer?: LoadBalancerInput | null;
+};
+
+// Stored (meta JSON) shape of a location rule. The load balancer is held in the
+// same snake_case meta shape used for the host-level load balancer.
+export type LocationRuleMeta = {
+  path: string;
+  upstreams: string[];
+  load_balancer?: LoadBalancerMeta;
 };
 
 export const PATH_BLOCK_STATUS_CODES = [400, 401, 403, 404, 410, 418, 451, 500, 502, 503] as const;
@@ -392,7 +407,7 @@ type ProxyHostMeta = {
   cpm_forward_auth?: CpmForwardAuthMeta;
   redirects?: RedirectRule[];
   rewrite?: RewriteConfig;
-  location_rules?: LocationRule[];
+  location_rules?: LocationRuleMeta[];
   path_allows?: PathAllowRule[];
   path_blocks?: PathBlockRule[];
   path_rewrites?: PathRewriteRule[];
@@ -461,7 +476,7 @@ export type ProxyHostInput = {
   cpmForwardAuth?: CpmForwardAuthInput | null;
   redirects?: RedirectRule[] | null;
   rewrite?: RewriteConfig | null;
-  locationRules?: LocationRule[] | null;
+  locationRules?: LocationRuleInput[] | null;
   pathAllows?: PathAllowRule[] | null;
   pathBlocks?: PathBlockRule[] | null;
   pathRewrites?: PathRewriteRule[] | null;
@@ -934,25 +949,76 @@ export function sanitizeErrorPageRules(value: unknown): ErrorPageRule[] {
   return valid;
 }
 
-function sanitizeLocationRules(value: unknown): LocationRule[] {
-  if (!Array.isArray(value)) return [];
-  const valid: LocationRule[] = [];
-  for (const item of value) {
-    if (
-      item &&
-      typeof item === "object" &&
-      typeof item.path === "string" && item.path.trim() &&
-      Array.isArray(item.upstreams)
-    ) {
-      const upstreams = (item.upstreams as unknown[])
-        .filter((u): u is string => typeof u === "string" && Boolean(u.trim()))
-        .map((u) => u.trim());
-      if (upstreams.length > 0) {
-        valid.push({ path: item.path.trim(), upstreams });
-      }
+// Extract a validated { path, upstreams } pair from a raw location-rule item,
+// or null if it is malformed. Shared by the meta and input sanitizers below.
+function parseLocationRuleBase(item: unknown): { path: string; upstreams: string[] } | null {
+  if (
+    item &&
+    typeof item === "object" &&
+    typeof (item as { path?: unknown }).path === "string" &&
+    (item as { path: string }).path.trim() &&
+    Array.isArray((item as { upstreams?: unknown }).upstreams)
+  ) {
+    const upstreams = ((item as { upstreams: unknown[] }).upstreams)
+      .filter((u): u is string => typeof u === "string" && Boolean(u.trim()))
+      .map((u) => u.trim());
+    if (upstreams.length > 0) {
+      return { path: (item as { path: string }).path.trim(), upstreams };
     }
   }
+  return null;
+}
+
+// Sanitize location rules read from stored meta (snake_case load_balancer).
+function sanitizeLocationRuleMetas(value: unknown): LocationRuleMeta[] {
+  if (!Array.isArray(value)) return [];
+  const valid: LocationRuleMeta[] = [];
+  for (const item of value) {
+    const base = parseLocationRuleBase(item);
+    if (!base) continue;
+    const rule: LocationRuleMeta = base;
+    const lb = sanitizeLoadBalancerMeta((item as { load_balancer?: LoadBalancerMeta }).load_balancer);
+    if (lb) rule.load_balancer = lb;
+    valid.push(rule);
+  }
   return valid;
+}
+
+// Normalize location rules supplied as input (camelCase loadBalancer) into the
+// stored meta shape, reusing the host-level load-balancer input normalizer.
+function normalizeLocationRulesInput(value: unknown): LocationRuleMeta[] {
+  if (!Array.isArray(value)) return [];
+  const valid: LocationRuleMeta[] = [];
+  for (const item of value) {
+    const base = parseLocationRuleBase(item);
+    if (!base) continue;
+    const rule: LocationRuleMeta = base;
+    const lbInput = (item as { loadBalancer?: LoadBalancerInput | null }).loadBalancer;
+    const lb = normalizeLoadBalancerInput(lbInput ?? null, undefined);
+    if (lb) rule.load_balancer = lb;
+    valid.push(rule);
+  }
+  return valid;
+}
+
+function hydrateLocationRules(metaRules: LocationRuleMeta[] | undefined): LocationRule[] {
+  if (!metaRules) return [];
+  return metaRules.map((rule) => ({
+    path: rule.path,
+    upstreams: rule.upstreams,
+    loadBalancer: hydrateLoadBalancer(rule.load_balancer),
+  }));
+}
+
+// Convert hydrated location rules back to the stored meta shape. Used when
+// reconstructing existing meta during an update.
+function dehydrateLocationRules(rules: LocationRule[]): LocationRuleMeta[] {
+  return rules.map((rule) => {
+    const meta: LocationRuleMeta = { path: rule.path, upstreams: rule.upstreams };
+    const lb = dehydrateLoadBalancer(rule.loadBalancer);
+    if (lb) meta.load_balancer = lb;
+    return meta;
+  });
 }
 
 function parseMeta(value: string | null): ProxyHostMeta {
@@ -975,7 +1041,7 @@ function parseMeta(value: string | null): ProxyHostMeta {
       cpm_forward_auth: sanitizeCpmForwardAuthMeta(parsed.cpm_forward_auth),
       redirects: sanitizeRedirectRules(parsed.redirects),
       rewrite: sanitizeRewriteConfig(parsed.rewrite) ?? undefined,
-      location_rules: sanitizeLocationRules(parsed.location_rules),
+      location_rules: sanitizeLocationRuleMetas(parsed.location_rules),
       path_allows: sanitizePathAllows(parsed.path_allows),
       path_blocks: sanitizePathBlocks(parsed.path_blocks),
       path_rewrites: sanitizePathRewrites(parsed.path_rewrites),
@@ -1502,7 +1568,7 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
   }
 
   if (input.locationRules !== undefined) {
-    const rules = sanitizeLocationRules(input.locationRules ?? []);
+    const rules = normalizeLocationRulesInput(input.locationRules ?? []);
     if (rules.length > 0) {
       next.location_rules = rules;
     } else {
@@ -1884,7 +1950,7 @@ function parseProxyHost(row: ProxyHostRow): ProxyHost {
       : null,
     redirects: meta.redirects ?? [],
     rewrite: meta.rewrite ?? null,
-    locationRules: meta.location_rules ?? [],
+    locationRules: hydrateLocationRules(meta.location_rules),
     pathAllows: meta.path_allows ?? [],
     pathBlocks: meta.path_blocks ?? [],
     pathRewrites: meta.path_rewrites ?? [],
@@ -2036,7 +2102,7 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     } : {}),
     ...(existing.redirects && existing.redirects.length > 0 ? { redirects: existing.redirects } : {}),
     ...(existing.rewrite ? { rewrite: existing.rewrite } : {}),
-    ...(existing.locationRules && existing.locationRules.length > 0 ? { location_rules: existing.locationRules } : {}),
+    ...(existing.locationRules && existing.locationRules.length > 0 ? { location_rules: dehydrateLocationRules(existing.locationRules) } : {}),
     ...(existing.pathAllows && existing.pathAllows.length > 0 ? { path_allows: existing.pathAllows } : {}),
     ...(existing.pathBlocks && existing.pathBlocks.length > 0 ? { path_blocks: existing.pathBlocks } : {}),
     ...(existing.pathRewrites && existing.pathRewrites.length > 0 ? { path_rewrites: existing.pathRewrites } : {}),

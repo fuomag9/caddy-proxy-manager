@@ -1687,6 +1687,7 @@ export const spec = {
         properties: {
           path: { type: "string", example: "/ws/*", description: "Caddy path pattern to match" },
           upstreams: { type: "array", items: { type: "string" }, example: ["ws-backend:8080", "ws-backend2:8080"], description: "Upstream servers for this path" },
+          loadBalancer: { oneOf: [{ $ref: "#/components/schemas/LoadBalancerConfig" }, { type: "null" }], description: "Optional per-rule load balancing and health checks for this path's upstreams" },
         },
         required: ["path", "upstreams"],
       },

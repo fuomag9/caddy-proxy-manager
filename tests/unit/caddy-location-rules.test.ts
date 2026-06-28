@@ -181,4 +181,65 @@ describe('buildLocationReverseProxy', () => {
 
     expect(reverseProxyHandler.upstreams).toEqual([{ dial: '[::1]:8080' }]);
   });
+
+  describe('per-rule load balancing & health checks', () => {
+    it('omits load_balancing/health_checks when no load balancer is set', () => {
+      const { reverseProxyHandler } = buildLocationReverseProxy(
+        { path: '/api/*', upstreams: ['a:80', 'b:80'] },
+        false,
+        false
+      );
+      expect(reverseProxyHandler.load_balancing).toBeUndefined();
+      expect(reverseProxyHandler.health_checks).toBeUndefined();
+    });
+
+    it('ignores a disabled load balancer', () => {
+      const { reverseProxyHandler } = buildLocationReverseProxy(
+        { path: '/api/*', upstreams: ['a:80', 'b:80'], load_balancer: { enabled: false, policy: 'round_robin' } },
+        false,
+        false
+      );
+      expect(reverseProxyHandler.load_balancing).toBeUndefined();
+      expect(reverseProxyHandler.health_checks).toBeUndefined();
+    });
+
+    it('applies selection policy and retry settings', () => {
+      const { reverseProxyHandler } = buildLocationReverseProxy(
+        {
+          path: '/api/*',
+          upstreams: ['a:80', 'b:80'],
+          load_balancer: { enabled: true, policy: 'round_robin', try_duration: '5s', try_interval: '250ms', retries: 3 },
+        },
+        false,
+        false
+      );
+      expect(reverseProxyHandler.load_balancing).toEqual({
+        selection_policy: { policy: 'round_robin' },
+        try_duration: '5s',
+        try_interval: '250ms',
+        retries: 3,
+      });
+    });
+
+    it('applies active and passive health checks', () => {
+      const { reverseProxyHandler } = buildLocationReverseProxy(
+        {
+          path: '/api/*',
+          upstreams: ['a:80', 'b:80'],
+          load_balancer: {
+            enabled: true,
+            policy: 'random',
+            active_health_check: { enabled: true, uri: '/health', port: 8081, interval: '30s', timeout: '5s', status: 200 },
+            passive_health_check: { enabled: true, fail_duration: '30s', max_fails: 5, unhealthy_status: [500, 502, 503] },
+          },
+        },
+        false,
+        false
+      );
+      expect(reverseProxyHandler.health_checks).toEqual({
+        active: { uri: '/health', port: 8081, interval: '30s', timeout: '5s', expect_status: 200 },
+        passive: { fail_duration: '30s', max_fails: 5, unhealthy_status: [500, 502, 503] },
+      });
+    });
+  });
 });

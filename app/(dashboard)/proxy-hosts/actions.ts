@@ -465,7 +465,7 @@ function parseRedirectsConfig(formData: FormData): RedirectRule[] | null {
   }
 }
 
-function parseLocationRulesConfig(formData: FormData): import("@/src/lib/models/proxy-hosts").LocationRule[] | null {
+function parseLocationRulesConfig(formData: FormData): import("@/src/lib/models/proxy-hosts").LocationRuleInput[] | null {
   const raw = formData.get("locationRulesJson");
   if (!raw || typeof raw !== "string") return null;
   try {

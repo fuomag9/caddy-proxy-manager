@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, Plus, MinusCircle } from "lucide-react";
-import type { LocationRule } from "@/lib/models/proxy-hosts";
+import type { LocationRule, LoadBalancerConfig } from "@/lib/models/proxy-hosts";
+import { LocationLoadBalancerFields } from "./LocationLoadBalancerFields";
 
 type UpstreamEntry = { protocol: string; address: string };
 
@@ -18,12 +19,13 @@ function serializeUpstream(entry: UpstreamEntry): string {
   return `${entry.protocol}${entry.address.trim()}`;
 }
 
-type RuleState = { path: string; upstreams: UpstreamEntry[] };
+type RuleState = { path: string; upstreams: UpstreamEntry[]; loadBalancer: LoadBalancerConfig | null };
 
 function toState(rules: LocationRule[]): RuleState[] {
   return rules.map((r) => ({
     path: r.path,
     upstreams: r.upstreams.length > 0 ? r.upstreams.map(parseUpstream) : [{ protocol: "http://", address: "" }],
+    loadBalancer: r.loadBalancer ?? null,
   }));
 }
 
@@ -36,6 +38,7 @@ function toJson(rules: RuleState[]): string {
         upstreams: r.upstreams
           .filter((u) => u.address.trim())
           .map(serializeUpstream),
+        loadBalancer: r.loadBalancer?.enabled ? r.loadBalancer : null,
       }))
       .filter((r) => r.upstreams.length > 0)
   );
@@ -47,13 +50,16 @@ export function LocationRulesFields({ initialData = [] }: Props) {
   const [rules, setRules] = useState<RuleState[]>(toState(initialData));
 
   const addRule = () =>
-    setRules((r) => [...r, { path: "", upstreams: [{ protocol: "http://", address: "" }] }]);
+    setRules((r) => [...r, { path: "", upstreams: [{ protocol: "http://", address: "" }], loadBalancer: null }]);
 
   const removeRule = (i: number) =>
     setRules((r) => r.filter((_, idx) => idx !== i));
 
   const updatePath = (i: number, value: string) =>
     setRules((r) => r.map((rule, idx) => (idx === i ? { ...rule, path: value } : rule)));
+
+  const updateLoadBalancer = (i: number, value: LoadBalancerConfig | null) =>
+    setRules((r) => r.map((rule, idx) => (idx === i ? { ...rule, loadBalancer: value } : rule)));
 
   const addUpstream = (ruleIdx: number) =>
     setRules((r) =>
@@ -172,6 +178,10 @@ export function LocationRulesFields({ initialData = [] }: Props) {
                   </Button>
                 </div>
               </div>
+              <LocationLoadBalancerFields
+                value={rule.loadBalancer}
+                onChange={(value) => updateLoadBalancer(i, value)}
+              />
             </div>
           ))}
         </div>
