@@ -77,31 +77,43 @@ test.describe('Certificates', () => {
     const headers = { 'Content-Type': 'application/json', 'Origin': BASE_URL };
     const domain = `acme-wc-${Date.now()}.example`;
 
-    // 1. Create a proxy host with wildcard domain (no certificate → ACME auto)
-    const wcHostRes = await page.request.post(`${API}/proxy-hosts`, {
-      data: {
-        name: `Wildcard ${domain}`,
-        domains: [`*.${domain}`],
-        upstreams: ['127.0.0.1:8080'],
-      },
+    // Auto-managed wildcard hosts require a DNS provider (ACME DNS-01 challenge).
+    // Configure one for this test and restore the original afterwards.
+    const dnsProviderUrl = `${API}/settings/dns-provider`;
+    const originalDns = await (await page.request.get(dnsProviderUrl, { headers: { Origin: BASE_URL } })).json();
+    const setDnsRes = await page.request.put(dnsProviderUrl, {
+      data: { providers: { duckdns: { api_token: 'e2e-fake-token' } }, default: 'duckdns' },
       headers,
     });
-    expect(wcHostRes.status()).toBe(201);
-    const wcHost = await wcHostRes.json();
+    expect(setDnsRes.ok()).toBeTruthy();
 
-    // 2. Create a proxy host for a subdomain (also no certificate → ACME auto)
-    const subHostRes = await page.request.post(`${API}/proxy-hosts`, {
-      data: {
-        name: `Sub ${domain}`,
-        domains: [`sub.${domain}`],
-        upstreams: ['127.0.0.1:8080'],
-      },
-      headers,
-    });
-    expect(subHostRes.status()).toBe(201);
-    const subHost = await subHostRes.json();
-
+    let wcHostId: number | undefined;
+    let subHostId: number | undefined;
     try {
+      // 1. Create a proxy host with wildcard domain (no certificate → ACME auto)
+      const wcHostRes = await page.request.post(`${API}/proxy-hosts`, {
+        data: {
+          name: `Wildcard ${domain}`,
+          domains: [`*.${domain}`],
+          upstreams: ['127.0.0.1:8080'],
+        },
+        headers,
+      });
+      expect(wcHostRes.status()).toBe(201);
+      wcHostId = (await wcHostRes.json()).id;
+
+      // 2. Create a proxy host for a subdomain (also no certificate → ACME auto)
+      const subHostRes = await page.request.post(`${API}/proxy-hosts`, {
+        data: {
+          name: `Sub ${domain}`,
+          domains: [`sub.${domain}`],
+          upstreams: ['127.0.0.1:8080'],
+        },
+        headers,
+      });
+      expect(subHostRes.status()).toBe(201);
+      subHostId = (await subHostRes.json()).id;
+
       // 3. Visit certificates page — subdomain should be collapsed under the wildcard
       await page.goto('/certificates');
       await expect(page.getByRole('tab', { name: /acme/i })).toBeVisible();
@@ -114,8 +126,12 @@ test.describe('Certificates', () => {
       // The subdomain host should NOT appear as a separate entry
       await expect(acmeTab.getByText(`sub.${domain}`)).not.toBeVisible({ timeout: 5_000 });
     } finally {
-      await page.request.delete(`${API}/proxy-hosts/${subHost.id}`, { headers });
-      await page.request.delete(`${API}/proxy-hosts/${wcHost.id}`, { headers });
+      if (subHostId) await page.request.delete(`${API}/proxy-hosts/${subHostId}`, { headers });
+      if (wcHostId) await page.request.delete(`${API}/proxy-hosts/${wcHostId}`, { headers });
+      await page.request.put(dnsProviderUrl, {
+        data: originalDns && Object.keys(originalDns).length ? originalDns : { providers: {}, default: null },
+        headers,
+      });
     }
   });
 
