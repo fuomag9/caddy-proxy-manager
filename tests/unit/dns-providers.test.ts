@@ -150,4 +150,55 @@ describe("DNS provider registry", () => {
       resolvers: ["1.1.1.1"],
     });
   });
+
+  it("registers acme-dns with the Caddy module path and account fields", () => {
+    const provider = getProviderDefinition("acmedns");
+
+    expect(provider).toMatchObject({
+      name: "acmedns",
+      displayName: "acme-dns",
+      docsUrl: "https://github.com/caddy-dns/acmedns",
+      modulePath: "github.com/caddy-dns/acmedns",
+    });
+    expect(provider?.fields).toEqual([
+      { key: "username", label: "Username", type: "string", required: true },
+      { key: "password", label: "Password", type: "password", required: true },
+      { key: "subdomain", label: "Subdomain", type: "string", required: true },
+      {
+        key: "server_url",
+        label: "Server URL",
+        type: "string",
+        required: true,
+        placeholder: "https://auth.acme-dns.io",
+      },
+    ]);
+    expect(DNS_PROVIDERS.map((p) => p.name)).toContain("acmedns");
+  });
+
+  it("encrypts, decrypts, and emits acme-dns credentials for Caddy DNS challenges", () => {
+    const encrypted = encryptProviderCredentials("acmedns", {
+      username: "acmedns-user",
+      password: "acmedns-pass",
+      subdomain: "acmedns-subdomain",
+      server_url: "https://auth.acme-dns.io",
+    });
+
+    expect(isEncryptedSecret(encrypted.password)).toBe(true);
+    expect(decryptProviderCredentials("acmedns", encrypted)).toEqual({
+      username: "acmedns-user",
+      password: "acmedns-pass",
+      subdomain: "acmedns-subdomain",
+      server_url: "https://auth.acme-dns.io",
+    });
+    expect(buildDnsChallengeConfig("acmedns", encrypted, ["1.1.1.1"])).toEqual({
+      provider: {
+        name: "acmedns",
+        username: "acmedns-user",
+        password: "acmedns-pass",
+        subdomain: "acmedns-subdomain",
+        server_url: "https://auth.acme-dns.io",
+      },
+      resolvers: ["1.1.1.1"],
+    });
+  });
 });

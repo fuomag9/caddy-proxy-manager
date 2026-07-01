@@ -231,6 +231,25 @@ export const DNS_PROVIDERS: DnsProviderDefinition[] = [
       { key: "api_token", label: "API Token", type: "password", required: true },
     ],
   },
+  {
+    name: "acmedns",
+    displayName: "acme-dns",
+    description: "acme-dns delegated DNS-01 validation (dedicated ACME challenge records only)",
+    docsUrl: "https://github.com/caddy-dns/acmedns",
+    modulePath: "github.com/caddy-dns/acmedns",
+    fields: [
+      { key: "username", label: "Username", type: "string", required: true },
+      { key: "password", label: "Password", type: "password", required: true },
+      { key: "subdomain", label: "Subdomain", type: "string", required: true },
+      {
+        key: "server_url",
+        label: "Server URL",
+        type: "string",
+        required: true,
+        placeholder: "https://auth.acme-dns.io",
+      },
+    ],
+  },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
