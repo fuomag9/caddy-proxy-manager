@@ -37,7 +37,7 @@
     "@radix-ui/react-tabs": "^1.1.18",
     "@radix-ui/react-tooltip": "^1.2.13",
     "@tailwindcss/postcss": "^4.3.3",
-    "apexcharts": "^5.16.0",
+    "apexcharts": "^6.4.0",
     "autoprefixer": "^10.5.4",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.6.23",
