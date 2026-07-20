@@ -277,6 +277,25 @@ export async function checkHostAccess(
   return !!groupAccess;
 }
 
+/**
+ * Match a request hostname against a proxy host domain pattern.
+ * Mirrors Caddy's host matching semantics: exact match, or a `*.example.com`
+ * wildcard that matches exactly one extra label (foo.example.com but not
+ * a.b.example.com, and not the bare example.com).
+ */
+function domainMatchesPattern(pattern: string, host: string): boolean {
+  const p = pattern.toLowerCase();
+  const h = host.toLowerCase();
+  if (p === h) return true;
+  if (p.startsWith("*.")) {
+    const base = p.slice(2);
+    if (!h.endsWith("." + base)) return false;
+    const sub = h.slice(0, h.length - base.length - 1);
+    return sub.length > 0 && !sub.includes(".");
+  }
+  return false;
+}
+
 export async function checkHostAccessByDomain(
   userId: number,
   host: string
@@ -286,6 +305,9 @@ export async function checkHostAccessByDomain(
     where: (table, operators) => operators.eq(table.enabled, true)
   });
 
+  // Prefer an exact domain match over a wildcard one, so that an explicit
+  // host (radarr.example.com) wins over a broader wildcard (*.example.com).
+  let wildcardMatch: (typeof allHosts)[number] | null = null;
   for (const ph of allHosts) {
     let parsed: string[];
     try {
@@ -297,6 +319,14 @@ export async function checkHostAccessByDomain(
       const hasAccess = await checkHostAccess(userId, ph.id);
       return { hasAccess, proxyHostId: ph.id };
     }
+    if (!wildcardMatch && parsed.some((d) => domainMatchesPattern(d, host))) {
+      wildcardMatch = ph;
+    }
+  }
+
+  if (wildcardMatch) {
+    const hasAccess = await checkHostAccess(userId, wildcardMatch.id);
+    return { hasAccess, proxyHostId: wildcardMatch.id };
   }
 
   // Host not found in any proxy host — deny by default
@@ -374,7 +404,7 @@ export async function isForwardAuthDomain(host: string): Promise<boolean> {
     } catch {
       continue;
     }
-    if (parsed.some((d) => d.toLowerCase() === host.toLowerCase())) {
+    if (parsed.some((d) => domainMatchesPattern(d, host))) {
       // Check that this host actually has forward auth enabled
       let parsedMeta: Record<string, unknown>;
       try {
