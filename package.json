@@ -78,7 +78,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/topojson-client": "^3.1.5",
     "@vitest/ui": "^4.1.10",
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.1",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.8.0",
     "shadcn": "^4.15.0",
