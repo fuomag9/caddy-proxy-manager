@@ -4,7 +4,7 @@
 # cross-compile Caddy for the target arch via GOOS/GOARCH. This avoids QEMU
 # emulation when producing the linux/arm64 image on an x86 GitHub runner —
 # native cross-compilation is several times faster.
-FROM --platform=$BUILDPLATFORM golang:1.26 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27 AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
