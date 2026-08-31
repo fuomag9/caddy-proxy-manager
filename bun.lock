@@ -21,7 +21,7 @@
         "@radix-ui/react-tabs": "^1.1.21",
         "@radix-ui/react-tooltip": "^1.2.16",
         "@tailwindcss/postcss": "^4.3.3",
-        "apexcharts": "^6.10.0",
+        "apexcharts": "^7.0.0",
         "autoprefixer": "^10.5.4",
         "bcryptjs": "^3.0.3",
         "better-auth": "^1.7.1",
@@ -744,7 +744,7 @@
 
     "apex-commons": ["apex-commons@0.5.0", "", {}, "sha512-xz83SgPREE1wGtoflvxjwJtcjzl5bKTz2/bDxWCZNL6QVjUNE47kMg/1Zqt0bSh6eOnmFCWlTDc3RU8o85N+wg=="],
 
-    "apexcharts": ["apexcharts@6.10.0", "", { "dependencies": { "apex-commons": "^0.5.0" } }, "sha512-XkDW9pb5L5jrjox86Q20gR2w6YnU4hUpv+FjL1eKtYKQGtyTUSsnFeuUE8wVDz8hNNHbOEx7Sl9cjfCmhB3NVw=="],
+    "apexcharts": ["apexcharts@7.0.0", "", { "dependencies": { "apex-commons": "^0.5.0" } }, "sha512-wX0LP5WajZXIAvQpCcDMVOlBUhlfhzUmEaKxPkUs54WFm0/GBbEyYCpw4G6iK7W5nU/R+kRzk+NHQSWlmp0qCA=="],
 
     "apg-lite": ["apg-lite@1.0.5", "", {}, "sha512-SlI+nLMQDzCZfS39ihzjGp3JNBQfJXyMi6cg9tkLOCPVErgFsUIAEdO9IezR7kbP5Xd0ozcPNQBkf9TO5cHgWw=="],
 
