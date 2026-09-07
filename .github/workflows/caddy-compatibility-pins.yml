@@ -33,9 +33,27 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Build the Caddy Dockerfile directly instead of `docker compose build caddy`:
+      # Compose interpolates variables for ALL services before building, and
+      # docker-compose.yml declares hard-required vars (SESSION_SECRET,
+      # ADMIN_USERNAME, ADMIN_PASSWORD, CLICKHOUSE_PASSWORD) that are unset in
+      # CI, so compose always failed here regardless of the caddy service. The
+      # Dockerfile re-runs update-compatibility-pins.sh inside the build, so
+      # this still end-to-end verifies the refreshed pins. Mirrors the caddy
+      # job of docker-build-pr.yml (same Dockerfile, same GHA cache scope).
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v4
+
       - name: Verify updated Caddy image
         if: steps.changes.outputs.changed == 'true'
-        run: docker compose build caddy
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: docker/caddy/Dockerfile
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha,scope=caddy
 
       - name: Open compatibility-pin pull request
         if: steps.changes.outputs.changed == 'true'
