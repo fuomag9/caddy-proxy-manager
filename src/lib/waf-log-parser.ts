@@ -335,6 +335,13 @@ export async function parseNewWafLogEntries(): Promise<void> {
     // Once we've read through to the current end of file, it's safe to
     // truncate: Coraza appends via O_APPEND, so writes after truncation land
     // correctly at the new (empty) end of file.
+    //
+    // Truncation relies on waf-audit.log being GROUP-WRITABLE for web's
+    // supplementary CADDY_GID (group_add in docker-compose.yml). That mode is
+    // whatever Coraza happened to create the file with — it is not pinned by
+    // any config. If the file is ever recreated without g+w, truncateSync
+    // fails with EACCES, the warning below fires, and the log grows
+    // unbounded until someone chgrp/chmods the file for the caddy GID.
     if (newOffset === currentSize && currentSize > AUDIT_LOG_TRUNCATE_THRESHOLD) {
       try {
         truncateSync(AUDIT_LOG, 0);
@@ -348,7 +355,10 @@ export async function parseNewWafLogEntries(): Promise<void> {
           const code = (err as NodeJS.ErrnoException).code;
           console.warn(
             `[waf-log-parser] could not truncate ${AUDIT_LOG} (${code ?? err}); ` +
-            `it will keep growing. Ingestion is unaffected.`
+            `it will keep growing. Ingestion is unaffected. Truncation requires ` +
+            `the file to be group-writable for web's supplementary CADDY_GID ` +
+            `(default 10000) — check its mode/owner inside the caddy container ` +
+            `and fix with chgrp/chmod if it is not g+w.`
           );
           warnedTruncateFailed = true;
         }

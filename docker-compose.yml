@@ -65,7 +65,10 @@ services:
       # Days of analytics data to keep before TTL deletes it (default 30)
       CLICKHOUSE_RETENTION_DAYS: ${CLICKHOUSE_RETENTION_DAYS:-30}
     group_add:
-      - "${CADDY_GID:-10000}"  # caddy's GID — lets the web user read/write /logs
+      # caddy's GID — grants group access to the log FILES (read access.log,
+      # truncate the group-writable waf-audit.log). The web user never needs
+      # to list /logs itself; see the caddy-logs note on the caddy service.
+      - "${CADDY_GID:-10000}"
     volumes:
       - caddy-manager-data:/app/data
       - geoip-data:/usr/share/GeoIP:ro,z
@@ -118,6 +121,12 @@ services:
     volumes:
       - caddy-data:/data
       - caddy-config:/config
+      # If you override this named volume with a bind mount, the host dir
+      # MUST be readable+writable by caddy's UID/GID — Caddy's log roller
+      # (timberjack) lists the directory to gzip and prune old rolled files.
+      # A write-only dir (e.g. mode 0733/0773) keeps rotation working but
+      # silently disables cleanup and fills the disk. On the host run:
+      #   chgrp <CADDY_GID> <host-dir> && chmod 2770 <host-dir>
       - caddy-logs:/logs
       - geoip-data:/usr/share/GeoIP:ro,z
       # Custom ACME CA root PEM written by web, read here for trusted_roots_pem_files (issue #192)

@@ -2661,11 +2661,27 @@ export async function buildCaddyDocument() {
   const httpApp = Object.keys(servers).length > 0 ? { http: { servers } } : {};
 
   // Build logging configuration
+  //
   // Roll settings are spelled out explicitly rather than relying on Caddy's
-  // built-in file-writer defaults — those defaults silently stopped rotating
-  // (no compression, no cleanup of old rolled files) on the deployed build,
-  // filling the host disk. Being explicit is defensive against future
-  // upstream default/behavior changes.
+  // built-in file-writer defaults, so rotation behavior doesn't depend on
+  // upstream defaults staying put.
+  //
+  // IMPORTANT for deployments that bind-mount /logs: Caddy ≥2.11 rolls logs
+  // via timberjack, whose housekeeping pass (gzip + prune old rolled files)
+  // starts with a directory listing (os.ReadDir). The /logs directory must
+  // therefore be READABLE as well as writable by the caddy container's UID —
+  // a write-only directory keeps rotation working (create/rename need only
+  // w+x) but silently disables compression and pruning: timberjack swallows
+  // the EACCES from the listing, and 100MB rolled files accumulate until the
+  // disk fills. This actually happened in production (2026-09: 14GB of rolled
+  // access logs on a 26G disk). The explicit roll_* settings here cannot
+  // prevent that — only correct directory permissions can.
+  //
+  // Named volumes (default compose setup) inherit the image's chown'd /logs
+  // and are fine. For bind mounts, run on the host:
+  //   chgrp <CADDY_GID> <host-dir> && chmod 2770 <host-dir>
+  // The web container never lists the directory — it needs only traverse (x)
+  // plus group access to the files themselves via group_add: CADDY_GID.
   const rollSettings = {
     roll: true,
     roll_size_mb: 100,
