@@ -14,6 +14,8 @@ import {
   buildWafHandler,
   buildWafHandlerEntry,
   CORAZA_MAX_BODY_LIMIT,
+  droppedWafDirectiveMessage,
+  filterCustomDirectives,
   findInvalidBodyLimitDirective,
   parseBodyLimitMib,
   resolveEffectiveWaf,
@@ -571,5 +573,77 @@ describe('parseBodyLimitMib', () => {
     expect(() => parseBodyLimitMib('0', 'Limit')).toThrow();
     expect(() => parseBodyLimitMib('1.5', 'Limit')).toThrow();
     expect(() => parseBodyLimitMib('abc', 'Limit')).toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// filterCustomDirectives
+// ---------------------------------------------------------------------------
+// The allowlist that guards custom_directives. buildWafHandler must only ever
+// emit `kept`. The `dropped` list is what validation surfaces to the user so a
+// directive like SecRuleUpdateActionById (discussion #146) fails loudly instead
+// of silently doing nothing.
+
+describe('filterCustomDirectives', () => {
+  it('keeps plain SecRule, SecAction, SecMarker and SecDefaultAction lines', () => {
+    const { kept, dropped } = filterCustomDirectives([
+      'SecRule REQUEST_URI "@contains /admin" "id:1001,phase:1,deny"',
+      'SecAction "id:1101,phase:1,log"',
+      'SecMarker marker1',
+      'SecDefaultAction "phase:1,log,pass"',
+    ].join('\n'));
+    expect(dropped).toEqual([]);
+    expect(kept).toHaveLength(4);
+  });
+
+  it('drops rule-mutation/engine directives with a reason', () => {
+    const { kept, dropped } = filterCustomDirectives('SecRuleUpdateActionById 930130 "block"');
+    expect(kept).toEqual([]);
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({ line: 'SecRuleUpdateActionById 930130 "block"' });
+    expect(dropped[0].reason).toMatch(/rule-mutation/);
+  });
+
+  it('drops Include directives with a reason', () => {
+    const { dropped } = filterCustomDirectives('Include @owasp_crs/*.conf');
+    expect(dropped[0].reason).toMatch(/Include is not allowed/);
+  });
+
+  it('drops out-of-range body limits but keeps in-range ones', () => {
+    const { kept, dropped } = filterCustomDirectives([
+      'SecRequestBodyLimit 10737418240',
+      'SecRequestBodyLimit 536870912',
+    ].join('\n'));
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0].line).toBe('SecRequestBodyLimit 10737418240');
+    expect(kept).toContain('SecRequestBodyLimit 536870912');
+  });
+
+  it('drops ctl:ruleEngine even inside an allowed line', () => {
+    const { dropped } = filterCustomDirectives('SecAction "id:9001,phase:1,ctl:ruleEngine=Off"');
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0].reason).toMatch(/ctl:ruleEngine/);
+  });
+
+  it('preserves empty lines and comments', () => {
+    const { kept, dropped } = filterCustomDirectives('# comment\n\nSecRule ARGS "@contains evil" "id:9002,deny"');
+    expect(dropped).toEqual([]);
+    expect(kept).toEqual(['# comment', '', 'SecRule ARGS "@contains evil" "id:9002,deny"']);
+  });
+
+  it('returns empty results for blank input', () => {
+    expect(filterCustomDirectives('')).toEqual({ kept: [], dropped: [] });
+    expect(filterCustomDirectives(undefined)).toEqual({ kept: [], dropped: [] });
+  });
+});
+
+describe('droppedWafDirectiveMessage', () => {
+  it('names each dropped line and its reason', () => {
+    const msg = droppedWafDirectiveMessage([
+      { line: 'SecRuleUpdateActionById 930130 "block"', reason: 'rule-mutation/engine directives are not allowed' },
+    ]);
+    expect(msg).toMatch(/will be dropped and never sent to Caddy/);
+    expect(msg).toMatch(/SecRuleUpdateActionById 930130 "block"/);
+    expect(msg).toMatch(/rule-mutation/);
   });
 });

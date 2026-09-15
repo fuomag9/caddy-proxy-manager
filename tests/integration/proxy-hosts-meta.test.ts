@@ -83,7 +83,7 @@ describe('proxy-hosts WAF meta', () => {
         load_owasp_crs: true,
         excluded_rule_ids: [942100, 941110],
         waf_mode: 'override',
-        custom_directives: 'SecRuleEngine On',
+        custom_directives: 'SecRule REQUEST_URI "@contains /admin" "id:1001,phase:1,deny"',
       },
     };
     const host = await insertHost({ meta: JSON.stringify(wafMeta) });

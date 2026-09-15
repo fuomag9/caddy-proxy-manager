@@ -6,7 +6,7 @@ import { asc, desc, eq, count, like, or } from "drizzle-orm";
 import { type GeoBlockSettings, getDnsProviderSettings } from "../settings";
 import { normalizeProxyHostDomains } from "../proxy-host-domains";
 import { ApiValidationError } from "../api-errors";
-import { bodyLimitRangeMessage, findInvalidBodyLimitDirective, isValidBodyLimit } from "../caddy-waf";
+import { bodyLimitRangeMessage, droppedWafDirectiveMessage, filterCustomDirectives, findInvalidBodyLimitDirective, isValidBodyLimit } from "../caddy-waf";
 
 /**
  * Wildcard certificates (e.g. "*.example.com") can only be issued via the ACME
@@ -354,6 +354,12 @@ function validateWafMeta(waf: WafHostConfig): WafHostConfig {
   const badDirective = findInvalidBodyLimitDirective(waf.custom_directives);
   if (badDirective) {
     throw new ApiValidationError(`waf.custom_directives has an out-of-range body limit: "${badDirective}" — ${bodyLimitRangeMessage("the byte count")}`);
+  }
+  // Lines in the message come straight from the user's custom_directives, but
+  // only lines CPM will drop anyway are reported, so nothing new is echoed.
+  const { dropped } = filterCustomDirectives(waf.custom_directives);
+  if (dropped.length > 0) {
+    throw new ApiValidationError(droppedWafDirectiveMessage(dropped));
   }
   return waf;
 }

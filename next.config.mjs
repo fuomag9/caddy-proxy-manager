@@ -1,12 +1,41 @@
 import { createRequire } from 'module';
+import { execSync } from 'node:child_process';
 import { copyMaplibreWorker } from './scripts/copy-maplibre-worker.mjs';
 
 // Application version shown in the web UI and OpenAPI spec (issue #259).
-// CI/release builds pass APP_VERSION (git tag, e.g. 1.2.3) as a Docker build
-// arg; otherwise fall back to the version declared in package.json.
+// Resolution order:
+//   1. APP_VERSION build arg -- set by CI to a release git tag (e.g. 1.2.3)
+//      for tagged releases.
+//   2. The git commit SHA -- used for non-release builds (branch/PR/dev) so the
+//      UI shows an identifiable build reference instead of a stale
+//      package.json placeholder like 1.0.0.
+//   3. The version declared in package.json.
+//   4. 'unknown'.
 const require = createRequire(import.meta.url);
 const { version: pkgVersion } = require('./package.json');
-const APP_VERSION = String(process.env.APP_VERSION || pkgVersion || 'unknown').replace(/^v/, '');
+
+function getGitCommit() {
+  try {
+    const sha = execSync('git rev-parse --short HEAD', {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      encoding: 'utf8',
+    }).trim();
+    return sha || null;
+  } catch {
+    // Not a git checkout (e.g. Docker build context excludes .git).
+    return null;
+  }
+}
+
+function resolveAppVersion() {
+  const fromArg = String(process.env.APP_VERSION || '').trim().replace(/^v/, '');
+  if (fromArg) return fromArg;
+  const commit = getGitCommit();
+  if (commit) return commit;
+  return pkgVersion || 'unknown';
+}
+
+const APP_VERSION = resolveAppVersion();
 
 // When building under Node.js (not Bun), redirect bun:sqlite to a better-sqlite3 shim
 // so `next build` works locally without Bun installed.

@@ -19,8 +19,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_PATH=/tmp/build.db
 ENV DATABASE_URL=file:/tmp/build.db
 # Application version baked into the UI/OpenAPI spec at build time (issue #259).
-# Set by CI to the git tag (without the leading v) for release builds; when
-# unset, next.config.mjs falls back to the package.json version.
+# Set by CI to the git tag (without the leading v) for release builds, or to
+# the git commit SHA for non-release builds; when unset, next.config.mjs
+# resolves it from git and finally falls back to the package.json version.
 ARG APP_VERSION
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

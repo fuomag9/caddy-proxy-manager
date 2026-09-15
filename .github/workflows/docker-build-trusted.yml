@@ -65,11 +65,14 @@ jobs:
         id: app-version
         run: |
           # Bake the release version (git tag without the leading v) into the
-          # image for tag builds; branch builds fall back to package.json.
+          # image for tag builds. Non-release (branch/dev) builds use the git
+          # commit SHA so the UI shows an identifiable build reference rather
+          # than a stale package.json placeholder (e.g. 1.0.0). See
+          # next.config.mjs for the resolution order.
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           else
-            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push Docker image

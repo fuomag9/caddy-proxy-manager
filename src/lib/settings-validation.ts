@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { bodyLimitRangeMessage, findInvalidBodyLimitDirective, isValidBodyLimit } from "./caddy-waf";
+import { bodyLimitRangeMessage, droppedWafDirectiveMessage, filterCustomDirectives, findInvalidBodyLimitDirective, isValidBodyLimit } from "./caddy-waf";
 import { normalizeDefaultResponseSettings } from "./caddy-default-response";
 import { getProviderDefinition, isValidDnsDuration } from "./dns-providers";
 
@@ -335,6 +335,10 @@ function validateWaf(value: Record<string, unknown>): void {
   const badDirective = findInvalidBodyLimitDirective(directives);
   if (badDirective) {
     invalid(`waf.custom_directives has an out-of-range body limit: "${badDirective}" — ${bodyLimitRangeMessage("the byte count")}`);
+  }
+  const { dropped } = filterCustomDirectives(directives);
+  if (dropped.length > 0) {
+    invalid(droppedWafDirectiveMessage(dropped));
   }
   if (value.excluded_rule_ids !== undefined) validateNumberList(value.excluded_rule_ids, "waf.excluded_rule_ids");
   validateBodyLimits(value, "waf");

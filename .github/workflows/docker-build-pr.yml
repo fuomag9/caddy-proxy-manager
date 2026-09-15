@@ -45,6 +45,14 @@ jobs:
           tags: |
             type=ref,event=pr
 
+      - name: Compute app version
+        id: app-version
+        run: |
+          # PR builds are not release builds, so bake the git commit SHA into
+          # the image to display an identifiable build reference instead of a
+          # stale package.json placeholder.
+          echo "version=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
       - name: Build Docker image (no push)
         id: build
         uses: docker/build-push-action@v7
@@ -54,5 +62,7 @@ jobs:
           push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.app-version.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.service }}
           platforms: linux/amd64,linux/arm64

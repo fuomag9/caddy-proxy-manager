@@ -113,6 +113,29 @@ describe("REST settings runtime validation", () => {
     expect(validateSettingsGroup("waf", input)).toBe(input);
   });
 
+  // Discussion #146: users reported a custom SecRuleUpdateActionById being
+  // silently ignored. Unlike a plain SecRule (which is allowed and works),
+  // the rule-mutation directive is dropped by the allowlist — so it must be
+  // reported at save time, not fail silently.
+  it("rejects custom WAF directives the allowlist will drop", () => {
+    expect(() => validateSettingsGroup("waf", {
+      ...validGroups.waf,
+      custom_directives: 'SecRuleUpdateActionById 930130 "block"',
+    })).toThrow(/will be dropped and never sent to Caddy/);
+    expect(() => validateSettingsGroup("waf", {
+      ...validGroups.waf,
+      custom_directives: 'Include @owasp_crs/*.conf',
+    })).toThrow(/will be dropped and never sent to Caddy/);
+  });
+
+  it("accepts custom WAF directives the allowlist permits", () => {
+    const input = {
+      ...validGroups.waf,
+      custom_directives: 'SecRule REQUEST_URI "@contains /admin" "id:1001,phase:1,deny,status:403,log"',
+    };
+    expect(validateSettingsGroup("waf", input)).toBe(input);
+  });
+
   it("rejects unsupported DNS providers and credential keys", () => {
     expect(() => validateSettingsGroup("dns-provider", {
       providers: { malicious: { command: "run" } },
