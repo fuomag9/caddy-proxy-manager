@@ -13,6 +13,7 @@ import {
   formatDialAddress,
   parseUpstreamTarget,
   toDurationMs,
+  escapeHostPlaceholders,
 } from "./caddy-utils";
 import {
   groupHostPatternsByPriority,
@@ -862,8 +863,8 @@ export function buildErrorPageRoute(rule: ErrorPageRule, hosts?: string[]): Cadd
       {
         handler: "static_response",
         status_code: "{http.error.status_code}",
-        body: rule.body,
-        headers: { "Content-Type": [rule.contentType || "text/html; charset=utf-8"] },
+        body: escapeHostPlaceholders(rule.body),
+        headers: { "Content-Type": [escapeHostPlaceholders(rule.contentType || "text/html; charset=utf-8")] },
       },
     ],
     terminal: true,
@@ -994,7 +995,7 @@ async function buildProxyRoutes(
           status_code: block.status,
         };
         if (block.body) {
-          handle.body = block.body;
+          handle.body = escapeHostPlaceholders(block.body);
         }
         const matcher: Record<string, unknown> = { path: [safePath] };
         if (allowPatterns.length > 0) {
@@ -1033,7 +1034,7 @@ async function buildProxyRoutes(
         handle: [{
           handler: "static_response",
           status_code: rule.status,
-          headers: { Location: [rule.to] },
+          headers: { Location: [escapeHostPlaceholders(rule.to)] },
         }],
       }));
       handlers.push({

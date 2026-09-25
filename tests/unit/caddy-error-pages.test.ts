@@ -57,6 +57,18 @@ describe('buildErrorPageRoute', () => {
   });
 });
 
+describe('buildErrorPageRoute placeholder escaping', () => {
+  it('escapes host placeholders in the body and content type but keeps request placeholders', () => {
+    const route = buildErrorPageRoute(
+      { statuses: [404], body: '<p>{file./data/x} {http.error.status_code}</p>', contentType: 'text/html; x={env.HOME}' },
+      ['a.example.com']
+    );
+    const handler = (route.handle as unknown[])[0] as { body: string; headers: Record<string, string[]> };
+    expect(handler.body).toBe('<p>\\{file./data/x} {http.error.status_code}</p>');
+    expect(handler.headers['Content-Type']).toEqual(['text/html; x=\\{env.HOME}']);
+  });
+});
+
 describe('sanitizeErrorPageRules', () => {
   it('drops rules without a body', () => {
     expect(sanitizeErrorPageRules([{ statuses: [502], body: '' }])).toEqual([]);
