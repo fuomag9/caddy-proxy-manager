@@ -75,6 +75,10 @@ export function parseBodyLimitMib(raw: unknown, label: string): number | undefin
 const BODY_LIMIT_DIRECTIVE =
   /^(SecRequestBodyLimit|SecRequestBodyNoFilesLimit|SecRequestBodyInMemoryLimit)\s+(\d+)\s*$/i;
 const BODY_LIMIT_ACTION_DIRECTIVE = /^SecRequestBodyLimitAction\s+(?:Reject|ProcessPartial)\s*$/i;
+// Coraza operators that load data from the container filesystem or execute a
+// program (inspectFile). Matched case-insensitively, negated or not.
+const FILE_OR_EXEC_OPERATOR =
+  /@\s*(inspectFile|pmFromFile|pmf|ipMatchFromFile|ipMatchF|validateSchema)\b/i;
 
 /**
  * Returns the first custom directive whose byte count Coraza would reject, or
@@ -177,6 +181,13 @@ export function filterCustomDirectives(
     // Reject ctl:ruleEngine inside allowed lines (can conditionally disable WAF)
     if (/ctl:ruleEngine/i.test(trimmed)) {
       dropped.push({ line: trimmed, reason: 'ctl:ruleEngine is not allowed (it can conditionally disable the WAF)' });
+      continue;
+    }
+    // Reject operators that read files or execute programs inside the Caddy
+    // container (same rationale as Include above).
+    const fileOperator = FILE_OR_EXEC_OPERATOR.exec(trimmed);
+    if (fileOperator) {
+      dropped.push({ line: trimmed, reason: `@${fileOperator[1]} is not allowed (it reads files or runs programs inside the container)` });
       continue;
     }
     kept.push(line);
