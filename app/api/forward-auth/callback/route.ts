@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  redeemExchangeCode,
-  resolveForwardAuthAudience,
-} from "@/src/lib/models/forward-auth";
-import { getTrustedForwardAuthOrigin } from "@/src/lib/forward-auth-trust";
+import { redeemExchangeCode } from "@/src/lib/models/forward-auth";
+import { resolveTrustedForwardAuthAudience } from "@/src/lib/forward-auth-trust";
 
 const COOKIE_NAME = "_cpm_fa";
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
@@ -19,11 +16,9 @@ export async function GET(request: NextRequest) {
   }
 
   // The public Next.js origin may be reachable directly, so forwarded headers
-  // are accepted only with the proof injected by the generated Caddy route.
-  const requestOrigin = getTrustedForwardAuthOrigin(request.headers);
-  const audience = requestOrigin
-    ? await resolveForwardAuthAudience(requestOrigin)
-    : null;
+  // are accepted only with the proof injected by the generated Caddy route,
+  // and only for the proxy host that route belongs to.
+  const audience = await resolveTrustedForwardAuthAudience(request.headers);
   if (!audience) {
     return new NextResponse(
       "Invalid or expired authorization code. Please try logging in again.",

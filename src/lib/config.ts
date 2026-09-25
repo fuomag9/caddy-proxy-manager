@@ -196,6 +196,21 @@ export const config = {
     allowAutoLinking: process.env.OAUTH_ALLOW_AUTO_LINKING === "true",
   },
   forwardAuthInternalUrl: process.env.FORWARD_AUTH_INTERNAL_URL ?? null,
+  /**
+   * Non-default external ports (e.g. "8443") on which forward-auth protected
+   * hosts are served. Redirect targets and callback origins on any other
+   * non-default port are rejected, because Caddy matches hosts without regard
+   * to the port. Read on each access so tests can vary it.
+   */
+  get forwardAuthAllowedPorts(): Set<string> {
+    return new Set(
+      (process.env.FORWARD_AUTH_ALLOWED_PORTS ?? "")
+        .split(",")
+        .map((port) => port.trim())
+        .filter((port) => /^[1-9]\d{0,4}$/.test(port) && Number(port) <= 65535)
+        .map((port) => String(Number(port)))
+    );
+  },
 };
 
 /**

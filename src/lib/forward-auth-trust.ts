@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { config } from "./config";
+import { resolveForwardAuthAudience, type ForwardAuthAudience } from "./models/forward-auth";
 
 /**
  * Internal proof header injected by generated Caddy routes before they proxy a
@@ -8,6 +9,22 @@ import { config } from "./config";
  * directly and clients can forge them there.
  */
 export const FORWARD_AUTH_PROXY_PROOF_HEADER = "X-CPM-Forward-Auth-Proof";
+
+/**
+ * Proxy-host ID of the Caddy route that issued the subrequest.  Caddy chose the
+ * route from the raw Host header, so CPM must authorize against that same
+ * proxy host rather than re-deriving it from a hostname it parsed itself.
+ */
+export const FORWARD_AUTH_PROXY_HOST_ID_HEADER = "X-CPM-Proxy-Host-Id";
+
+/**
+ * Host header syntax accepted from Caddy: LDH labels (optionally with a
+ * trailing dot) or a bracketed IPv6 literal, plus an optional port.  Anything
+ * else — percent-encoding, non-ASCII, IPv4 shorthands — could be normalized by
+ * the URL parser into a different hostname than the one Caddy matched.
+ */
+const FORWARDED_HOST_RE =
+  /^(?:[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.?|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/;
 
 const PROOF_CONTEXT = "cpm-forward-auth-proxy-proof:v1";
 
@@ -44,8 +61,7 @@ export function getTrustedForwardAuthOrigin(headers: Headers): string | null {
   if (
     (forwardedProto !== "http" && forwardedProto !== "https") ||
     !forwardedHost ||
-    forwardedHost.includes(",") ||
-    /[\r\n]/.test(forwardedHost)
+    !FORWARDED_HOST_RE.test(forwardedHost)
   ) {
     return null;
   }
@@ -54,8 +70,37 @@ export function getTrustedForwardAuthOrigin(headers: Headers): string | null {
     const parsed = new URL(`${forwardedProto}://${forwardedHost}`);
     if (parsed.username || parsed.password) return null;
     if (parsed.pathname !== "/" || parsed.search || parsed.hash) return null;
+    // The parsed hostname must be exactly what Caddy saw (case aside).
+    const rawHostname = forwardedHost.startsWith("[")
+      ? forwardedHost.slice(0, forwardedHost.indexOf("]") + 1)
+      : forwardedHost.replace(/:\d+$/, "");
+    if (parsed.hostname !== rawHostname.toLowerCase()) return null;
     return parsed.origin;
   } catch {
     return null;
   }
+}
+
+/** The proxy-host ID pinned by the generated Caddy route, or null. */
+export function getTrustedForwardAuthProxyHostId(headers: Headers): number | null {
+  if (!hasValidProxyProof(headers)) return null;
+  const raw = headers.get(FORWARD_AUTH_PROXY_HOST_ID_HEADER)?.trim() ?? "";
+  if (!/^[1-9]\d{0,9}$/.test(raw)) return null;
+  return Number(raw);
+}
+
+/**
+ * Resolve the forward-auth audience for a Caddy subrequest.  Requires a valid
+ * proxy proof, a well-formed forwarded origin, and that the origin resolves to
+ * the same proxy host Caddy routed the request through.
+ */
+export async function resolveTrustedForwardAuthAudience(
+  headers: Headers
+): Promise<ForwardAuthAudience | null> {
+  const origin = getTrustedForwardAuthOrigin(headers);
+  const pinnedProxyHostId = getTrustedForwardAuthProxyHostId(headers);
+  if (!origin || pinnedProxyHostId === null) return null;
+  const audience = await resolveForwardAuthAudience(origin);
+  if (!audience || audience.proxyHostId !== pinnedProxyHostId) return null;
+  return audience;
 }

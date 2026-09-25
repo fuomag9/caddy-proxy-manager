@@ -10,6 +10,7 @@ import {
 } from "../db/schema";
 import { and, eq, gt, inArray, lt } from "drizzle-orm";
 import { hostMatchesPattern } from "../host-pattern-priority";
+import { config } from "../config";
 
 const DEFAULT_SESSION_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 const EXCHANGE_CODE_TTL = 60; // 60 seconds
@@ -33,6 +34,9 @@ function parseForwardAuthUrl(rawUrl: string): URL | null {
     const parsed = new URL(rawUrl);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
     if (parsed.username || parsed.password) return null;
+    // Caddy routes by hostname only, so a non-default port is accepted only
+    // when the operator declared it as an external forward-auth port.
+    if (parsed.port && !config.forwardAuthAllowedPorts.has(parsed.port)) return null;
     return parsed;
   } catch {
     return null;
