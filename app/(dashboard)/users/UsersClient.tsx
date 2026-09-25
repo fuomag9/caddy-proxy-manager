@@ -122,7 +122,7 @@ export default function UsersClient({ users }: Props) {
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="create-password">Password</Label>
-                  <Input id="create-password" name="password" type="password" placeholder="Min 8 characters" required minLength={8} data-testid="create-password" />
+                  <Input id="create-password" name="password" type="password" placeholder="Min 12 chars, upper/lower, number, symbol" required minLength={12} data-testid="create-password" />
                 </div>
               </div>
               <div className="flex gap-2">

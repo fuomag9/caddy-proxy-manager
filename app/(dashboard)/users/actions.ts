@@ -11,8 +11,10 @@ import {
   type User,
 } from "@/src/lib/models/user";
 import { logAuditEvent } from "@/src/lib/audit";
+import { passwordPolicyMessage } from "@/src/lib/password-policy";
 
 const VALID_ROLES = new Set<User["role"]>(["admin", "user", "viewer"]);
+const VALID_STATUSES = new Set(["active", "disabled"]);
 
 export async function createUserAction(formData: FormData) {
   const session = await requireAdmin();
@@ -26,6 +28,10 @@ export async function createUserAction(formData: FormData) {
 
   if (!email || !password) {
     throw new Error("Email and password are required");
+  }
+  const policyError = passwordPolicyMessage(password);
+  if (policyError) {
+    throw new Error(policyError);
   }
 
   const bcrypt = await import("bcryptjs");
@@ -58,6 +64,10 @@ export async function updateUserRoleAction(userId: number, role: User["role"]) {
   if (actorId === userId) {
     throw new Error("Cannot change your own role");
   }
+  // Server Action arguments come from the client; accept only known roles.
+  if (!VALID_ROLES.has(role)) {
+    throw new Error("Invalid role");
+  }
 
   await updateUserRole(userId, role);
 
@@ -78,6 +88,9 @@ export async function updateUserStatusAction(userId: number, status: string) {
 
   if (actorId === userId) {
     throw new Error("Cannot change your own status");
+  }
+  if (!VALID_STATUSES.has(status)) {
+    throw new Error("Invalid status");
   }
 
   await updateUserStatus(userId, status);
