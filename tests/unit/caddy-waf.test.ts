@@ -625,6 +625,29 @@ describe('filterCustomDirectives', () => {
     expect(dropped[0].reason).toMatch(/ctl:ruleEngine/);
   });
 
+  it('drops rules using operators that read files or run programs', () => {
+    const lines = [
+      'SecRule FILES_TMPNAMES "@inspectFile /usr/local/bin/scan" "id:9101,deny"',
+      'SecRule ARGS "@pmFromFile /etc/hosts" "id:9102,deny"',
+      'SecRule ARGS "@pmf words.txt" "id:9103,deny"',
+      'SecRule REMOTE_ADDR "!@ipMatchFromFile /data/ips.txt" "id:9104,deny"',
+      'SecRule REMOTE_ADDR "@ipMatchF ips.txt" "id:9105,deny"',
+      'SecRule REQUEST_BODY "@validateSchema /data/schema.json" "id:9106,deny"',
+      'SecRule ARGS "@INSPECTFILE /bin/x" "id:9107,deny"',
+    ];
+    const { kept, dropped } = filterCustomDirectives(lines.join('\n'));
+    expect(kept).toEqual([]);
+    expect(dropped).toHaveLength(lines.length);
+    for (const item of dropped) expect(item.reason).toMatch(/reads files or runs programs/);
+  });
+
+  it('keeps rules whose operators only look similar to file operators', () => {
+    const line = 'SecRule ARGS "@pm pmfoo inspectFile" "id:9108,deny"';
+    const { kept, dropped } = filterCustomDirectives(line);
+    expect(dropped).toEqual([]);
+    expect(kept).toEqual([line]);
+  });
+
   it('preserves empty lines and comments', () => {
     const { kept, dropped } = filterCustomDirectives('# comment\n\nSecRule ARGS "@contains evil" "id:9002,deny"');
     expect(dropped).toEqual([]);
