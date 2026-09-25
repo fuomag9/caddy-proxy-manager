@@ -211,6 +211,17 @@ describe('buildSyncPayload', () => {
     expect(payload.settings.default_response).toEqual({ mode: 'respond', status: 404, body: 'Not Found' });
   });
 
+  it('does not include CA private keys', async () => {
+    const now = nowIso();
+    await ctx.db.insert(schema.caCertificates).values({
+      name: 'Signing CA', certificatePem: 'CERT', privateKeyPem: encryptSecret('CA-KEY'), createdAt: now, updatedAt: now,
+    });
+    const payload = await buildSyncPayload();
+    expect(payload.data.caCertificates).toHaveLength(1);
+    expect(payload.data.caCertificates[0].privateKeyPem).toBeNull();
+    expect(JSON.stringify(payload)).not.toContain('CA-KEY');
+  });
+
   it('includes generated_at as an ISO date string', async () => {
     const before = Date.now();
     const payload = await buildSyncPayload();
@@ -490,6 +501,19 @@ describe('applySyncPayload', () => {
       },
     };
   }
+
+  it('never accepts a CA signing key over sync', async () => {
+    const now = nowIso();
+    const payload = emptyPayload();
+    payload.data.caCertificates = [{
+      id: 1, name: 'Master CA', certificatePem: 'CERT', privateKeyPem: 'KEY-FROM-MASTER',
+      createdBy: null, createdAt: now, updatedAt: now,
+    }];
+    await applySyncPayload(payload);
+    const [row] = await ctx.db.select().from(schema.caCertificates);
+    expect(row.certificatePem).toBe('CERT');
+    expect(row.privateKeyPem).toBeNull();
+  });
 
   it('runs without error on an empty payload', async () => {
     await expect(applySyncPayload(emptyPayload())).resolves.toBeUndefined();

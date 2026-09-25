@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../helpers/db';
 import {
+  caCertificates,
   issuedClientCertificates,
   mtlsCertificateRoles,
   mtlsRoles,
@@ -43,7 +44,7 @@ beforeEach(async () => {
   userId = user.id;
 });
 
-const { createCaCertificate, deleteCaCertificate, listCaCertificates } =
+const { createCaCertificate, deleteCaCertificate, listCaCertificates, getCaCertificatePrivateKey, migrateLegacyCaPrivateKeys } =
   await import('../../src/lib/models/ca-certificates');
 
 function nowIso() { return new Date().toISOString(); }
@@ -187,5 +188,30 @@ describe('deleteCaCertificate cascade', () => {
       .from(issuedClientCertificates)
       .where(eq(issuedClientCertificates.caCertificateId, caB.id));
     expect(survivors.map(c => c.id)).toEqual([keep.id]);
+  });
+});
+
+describe('CA private key storage', () => {
+  const KEY = '-----BEGIN PRIVATE KEY-----\nc2VjcmV0\n-----END PRIVATE KEY-----';
+
+  it('stores the key encrypted and returns it decrypted to the signer', async () => {
+    const ca = await createCaCertificate({ name: 'Enc CA', certificatePem: 'CERT', privateKeyPem: KEY }, userId);
+    const [row] = await db.select().from(caCertificates).where(eq(caCertificates.id, ca.id));
+    expect(row.privateKeyPem).toMatch(/^enc:v1:/);
+    expect(row.privateKeyPem).not.toContain('c2VjcmV0');
+    expect(await getCaCertificatePrivateKey(ca.id)).toBe(KEY);
+  });
+
+  it('encrypts legacy plaintext keys idempotently', async () => {
+    const now = nowIso();
+    const [legacy] = await db.insert(caCertificates).values({
+      name: 'Legacy CA', certificatePem: 'CERT', privateKeyPem: KEY, createdAt: now, updatedAt: now,
+    }).returning();
+
+    expect(await migrateLegacyCaPrivateKeys()).toBe(1);
+    expect(await migrateLegacyCaPrivateKeys()).toBe(0);
+    const [row] = await db.select().from(caCertificates).where(eq(caCertificates.id, legacy.id));
+    expect(row.privateKeyPem).toMatch(/^enc:v1:/);
+    expect(await getCaCertificatePrivateKey(legacy.id)).toBe(KEY);
   });
 });
