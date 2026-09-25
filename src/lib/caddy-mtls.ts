@@ -153,18 +153,29 @@ export function buildValidClientCertCelExpression(): string {
  * a client certificate from CA_B cannot authenticate against a host that only
  * configured CA_A.
  *
+ * When `mTlsDomainLeafOverride` is supplied, the pinned leaf-cert set is part of
+ * the grouping key too: `buildClientAuthentication` unions the pinned leaves of
+ * every domain it is given, so two hosts that pin different client certs from
+ * the same CA must never share one policy.
+ *
  * @param domains - List of domain names that have mTLS configured.
  * @param mTlsDomainMap - Map from lowercased domain to its list of CA cert IDs.
- * @returns Map from CA-set fingerprint string to the list of domains sharing it.
+ * @param mTlsDomainLeafOverride - Map from lowercased domain to its pinned leaf PEMs.
+ * @returns Map from CA-set (and leaf-set) fingerprint string to the list of domains sharing it.
  */
 export function groupMtlsDomainsByCaSet(
   domains: string[],
-  mTlsDomainMap: Map<string, number[]>
+  mTlsDomainMap: Map<string, number[]>,
+  mTlsDomainLeafOverride?: Map<string, string[]>
 ): Map<string, string[]> {
   const groups = new Map<string, string[]>();
   for (const domain of domains) {
     const ids = mTlsDomainMap.get(domain.toLowerCase()) ?? [];
-    const key = [...ids].sort((a, b) => a - b).join(",");
+    const leafPems = mTlsDomainLeafOverride?.get(domain.toLowerCase());
+    const caKey = [...ids].sort((a, b) => a - b).join(",");
+    const key = leafPems
+      ? `${caKey}|leaf:${[...new Set(leafPems.map((pem) => pem.trim()))].sort().join("\n")}`
+      : caKey;
     const group = groups.get(key) ?? [];
     group.push(domain);
     groups.set(key, group);

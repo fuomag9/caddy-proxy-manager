@@ -502,3 +502,78 @@ describe('mTLS per-host CA isolation (regression test for cross-CA bug)', () => 
     expect(domainGroup).toContain('app2.example.com');
   });
 });
+
+// ---------------------------------------------------------------------------
+// groupMtlsDomainsByCaSet with pinned leaf certificates
+// ---------------------------------------------------------------------------
+
+describe('groupMtlsDomainsByCaSet with pinned leaf certs', () => {
+  const leaf = (label: string) => `-----BEGIN CERTIFICATE-----\n${label}\n-----END CERTIFICATE-----`;
+
+  it('separates hosts that pin different leaves issued by the same CA', () => {
+    const mTlsDomainMap = new Map([
+      ['admin.example.com', [1]],
+      ['public.example.com', [1]],
+    ]);
+    const leafOverride = new Map([
+      ['admin.example.com', [leaf('ALICE')]],
+      ['public.example.com', [leaf('BOB')]],
+    ]);
+    const groups = groupMtlsDomainsByCaSet(
+      ['admin.example.com', 'public.example.com'],
+      mTlsDomainMap,
+      leafOverride
+    );
+    expect(groups.size).toBe(2);
+    for (const group of groups.values()) expect(group).toHaveLength(1);
+  });
+
+  it('keeps hosts that pin the same leaf set (in any order) together', () => {
+    const mTlsDomainMap = new Map([
+      ['a.example.com', [1]],
+      ['b.example.com', [1]],
+    ]);
+    const leafOverride = new Map([
+      ['a.example.com', [leaf('ALICE'), leaf('BOB')]],
+      ['b.example.com', [leaf('BOB'), leaf('ALICE')]],
+    ]);
+    const groups = groupMtlsDomainsByCaSet(['a.example.com', 'b.example.com'], mTlsDomainMap, leafOverride);
+    expect(groups.size).toBe(1);
+  });
+
+  it('separates a leaf-pinned host from a whole-CA host on the same CA', () => {
+    const mTlsDomainMap = new Map([
+      ['pinned.example.com', [1]],
+      ['legacy.example.com', [1]],
+    ]);
+    const leafOverride = new Map([['pinned.example.com', [leaf('ALICE')]]]);
+    const groups = groupMtlsDomainsByCaSet(
+      ['pinned.example.com', 'legacy.example.com'],
+      mTlsDomainMap,
+      leafOverride
+    );
+    expect(groups.size).toBe(2);
+  });
+
+  it('never unions another host\'s pinned leaf into a policy', () => {
+    const mTlsDomainMap = new Map([
+      ['admin.example.com', [1]],
+      ['public.example.com', [1]],
+    ]);
+    const caCertMap = new Map([[1, { id: 1, certificatePem: leaf('CA') }]]);
+    const leafOverride = new Map([
+      ['admin.example.com', [leaf('ALICE')]],
+      ['public.example.com', [leaf('BOB')]],
+    ]);
+    const groups = groupMtlsDomainsByCaSet(
+      ['admin.example.com', 'public.example.com'],
+      mTlsDomainMap,
+      leafOverride
+    );
+    for (const group of groups.values()) {
+      const auth = buildClientAuthentication(group, mTlsDomainMap, caCertMap, new Map(), new Set(), leafOverride);
+      expect(auth!.trusted_leaf_certs).toHaveLength(1);
+      expect(auth!.trusted_leaf_certs).toEqual(group[0] === 'admin.example.com' ? ['ALICE'] : ['BOB']);
+    }
+  });
+});
