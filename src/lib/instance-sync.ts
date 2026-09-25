@@ -1,5 +1,5 @@
 import db, { nowIso } from "./db";
-import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, l4ProxyHosts, proxyHosts } from "./db/schema";
+import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, l4ProxyHosts, proxyHosts, settings as settingsTable } from "./db/schema";
 import { getSetting, setSetting } from "./settings";
 import { recordInstanceSyncResult, updateInstance } from "./models/instances";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
@@ -477,24 +477,36 @@ export async function syncInstances(): Promise<{ total: number; success: number;
 }
 
 export async function applySyncPayload(payload: SyncPayload) {
-  await setSyncedSetting("general", payload.settings.general);
-  await setSyncedSetting("acme", payload.settings.acme ?? null);
-  await setSyncedSetting("cloudflare", payload.settings.cloudflare);
-  await setSyncedSetting("dns_provider", payload.settings.dns_provider ?? null);
-  await setSyncedSetting("authentik", payload.settings.authentik);
-  await setSyncedSetting("metrics", payload.settings.metrics);
-  await setSyncedSetting("logging", payload.settings.logging);
-  await setSyncedSetting("dns", payload.settings.dns);
-  await setSyncedSetting("upstream_dns_resolution", payload.settings.upstream_dns_resolution ?? null);
-  await setSyncedSetting("waf", payload.settings.waf ?? null);
-  await setSyncedSetting("geoblock", payload.settings.geoblock ?? null);
-  await setSyncedSetting("error_pages", payload.settings.error_pages ?? null);
-  await setSyncedSetting("trusted_proxies", payload.settings.trusted_proxies ?? null);
-  await setSyncedSetting("forward_auth", payload.settings.forward_auth ?? null);
-  await setSyncedSetting("default_response", payload.settings.default_response ?? null);
+  const syncedSettings: Array<[string, unknown]> = [
+    ["general", payload.settings.general],
+    ["acme", payload.settings.acme ?? null],
+    ["cloudflare", payload.settings.cloudflare],
+    ["dns_provider", payload.settings.dns_provider ?? null],
+    ["authentik", payload.settings.authentik],
+    ["metrics", payload.settings.metrics],
+    ["logging", payload.settings.logging],
+    ["dns", payload.settings.dns],
+    ["upstream_dns_resolution", payload.settings.upstream_dns_resolution ?? null],
+    ["waf", payload.settings.waf ?? null],
+    ["geoblock", payload.settings.geoblock ?? null],
+    ["error_pages", payload.settings.error_pages ?? null],
+    ["trusted_proxies", payload.settings.trusted_proxies ?? null],
+    ["forward_auth", payload.settings.forward_auth ?? null],
+    ["default_response", payload.settings.default_response ?? null],
+  ];
+  const settingsUpdatedAt = nowIso();
 
-  // better-sqlite3 is synchronous, so transaction callback must be synchronous
+  // better-sqlite3 is synchronous, so transaction callback must be synchronous.
+  // Settings are written in the same transaction as the tables, so a payload
+  // that fails part-way leaves neither applied.
   db.transaction((tx) => {
+    for (const [key, value] of syncedSettings) {
+      const serialized = JSON.stringify(value ?? null);
+      tx.insert(settingsTable)
+        .values({ key: `${SYNCED_PREFIX}${key}`, value: serialized, updatedAt: settingsUpdatedAt })
+        .onConflictDoUpdate({ target: settingsTable.key, set: { value: serialized, updatedAt: settingsUpdatedAt } })
+        .run();
+    }
     tx.delete(l4ProxyHosts).run();
     tx.delete(proxyHosts).run();
     tx.delete(accessListEntries).run();

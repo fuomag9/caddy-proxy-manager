@@ -685,6 +685,27 @@ describe('applySyncPayload', () => {
     expect(JSON.parse(row!.value)).toEqual({ primaryDomain: 'example.com' });
   });
 
+  it('applies settings and tables atomically', async () => {
+    const now = nowIso();
+    const host = {
+      id: 1, name: 'Dup', domains: JSON.stringify(['dup.example.com']), upstreams: JSON.stringify(['backend:8080']),
+      certificateId: null, accessListId: null, ownerUserId: null, sslForced: false, hstsEnabled: false,
+      hstsSubdomains: false, allowWebsocket: false, preserveHostHeader: false, skipHttpsHostnameValidation: false,
+      meta: null, enabled: true, createdAt: now, updatedAt: now,
+    };
+    const payload = emptyPayload();
+    payload.settings.general = { primaryDomain: 'should-not-land.example.com' };
+    // Duplicate primary keys make the table inserts fail part-way.
+    payload.data.proxyHosts = [host, { ...host }];
+
+    await expect(applySyncPayload(payload)).rejects.toThrow();
+
+    const row = await ctx.db.query.settings.findFirst({
+      where: (t, { eq }) => eq(t.key, 'synced:general'),
+    });
+    expect(row).toBeUndefined();
+  });
+
   it('stores synced ACME settings with synced: prefix', async () => {
     const payload = emptyPayload();
     payload.settings.acme = { caUrl: 'https://ca.internal.example.com/acme/acme/directory' };
