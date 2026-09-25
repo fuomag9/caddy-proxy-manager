@@ -163,6 +163,47 @@ export function ruleInfoFromAuditEntry(entry: CorazaAuditEntry): RuleInfo | null
   return null;
 }
 
+// Request/response headers that carry credentials. Coraza's audit log (parts
+// B and F) records every header verbatim; Caddy's own access log redacts
+// these, so the stored WAF event must not keep them either.
+const CREDENTIAL_HEADERS = new Set([
+  'authorization',
+  'proxy-authorization',
+  'cookie',
+  'set-cookie',
+  'x-api-key',
+  'x-auth-token',
+  'x-cpm-forward-auth-proof',
+]);
+const REDACTED = '[redacted]';
+
+function redactHeaderMap(headers: unknown): unknown {
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return headers;
+  const out: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(headers as Record<string, unknown>)) {
+    out[name] = CREDENTIAL_HEADERS.has(name.toLowerCase())
+      ? (Array.isArray(value) ? value.map(() => REDACTED) : REDACTED)
+      : value;
+  }
+  return out;
+}
+
+/** The audit entry with credential header values replaced, for storage. */
+export function redactAuditEntry(entry: unknown): unknown {
+  if (!entry || typeof entry !== 'object') return entry;
+  const copy = structuredClone(entry) as { transaction?: Record<string, unknown> };
+  const tx = copy.transaction;
+  if (tx && typeof tx === 'object') {
+    for (const part of ['request', 'response'] as const) {
+      const section = tx[part] as Record<string, unknown> | undefined;
+      if (section && typeof section === 'object' && 'headers' in section) {
+        section.headers = redactHeaderMap(section.headers);
+      }
+    }
+  }
+  return copy;
+}
+
 export function parseLine(line: string, ruleMap: Map<string, RuleInfo>): WafEventRow | null {
   let entry: CorazaAuditEntry;
   try {
@@ -213,7 +254,7 @@ export function parseLine(line: string, ruleMap: Map<string, RuleInfo>): WafEven
     rule_id: ruleInfo?.ruleId ?? null,
     rule_message: ruleInfo?.ruleMessage ?? null,
     severity: ruleInfo?.severity ?? null,
-    raw_data: line,
+    raw_data: JSON.stringify(redactAuditEntry(entry)),
     blocked,
   };
 }
