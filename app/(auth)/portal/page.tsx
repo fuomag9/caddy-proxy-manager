@@ -16,8 +16,11 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
   // Two entry modes:
   // 1. Fresh from Caddy redirect: ?rd=<full-url> → validate, store server-side, create rid
   // 2. Returning from OAuth: ?rid=<opaque-id> → reuse the existing rid (redirect already stored)
+  // A Caddy redirect always carries ?rd=; when it is present any ?rid= is
+  // ignored, so a rid smuggled through the protected URL's own query string
+  // cannot replace the target the browser was actually sent from.
   let targetDomain = "";
-  let rid = existingRid;
+  let rid = redirectUri ? "" : existingRid;
   if (!rid && redirectUri) {
     try {
       const parsed = new URL(redirectUri);

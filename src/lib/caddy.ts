@@ -67,6 +67,7 @@ import { getAccessRulesForHosts } from "./models/mtls-access-rules";
 import { buildWafHandlerEntry, resolveEffectiveWaf } from "./caddy-waf";
 import {
   FORWARD_AUTH_PROXY_PROOF_HEADER,
+  FORWARD_AUTH_PROXY_HOST_ID_HEADER,
   getForwardAuthProxyProof,
 } from "./forward-auth-trust";
 import { decryptSecret } from "./secret";
@@ -1686,7 +1687,8 @@ async function buildProxyRoutes(
                 "X-Forwarded-Uri": ["{http.request.uri}"],
                 "X-Forwarded-Host": ["{http.request.hostport}"],
                 "X-Forwarded-Proto": ["{http.request.scheme}"],
-                [FORWARD_AUTH_PROXY_PROOF_HEADER]: [cpmProxyProof]
+                [FORWARD_AUTH_PROXY_PROOF_HEADER]: [cpmProxyProof],
+                [FORWARD_AUTH_PROXY_HOST_ID_HEADER]: [String(row.id)]
               }
             }
           },
@@ -1732,7 +1734,8 @@ async function buildProxyRoutes(
                   set: {
                     "X-Forwarded-Host": ["{http.request.hostport}"],
                     "X-Forwarded-Proto": ["{http.request.scheme}"],
-                    [FORWARD_AUTH_PROXY_PROOF_HEADER]: [cpmProxyProof]
+                    [FORWARD_AUTH_PROXY_PROOF_HEADER]: [cpmProxyProof],
+                    [FORWARD_AUTH_PROXY_HOST_ID_HEADER]: [String(row.id)]
                   }
                 }
               }

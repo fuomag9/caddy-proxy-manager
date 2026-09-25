@@ -36,6 +36,9 @@ services:
       # NextAuth configuration
       NEXTAUTH_URL: ${BASE_URL:-http://localhost:3000}
 
+      # Extra external ports for forward-auth protected sites (see .env.example)
+      FORWARD_AUTH_ALLOWED_PORTS: ${FORWARD_AUTH_ALLOWED_PORTS:-}
+
       # REQUIRED: Admin credentials for login
       # SECURITY: You MUST set these to secure values in production!
       # Password must be 12+ chars with uppercase, lowercase, numbers, and special chars
