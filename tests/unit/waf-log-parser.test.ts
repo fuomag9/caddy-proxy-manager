@@ -21,7 +21,7 @@ vi.mock('node:fs', () => ({
   createReadStream: vi.fn(),
 }));
 
-import { extractBracketField, parseLine, ruleInfoFromAuditEntry } from '@/src/lib/waf-log-parser';
+import { extractBracketField, parseLine, ruleInfoFromAuditEntry, redactAuditEntry } from '@/src/lib/waf-log-parser';
 
 /**
  * Regression (issue #233): rule attribution must come from the audit entry's own
@@ -194,5 +194,46 @@ describe('parseLine host header contract', () => {
     });
     const row = parseLine(line, ruleMap);
     expect(row?.host).toBe('');
+  });
+});
+
+describe('stored WAF event redaction', () => {
+  const line = JSON.stringify({
+    transaction: {
+      id: 'tx-cred',
+      client_ip: '1.2.3.4',
+      unix_timestamp: 1_700_000_000_000_000_000,
+      is_interrupted: true,
+      request: {
+        method: 'GET',
+        uri: '/?q=<script>',
+        headers: {
+          host: ['example.com'],
+          cookie: ['_cpm_fa=session-secret; other=1'],
+          Authorization: ['Bearer api-secret'],
+          'user-agent': ['curl/8'],
+        },
+      },
+      response: { status: 403, headers: { 'Set-Cookie': ['sid=response-secret'] } },
+    },
+    messages: [{ error_message: '[id "941100"] [msg "XSS"] [severity "CRITICAL"]' }],
+  });
+
+  it('replaces credential header values but keeps the rest of the entry', () => {
+    const row = parseLine(line, new Map());
+    expect(row).not.toBeNull();
+    expect(row!.raw_data).not.toMatch(/session-secret|api-secret|response-secret/);
+    const stored = JSON.parse(row!.raw_data ?? "{}");
+    expect(stored.transaction.request.headers.cookie).toEqual(['[redacted]']);
+    expect(stored.transaction.request.headers.Authorization).toEqual(['[redacted]']);
+    expect(stored.transaction.response.headers['Set-Cookie']).toEqual(['[redacted]']);
+    expect(stored.transaction.request.headers['user-agent']).toEqual(['curl/8']);
+    expect(stored.transaction.request.uri).toBe('/?q=<script>');
+  });
+
+  it('does not mutate the parsed input', () => {
+    const entry = JSON.parse(line);
+    redactAuditEntry(entry);
+    expect(entry.transaction.request.headers.cookie).toEqual(['_cpm_fa=session-secret; other=1']);
   });
 });
