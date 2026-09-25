@@ -127,7 +127,7 @@ Development mode (`NODE_ENV=development`) allows default `admin`/`admin` credent
 ```bash
 export SESSION_SECRET=$(openssl rand -base64 32)
 export ADMIN_USERNAME="admin"
-export ADMIN_PASSWORD="YourStr0ng-P@ssw0rd123!"
+export ADMIN_PASSWORD="<choose-your-own: 12+ chars, upper, lower, digit, symbol>"
 docker compose up -d
 ```
 
