@@ -28,9 +28,21 @@ export default async function ProfilePage() {
 
   const sessions = userSessions.map((s) => ({ ...s, current: s.id === currentSessionId }));
 
+  // Only what the page needs crosses into the client bundle — never the hash.
+  const userData = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    provider: user.provider,
+    subject: user.subject,
+    hasPassword: !!user.passwordHash,
+    role: user.role,
+    avatarUrl: user.avatarUrl,
+  };
+
   return (
     <ProfileClient
-      user={user}
+      user={userData}
       linkedProviders={linkedProviders}
       enabledProviders={enabledProviders}
       apiTokens={apiTokens}

@@ -65,7 +65,7 @@ interface UserData {
   name: string | null;
   provider: string | null;
   subject: string | null;
-  passwordHash: string | null;
+  hasPassword: boolean;
   role: string;
   avatarUrl: string | null;
 }
@@ -99,7 +99,7 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
     return provider;
   };
 
-  const hasPassword = !!user.passwordHash;
+  const hasPassword = user.hasPassword;
   const linkedNames = linkedProviders.map((l) =>
     enabledProviders.find((p) => p.id === l.providerId)?.name ?? getProviderName(l.providerId)
   );
