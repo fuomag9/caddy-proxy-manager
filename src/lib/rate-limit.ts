@@ -13,6 +13,27 @@ const ATTEMPTS = new Map<string, RateLimitEntry>();
 const MAX_ATTEMPTS = Number(process.env.LOGIN_MAX_ATTEMPTS ?? 5);
 const WINDOW_MS = Number(process.env.LOGIN_WINDOW_MS ?? 5 * 60 * 1000);
 const BLOCK_DURATION_MS = Number(process.env.LOGIN_BLOCK_MS ?? 15 * 60 * 1000);
+// Keys are partly client-chosen (IPs, usernames), so the table is bounded.
+export const MAX_TRACKED_KEYS = 10_000;
+
+/**
+ * Make room for one more key: drop expired entries, then the oldest entries
+ * that are not currently blocked, and only then the oldest blocked ones — so
+ * flooding the table with fresh keys does not lift an active block.
+ */
+function makeRoom(now: number): void {
+  if (ATTEMPTS.size < MAX_TRACKED_KEYS) return;
+  for (const key of [...ATTEMPTS.keys()]) getEntry(key, now);
+  // Map iteration follows insertion order, so the first keys are the oldest.
+  for (const [key, entry] of ATTEMPTS) {
+    if (ATTEMPTS.size < MAX_TRACKED_KEYS) return;
+    if (!entry.blockedUntil) ATTEMPTS.delete(key);
+  }
+  for (const key of ATTEMPTS.keys()) {
+    if (ATTEMPTS.size < MAX_TRACKED_KEYS) return;
+    ATTEMPTS.delete(key);
+  }
+}
 
 function getEntry(key: string, now: number): RateLimitEntry | undefined {
   const entry = ATTEMPTS.get(key);
@@ -54,6 +75,7 @@ export function registerFailedAttempt(key: string): RateLimitOutcome {
   const existing = getEntry(key, now);
 
   if (!existing) {
+    makeRoom(now);
     ATTEMPTS.set(key, {
       attempts: 1,
       firstAttemptTimestamp: now

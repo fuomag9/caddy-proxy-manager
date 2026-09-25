@@ -85,6 +85,24 @@ export async function createRedirectIntent(redirectUri: string): Promise<string>
   return rid;
 }
 
+/**
+ * Whether a redirect intent exists, is unconsumed and unexpired — without
+ * claiming it.  Lets the login endpoint reject a bad intent before it spends
+ * any effort on (or reveals anything about) the submitted credentials.
+ */
+export async function isRedirectIntentUsable(rid: string): Promise<boolean> {
+  if (!rid) return false;
+  const intent = await db.query.forwardAuthRedirectIntents.findFirst({
+    where: (table, operators) =>
+      operators.and(
+        operators.eq(table.ridHash, hashToken(rid)),
+        operators.eq(table.consumed, false),
+        operators.gt(table.expiresAt, nowIso())
+      ),
+  });
+  return !!intent;
+}
+
 export async function consumeRedirectIntent(
   rid: string
 ): Promise<{

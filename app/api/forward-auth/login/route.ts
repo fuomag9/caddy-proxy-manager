@@ -6,10 +6,29 @@ import {
   createForwardAuthSession,
   createExchangeCode,
   checkHostAccess,
-  consumeRedirectIntent
+  consumeRedirectIntent,
+  isRedirectIntentUsable
 } from "@/src/lib/models/forward-auth";
 import { logAuditEvent } from "@/src/lib/audit";
 import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
+
+// Compared against when the account does not exist, so unknown and known
+// usernames take the same time to reject.
+let dummyHash: string | null = null;
+function getDummyHash(): string {
+  dummyHash ??= bcrypt.hashSync("cpm-forward-auth-dummy-password", 12);
+  return dummyHash;
+}
+
+/**
+ * Client IP for rate limiting: the address appended by the nearest proxy
+ * (rightmost X-Forwarded-For entry). X-Real-IP is not used because Caddy
+ * neither sets nor strips it, so it is always client-controlled.
+ */
+function clientIpKey(request: NextRequest): string {
+  const ip = request.headers.get("x-forwarded-for")?.split(",").pop()?.trim();
+  return `ip:${ip || "unknown"}`;
+}
 
 /**
  * Forward auth login endpoint — validates credentials and starts the exchange flow.
@@ -36,13 +55,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing redirect intent" }, { status: 400 });
     }
 
-    // Rate limiting — prefer x-real-ip (set by reverse proxy) over x-forwarded-for
-    const ip =
-      request.headers.get("x-real-ip")?.trim() ||
-      request.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ||
-      "unknown";
-    const rateLimitResult = isRateLimited(ip);
-    if (rateLimitResult.blocked) {
+    // Reject an unusable intent before touching the credentials, so this
+    // response never depends on whether the password was right.
+    if (!(await isRedirectIntentUsable(rid))) {
+      return NextResponse.json({ error: "Invalid or expired redirect intent. Please try again." }, { status: 400 });
+    }
+
+    // Rate limit per client IP and per account; either one blocks.
+    const ipKey = clientIpKey(request);
+    const accountKey = `account:${username.toLowerCase()}`;
+    if (isRateLimited(ipKey).blocked || isRateLimited(accountKey).blocked) {
       return NextResponse.json(
         { error: "Too many login attempts. Please try again later." },
         { status: 429 }
@@ -55,32 +77,20 @@ export async function POST(request: NextRequest) {
       where: (table, operators) => operators.eq(table.email, email)
     });
 
-    if (!user || user.status !== "active" || !user.passwordHash) {
-      registerFailedAttempt(ip);
+    const passwordHash = user && user.status === "active" ? user.passwordHash : null;
+    const isValid = await bcrypt.compare(password, passwordHash ?? getDummyHash());
+    if (!user || !passwordHash || !isValid) {
+      registerFailedAttempt(ipKey);
+      registerFailedAttempt(accountKey);
       logAuditEvent({
-        userId: null,
+        userId: user?.id ?? null,
         action: "forward_auth_login_failed",
         entityType: "user",
-        summary: `Forward auth login failed for username: ${username}`
+        ...(user ? { entityId: user.id } : {}),
+        summary: `Forward auth login failed for username: ${username.slice(0, 64)}`
       });
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
-
-    const isValid = await bcrypt.compare(password, user.passwordHash);
-    if (!isValid) {
-      registerFailedAttempt(ip);
-      logAuditEvent({
-        userId: user.id,
-        action: "forward_auth_login_failed",
-        entityType: "user",
-        entityId: user.id,
-        summary: `Forward auth login failed for user ${user.email}`
-      });
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-    }
-
-    // Successful credential check — reset rate limiter for this IP
-    resetAttempts(ip);
 
     // Consume the redirect intent — returns the server-stored redirect URI.
     // This is a one-time operation: the intent is deleted after consumption.
@@ -88,6 +98,10 @@ export async function POST(request: NextRequest) {
     if (!intent) {
       return NextResponse.json({ error: "Invalid or expired redirect intent. Please try again." }, { status: 400 });
     }
+
+    // Successful credential check for a live intent — reset both limiters.
+    resetAttempts(ipKey);
+    resetAttempts(accountKey);
 
     const targetUrl = new URL(intent.redirectUri);
 

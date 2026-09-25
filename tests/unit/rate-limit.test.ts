@@ -106,3 +106,22 @@ describe('rate-limit', () => {
     expect(isRateLimited(KEY_B).blocked).toBe(false);
   });
 });
+
+describe('rate-limit table bound', () => {
+  it('stays bounded when flooded with unique keys and keeps active blocks', async () => {
+    const { MAX_TRACKED_KEYS } = await import('@/src/lib/rate-limit');
+    for (let i = 0; i < 5; i++) registerFailedAttempt('account:admin');
+    expect(isRateLimited('account:admin').blocked).toBe(true);
+
+    for (let i = 0; i < MAX_TRACKED_KEYS + 500; i++) registerFailedAttempt(`ip:flood-${i}`);
+
+    // The blocked key survives the flood; the oldest unblocked keys were evicted.
+    expect(isRateLimited('account:admin').blocked).toBe(true);
+    registerFailedAttempt('ip:flood-0');
+    registerFailedAttempt('ip:flood-0');
+    registerFailedAttempt('ip:flood-0');
+    registerFailedAttempt('ip:flood-0');
+    // flood-0 was evicted earlier, so it restarted its count: 4 fresh attempts, not blocked.
+    expect(isRateLimited('ip:flood-0').blocked).toBe(false);
+  });
+});
