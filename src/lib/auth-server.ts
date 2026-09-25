@@ -40,6 +40,10 @@ export function mapOAuthProvider(p: OAuthProvider): GenericOAuthConfig {
     // auto-provisioning of an unknown identity is gated. Controlled by its own
     // flag, independent of credential self-registration.
     disableImplicitSignUp: !config.auth.allowOauthRegistration,
+    // disableImplicitSignUp alone can be overridden by the client: Better Auth
+    // honours a `requestSignUp: true` field on /sign-in/social. disableSignUp
+    // closes account creation regardless of what the request asks for.
+    disableSignUp: !config.auth.allowOauthRegistration,
     // Ownership of an existing CPM account is asserted by the operator through
     // the provider's auto-link switch, never by the IdP alone. Reporting the
     // claim only for auto-link providers keeps a provider that merely returns
@@ -133,6 +137,21 @@ function createAuth(): any {
     // behind reverse proxies that rewrite Host without setting X-Forwarded-Host.
     trustHost: process.env.AUTH_TRUST_HOST === "true",
     trustedOrigins: [config.baseUrl],
+    // Self-service endpoints CPM does not use. Profile, password and account
+    // changes go through CPM's own routes, which enforce its password policy,
+    // keep users.passwordHash in sync and audit the change; leaving Better
+    // Auth's equivalents reachable would bypass all of that (and let users
+    // rename themselves, which feeds the forward-auth X-CPM-User header).
+    disabledPaths: [
+      "/update-user",
+      "/change-password",
+      "/change-email",
+      "/delete-user",
+      "/unlink-account",
+      "/update-session",
+      "/verify-password",
+      "/is-username-available",
+    ],
     advanced: {
       database: {
         generateId: "serial",
