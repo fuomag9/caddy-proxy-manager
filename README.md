@@ -151,7 +151,7 @@ CPM has three roles with increasing privileges:
 | Create and manage own API tokens | Yes | Yes | Yes |
 | Access role-appropriate REST API endpoints (`/api/v1/`) | Yes | Yes | Yes |
 
-New users default to the **user** role. The initial admin account is created from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` environment variables.
+New users default to the **user** role. The initial admin account is created from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` environment variables. A password later changed in the UI is kept across restarts; changing `ADMIN_USERNAME` or `ADMIN_PASSWORD` in the environment re-applies them to that account on the next start (and restores its admin role), which is the recovery path for a lost admin password.
 
 API tokens can only be created from an authenticated dashboard session; an
 existing bearer token cannot mint replacement credentials. Viewer and user
