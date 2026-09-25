@@ -129,6 +129,9 @@ describe('mapOAuthProvider — OAuth self-registration gating (M2)', () => {
     // must be closed: an unknown IdP identity cannot self-provision an account.
     const cfg = mapOAuthProvider(sampleProvider);
     expect(cfg.disableImplicitSignUp).toBe(true);
+    // A client-sent `requestSignUp: true` overrides disableImplicitSignUp in
+    // Better Auth; disableSignUp is the flag it cannot override.
+    expect(cfg.disableSignUp).toBe(true);
   });
 
   it('uses the Better Auth 1.7.4 config shape: providerId is the config-pinned namespace', () => {

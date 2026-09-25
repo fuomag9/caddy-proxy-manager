@@ -182,3 +182,26 @@ describe('better-auth account.accountLinking (wired into the real config)', () =
     expect(options.account.accountLinking.disableImplicitLinking).toBeUndefined();
   });
 });
+
+describe('better-auth self-service endpoints', () => {
+  const options = (getAuth() as any).options;
+
+  it.each([
+    '/update-user',
+    '/change-password',
+    '/change-email',
+    '/delete-user',
+    '/unlink-account',
+    '/update-session',
+    '/verify-password',
+    '/is-username-available',
+  ])('disables %s (CPM routes own these changes)', (path) => {
+    expect(options.disabledPaths).toContain(path);
+  });
+
+  it('keeps the endpoints the UI relies on', () => {
+    for (const path of ['/sign-in/username', '/sign-in/social', '/link-social', '/get-session', '/sign-out']) {
+      expect(options.disabledPaths).not.toContain(path);
+    }
+  });
+});
