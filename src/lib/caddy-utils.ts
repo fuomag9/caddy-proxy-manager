@@ -17,6 +17,25 @@ export const PRIVATE_RANGES_CIDRS = [
   "::1/128",
 ];
 
+// ---------------------------------------------------------------------------
+// Placeholder escaping for operator-authored response content
+// ---------------------------------------------------------------------------
+
+/**
+ * Caddy expands placeholders in static_response bodies and header values at
+ * serve time, and its global providers read files ({file.*}), environment
+ * variables ({env.*}) and host details ({system.*}). Response content typed by
+ * an operator (error pages, path-block bodies, default responses) is meant to
+ * be served literally, so escape the opening brace of those placeholders.
+ * Caddy treats any brace preceded by a backslash as a literal and drops the
+ * backslash, so the served text is unchanged.
+ */
+const HOST_PLACEHOLDER_RE = /(?<!\\)\{(?=(?:file|env|system)\.)/g;
+
+export function escapeHostPlaceholders(value: string): string {
+  return value.replace(HOST_PLACEHOLDER_RE, "\\{");
+}
+
 export function expandPrivateRanges(proxies: string[]): string[] {
   if (!proxies.includes("private_ranges")) return proxies;
   return proxies.flatMap((p) => (p === "private_ranges" ? PRIVATE_RANGES_CIDRS : [p]));
