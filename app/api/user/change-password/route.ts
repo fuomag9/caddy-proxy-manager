@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const isValid = bcrypt.compareSync(currentPassword, user.passwordHash);
+      const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
       if (!isValid) {
         registerFailedAttempt(rateLimitKey);
         return NextResponse.json(
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
     resetAttempts(rateLimitKey);
 
     // Hash new password
-    const newPasswordHash = bcrypt.hashSync(newPassword, 12);
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
     // Update password
     await updateUserPassword(userId, newPasswordHash);
