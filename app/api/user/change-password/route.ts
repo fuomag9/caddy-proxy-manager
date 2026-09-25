@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, checkSameOrigin } from "@/src/lib/auth";
+import { auth, checkSameOrigin, getCurrentSessionInfo } from "@/src/lib/auth";
 import { getUserById, updateUserPassword } from "@/src/lib/models/user";
+import { revokeOtherUserSessions } from "@/src/lib/models/sessions";
+import { deleteUserForwardAuthSessions } from "@/src/lib/models/forward-auth";
 import { createAuditEvent } from "@/src/lib/models/audit";
 import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
 import bcrypt from "bcryptjs";
+import { passwordPolicyMessage } from "@/src/lib/password-policy";
+
+// How recent a sign-in must be to add a first password to an account.
+const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   const originCheck = checkSameOrigin(request);
@@ -29,27 +35,10 @@ export async function POST(request: NextRequest) {
     const { currentPassword, newPassword } = body;
 
     // Enforce password complexity matching production admin password requirements
-    if (!newPassword || newPassword.length < 12) {
-      return NextResponse.json(
-        { error: "New password must be at least 12 characters long" },
-        { status: 400 }
-      );
-    }
-    const complexityErrors: string[] = [];
-    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword)) {
-      complexityErrors.push("must include both uppercase and lowercase letters");
-    }
-    if (!/[0-9]/.test(newPassword)) {
-      complexityErrors.push("must include at least one number");
-    }
-    if (!/[^A-Za-z0-9]/.test(newPassword)) {
-      complexityErrors.push("must include at least one special character");
-    }
-    if (complexityErrors.length > 0) {
-      return NextResponse.json(
-        { error: `Password ${complexityErrors.join(", ")}` },
-        { status: 400 }
-      );
+    const policyError =
+      typeof newPassword === "string" ? passwordPolicyMessage(newPassword, "New password") : "New password is required";
+    if (policyError) {
+      return NextResponse.json({ error: policyError }, { status: 400 });
     }
 
     const userId = Number(session.user.id);
@@ -57,6 +46,21 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const currentSession = await getCurrentSessionInfo(request);
+
+    // An account without a password (OAuth-only) has no current password to
+    // prove, so adding one requires a recent sign-in instead: a stolen,
+    // long-lived session must not be able to attach a durable credential.
+    if (!user.passwordHash) {
+      const signedInAt = currentSession?.createdAt.getTime() ?? NaN;
+      if (!(Date.now() - signedInAt <= RECENT_SIGN_IN_MS)) {
+        return NextResponse.json(
+          { error: "Please sign in again before setting a password." },
+          { status: 403 }
+        );
+      }
     }
 
     // If user has a password, verify current password
@@ -86,6 +90,11 @@ export async function POST(request: NextRequest) {
 
     // Update password
     await updateUserPassword(userId, newPasswordHash);
+
+    // End every other sign-in: other management sessions and all forward-auth
+    // sessions. The caller's current session stays so they are not logged out.
+    await revokeOtherUserSessions(userId, currentSession?.id ?? null);
+    await deleteUserForwardAuthSessions(userId);
 
     // Audit log
     await createAuditEvent({
