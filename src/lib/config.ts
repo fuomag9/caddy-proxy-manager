@@ -5,7 +5,15 @@ const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "admin";
 const DISALLOWED_SESSION_SECRETS = new Set([
   "change-me-in-production",
-  "dev-secret-change-in-production-12345678901234567890123456789012"
+  "dev-secret-change-in-production-12345678901234567890123456789012",
+  // Placeholders shipped in .env.example / documentation
+  "your-secure-session-secret-here-min-32-chars",
+]);
+// Example passwords from .env.example / README; they satisfy the complexity
+// rules, so they must be rejected explicitly.
+const DISALLOWED_ADMIN_PASSWORDS = new Set([
+  "Your-Secure-P@ssw0rd-Here!",
+  "YourStr0ng-P@ssw0rd123!",
 ]);
 const DEFAULT_CADDY_URL = process.env.NODE_ENV === "development" ? "http://localhost:2019" : "http://caddy:2019";
 const MIN_SESSION_SECRET_LENGTH = 32;
@@ -14,9 +22,11 @@ const MIN_ADMIN_PASSWORD_LENGTH = 12;
 const isProduction = process.env.NODE_ENV === "production";
 const isNodeRuntime = process.env.NEXT_RUNTIME === "nodejs";
 const isDevelopment = process.env.NODE_ENV === "development";
-// Only enforce strict validation in actual production runtime, not during build
+// Only enforce strict validation in actual production runtime, not during build.
+// Any runtime that is not explicitly development (e.g. NODE_ENV=staging) gets
+// the production checks rather than silently accepting defaults.
 const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build" || !process.env.NEXT_RUNTIME;
-const isRuntimeProduction = isProduction && isNodeRuntime && !isBuildPhase;
+const isRuntimeProduction = !isDevelopment && isNodeRuntime && !isBuildPhase;
 
 function resolveSessionSecret(): string {
   const rawSecret = process.env.SESSION_SECRET ?? null;
@@ -103,6 +113,10 @@ function resolveAdminCredentials() {
     if (!rawPassword || password === DEFAULT_ADMIN_PASSWORD) {
       errors.push(
         "ADMIN_PASSWORD must be set to a custom value in production (not 'admin')"
+      );
+    } else if (DISALLOWED_ADMIN_PASSWORDS.has(password)) {
+      errors.push(
+        "ADMIN_PASSWORD is an example value from the documentation; choose your own password"
       );
     } else {
       if (password.length < MIN_ADMIN_PASSWORD_LENGTH) {
