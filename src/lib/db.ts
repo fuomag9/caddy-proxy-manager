@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { eq, ne, and, isNull, desc } from "drizzle-orm";
-import { mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, isAbsolute, resolve as resolvePath } from "node:path";
 import * as schema from "./db/schema";
 import {
@@ -65,13 +65,31 @@ function ensureDirectoryFor(pathname: string) {
   mkdirSync(dir, { recursive: true });
 }
 
+/**
+ * The database holds password hashes, session tokens and encrypted secrets,
+ * but SQLite creates its files with the process umask (usually world-readable).
+ * Restrict the database and its journal files to the owning user.
+ */
+export function restrictDatabaseFileModes(pathname: string = sqlitePath): void {
+  if (pathname === ":memory:") return;
+  for (const file of [pathname, `${pathname}-journal`, `${pathname}-wal`, `${pathname}-shm`]) {
+    try {
+      if (existsSync(file)) chmodSync(file, 0o600);
+    } catch (error) {
+      console.warn(`Could not restrict permissions on ${file}:`, (error as NodeJS.ErrnoException).code ?? error);
+    }
+  }
+}
+
 const globalForDrizzle = globalThis as GlobalForDrizzle;
 
 export const sqlite =
   globalForDrizzle.__SQLITE_CLIENT__ ??
   (() => {
     ensureDirectoryFor(sqlitePath);
-    return new Database(sqlitePath);
+    const client = new Database(sqlitePath);
+    restrictDatabaseFileModes(sqlitePath);
+    return client;
   })();
 
 if (process.env.NODE_ENV !== "production") {
