@@ -15,6 +15,9 @@ export function buildCsp(nonce: string): string {
     "worker-src 'self' blob:",
     "connect-src 'self'",
     "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "form-action 'self'",
   ];
   return directives.join("; ");
 }

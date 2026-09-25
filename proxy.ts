@@ -12,10 +12,37 @@ import { buildCsp } from "@/src/lib/csp";
  * Note: Proxy always runs on Node.js runtime.
  */
 
+/**
+ * Continue the request with the nonce-based CSP. The policy is also set as a
+ * request header, which is where the root layout reads the nonce from; this
+ * overwrites any Content-Security-Policy header the client sent.
+ */
+function withSecurityHeaders(req: NextRequest): NextResponse {
+  const nonce = crypto.randomBytes(16).toString("base64");
+  const csp = buildCsp(nonce);
+
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("Content-Security-Policy", csp);
+
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+
+  response.headers.set("Content-Security-Policy", csp);
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()");
+  return response;
+}
+
 export default async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
-  // Allow public routes
+  // Allow public routes. They get the same security headers as authenticated
+  // pages: after a password login the browser moves on to the dashboard
+  // without reloading the document, so the /login document's policy is the
+  // one that stays in force.
   if (
     pathname === "/login" ||
     pathname === "/portal" ||
@@ -25,15 +52,7 @@ export default async function middleware(req: NextRequest) {
     pathname.startsWith("/api/v1/") ||
     pathname.startsWith("/api/forward-auth/")
   ) {
-    const publicResponse = NextResponse.next();
-    // Anti-clickjacking for public pages (/login, /portal): the authenticated
-    // branch below sets the full security-header set, but public pages returned
-    // here previously carried none, leaving the login and forward-auth portal
-    // forms framable. Apply the framing protections to every public response.
-    publicResponse.headers.set("X-Frame-Options", "DENY");
-    publicResponse.headers.set("Content-Security-Policy", "frame-ancestors 'none'");
-    publicResponse.headers.set("X-Content-Type-Options", "nosniff");
-    return publicResponse;
+    return withSecurityHeaders(req);
   }
 
   // Check authentication for protected routes
@@ -46,26 +65,7 @@ export default async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Generate per-request nonce for CSP
-  const nonce = crypto.randomBytes(16).toString("base64");
-  const csp = buildCsp(nonce);
-
-  // Set CSP as a request header so Next.js can read the nonce
-  const requestHeaders = new Headers(req.headers);
-  requestHeaders.set("Content-Security-Policy", csp);
-
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-
-  // Also set CSP as a response header for browser enforcement
-  response.headers.set("Content-Security-Policy", csp);
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()");
-
-  return response;
+  return withSecurityHeaders(req);
 }
 
 export const config = {
