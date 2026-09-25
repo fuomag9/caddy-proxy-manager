@@ -4,6 +4,7 @@ import { asc, eq } from "drizzle-orm";
 import { encryptSecret } from "../secret";
 import { assertValidInstanceSyncToken } from "../instance-sync-token";
 import { sanitizeInstanceSyncError } from "../instance-sync-error";
+import { ApiValidationError } from "../api-errors";
 
 export type Instance = {
   id: number;
@@ -47,6 +48,32 @@ export async function listInstances(): Promise<Instance[]> {
   return rows.map(toInstance);
 }
 
+/**
+ * A slave base URL must be a plain http(s) origin (optionally with a path
+ * prefix): no credentials, query or fragment. Sync posts the full config,
+ * including decrypted certificate keys, to `${baseUrl}/api/instances/sync`.
+ */
+export function instanceBaseUrlValidationError(baseUrl: unknown): string | null {
+  if (typeof baseUrl !== "string" || !baseUrl.trim()) return "Base URL is required";
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl.trim());
+  } catch {
+    return "Base URL must be a valid URL";
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return "Base URL must use https (or http with INSTANCE_SYNC_ALLOW_HTTP=true)";
+  }
+  if (parsed.username || parsed.password) return "Base URL must not contain credentials";
+  if (parsed.search || parsed.hash) return "Base URL must not contain a query string or fragment";
+  return null;
+}
+
+function assertValidInstanceBaseUrl(baseUrl: unknown): void {
+  const error = instanceBaseUrlValidationError(baseUrl);
+  if (error) throw new ApiValidationError(error);
+}
+
 export async function getInstance(id: number): Promise<InstanceRow | null> {
   return await db.query.instances.findFirst({
     where: (table, operators) => operators.eq(table.id, id)
@@ -55,6 +82,7 @@ export async function getInstance(id: number): Promise<InstanceRow | null> {
 
 export async function createInstance(input: InstanceInput): Promise<Instance> {
   assertValidInstanceSyncToken(input.apiToken, "Instance API token");
+  assertValidInstanceBaseUrl(input.baseUrl);
   const now = nowIso();
   const [row] = await db
     .insert(instances)
@@ -81,6 +109,9 @@ export async function updateInstance(
 ): Promise<Instance> {
   if (input.apiToken !== undefined) {
     assertValidInstanceSyncToken(input.apiToken, "Instance API token");
+  }
+  if (input.baseUrl !== undefined) {
+    assertValidInstanceBaseUrl(input.baseUrl);
   }
   const existing = await getInstance(id);
   if (!existing) {

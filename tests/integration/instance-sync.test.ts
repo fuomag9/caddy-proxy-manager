@@ -395,6 +395,70 @@ describe('syncInstances token policy', () => {
 // applySyncPayload
 // ---------------------------------------------------------------------------
 
+describe('syncInstances transport', () => {
+  const STRONG_TOKEN = 'a'.repeat(48);
+
+  async function addSlave() {
+    process.env.INSTANCE_MODE = 'master';
+    const now = nowIso();
+    await ctx.db.insert(schema.instances).values({
+      name: 'Slave',
+      baseUrl: 'https://slave.example.com',
+      apiToken: encryptSecret(STRONG_TOKEN),
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  it('does not follow redirects and records a redirect as a failure', async () => {
+    await addSlave();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(null, { status: 307, headers: { location: 'http://elsewhere.example/' } })
+    );
+
+    const result = await syncInstances();
+
+    expect(result).toMatchObject({ success: 0, failed: 1 });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect(init.redirect).toBe('manual');
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    const [row] = await ctx.db.query.instances.findMany();
+    expect(row.lastSyncError).toContain('307');
+    fetchSpy.mockRestore();
+  });
+
+  it('requires an { ok: true } reply, not just a 2xx status', async () => {
+    await addSlave();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html>login</html>', { status: 200, headers: { 'content-type': 'text/html' } })
+    );
+    expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+
+    fetchSpy.mockResolvedValue(Response.json({ ok: true }));
+    expect(await syncInstances()).toMatchObject({ success: 1, failed: 0 });
+    fetchSpy.mockRestore();
+  });
+});
+
+describe('instance base URL validation', () => {
+  it.each([
+    ['https://slave.example.com', null],
+    ['http://10.0.0.5:3000/cpm', null],
+    ['file:///etc/passwd', /https/],
+    ['ftp://slave.example.com', /https/],
+    ['https://user:pass@slave.example.com', /credentials/],
+    ['https://slave.example.com/?x=1', /query/],
+    ['not a url', /valid URL/],
+  ])('%s', async (url, expected) => {
+    const { instanceBaseUrlValidationError } = await import('../../src/lib/models/instances');
+    const error = instanceBaseUrlValidationError(url);
+    if (expected === null) expect(error).toBeNull();
+    else expect(error).toMatch(expected);
+  });
+});
+
 describe('applySyncPayload', () => {
   /** Build a minimal valid payload (all data empty, all settings null). */
   function emptyPayload(): SyncPayload {
