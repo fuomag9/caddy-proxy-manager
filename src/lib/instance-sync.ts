@@ -341,6 +341,40 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
   };
 }
 
+const SYNC_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * POST the sync payload to one slave. Redirects are not followed (the body
+ * carries decrypted key material and must only reach the configured URL), the
+ * request is bounded in time, and only a 2xx `{ ok: true }` reply from a CPM
+ * slave counts as success.
+ */
+async function postSyncPayload(
+  baseUrl: string,
+  token: string,
+  payload: SyncPayload
+): Promise<{ ok: true } | { ok: false; status?: number }> {
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/instances/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload),
+      redirect: "manual",
+      signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS),
+    });
+    if (response.status < 200 || response.status >= 300) {
+      return { ok: false, status: response.status };
+    }
+    const body = await response.json().catch(() => null) as { ok?: unknown } | null;
+    return body?.ok === true ? { ok: true } : { ok: false, status: response.status };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export async function syncInstances(): Promise<{ total: number; success: number; failed: number; skippedHttp: number }> {
   const mode = await getInstanceMode();
   if (mode !== "master") {
@@ -396,28 +430,16 @@ export async function syncInstances(): Promise<{ total: number; success: number;
         return { ok: false, skippedHttp: true };
       }
 
-      let failureMessage = "Sync request failed";
-      try {
-        const response = await fetch(`${instance.baseUrl.replace(/\/$/, "")}/api/instances/sync`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          failureMessage = `Sync failed with HTTP ${response.status}`;
-          throw new Error(failureMessage);
-        }
-
+      const result = await postSyncPayload(instance.baseUrl, token, payload);
+      if (result.ok) {
         await recordInstanceSyncResult(instance.id, { ok: true });
         return { ok: true, skippedHttp: false };
-      } catch {
-        await recordInstanceSyncResult(instance.id, { ok: false, error: failureMessage });
-        return { ok: false, skippedHttp: false };
       }
+      const failureMessage = result.status !== undefined
+        ? `Sync failed with HTTP ${result.status}`
+        : "Sync request failed";
+      await recordInstanceSyncResult(instance.id, { ok: false, error: failureMessage });
+      return { ok: false, skippedHttp: false };
     })
   );
 
@@ -430,31 +452,16 @@ export async function syncInstances(): Promise<{ total: number; success: number;
         return { ok: false, skippedHttp: true };
       }
 
-      let failureStatus: number | null = null;
-      try {
-        const response = await fetch(`${instance.url.replace(/\/$/, "")}/api/instances/sync`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${instance.token}`
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          failureStatus = response.status;
-          throw new Error("Sync request rejected");
-        }
-
+      const result = await postSyncPayload(instance.url, instance.token, payload);
+      if (result.ok) {
         console.log(`Sync to env-configured instance "${instance.name}" succeeded`);
         return { ok: true, skippedHttp: false };
-      } catch {
-        console.error("Environment-configured instance sync failed", {
-          instanceName: instance.name,
-          ...(failureStatus === null ? {} : { status: failureStatus }),
-        });
-        return { ok: false, skippedHttp: false };
       }
+      console.error("Environment-configured instance sync failed", {
+        instanceName: instance.name,
+        ...(result.status === undefined ? {} : { status: result.status }),
+      });
+      return { ok: false, skippedHttp: false };
     })
   );
 
