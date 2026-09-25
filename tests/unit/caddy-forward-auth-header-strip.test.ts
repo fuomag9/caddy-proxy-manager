@@ -163,3 +163,93 @@ describe('CPM forward-auth inbound X-CPM-* header stripping', () => {
     }
   });
 });
+
+const AUTHENTIK_HEADERS = ['X-Authentik-Username', 'X-Authentik-Groups', 'X-Authentik-Email'];
+
+function isAuthentikStrip(h: unknown): boolean {
+  const handler = h as Record<string, unknown>;
+  if (handler?.handler !== 'headers') return false;
+  const del = (handler.request as { delete?: string[] } | undefined)?.delete;
+  if (!Array.isArray(del)) return false;
+  return AUTHENTIK_HEADERS.every((name) => del.includes(name));
+}
+
+function expectStripBeforeEveryUpstream(doc: unknown) {
+  const upstreamRoutes = collectHandleArrays(doc).filter((arr) => arr.some(isUpstreamProxy));
+  expect(upstreamRoutes.length).toBeGreaterThan(0);
+  for (const arr of upstreamRoutes) {
+    const stripIdx = arr.findIndex(isAuthentikStrip);
+    const proxyIdx = arr.findIndex(isUpstreamProxy);
+    expect(stripIdx).toBeGreaterThanOrEqual(0);
+    expect(stripIdx).toBeLessThan(proxyIdx);
+  }
+  return upstreamRoutes;
+}
+
+const authentikBase = {
+  enabled: true,
+  outpostDomain: 'outpost.goauthentik.io',
+  outpostUpstream: 'http://authentik-server:9000',
+  copyHeaders: AUTHENTIK_HEADERS,
+};
+
+describe('Authentik forward-auth inbound identity header stripping', () => {
+  it('strips copy headers before the upstream on a full-site protected host', async () => {
+    await createProxyHost(
+      {
+        name: 'ak-fullsite',
+        domains: ['ak.example.com'],
+        upstreams: [UPSTREAM],
+        authentik: authentikBase,
+        locationRules: [{ path: '/api/*', upstreams: [UPSTREAM] }],
+      },
+      1
+    );
+    expectStripBeforeEveryUpstream(await buildCaddyDocument());
+  });
+
+  it('strips copy headers on excluded (unauthenticated) paths', async () => {
+    await createProxyHost(
+      {
+        name: 'ak-excluded',
+        domains: ['ak2.example.com'],
+        upstreams: [UPSTREAM],
+        authentik: { ...authentikBase, excludedPaths: ['/public/*'] },
+      },
+      1
+    );
+    const routes = expectStripBeforeEveryUpstream(await buildCaddyDocument());
+    // At least one upstream route runs without the outpost subrequest.
+    expect(
+      routes.some((arr) => !arr.some((h) => JSON.stringify(h).includes('authentik-server:9000')))
+    ).toBe(true);
+  });
+
+  it('strips copy headers on the unprotected catch-all and location routes in protected-paths mode', async () => {
+    await createProxyHost(
+      {
+        name: 'ak-protected',
+        domains: ['ak3.example.com'],
+        upstreams: [UPSTREAM],
+        authentik: { ...authentikBase, protectedPaths: ['/admin/*'] },
+        locationRules: [{ path: '/api/*', upstreams: [UPSTREAM] }],
+      },
+      1
+    );
+    expectStripBeforeEveryUpstream(await buildCaddyDocument());
+  });
+
+  it('drops copy header names that are not valid header tokens', async () => {
+    await createProxyHost(
+      {
+        name: 'ak-badname',
+        domains: ['ak4.example.com'],
+        upstreams: [UPSTREAM],
+        authentik: { ...authentikBase, copyHeaders: [...AUTHENTIK_HEADERS, 'X-Bad}{Name'] },
+      },
+      1
+    );
+    const json = JSON.stringify(await buildCaddyDocument());
+    expect(json).not.toContain('X-Bad}{Name');
+  });
+});

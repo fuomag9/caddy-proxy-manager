@@ -1296,13 +1296,25 @@ async function buildProxyRoutes(
         forwardAuthHandler.trusted_proxies = trustedProxies;
       }
 
+      // Security: client-supplied copies of the identity headers are deleted on
+      // every route that reaches the upstream. The copy step above only sets a
+      // header when the outpost response carries a non-empty value, and
+      // unprotected routes never consult the outpost at all.
+      const authentikStripHandler: Record<string, unknown> | null =
+        authentik.copyHeaders.length > 0
+          ? { handler: "headers", request: { delete: [...authentik.copyHeaders] } }
+          : null;
+      const akHandlers: Record<string, unknown>[] = authentikStripHandler
+        ? [authentikStripHandler, ...handlers]
+        : handlers;
+
       // Path-based authentication support
       if (authentik.protectedPaths && authentik.protectedPaths.length > 0) {
         // Whitelist mode: only specified paths get auth
         for (const domainGroup of domainGroups) {
           // Create separate routes for each protected path
           for (const protectedPath of authentik.protectedPaths) {
-            const protectedHandlers: Record<string, unknown>[] = [...handlers];
+            const protectedHandlers: Record<string, unknown>[] = [...akHandlers];
             const protectedReverseProxy = JSON.parse(JSON.stringify(reverseProxyHandler));
 
             protectedHandlers.push(forwardAuthHandler);
@@ -1343,12 +1355,12 @@ async function buildProxyRoutes(
             if (!safePath) continue;
             hostRoutes.push({
               match: [{ host: domainGroup, path: [safePath] }],
-              handle: [...handlers, locationProxy],
+              handle: [...akHandlers, locationProxy],
               terminal: true,
             });
           }
 
-          const unprotectedHandlers: Record<string, unknown>[] = [...handlers, reverseProxyHandler];
+          const unprotectedHandlers: Record<string, unknown>[] = [...akHandlers, reverseProxyHandler];
 
           hostRoutes.push({
             match: [{ host: domainGroup }],
@@ -1375,7 +1387,7 @@ async function buildProxyRoutes(
           for (const excludedPath of authentik.excludedPaths) {
             hostRoutes.push({
               match: [{ host: domainGroup, path: [excludedPath] }],
-              handle: [...handlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
+              handle: [...akHandlers, JSON.parse(JSON.stringify(reverseProxyHandler))],
               terminal: true
             });
           }
@@ -1390,7 +1402,7 @@ async function buildProxyRoutes(
             if (!safePath) continue;
             hostRoutes.push({
               match: [{ host: domainGroup, path: [safePath] }],
-              handle: [...handlers, forwardAuthHandler, locationProxy],
+              handle: [...akHandlers, forwardAuthHandler, locationProxy],
               terminal: true,
             });
           }
@@ -1398,7 +1410,7 @@ async function buildProxyRoutes(
           // Catch-all with auth (everything not excluded)
           hostRoutes.push({
             match: [{ host: domainGroup }],
-            handle: [...handlers, forwardAuthHandler, reverseProxyHandler],
+            handle: [...akHandlers, forwardAuthHandler, reverseProxyHandler],
             terminal: true
           });
         }
@@ -1426,12 +1438,12 @@ async function buildProxyRoutes(
             if (!safePath) continue;
             hostRoutes.push({
               match: [{ host: domainGroup, path: [safePath] }],
-              handle: [...handlers, forwardAuthHandler, locationProxy],
+              handle: [...akHandlers, forwardAuthHandler, locationProxy],
               terminal: true,
             });
           }
 
-          const routeHandlers: Record<string, unknown>[] = [...handlers, forwardAuthHandler, reverseProxyHandler];
+          const routeHandlers: Record<string, unknown>[] = [...akHandlers, forwardAuthHandler, reverseProxyHandler];
           const route: CaddyHttpRoute = {
             match: [{ host: domainGroup }],
             handle: routeHandlers,
@@ -3112,7 +3124,9 @@ function parseAuthentikConfig(meta: ProxyHostAuthentikMeta | undefined | null): 
 
   const copyHeaders =
     Array.isArray(meta.copy_headers) && meta.copy_headers.length > 0
-      ? meta.copy_headers.map((header) => header?.trim()).filter((header): header is string => Boolean(header))
+      ? meta.copy_headers
+          .map((header) => header?.trim())
+          .filter((header): header is string => Boolean(header) && FA_HEADER_NAME_RE.test(header))
       : DEFAULT_AUTHENTIK_HEADERS;
 
   const trustedProxies =
