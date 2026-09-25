@@ -39,6 +39,17 @@ export async function register() {
       if (process.env.NODE_ENV === "production") throw error;
     }
 
+    const { migrateLegacyCaPrivateKeys } = await import("./lib/models/ca-certificates");
+    try {
+      const migrated = await migrateLegacyCaPrivateKeys();
+      if (migrated > 0) {
+        console.log(`Encrypted ${migrated} legacy CA private key(s)`);
+      }
+    } catch (error) {
+      console.error("Failed to encrypt legacy CA private keys");
+      if (process.env.NODE_ENV === "production") throw error;
+    }
+
     // Apply Caddy configuration from database on startup
     const { applyCaddyConfig } = await import("./lib/caddy");
     try {

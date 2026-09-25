@@ -306,8 +306,11 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     createdBy: null
   }));
 
+  // Slaves only need the CA certificate to verify client certificates; the
+  // signing key stays on the master.
   const sanitizedCaCertificates = caCertRows.map((row) => ({
     ...row,
+    privateKeyPem: null,
     createdBy: null
   }));
 
@@ -510,7 +513,11 @@ export async function applySyncPayload(payload: SyncPayload) {
       }))).run();
     }
     if (payload.data.caCertificates && payload.data.caCertificates.length > 0) {
-      tx.insert(caCertificates).values(payload.data.caCertificates).run();
+      tx.insert(caCertificates).values(payload.data.caCertificates.map((ca) => ({
+        ...ca,
+        // Never accept a CA signing key over sync (older masters sent it).
+        privateKeyPem: null,
+      }))).run();
     }
     if (payload.data.issuedClientCertificates && payload.data.issuedClientCertificates.length > 0) {
       tx.insert(issuedClientCertificates).values(payload.data.issuedClientCertificates).run();

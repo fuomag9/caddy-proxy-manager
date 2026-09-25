@@ -4,6 +4,12 @@ import { applyCaddyConfig } from "../caddy";
 import { caCertificates, issuedClientCertificates, mtlsCertificateRoles, proxyHosts } from "../db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
 import { ApiConflictError } from "../api-errors";
+import { decryptSecret, encryptSecret, isEncryptedSecret } from "../secret";
+
+function encryptCaPrivateKey(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? encryptSecret(trimmed) : null;
+}
 
 function tryParseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -51,7 +57,27 @@ export async function getCaCertificatePrivateKey(id: number): Promise<string | n
   const cert = await db.query.caCertificates.findFirst({
     where: (table, { eq }) => eq(table.id, id)
   });
-  return cert?.privateKeyPem ?? null;
+  return cert?.privateKeyPem ? decryptSecret(cert.privateKeyPem, `CA certificate ${id} private key`) : null;
+}
+
+/**
+ * Encrypt CA private keys stored in plaintext by older releases. Idempotent,
+ * so a restored legacy backup is repaired on the next startup.
+ */
+export async function migrateLegacyCaPrivateKeys(): Promise<number> {
+  const rows = await db
+    .select({ id: caCertificates.id, privateKeyPem: caCertificates.privateKeyPem })
+    .from(caCertificates);
+  let migrated = 0;
+  for (const row of rows) {
+    if (!row.privateKeyPem || isEncryptedSecret(row.privateKeyPem)) continue;
+    await db
+      .update(caCertificates)
+      .set({ privateKeyPem: encryptSecret(row.privateKeyPem) })
+      .where(eq(caCertificates.id, row.id));
+    migrated += 1;
+  }
+  return migrated;
 }
 
 export async function getCaCertificate(id: number): Promise<CaCertificate | null> {
@@ -68,7 +94,7 @@ export async function createCaCertificate(input: CaCertificateInput, actorUserId
     .values({
       name: input.name.trim(),
       certificatePem: input.certificatePem.trim(),
-      privateKeyPem: input.privateKeyPem?.trim() ?? null,
+      privateKeyPem: encryptCaPrivateKey(input.privateKeyPem),
       createdBy: actorUserId,
       createdAt: now,
       updatedAt: now
@@ -102,7 +128,7 @@ export async function updateCaCertificate(id: number, input: Partial<CaCertifica
     .set({
       name: input.name?.trim() ?? existing.name,
       certificatePem: input.certificatePem?.trim() ?? existing.certificatePem,
-      ...(input.privateKeyPem !== undefined ? { privateKeyPem: input.privateKeyPem?.trim() ?? null } : {}),
+      ...(input.privateKeyPem !== undefined ? { privateKeyPem: encryptCaPrivateKey(input.privateKeyPem) } : {}),
       updatedAt: now
     })
     .where(eq(caCertificates.id, id));
