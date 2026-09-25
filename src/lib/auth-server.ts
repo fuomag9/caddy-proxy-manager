@@ -199,11 +199,11 @@ function createAuth(): any {
       password: {
         async hash(password: string) {
           const bcrypt = await import("bcryptjs");
-          return bcrypt.default.hashSync(password, 12);
+          return await bcrypt.default.hash(password, 12);
         },
         async verify({ hash, password }: { hash: string; password: string }) {
           const bcrypt = await import("bcryptjs");
-          return bcrypt.default.compareSync(password, hash);
+          return await bcrypt.default.compare(password, hash);
         },
       },
     },

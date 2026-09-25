@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const bcrypt = await import("bcryptjs");
-    const passwordHash = bcrypt.default.hashSync(password, 12);
+    const passwordHash = await bcrypt.default.hash(password, 12);
 
     const user = await createUser({
       email,
