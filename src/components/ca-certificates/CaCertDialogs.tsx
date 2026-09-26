@@ -83,6 +83,10 @@ export function IssueClientCertDialog({
     startTransition(async () => {
       try {
         const result = await issueClientCertificateAction(cert.id, formData);
+        if ("error" in result) {
+          setError(result.error);
+          return;
+        }
         setIssued({
           ...result,
           name: sanitizeFilenameSegment(String(formData.get("common_name") ?? "client")),

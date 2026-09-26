@@ -1,10 +1,14 @@
 export const GENERIC_INSTANCE_SYNC_ERROR = "Previous synchronization failed";
+export const SYNC_TIMED_OUT_ERROR = "Sync timed out";
+export const SYNC_NOT_ACKNOWLEDGED_ERROR = "Slave did not acknowledge the sync (unexpected response)";
 
 const SAFE_SYNC_ERRORS = new Set([
   "Stored token could not be decrypted",
   "Stored instance sync token does not meet the current security policy",
   "HTTP sync blocked. Set INSTANCE_SYNC_ALLOW_HTTP=true to allow insecure sync.",
   "Sync request failed",
+  SYNC_TIMED_OUT_ERROR,
+  SYNC_NOT_ACKNOWLEDGED_ERROR,
   "Failed to apply synchronized configuration",
 ]);
 

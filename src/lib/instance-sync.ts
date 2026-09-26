@@ -1,10 +1,11 @@
 import db, { nowIso } from "./db";
 import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, l4ProxyHosts, proxyHosts, settings as settingsTable } from "./db/schema";
-import { getSetting, setSetting } from "./settings";
-import { recordInstanceSyncResult, updateInstance } from "./models/instances";
-import { decryptSecret, encryptSecret, isEncryptedSecret } from "./secret";
+import { encryptCloudflareSettingToken, getSetting, setSetting } from "./settings";
+import { instanceBaseUrlValidationError, recordInstanceSyncResult, updateInstance } from "./models/instances";
+import { decryptSecret, encryptSecret, isEncryptedSecret, reencryptSecret } from "./secret";
+import { encryptDnsProviderSettingCredentials } from "./dns-providers";
 import { sanitizeStoredCertificateProviderOptions } from "./certificate-provider-options";
-import { sanitizeInstanceSyncError } from "./instance-sync-error";
+import { SYNC_NOT_ACKNOWLEDGED_ERROR, SYNC_TIMED_OUT_ERROR, sanitizeInstanceSyncError } from "./instance-sync-error";
 import { applyL4Ports, getL4PortsDiff } from "./l4-ports";
 import {
   assertValidInstanceSyncToken,
@@ -36,6 +37,12 @@ export type SyncSettings = {
 export type SyncPayload = {
   generated_at: string;
   settings: SyncSettings;
+  /**
+   * Where the master decrypted a secret inside `settings` for transport; the
+   * slave encrypts the strings at these paths again. Absent in payloads from
+   * older masters, which sent secrets as stored (encrypted with their key).
+   */
+  settings_secret_paths?: SettingPath[];
   data: {
     certificates: Array<typeof certificates.$inferSelect>;
     caCertificates: Array<typeof caCertificates.$inferSelect>;
@@ -63,6 +70,7 @@ const ENV_INSTANCE_SYNC_TOKEN = "INSTANCE_SYNC_TOKEN";
 const ENV_INSTANCE_SLAVES = "INSTANCE_SLAVES";
 const ENV_SYNC_INTERVAL = "INSTANCE_SYNC_INTERVAL";
 const ENV_SYNC_ALLOW_HTTP = "INSTANCE_SYNC_ALLOW_HTTP";
+const ENV_SYNC_TIMEOUT_MS = "INSTANCE_SYNC_TIMEOUT_MS";
 
 /**
  * Type for slave instances configured via environment variable.
@@ -91,13 +99,24 @@ export function getEnvSlaveInstances(): EnvSlaveInstance[] {
       return [];
     }
 
-    return parsed.filter((item): item is EnvSlaveInstance => {
-      if (typeof item !== "object" || item === null) return false;
-      if (typeof item.name !== "string" || item.name.trim().length === 0) return false;
-      if (typeof item.url !== "string" || item.url.trim().length === 0) return false;
-      if (!isValidInstanceSyncToken(item.token)) return false;
-      return true;
-    });
+    return parsed
+      .filter((item, index): item is EnvSlaveInstance => {
+        if (typeof item !== "object" || item === null) return false;
+        if (typeof item.name !== "string" || item.name.trim().length === 0) return false;
+        if (typeof item.url !== "string" || item.url.trim().length === 0) return false;
+        if (!isValidInstanceSyncToken(item.token)) return false;
+        const urlError = instanceBaseUrlValidationError(item.url);
+        if (urlError) {
+          // The message is a fixed validation string; never log the URL or the
+          // entry itself, which may carry the token.
+          console.warn(`Skipping INSTANCE_SLAVES entry ${index}: ${urlError}`);
+          return false;
+        }
+        return true;
+      })
+      // Validation trims the URL, so sync must use the trimmed value too
+      // (UI/API instances are stored trimmed).
+      .map((item) => ({ name: item.name.trim(), url: item.url.trim(), token: item.token }));
   } catch {
     // JSON.parse errors can include excerpts from the input, which contains
     // bearer tokens. Never attach the exception or environment value here.
@@ -120,6 +139,26 @@ export function getSyncIntervalMs(): number {
 
   // Minimum 30 seconds to prevent abuse
   return Math.max(seconds, 30) * 1000;
+}
+
+const DEFAULT_SYNC_TIMEOUT_MS = 60_000;
+const MIN_SYNC_TIMEOUT_MS = 5_000;
+// Bun's fetch gives up after 300 s on its own (Node's undici fails a request
+// whose headers take longer than that), so a larger limit would never apply.
+const MAX_SYNC_TIMEOUT_MS = 300_000;
+
+/**
+ * Timeout for one sync request to a slave, covering the upload and the
+ * slave's apply (including its Caddy reload). Read from
+ * INSTANCE_SYNC_TIMEOUT_MS; defaults to 60 s (also for 0 or an invalid value)
+ * and is clamped to 5 s..5 min.
+ */
+export function getSyncRequestTimeoutMs(): number {
+  const envValue = process.env[ENV_SYNC_TIMEOUT_MS]?.trim();
+  if (!envValue || !/^\d+$/.test(envValue)) return DEFAULT_SYNC_TIMEOUT_MS;
+  const ms = Number(envValue);
+  if (ms === 0) return DEFAULT_SYNC_TIMEOUT_MS;
+  return Math.min(Math.max(ms, MIN_SYNC_TIMEOUT_MS), MAX_SYNC_TIMEOUT_MS);
 }
 
 /**
@@ -263,6 +302,106 @@ export async function clearSyncedSetting(key: string): Promise<void> {
   await setSetting(`${SYNCED_PREFIX}${key}`, null);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Location of a string inside the synced settings: the settings group key,
+ * then the object keys and array indexes down to the string.
+ */
+export type SettingPath = Array<string | number>;
+
+function formatSettingPath(path: SettingPath): string {
+  return path.map((part, index) => (typeof part === "number" ? `[${part}]` : index === 0 ? part : `.${part}`)).join("");
+}
+
+/** Apply `transform` to every string inside a JSON setting value. */
+function mapSettingStrings(
+  value: unknown,
+  path: SettingPath,
+  transform: (value: string, path: SettingPath) => string
+): unknown {
+  if (typeof value === "string") return transform(value, path);
+  if (Array.isArray(value)) {
+    return value.map((item, index) => mapSettingStrings(item, [...path, index], transform));
+  }
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, mapSettingStrings(item, [...path, key], transform)])
+    );
+  }
+  return value;
+}
+
+/** Undecryptable setting paths already reported by this process. */
+const reportedUndecryptableSettingPaths = new Set<string>();
+
+/**
+ * Replace every encrypted string in a setting value with its plaintext and
+ * record where it was in `decryptedPaths`, so a slave does not need the
+ * master's SESSION_SECRET: the slave encrypts the strings at those paths with
+ * its own key (see encryptSyncedSettingSecrets). A value no key here decrypts
+ * is sent as stored, as older releases sent every value, and reported once
+ * per process.
+ */
+function decryptSettingSecrets(key: string, value: unknown, decryptedPaths: SettingPath[]): unknown {
+  return mapSettingStrings(value, [key], (item, path) => {
+    if (!isEncryptedSecret(item)) return item;
+    try {
+      const plaintext = decryptSecret(item, `setting ${formatSettingPath(path)}`);
+      decryptedPaths.push(path);
+      return plaintext;
+    } catch {
+      const pathKey = JSON.stringify(path);
+      if (!reportedUndecryptableSettingPaths.has(pathKey)) {
+        reportedUndecryptableSettingPaths.add(pathKey);
+        console.warn(
+          `Instance sync: setting ${formatSettingPath(path)} cannot be decrypted with SESSION_SECRET or SESSION_SECRET_PREVIOUS; sending it as stored`
+        );
+      }
+      return item;
+    }
+  });
+}
+
+/** The well-formed entries of a payload's settings_secret_paths, as JSON strings. */
+function parseSettingSecretPaths(paths: unknown): Set<string> {
+  const parsed = new Set<string>();
+  if (!Array.isArray(paths)) return parsed;
+  for (const path of paths) {
+    if (Array.isArray(path) && path.every((part) => typeof part === "string" || typeof part === "number")) {
+      parsed.add(JSON.stringify(path));
+    }
+  }
+  return parsed;
+}
+
+/**
+ * Store a synced setting's secrets under this instance's SESSION_SECRET.
+ * Strings the master decrypted for transport (listed in the payload's
+ * settings_secret_paths) are encrypted, whatever this release knows about
+ * the setting. Ciphertext from an older master (which sent values as stored,
+ * under its own key) is re-encrypted when a key here decrypts it and kept as
+ * sent otherwise. DNS provider password fields known to this release are
+ * encrypted as well, which covers masters that send no secret paths.
+ */
+function encryptSyncedSettingSecrets(key: string, value: unknown, secretPaths: Set<string>): unknown {
+  const encrypted = mapSettingStrings(value, [key], (item, path) => {
+    if (isEncryptedSecret(item)) {
+      try {
+        return reencryptSecret(item, `synced setting ${formatSettingPath(path)}`) ?? item;
+      } catch {
+        return item;
+      }
+    }
+    return item && secretPaths.has(JSON.stringify(path)) ? encryptSecret(item) : item;
+  });
+  if (key === "dns_provider") return encryptDnsProviderSettingCredentials(encrypted);
+  if (key === "cloudflare") return encryptCloudflareSettingToken(encrypted);
+  return encrypted;
+}
+
 export async function buildSyncPayload(): Promise<SyncPayload> {
   const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows, l4Rows] = await Promise.all([
     db.select().from(certificates),
@@ -274,7 +413,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     db.select().from(l4ProxyHosts),
   ]);
 
-  const settings = {
+  const storedSettings = {
     general: await getSetting("general"),
     acme: await getSetting("acme"),
     cloudflare: await getSetting("cloudflare"),
@@ -291,6 +430,12 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     default_response: await getSetting("default_response"),
     forward_auth: await getSetting("forward_auth"),
   };
+  // Secrets inside settings (DNS provider credentials) travel decrypted over
+  // the authenticated sync channel, like certificate private keys below.
+  const settingsSecretPaths: SettingPath[] = [];
+  const settings = Object.fromEntries(
+    Object.entries(storedSettings).map(([key, value]) => [key, decryptSettingSecrets(key, value, settingsSecretPaths)])
+  ) as typeof storedSettings;
 
   const sanitizedAccessLists = accessListRows.map((row) => ({
     ...row,
@@ -332,6 +477,7 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
   return {
     generated_at: nowIso(),
     settings,
+    settings_secret_paths: settingsSecretPaths,
     data: {
       certificates: sanitizedCertificates,
       caCertificates: sanitizedCaCertificates,
@@ -344,19 +490,22 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
   };
 }
 
-const SYNC_REQUEST_TIMEOUT_MS = 30_000;
+function isTimeoutError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { name?: unknown }).name === "TimeoutError";
+}
 
 /**
  * POST the sync payload to one slave. Redirects are not followed (the body
  * carries decrypted key material and must only reach the configured URL), the
  * request is bounded in time, and only a 2xx `{ ok: true }` reply from a CPM
- * slave counts as success.
+ * slave counts as success. Failures carry a fixed message that is safe to
+ * store and show (see instance-sync-error.ts).
  */
 async function postSyncPayload(
   baseUrl: string,
   token: string,
   payload: SyncPayload
-): Promise<{ ok: true } | { ok: false; status?: number }> {
+): Promise<{ ok: true } | { ok: false; error: string; status?: number }> {
   try {
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/instances/sync`, {
       method: "POST",
@@ -366,15 +515,20 @@ async function postSyncPayload(
       },
       body: JSON.stringify(payload),
       redirect: "manual",
-      signal: AbortSignal.timeout(SYNC_REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(getSyncRequestTimeoutMs()),
     });
     if (response.status < 200 || response.status >= 300) {
-      return { ok: false, status: response.status };
+      return { ok: false, error: `Sync failed with HTTP ${response.status}`, status: response.status };
     }
-    const body = await response.json().catch(() => null) as { ok?: unknown } | null;
-    return body?.ok === true ? { ok: true } : { ok: false, status: response.status };
-  } catch {
-    return { ok: false };
+    const body = await response.json().catch((error: unknown) => {
+      if (isTimeoutError(error)) throw error;
+      return null;
+    }) as { ok?: unknown } | null;
+    return body?.ok === true
+      ? { ok: true }
+      : { ok: false, error: SYNC_NOT_ACKNOWLEDGED_ERROR, status: response.status };
+  } catch (error) {
+    return { ok: false, error: isTimeoutError(error) ? SYNC_TIMED_OUT_ERROR : "Sync request failed" };
   }
 }
 
@@ -438,10 +592,7 @@ export async function syncInstances(): Promise<{ total: number; success: number;
         await recordInstanceSyncResult(instance.id, { ok: true });
         return { ok: true, skippedHttp: false };
       }
-      const failureMessage = result.status !== undefined
-        ? `Sync failed with HTTP ${result.status}`
-        : "Sync request failed";
-      await recordInstanceSyncResult(instance.id, { ok: false, error: failureMessage });
+      await recordInstanceSyncResult(instance.id, { ok: false, error: result.error });
       return { ok: false, skippedHttp: false };
     })
   );
@@ -462,6 +613,7 @@ export async function syncInstances(): Promise<{ total: number; success: number;
       }
       console.error("Environment-configured instance sync failed", {
         instanceName: instance.name,
+        reason: result.error,
         ...(result.status === undefined ? {} : { status: result.status }),
       });
       return { ok: false, skippedHttp: false };
@@ -474,6 +626,25 @@ export async function syncInstances(): Promise<{ total: number; success: number;
   const failed = allResults.length - success - skippedHttp;
 
   return { total: allResults.length, success, failed, skippedHttp };
+}
+
+let periodicSyncInFlight = false;
+
+/**
+ * Entry point for the periodic sync timer. A tick that fires while the
+ * previous periodic sync is still waiting on a slow slave is skipped
+ * (returns null), so ticks never pile up, each holding a full payload with
+ * decrypted key material, when the request timeout exceeds the interval.
+ * Syncs triggered by config changes call syncInstances() directly.
+ */
+export async function runPeriodicInstanceSync(): Promise<Awaited<ReturnType<typeof syncInstances>> | null> {
+  if (periodicSyncInFlight) return null;
+  periodicSyncInFlight = true;
+  try {
+    return await syncInstances();
+  } finally {
+    periodicSyncInFlight = false;
+  }
 }
 
 export async function applySyncPayload(payload: SyncPayload) {
@@ -494,13 +665,17 @@ export async function applySyncPayload(payload: SyncPayload) {
     ["forward_auth", payload.settings.forward_auth ?? null],
     ["default_response", payload.settings.default_response ?? null],
   ];
+  const secretPaths = parseSettingSecretPaths(payload.settings_secret_paths);
+  const syncedSettingsToStore = syncedSettings.map(
+    ([key, value]) => [key, encryptSyncedSettingSecrets(key, value, secretPaths)] as const
+  );
   const settingsUpdatedAt = nowIso();
 
   // better-sqlite3 is synchronous, so transaction callback must be synchronous.
   // Settings are written in the same transaction as the tables, so a payload
   // that fails part-way leaves neither applied.
   db.transaction((tx) => {
-    for (const [key, value] of syncedSettings) {
+    for (const [key, value] of syncedSettingsToStore) {
       const serialized = JSON.stringify(value ?? null);
       tx.insert(settingsTable)
         .values({ key: `${SYNCED_PREFIX}${key}`, value: serialized, updatedAt: settingsUpdatedAt })
