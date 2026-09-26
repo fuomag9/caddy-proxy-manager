@@ -3,10 +3,10 @@ import { applyCaddyConfig } from "../caddy";
 import { logAuditEvent } from "../audit";
 import { proxyHosts } from "../db/schema";
 import { asc, desc, eq, count, like, or } from "drizzle-orm";
-import { type GeoBlockSettings, getDnsProviderSettings } from "../settings";
+import { type GeoBlockSettings, type WafSettings, getDnsProviderSettings, getWafSettings } from "../settings";
 import { normalizeProxyHostDomains } from "../proxy-host-domains";
 import { ApiValidationError } from "../api-errors";
-import { bodyLimitRangeMessage, droppedWafDirectiveMessage, filterCustomDirectives, findInvalidBodyLimitDirective, isValidBodyLimit } from "../caddy-waf";
+import { bodyLimitRangeMessage, customDirectivesError, isValidBodyLimit, wafDirectiveSource } from "../caddy-waf";
 
 /**
  * Wildcard certificates (e.g. "*.example.com") can only be issued via the ACME
@@ -331,8 +331,14 @@ export type MtlsConfig = {
  * while Caddy loads the config, so one bad value here makes Caddy reject the
  * whole document and *every* host stops being reconfigured — worth failing the
  * write with a clear message instead.
+ *
+ * Custom directives are checked against `previous` (the stored config): only
+ * lines the change newly drops are rejected. A stored rule that a later
+ * release started dropping must not block unrelated edits — the enable toggle,
+ * suppressing a rule, a PATCH of other fields; buildWafHandler still leaves it
+ * out and logs a warning.
  */
-function validateWafMeta(waf: WafHostConfig): WafHostConfig {
+function validateWafMeta(waf: WafHostConfig, previous: WafHostConfig | undefined, globalWaf: WafSettings | null): WafHostConfig {
   for (const key of ["request_body_limit", "request_body_in_memory_limit"] as const) {
     const value = waf[key];
     if (value === undefined || value === null) continue;
@@ -349,19 +355,32 @@ function validateWafMeta(waf: WafHostConfig): WafHostConfig {
   ) {
     throw new ApiValidationError("waf.request_body_in_memory_limit must not exceed waf.request_body_limit");
   }
-  // Safe to echo: findInvalidBodyLimitDirective only ever returns a line that
-  // matched `<known directive name> <digits>`, never free-form user text.
-  const badDirective = findInvalidBodyLimitDirective(waf.custom_directives);
-  if (badDirective) {
-    throw new ApiValidationError(`waf.custom_directives has an out-of-range body limit: "${badDirective}" — ${bodyLimitRangeMessage("the byte count")}`);
-  }
-  // Lines in the message come straight from the user's custom_directives, but
-  // only lines CPM will drop anyway are reported, so nothing new is echoed.
-  const { dropped } = filterCustomDirectives(waf.custom_directives);
-  if (dropped.length > 0) {
-    throw new ApiValidationError(droppedWafDirectiveMessage(dropped));
+  // A merge-mode host's directives follow the global ones in the same handler,
+  // so they are checked after them (a reused global rule id is dropped).
+  const directiveError = customDirectivesError(
+    waf.custom_directives,
+    { crsLoaded: hostCrsLoaded(waf), precedingDirectives: wafDirectiveSource(globalWaf, waf, "").globalDirectives },
+    previous && {
+      directives: previous.custom_directives,
+      options: {
+        crsLoaded: hostCrsLoaded(previous),
+        precedingDirectives: wafDirectiveSource(globalWaf, previous, "").globalDirectives,
+      },
+    }
+  );
+  if (directiveError) {
+    throw new ApiValidationError(directiveError);
   }
   return waf;
+}
+
+/**
+ * Whether the host's WAF handler loads the OWASP CRS. In override mode the
+ * host alone decides; in merge mode an unset value inherits the global
+ * setting, which buildWafHandler resolves, so it stays undefined here.
+ */
+function hostCrsLoaded(waf: WafHostConfig): boolean | undefined {
+  return waf.waf_mode === "override" ? Boolean(waf.load_owasp_crs) : waf.load_owasp_crs;
 }
 
 function sanitizeMtlsMeta(meta: MtlsConfig | undefined): MtlsConfig | undefined {
@@ -964,8 +983,9 @@ function serializeMeta(meta: ProxyHostMeta | null | undefined) {
     normalized.geoblock_mode = meta.geoblock_mode;
   }
 
+  // Validated in buildMeta, and only when the caller supplies `waf`.
   if (meta.waf) {
-    normalized.waf = validateWafMeta(meta.waf);
+    normalized.waf = meta.waf;
   }
 
   if (meta.mtls) {
@@ -1799,7 +1819,11 @@ function assertSingleForwardAuthProvider(meta: ProxyHostMeta, input: Partial<Pro
   );
 }
 
-function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): string | null {
+function buildMeta(
+  existing: ProxyHostMeta,
+  input: Partial<ProxyHostInput>,
+  globalWaf: WafSettings | null = null
+): string | null {
   const next: ProxyHostMeta = { ...existing };
 
   if (input.customReverseProxyJson !== undefined) {
@@ -1875,7 +1899,7 @@ function buildMeta(existing: ProxyHostMeta, input: Partial<ProxyHostInput>): str
 
   if (input.waf !== undefined) {
     if (input.waf) {
-      next.waf = validateWafMeta(input.waf);
+      next.waf = validateWafMeta(input.waf, existing.waf, globalWaf);
     } else {
       delete next.waf;
     }
@@ -2464,7 +2488,7 @@ export async function createProxyHost(input: ProxyHostInput, actorUserId: number
   await assertWildcardIssuable(domains, input.certificateId ?? null);
 
   const now = nowIso();
-  const meta = buildMeta({}, input);
+  const meta = buildMeta({}, input, input.waf ? await getWafSettings() : null);
   const [record] = await db
     .insert(proxyHosts)
     .values({
@@ -2553,7 +2577,7 @@ export async function updateProxyHost(id: number, input: Partial<ProxyHostInput>
     ...(existing.pathRewrites && existing.pathRewrites.length > 0 ? { path_rewrites: existing.pathRewrites } : {}),
     ...(existing.errorPages && existing.errorPages.length > 0 ? { error_pages: existing.errorPages } : {}),
   };
-  const meta = buildMeta(existingMeta, input);
+  const meta = buildMeta(existingMeta, input, input.waf ? await getWafSettings() : null);
 
   const now = nowIso();
   await db

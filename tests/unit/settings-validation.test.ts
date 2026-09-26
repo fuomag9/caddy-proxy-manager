@@ -128,6 +128,22 @@ describe("REST settings runtime validation", () => {
     })).toThrow(/will be dropped and never sent to Caddy/);
   });
 
+  it("only rejects WAF directive lines an update newly drops", () => {
+    const legacy = 'SecRule ARGS "@pmFromFile /etc/hosts" "id:1,deny"';
+    const previousWaf = { custom_directives: legacy, load_owasp_crs: true };
+    expect(() => validateSettingsGroup("waf", { ...validGroups.waf, custom_directives: legacy })).toThrow(/will be dropped/);
+    expect(() => validateSettingsGroup(
+      "waf",
+      { ...validGroups.waf, mode: "DetectionOnly", custom_directives: legacy },
+      { previousWaf }
+    )).not.toThrow();
+    expect(() => validateSettingsGroup(
+      "waf",
+      { ...validGroups.waf, custom_directives: `${legacy}\nSecRuleUpdateActionById 930130 "block"` },
+      { previousWaf }
+    )).toThrow(/SecRuleUpdateActionById/);
+  });
+
   it("accepts custom WAF directives the allowlist permits", () => {
     const input = {
       ...validGroups.waf,

@@ -132,7 +132,13 @@ function caddyHeaders(headers: Record<string, string> | undefined): Record<strin
   );
 }
 
-/** Build the final matcher-less route for CPM's main HTTP server. */
+/**
+ * Build the final matcher-less route for CPM's main HTTP server.
+ *
+ * Request placeholders ({http.*}) in the body, header values and redirect
+ * target are expanded by Caddy as usual; host placeholders ({env.*},
+ * {system.*}, {file.*}) are escaped and served literally.
+ */
 export function buildDefaultResponseRoute(
   settings: DefaultResponseSettings | null | undefined
 ): CaddyDefaultResponseRoute | null {

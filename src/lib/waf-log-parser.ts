@@ -165,7 +165,8 @@ export function ruleInfoFromAuditEntry(entry: CorazaAuditEntry): RuleInfo | null
 
 // Request/response headers that carry credentials. Coraza's audit log (parts
 // B and F) records every header verbatim; Caddy's own access log redacts
-// these, so the stored WAF event must not keep them either.
+// these, so the stored WAF event must not keep them either. The app-specific
+// token headers are the ones self-hosted media and dev tools authenticate with.
 const CREDENTIAL_HEADERS = new Set([
   'authorization',
   'proxy-authorization',
@@ -174,24 +175,223 @@ const CREDENTIAL_HEADERS = new Set([
   'x-api-key',
   'x-auth-token',
   'x-cpm-forward-auth-proof',
+  'x-plex-token',
+  'x-emby-token',
+  'x-emby-authorization',
+  'x-mediabrowser-token',
+  'private-token',
+  'x-vault-token',
 ]);
 const REDACTED = '[redacted]';
 
+// SecLang variables naming a credential: any cookie, or a credential header.
+// Rule logdata such as CRS's "Matched Data: %{TX.0} found within
+// %{MATCHED_VAR_NAME}: %{MATCHED_VAR}" echoes that variable's value.
+const COOKIE_VARIABLE_PREFIX = 'request_cookies:';
+const CREDENTIAL_HEADER_VARIABLES = [...CREDENTIAL_HEADERS].flatMap((name) => [
+  `request_headers:${name}`,
+  `response_headers:${name}`,
+]);
+// Any text that could start one of them, for a quick skip.
+const CREDENTIAL_COLLECTION = /REQUEST_COOKIES:|(?:REQUEST|RESPONSE)_HEADERS:/i;
+const MATCHED_DATA = 'Matched Data: ';
+const MATCHED_HEADER = 'Matched Data: Header ';
+const FOUND_WITHIN = ' found within ';
+// Coraza cuts a rule's msg and logdata to this many bytes before logging them.
+const CORAZA_LOG_DATA_CAP = 280;
+// A `[name "value"]` field of a ModSecurity-format rule message. Coraza
+// Go-quotes the value, so an escaped quote never ends it early.
+const RULE_MESSAGE_FIELD = /\[([A-Za-z0-9_]+) "((?:[^"\\]|\\.)*)"\]/g;
+// The fields that carry a rule's msg or logdata (chained rules add numbered ones).
+const MSG_OR_DATA_FIELD = /^(?:msg|data)(?:_match_\d+)?$/;
+// ErrorLog writes the rule's msg unquoted after the disruptive-action prefix,
+// e.g. "Coraza: Access denied (phase 2). <msg> [file ...".
+const ERROR_LOG_ACTION = /^\s*Coraza: (?:Warning|[A-Za-z ]+ \(phase \d+\))\. /;
+
 function redactHeaderMap(headers: unknown): unknown {
   if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return headers;
-  const out: Record<string, unknown> = {};
-  for (const [name, value] of Object.entries(headers as Record<string, unknown>)) {
-    out[name] = CREDENTIAL_HEADERS.has(name.toLowerCase())
-      ? (Array.isArray(value) ? value.map(() => REDACTED) : REDACTED)
-      : value;
-  }
-  return out;
+  // fromEntries defines own properties, so a header literally named
+  // "__proto__" stays a key instead of setting the object's prototype.
+  return Object.fromEntries(
+    Object.entries(headers as Record<string, unknown>).map(([name, value]) => [
+      name,
+      CREDENTIAL_HEADERS.has(name.toLowerCase())
+        ? (Array.isArray(value) ? value.map(() => REDACTED) : REDACTED)
+        : value,
+    ])
+  );
 }
 
-/** The audit entry with credential header values replaced, for storage. */
+/** True when the transaction's request or response carried a credential header (a cookie included). */
+function carriesCredentials(entry: object): boolean {
+  const tx = (entry as { transaction?: unknown }).transaction;
+  if (!tx || typeof tx !== 'object') return false;
+  return (['request', 'response'] as const).some((part) => {
+    const headers = (tx as Record<string, { headers?: unknown } | undefined>)[part]?.headers;
+    if (!headers || typeof headers !== 'object') return false;
+    return Object.entries(headers).some(([name, value]) =>
+      CREDENTIAL_HEADERS.has(name.toLowerCase()) &&
+      (Array.isArray(value) ? value.some((v) => Boolean(v)) : Boolean(value))
+    );
+  });
+}
+
+/** True when `name` is a cookie or credential header variable, e.g. `REQUEST_COOKIES:session`. */
+function isCredentialVariable(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.startsWith(COOKIE_VARIABLE_PREFIX) || CREDENTIAL_HEADER_VARIABLES.includes(lower);
+}
+
+/** True when `text` is the start of a credential variable name cut short, e.g. `REQUEST_COO`. */
+function isCredentialVariablePrefix(text: string): boolean {
+  const lower = text.toLowerCase();
+  return [COOKIE_VARIABLE_PREFIX, ...CREDENTIAL_HEADER_VARIABLES].some(
+    (name) => name.length > lower.length && name.startsWith(lower)
+  );
+}
+
+function utf8Length(codePoint: number): number {
+  if (!(codePoint >= 0)) return 1;
+  return codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4;
+}
+
+/** Byte length of the text a Go-quoted (%q) string holds, escapes decoded. */
+function goQuotedByteLength(quoted: string): number {
+  let bytes = 0;
+  for (let i = 0; i < quoted.length;) {
+    if (quoted[i] === '\\' && i + 1 < quoted.length) {
+      const kind = quoted[i + 1];
+      if (kind === 'x') {
+        bytes += 1;
+        i += 4;
+      } else if (kind === 'u' || kind === 'U') {
+        const digits = kind === 'u' ? 4 : 8;
+        bytes += utf8Length(parseInt(quoted.slice(i + 2, i + 2 + digits), 16));
+        i += 2 + digits;
+      } else if (kind >= '0' && kind <= '7') {
+        bytes += 1;
+        i += 4;
+      } else {
+        bytes += 1;
+        i += 2;
+      }
+      continue;
+    }
+    const codePoint = quoted.codePointAt(i)!;
+    bytes += utf8Length(codePoint);
+    i += codePoint > 0xffff ? 2 : 1;
+  }
+  return bytes;
+}
+
+/**
+ * Redacts the credential value a rule's msg or logdata `text` reports. The
+ * variable name is looked for only where logdata puts it: after the first
+ * " found within " of "Matched Data: X found within NAME[: VALUE]", after
+ * "Matched Data: Header " in "Matched Data: Header NAME: VALUE", and at the
+ * start of "NAME=VALUE" or "NAME: VALUE" (whichever separator comes first).
+ * X and VALUE are request data, so a variable name written inside them never
+ * counts.
+ *
+ * Coraza cuts logdata at 280 bytes (`capped`), which can remove NAME and leave
+ * only the start of the matched value. When the transaction carried
+ * credentials (`credentialed`), that excerpt is redacted if what is left of
+ * NAME could be the start of a credential variable, or if no " found within "
+ * is left at all in a capped text.
+ */
+function redactCredentialText(text: string, credentialed: boolean, capped: boolean): string {
+  if (!text.startsWith(MATCHED_DATA)) {
+    // "%{MATCHED_VAR_NAME}=%{MATCHED_VAR}" or "%{MATCHED_VAR_NAME}: %{MATCHED_VAR}".
+    const separator = [text.indexOf('='), text.indexOf(': ')]
+      .filter((index) => index > 0)
+      .reduce((first, index) => Math.min(first, index), Infinity);
+    if (separator === Infinity || !isCredentialVariable(text.slice(0, separator))) return text;
+    return text[separator] === '='
+      ? `${text.slice(0, separator)}=${REDACTED}`
+      : `${text.slice(0, separator)}: ${REDACTED}`;
+  }
+  const within = text.indexOf(FOUND_WITHIN, MATCHED_DATA.length);
+  if (within === -1) {
+    if (text.startsWith(MATCHED_HEADER)) {
+      const separator = text.indexOf(': ', MATCHED_HEADER.length);
+      return separator !== -1 && isCredentialVariable(text.slice(MATCHED_HEADER.length, separator))
+        ? `${text.slice(0, separator)}: ${REDACTED}`
+        : text;
+    }
+    return credentialed && capped ? `${MATCHED_DATA}${REDACTED}` : text;
+  }
+  const after = text.slice(within + FOUND_WITHIN.length);
+  // Legitimate credentials never contain " found within ", so a second one
+  // came from request data, and NAME can't be told apart from it.
+  if (after.includes(FOUND_WITHIN)) return text;
+  const separator = after.indexOf(': ');
+  const credential = separator === -1
+    // NAME ends the text: the logdata stops there, or the cap cut NAME or
+    // the ": " after it.
+    ? isCredentialVariable(after) || isCredentialVariable(after.replace(/:$/, ''))
+      || (credentialed && isCredentialVariablePrefix(after))
+    : isCredentialVariable(after.slice(0, separator));
+  if (!credential) return text;
+  const name = separator === -1 ? after : `${after.slice(0, separator)}: ${REDACTED}`;
+  return `${MATCHED_DATA}${REDACTED}${FOUND_WITHIN}${name}`;
+}
+
+/** redactCredentialText for a plain (not Go-quoted) msg or logdata string. */
+function redactPlainText(text: string, credentialed: boolean): string {
+  return redactCredentialText(text, credentialed, Buffer.byteLength(text, 'utf8') >= CORAZA_LOG_DATA_CAP);
+}
+
+/**
+ * A ModSecurity-format rule message with redactCredentialText applied to its
+ * msg and data fields, and to the unquoted msg ErrorLog writes before them.
+ * A message with no fields is treated as a plain msg.
+ */
+function redactRuleMessage(message: string, credentialed: boolean): string {
+  if (!message.includes(MATCHED_DATA) && !CREDENTIAL_COLLECTION.test(message)) return message;
+  const between = (segment: string) => {
+    const action = ERROR_LOG_ACTION.exec(segment)?.[0] ?? '';
+    const msg = segment.slice(action.length).trimEnd();
+    return `${action}${redactPlainText(msg, credentialed)}${segment.slice(action.length + msg.length)}`;
+  };
+  let out = '';
+  let last = 0;
+  for (const field of message.matchAll(RULE_MESSAGE_FIELD)) {
+    const [whole, name, value] = field;
+    out += between(message.slice(last, field.index));
+    out += MSG_OR_DATA_FIELD.test(name)
+      ? `[${name} "${redactCredentialText(value, credentialed, goQuotedByteLength(value) >= CORAZA_LOG_DATA_CAP)}"]`
+      : whole;
+    last = field.index + whole.length;
+  }
+  return out + between(message.slice(last));
+}
+
+function redactMessages(messages: unknown, credentialed: boolean): void {
+  if (!Array.isArray(messages)) return;
+  for (const message of messages) {
+    if (!message || typeof message !== 'object') continue;
+    const m = message as Record<string, unknown>;
+    // error_message is the ModSecurity-format string (audit part H), which
+    // older Coraza builds wrote to `message`; data.* (part K) are the plain
+    // msg and logdata.
+    if (typeof m.error_message === 'string') m.error_message = redactRuleMessage(m.error_message, credentialed);
+    if (typeof m.message === 'string') m.message = redactRuleMessage(m.message, credentialed);
+    const data = m.data as Record<string, unknown> | null | undefined;
+    if (data && typeof data === 'object') {
+      if (typeof data.msg === 'string') data.msg = redactPlainText(data.msg, credentialed);
+      if (typeof data.data === 'string') data.data = redactPlainText(data.data, credentialed);
+    }
+  }
+}
+
+/**
+ * The audit entry with credential header values — and the credential values
+ * matched rules echo in their messages — replaced, for storage.
+ */
 export function redactAuditEntry(entry: unknown): unknown {
   if (!entry || typeof entry !== 'object') return entry;
-  const copy = structuredClone(entry) as { transaction?: Record<string, unknown> };
+  const credentialed = carriesCredentials(entry);
+  const copy = structuredClone(entry) as { transaction?: Record<string, unknown>; messages?: unknown };
   const tx = copy.transaction;
   if (tx && typeof tx === 'object') {
     for (const part of ['request', 'response'] as const) {
@@ -201,7 +401,22 @@ export function redactAuditEntry(entry: unknown): unknown {
       }
     }
   }
+  redactMessages(copy.messages, credentialed);
   return copy;
+}
+
+/**
+ * The redacted entry serialized for raw_data. unix_timestamp is nanoseconds,
+ * past what a JS number holds exactly, so the digits from the original line
+ * are put back instead of the rounded re-serialization.
+ */
+function storedRawData(line: string, redacted: CorazaAuditEntry): string {
+  const json = JSON.stringify(redacted);
+  const ts = redacted.transaction?.unix_timestamp;
+  if (typeof ts !== 'number' || Number.isSafeInteger(ts)) return json;
+  const original = /"unix_timestamp"\s*:\s*(\d+)\s*[,}]/.exec(line)?.[1];
+  if (!original || Number(original) !== ts) return json;
+  return json.replace(`"unix_timestamp":${JSON.stringify(ts)}`, `"unix_timestamp":${original}`);
 }
 
 export function parseLine(line: string, ruleMap: Map<string, RuleInfo>): WafEventRow | null {
@@ -236,7 +451,9 @@ export function parseLine(line: string, ruleMap: Map<string, RuleInfo>): WafEven
 
   // Prefer the rule carried by the audit entry itself; fall back to the
   // waf-rules.log join only for Coraza builds that don't populate `messages`.
-  const ruleInfo = ruleInfoFromAuditEntry(entry) ?? (tx.id ? ruleMap.get(tx.id) : undefined);
+  // Read from the redacted entry so rule_message matches what raw_data keeps.
+  const redacted = redactAuditEntry(entry) as CorazaAuditEntry;
+  const ruleInfo = ruleInfoFromAuditEntry(redacted) ?? (tx.id ? ruleMap.get(tx.id) : undefined);
 
   const blocked = tx.is_interrupted ?? false;
 
@@ -254,7 +471,7 @@ export function parseLine(line: string, ruleMap: Map<string, RuleInfo>): WafEven
     rule_id: ruleInfo?.ruleId ?? null,
     rule_message: ruleInfo?.ruleMessage ?? null,
     severity: ruleInfo?.severity ?? null,
-    raw_data: JSON.stringify(redactAuditEntry(entry)),
+    raw_data: storedRawData(line, redacted),
     blocked,
   };
 }

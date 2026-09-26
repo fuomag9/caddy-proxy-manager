@@ -10,18 +10,12 @@ import { ChevronDown, ClipboardCopy, ShieldOff } from "lucide-react";
 import { useState } from "react";
 import { type WafHostConfig } from "@/lib/models/proxy-hosts";
 import { bytesToMib, MAX_BODY_LIMIT_MIB, MIN_BODY_LIMIT_MIB } from "@/lib/caddy-waf";
+import { appendQuickTemplate, HOST_TEMPLATE_ID_OFFSET, WAF_QUICK_TEMPLATES } from "@/lib/waf-quick-templates";
 import { WafRuleExclusions } from "./WafRuleExclusions";
 
 type WafMode = "merge" | "override";
 type EngineMode = "Off" | "On" | "inherit";
 type LimitAction = "Reject" | "ProcessPartial" | "inherit";
-
-const QUICK_TEMPLATES = [
-  { label: "Allow IP", snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
-  { label: "Disable WAF for path", snippet: `SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"` },
-  { label: "Remove XSS rules", snippet: `SecRuleRemoveByTag "attack-xss"` },
-  { label: "Block User-Agent", snippet: `SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9002,phase:1,deny,status:403,log"` },
-];
 
 type Props = {
   value?: WafHostConfig | null;
@@ -254,13 +248,13 @@ export function WafFields({ value, showModeSelector = true }: Props) {
             showTemplates ? "max-h-[500px] opacity-100 mt-2" : "max-h-0 opacity-0 pointer-events-none"
           )}>
             <div className="flex flex-col gap-1.5">
-              {QUICK_TEMPLATES.map((t) => (
+              {WAF_QUICK_TEMPLATES.map((t) => (
                 <Button
                   key={t.label}
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => setCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}
+                  onClick={() => setCustomDirectives((prev) => appendQuickTemplate(prev, t, HOST_TEMPLATE_ID_OFFSET))}
                   className="justify-start font-mono text-[0.72rem]"
                 >
                   <ClipboardCopy className="h-3 w-3 mr-1 shrink-0" />

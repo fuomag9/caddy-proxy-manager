@@ -9,6 +9,7 @@ import { Search, X, ShieldOff, Trash2, Copy, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { bytesToMib, MAX_BODY_LIMIT_MIB, MIN_BODY_LIMIT_MIB } from "@/lib/caddy-waf";
+import { appendQuickTemplate, WAF_QUICK_TEMPLATES } from "@/lib/waf-quick-templates";
 import { formatDateTimeUtc } from "@/src/lib/date-format";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -1120,14 +1121,9 @@ export default function WafEventsClient({ events, stats, pagination, initialSear
                 </Button>
                 <div className={cn("overflow-hidden transition-all duration-200", wafShowTemplates ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0 pointer-events-none")}>
                   <div className="flex flex-col gap-1.5 mt-2">
-                    {[
-                      { label: "Allow IP",             snippet: `SecRule REMOTE_ADDR "@ipMatch 1.2.3.4" "id:9000,phase:1,allow,nolog,msg:'Allow IP'"` },
-                      { label: "Disable WAF for path", snippet: `SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"` },
-                      { label: "Remove XSS rules",     snippet: `SecRuleRemoveByTag "attack-xss"` },
-                      { label: "Block User-Agent",     snippet: `SecRule REQUEST_HEADERS:User-Agent "@contains badbot" "id:9002,phase:1,deny,status:403,log"` },
-                    ].map((t) => (
+                    {WAF_QUICK_TEMPLATES.map((t) => (
                       <Button key={t.label} type="button" size="sm" variant="outline" className="justify-start font-mono text-[0.72rem]"
-                        onClick={() => setWafCustomDirectives((prev) => prev ? `${prev}\n${t.snippet}` : t.snippet)}>
+                        onClick={() => setWafCustomDirectives((prev) => appendQuickTemplate(prev, t))}>
                         <Copy className="h-3 w-3 mr-1.5 shrink-0" />
                         {t.label}
                       </Button>

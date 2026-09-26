@@ -23,6 +23,7 @@ import { applyCaddyConfig } from "@/src/lib/caddy";
 import { DefaultResponseValidationError } from "@/src/lib/caddy-default-response";
 import { instanceSyncTokenValidationError } from "@/src/lib/instance-sync-token";
 import {
+  encryptDnsProviderSettingCredentials,
   redactDnsProviderSettingsForApi,
   redactLegacyCloudflareSettingsForApi,
 } from "@/src/lib/dns-providers";
@@ -189,7 +190,9 @@ export async function PUT(
 
     let validated: unknown;
     try {
-      validated = validateSettingsGroup(group, input);
+      validated = validateSettingsGroup(group, input, {
+        previousWaf: group === "waf" ? await getWafSettings() : null,
+      });
     } catch (error) {
       if (error instanceof SettingsValidationError || error instanceof DefaultResponseValidationError) {
         return NextResponse.json(
@@ -204,7 +207,9 @@ export async function PUT(
       // Preserve the exact local stored value (including encrypted credentials),
       // rather than the effective or redacted GET representation, for rollback.
       const previousValue = await getSetting<unknown>(handler.storageKey);
-      await handler.save(validated as never);
+      // Provider credentials are stored encrypted, as the dashboard form does.
+      const toSave = group === "dns-provider" ? encryptDnsProviderSettingCredentials(validated) : validated;
+      await handler.save(toSave as never);
 
       if (handler.applyCaddy) {
         try {

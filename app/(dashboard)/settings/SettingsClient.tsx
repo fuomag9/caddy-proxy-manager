@@ -1046,7 +1046,10 @@ function DefaultResponseSection({
                   className="h-8 w-28 font-mono"
                 />
               </FormRow>
-              <FormRow label="Response body" hint="Plain text, JSON, or custom HTML. Empty is allowed.">
+              <FormRow
+                label="Response body"
+                hint="Plain text, JSON, or custom HTML. Empty is allowed. Request placeholders such as {http.request.host} are expanded; {env.*}, {system.*} and {file.*} are sent literally."
+              >
                 <Textarea
                   name="body"
                   defaultValue={defaultResponse?.mode === "respond" ? defaultResponse.body ?? "" : ""}
@@ -1079,7 +1082,10 @@ function DefaultResponseSection({
                   </SelectContent>
                 </Select>
               </FormRow>
-              <FormRow label="Redirect URL" hint="Absolute, relative, and Caddy placeholder-based targets are supported.">
+              <FormRow
+                label="Redirect URL"
+                hint="Absolute and relative targets are supported. Request placeholders such as {http.request.uri} are expanded; {env.*}, {system.*} and {file.*} are sent literally."
+              >
                 <Input
                   name="redirectUrl"
                   defaultValue={defaultResponse?.mode === "redirect" ? defaultResponse.redirectUrl ?? "" : ""}
