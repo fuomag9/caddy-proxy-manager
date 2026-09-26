@@ -478,8 +478,8 @@ The callback URL format is:
 For environment-configured providers, the provider ID is derived from `OAUTH_PROVIDER_NAME` (lowercased, non-alphanumeric replaced with `-`). The exact callback URL is shown in **Settings → OAuth Providers** after the provider is synced.
 
 Examples:
-- `https://caddy-manager.example.com/api/auth/callback/authentik-QXV0aG` (production)
-- `http://localhost:3000/api/auth/callback/authentik-QXV0aG` (development)
+- `https://caddy-manager.example.com/api/auth/callback/authentik` (production, `OAUTH_PROVIDER_NAME=Authentik`)
+- `http://localhost:3000/api/auth/callback/authentik` (development)
 
 The `BASE_URL` environment variable must match exactly where users access your dashboard.
 
