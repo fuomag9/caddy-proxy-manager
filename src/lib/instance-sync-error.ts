@@ -2,6 +2,9 @@ export const GENERIC_INSTANCE_SYNC_ERROR = "Previous synchronization failed";
 export const SYNC_TIMED_OUT_ERROR = "Sync timed out";
 export const SYNC_NOT_ACKNOWLEDGED_ERROR = "Slave did not acknowledge the sync (unexpected response)";
 export const SYNC_INVALID_KEY_ERROR = "Slave returned an invalid sync key";
+export const SYNC_KEY_CHANGED_ERROR = "Slave sync key changed; verify the slave, then pin its new key or reset its key pin";
+export const SYNC_KEY_CONFIG_MISMATCH_ERROR = "Slave sync key does not match the key configured in INSTANCE_SLAVES";
+export const SYNC_SLAVE_CHANGED_DURING_SYNC_ERROR = "Slave instance was removed or its base URL changed during the sync";
 export const SYNC_SEALED_KEY_MISMATCH_ERROR = "Sync payload was sealed for a different key; retry";
 export const SYNC_SEALED_STALE_ERROR = "Sync payload was sealed for an expired or already used key request; retry";
 export const SYNC_SEALED_OPEN_FAILED_ERROR = "Sealed secrets in the sync payload could not be opened";
@@ -14,6 +17,9 @@ const SAFE_SYNC_ERRORS = new Set([
   SYNC_TIMED_OUT_ERROR,
   SYNC_NOT_ACKNOWLEDGED_ERROR,
   SYNC_INVALID_KEY_ERROR,
+  SYNC_KEY_CHANGED_ERROR,
+  SYNC_KEY_CONFIG_MISMATCH_ERROR,
+  SYNC_SLAVE_CHANGED_DURING_SYNC_ERROR,
   SYNC_SEALED_KEY_MISMATCH_ERROR,
   SYNC_SEALED_STALE_ERROR,
   SYNC_SEALED_OPEN_FAILED_ERROR,

@@ -58,6 +58,7 @@ import { decryptSecret, encryptSecret, isEncryptedSecret } from '../../src/lib/s
 import { createInstance, listInstances, updateInstance } from '../../src/lib/models/instances';
 import { setSetting } from '../../src/lib/settings';
 import { ApiValidationError } from '../../src/lib/api-errors';
+import { getSyncPublicKey } from '../../src/lib/sync-crypto';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -563,6 +564,62 @@ describe('syncInstances transport', () => {
     expect(logged).not.toContain('pass');
     warnSpy.mockRestore();
     fetchSpy.mockRestore();
+  });
+
+  it('reads syncKeyId from INSTANCE_SLAVES and skips entries with an invalid one', async () => {
+    const token = 'env-slave-token-secret-sentinel-0123456789';
+    const url = 'https://pinned-slave.example.com';
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'pinned', url, token, syncKeyId: '0123456789abcdef' },
+      { name: 'unpinned', url, token, syncKeyId: null },
+      { name: 'uppercase', url, token, syncKeyId: '0123456789ABCDEF' },
+      { name: 'short', url, token, syncKeyId: '0123456789abcde' },
+      { name: 'number', url, token, syncKeyId: 1234567890123456 },
+      { name: 'empty', url, token, syncKeyId: '' },
+    ]);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(getEnvSlaveInstances()).toEqual([
+      { name: 'pinned', url, token, syncKeyId: '0123456789abcdef' },
+      { name: 'unpinned', url, token },
+    ]);
+    const warnings = warnSpy.mock.calls.map((call) => String(call[0]));
+    expect(warnings).toEqual([2, 3, 4, 5].map((index) =>
+      `Skipping INSTANCE_SLAVES entry ${index}: syncKeyId must be a sync key id (16 lowercase hex characters)`));
+    const logged = JSON.stringify(warnSpy.mock.calls);
+    expect(logged).not.toContain(token);
+    expect(logged).not.toContain('pinned-slave.example.com');
+    warnSpy.mockRestore();
+  });
+
+  it('reads syncPublicKey from INSTANCE_SLAVES, sets syncKeyId from it, and skips entries with an invalid one', async () => {
+    const token = 'env-slave-token-secret-sentinel-0123456789';
+    const url = 'https://pinned-slave.example.com';
+    const { publicKey, keyId } = getSyncPublicKey();
+    const encoded = publicKey.toString('base64');
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'full', url, token, syncPublicKey: encoded },
+      { name: 'both', url, token, syncPublicKey: encoded, syncKeyId: keyId },
+      { name: 'unpinned', url, token, syncPublicKey: null },
+      { name: 'mismatched', url, token, syncPublicKey: encoded, syncKeyId: '0123456789abcdef' },
+      { name: 'base64url', url, token, syncPublicKey: publicKey.toString('base64url') },
+      { name: 'short', url, token, syncPublicKey: Buffer.alloc(31, 1).toString('base64') },
+      { name: 'low-order', url, token, syncPublicKey: Buffer.alloc(32).toString('base64') },
+    ]);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(getEnvSlaveInstances()).toEqual([
+      { name: 'full', url, token, syncKeyId: keyId, syncPublicKey: encoded },
+      { name: 'both', url, token, syncKeyId: keyId, syncPublicKey: encoded },
+      { name: 'unpinned', url, token },
+    ]);
+    expect(warnSpy.mock.calls.map((call) => String(call[0]))).toEqual([
+      'Skipping INSTANCE_SLAVES entry 3: syncKeyId is not the key id of syncPublicKey',
+      ...[4, 5, 6].map((index) =>
+        `Skipping INSTANCE_SLAVES entry ${index}: syncPublicKey must be a sync public key (base64 of 32 bytes)`),
+    ]);
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(token);
+    warnSpy.mockRestore();
   });
 
   it('skips a periodic tick while the previous periodic sync is still running', async () => {

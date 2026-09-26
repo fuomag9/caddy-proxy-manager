@@ -2,8 +2,9 @@
  * GET /api/instances/sync (the slave's sync public key) and the sync POST's
  * handling of sealed payloads.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { createHash, createPrivateKey, createPublicKey, hkdfSync } from 'node:crypto';
 
 vi.hoisted(() => {
   process.env.INSTANCE_SYNC_RATE_MAX = '3';
@@ -19,7 +20,15 @@ vi.mock('@/src/lib/instance-sync', () => ({
 import { GET, POST } from '@/app/api/instances/sync/route';
 import { applyCaddyConfig } from '@/src/lib/caddy';
 import { applySyncPayload, getInstanceMode, getSlaveMasterToken, setSlaveLastSync } from '@/src/lib/instance-sync';
-import { SyncSealError, consumeSyncNonce, getSyncPublicKey } from '@/src/lib/sync-crypto';
+import {
+  SyncSealError,
+  consumeSyncNonce,
+  createSyncKeyChallenge,
+  getSyncPublicKey,
+  parseSyncKeyRotationProofs,
+  parseSyncPublicKeyResponse,
+  verifySyncKeyRotationProof,
+} from '@/src/lib/sync-crypto';
 
 const TOKEN = 'sync-token-0123456789abcdef0123456789abcdef';
 const KEY_ID = '0123456789abcdef';
@@ -27,6 +36,10 @@ const NONCE = 'AbCdEfGhIjKlMnOpQrSt_-';
 const SEALED = { secrets_sealed_key_id: KEY_ID, secrets_sealed_nonce: NONCE };
 
 let clientNumber = 0;
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -37,12 +50,17 @@ beforeEach(() => {
 });
 
 /** A request from a client address of its own, unless `client` names one. */
-function syncRequest(method: 'GET' | 'POST', options: { token?: string | null; body?: unknown; client?: string } = {}) {
+function syncRequest(
+  method: 'GET' | 'POST',
+  options: { token?: string | null; body?: unknown; client?: string; query?: string } = {}
+) {
   const headers: Record<string, string> = {
     'x-forwarded-for': options.client ?? `198.51.100.${++clientNumber}`,
   };
   if (options.token !== null) headers.authorization = `Bearer ${options.token ?? TOKEN}`;
-  if (method === 'GET') return new NextRequest('http://localhost/api/instances/sync', { method, headers });
+  if (method === 'GET') {
+    return new NextRequest(`http://localhost/api/instances/sync${options.query ?? ''}`, { method, headers });
+  }
   headers['content-type'] = 'application/json';
   return new NextRequest('http://localhost/api/instances/sync', {
     method,
@@ -133,6 +151,60 @@ describe('GET /api/instances/sync', () => {
 
     // The master's syncs from the same address are not held back by its key requests.
     expect((await POST(syncRequest('POST', { client }))).status).toBe(200);
+  });
+});
+
+describe('GET /api/instances/sync with a rotation challenge', () => {
+  const PREVIOUS_SECRET = 'previous-secret-for-sync-key-route-tests-33333333';
+
+  /** The public key the slave derives from `secret` (see sync-crypto.ts). */
+  function derivedPublicKey(secret: string) {
+    const seed = Buffer.from(hkdfSync('sha256', secret, Buffer.alloc(0), 'cpm-instance-sync-x25519:v1', 32));
+    const privateKey = createPrivateKey({
+      key: Buffer.concat([Buffer.from('302e020100300506032b656e04220420', 'hex'), seed]),
+      format: 'der',
+      type: 'pkcs8',
+    });
+    const spki = createPublicKey(privateKey).export({ format: 'der', type: 'spki' });
+    const publicKey = Buffer.from(spki.subarray(spki.length - 32));
+    return { publicKey, keyId: createHash('sha256').update(publicKey).digest('hex').slice(0, 16) };
+  }
+
+  it('adds a proof from each SESSION_SECRET_PREVIOUS key, which the master verifies', async () => {
+    vi.stubEnv('SESSION_SECRET_PREVIOUS', PREVIOUS_SECRET);
+    const challenge = createSyncKeyChallenge();
+
+    const response = await GET(syncRequest('GET', { query: `?challenge=${challenge.value}` }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const body = await response.json();
+    const previous = derivedPublicKey(PREVIOUS_SECRET);
+    expect(body.rotationProofs).toEqual([{ keyId: previous.keyId, proof: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) }]);
+    expect(verifySyncKeyRotationProof(
+      challenge, previous, parseSyncPublicKeyResponse(body)!, parseSyncKeyRotationProofs(body)
+    )).toBe(true);
+  });
+
+  it('answers a challenge without proofs when SESSION_SECRET_PREVIOUS is not set', async () => {
+    const response = await GET(syncRequest('GET', { query: `?challenge=${createSyncKeyChallenge().value}` }));
+
+    expect(response.status).toBe(200);
+    expect(Object.keys(await response.json()).sort()).toEqual(['algorithm', 'keyId', 'nonce', 'publicKey', 'version']);
+  });
+
+  it.each([
+    ['not 32 bytes', 'A'.repeat(42), undefined],
+    ['not base64url', `${'A'.repeat(42)}+`, undefined],
+    ['empty', '', undefined],
+    ['a low-order point', Buffer.alloc(32).toString('base64url'), PREVIOUS_SECRET],
+  ])('refuses a challenge that is %s with 400 and no nonce', async (_case, challenge, previous) => {
+    if (previous) vi.stubEnv('SESSION_SECRET_PREVIOUS', previous);
+
+    const response = await GET(syncRequest('GET', { query: `?challenge=${challenge}` }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Invalid sync key challenge' });
   });
 });
 

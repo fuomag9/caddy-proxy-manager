@@ -8,7 +8,14 @@ import {
   SYNC_SEALED_OPEN_FAILED_ERROR,
   SYNC_SEALED_STALE_ERROR,
 } from "@/src/lib/instance-sync-error";
-import { SyncSealError, createSyncKeyResponse, isSyncNonce } from "@/src/lib/sync-crypto";
+import {
+  SYNC_KEY_CHALLENGE_PARAM,
+  SyncSealError,
+  createSyncKeyResponse,
+  isSyncKeyId,
+  isSyncNonce,
+  type SyncPublicKeyResponse,
+} from "@/src/lib/sync-crypto";
 import { getClientIp } from "@/src/lib/client-ip";
 import { createRateLimiter, type RateLimiter } from "@/src/lib/rate-limit";
 
@@ -34,7 +41,6 @@ const keyRateLimiter = createRateLimiter({
   windowMs: SYNC_RATE_WINDOW_MS,
   blockMs: "window",
 });
-const SEALED_KEY_ID_PATTERN = /^[0-9a-f]{16}$/;
 
 /**
  * Timing-safe token comparison to prevent timing attacks
@@ -285,7 +291,7 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
   // its sealed settings secrets are. Unsealed payloads keep the lenient
   // handling of settings_secret_paths.
   if (p.secrets_sealed_key_id !== undefined || p.secrets_sealed_nonce !== undefined) {
-    if (!isString(p.secrets_sealed_key_id) || !SEALED_KEY_ID_PATTERN.test(p.secrets_sealed_key_id)) {
+    if (!isSyncKeyId(p.secrets_sealed_key_id)) {
       return false;
     }
     if (!isSyncNonce(p.secrets_sealed_nonce)) {
@@ -358,12 +364,22 @@ async function refuseUnauthorizedSyncRequest(request: NextRequest, limiter: Rate
  * This slave's public key, which the master seals the secrets in the sync
  * payload to, and a single-use nonce for that payload (see
  * src/lib/sync-crypto.ts). Authenticated like the sync; the master fetches
- * both before every sync.
+ * both before every sync. With `?challenge=` (masters that pin slave keys
+ * send one), the reply also carries a rotation proof from each key derived
+ * from SESSION_SECRET_PREVIOUS; a challenge that is not a usable X25519
+ * public key gets 400 and no nonce.
  */
 export async function GET(request: NextRequest) {
   const refusal = await refuseUnauthorizedSyncRequest(request, keyRateLimiter);
   if (refusal) return refusal;
-  return NextResponse.json(createSyncKeyResponse(), { headers: { "Cache-Control": "no-store" } });
+  let body: SyncPublicKeyResponse;
+  try {
+    body = createSyncKeyResponse(request.nextUrl.searchParams.get(SYNC_KEY_CHALLENGE_PARAM));
+  } catch (error) {
+    if (!(error instanceof SyncSealError) || error.code !== "invalid_challenge") throw error;
+    return NextResponse.json({ error: "Invalid sync key challenge" }, { status: 400 });
+  }
+  return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: NextRequest) {
