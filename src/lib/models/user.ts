@@ -1,6 +1,30 @@
 import db, { nowIso, toIso } from "../db";
-import { users, accounts, oauthProviders, sessions, forwardAuthSessions } from "../db/schema";
-import { and, count, desc, eq, isNotNull, ne, or, sql } from "drizzle-orm";
+import {
+  users,
+  accounts,
+  oauthProviders,
+  sessions,
+  verifications,
+  pendingOAuthLinks,
+  accessLists,
+  certificates,
+  caCertificates,
+  issuedClientCertificates,
+  proxyHosts,
+  l4ProxyHosts,
+  apiTokens,
+  auditEvents,
+  mtlsRoles,
+  mtlsAccessRules,
+  groups,
+  groupMembers,
+  forwardAuthAccess,
+  forwardAuthSessions,
+  forwardAuthExchanges,
+} from "../db/schema";
+import * as schema from "../db/schema";
+import { and, count, desc, eq, inArray, is, isNotNull, ne, notInArray, or, sql } from "drizzle-orm";
+import { SQLiteTable, getTableConfig } from "drizzle-orm/sqlite-core";
 import { deleteUserForwardAuthSessions } from "./forward-auth";
 import {
   CREDENTIAL_ACCOUNT_ISSUER,
@@ -524,6 +548,95 @@ export async function updateUserStatus(userId: number, status: string): Promise<
   return updated ? parseDbUser(updated) : null;
 }
 
+/**
+ * The user id in the state of a Better Auth "link account" flow, as text, and
+ * null for every other verification row. Better Auth's OAuth callback links
+ * the identity to this user id without checking a session.
+ */
+const linkStateUserId = sql`case when json_valid(${verifications.value})
+  then cast(json_extract(${verifications.value}, '$.link.userId') as text) end`;
+
+/**
+ * Applies the schema's onDelete rules for a user id: deletes the rows that
+ * belong to the user (sign-ins, sign-in methods, API tokens, memberships,
+ * forward-auth grants) and clears the user from rows that only record who
+ * created or owns them. Production SQLite runs with foreign_keys off, so
+ * none of those rules fire by themselves, and a user later created with the
+ * same id (the primary admin always gets id 1) would take over whatever is
+ * left. It does not touch the users row itself.
+ */
+function deleteUserReferences(tx: DbTransaction, userId: number): void {
+  // onDelete: "cascade". Exchange codes cascade from forward-auth sessions.
+  tx.delete(forwardAuthExchanges)
+    .where(inArray(
+      forwardAuthExchanges.sessionId,
+      tx.select({ id: forwardAuthSessions.id }).from(forwardAuthSessions).where(eq(forwardAuthSessions.userId, userId))
+    ))
+    .run();
+  tx.delete(forwardAuthSessions).where(eq(forwardAuthSessions.userId, userId)).run();
+  tx.delete(forwardAuthAccess).where(eq(forwardAuthAccess.userId, userId)).run();
+  tx.delete(groupMembers).where(eq(groupMembers.userId, userId)).run();
+  tx.delete(sessions).where(eq(sessions.userId, userId)).run();
+  tx.delete(accounts).where(eq(accounts.userId, userId)).run();
+  tx.delete(pendingOAuthLinks).where(eq(pendingOAuthLinks.userId, userId)).run();
+  tx.delete(apiTokens).where(eq(apiTokens.createdBy, userId)).run();
+  tx.delete(verifications).where(sql`${linkStateUserId} = ${String(userId)}`).run();
+
+  // onDelete: "set null".
+  tx.update(auditEvents).set({ userId: null }).where(eq(auditEvents.userId, userId)).run();
+  tx.update(proxyHosts).set({ ownerUserId: null }).where(eq(proxyHosts.ownerUserId, userId)).run();
+  tx.update(l4ProxyHosts).set({ ownerUserId: null }).where(eq(l4ProxyHosts.ownerUserId, userId)).run();
+  tx.update(accessLists).set({ createdBy: null }).where(eq(accessLists.createdBy, userId)).run();
+  tx.update(certificates).set({ createdBy: null }).where(eq(certificates.createdBy, userId)).run();
+  tx.update(caCertificates).set({ createdBy: null }).where(eq(caCertificates.createdBy, userId)).run();
+  tx.update(issuedClientCertificates).set({ createdBy: null })
+    .where(eq(issuedClientCertificates.createdBy, userId)).run();
+  tx.update(mtlsRoles).set({ createdBy: null }).where(eq(mtlsRoles.createdBy, userId)).run();
+  tx.update(mtlsAccessRules).set({ createdBy: null }).where(eq(mtlsAccessRules.createdBy, userId)).run();
+  tx.update(groups).set({ createdBy: null }).where(eq(groups.createdBy, userId)).run();
+}
+
+/** Deletes the user and, in the same transaction, everything deleteUserReferences covers. */
 export async function deleteUser(userId: number): Promise<void> {
-  await db.delete(users).where(eq(users.id, userId));
+  db.transaction((tx) => {
+    deleteUserReferences(tx, userId);
+    tx.delete(users).where(eq(users.id, userId)).run();
+  });
+}
+
+/**
+ * Runs deleteUserReferences, in one transaction, for every user id that rows
+ * still reference although its users row is gone. Older releases left such
+ * rows: their deleteUser removed only the users row. The id can be handed out
+ * again, because the primary admin is always created as id 1 and rebuilding
+ * the users table (migration 0022 does) resets its AUTOINCREMENT counter to
+ * the highest remaining id, and the new user would take over the sessions,
+ * API tokens and sign-in methods. Returns the ids it cleared.
+ */
+export async function deleteOrphanedUserReferences(): Promise<number[]> {
+  // Every column the schema declares as a reference to users.id.
+  const references = (Object.values(schema) as unknown[])
+    .filter((value): value is SQLiteTable => is(value, SQLiteTable))
+    .flatMap((table) => getTableConfig(table).foreignKeys
+      .map((foreignKey) => foreignKey.reference())
+      .filter((reference) => reference.foreignTable === users)
+      .map((reference) => ({ table, column: reference.columns[0] })));
+
+  return db.transaction((tx) => {
+    const orphanIds = new Set<number>();
+    for (const { table, column } of references) {
+      const rows = tx
+        .selectDistinct({ userId: column })
+        .from(table)
+        .where(and(isNotNull(column), notInArray(column, tx.select({ id: users.id }).from(users))))
+        .all();
+      for (const { userId } of rows) orphanIds.add(Number(userId));
+    }
+    for (const userId of orphanIds) deleteUserReferences(tx, userId);
+    // Link-account states that name a user that does not exist, whatever form the id takes.
+    tx.delete(verifications)
+      .where(sql`${linkStateUserId} is not null and ${linkStateUserId} not in (select cast(${users.id} as text) from ${users})`)
+      .run();
+    return [...orphanIds].sort((a, b) => a - b);
+  });
 }
