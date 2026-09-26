@@ -14,6 +14,8 @@ interface PortalLoginFormProps {
   rid: string;
   hasRedirect: boolean;
   targetDomain: string;
+  /** Why this sign-in cannot proceed; replaces the login form when set. */
+  errorMessage?: string | null;
   enabledProviders?: Array<{ id: string; name: string }>;
   existingSession?: { userId: string; name: string | null; email: string | null } | null;
 }
@@ -22,6 +24,7 @@ export default function PortalLoginForm({
   rid,
   hasRedirect,
   targetDomain,
+  errorMessage = null,
   enabledProviders = [],
   existingSession,
 }: PortalLoginFormProps) {
@@ -110,6 +113,31 @@ export default function PortalLoginForm({
             <CardTitle className="text-xl">Authentication Required</CardTitle>
             <CardDescription>No redirect destination specified.</CardDescription>
           </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="text-center space-y-1">
+            <div className="flex justify-center mb-2">
+              <Shield className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <CardTitle className="text-xl">Authentication Required</CardTitle>
+            {targetDomain && (
+              <CardDescription>
+                Sign in to access <span className="font-medium text-foreground">{targetDomain}</span>
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent>
+            <Alert variant="destructive">
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          </CardContent>
         </Card>
       </div>
     );

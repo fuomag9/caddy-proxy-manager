@@ -3,6 +3,8 @@ import { createHash, timingSafeEqual } from "crypto";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { extractL4ListenPort, isReservedL4Port } from "@/src/lib/l4-reserved-ports";
 import { applySyncPayload, getInstanceMode, getSlaveMasterToken, setSlaveLastSync, SyncPayload } from "@/src/lib/instance-sync";
+import { getClientIp } from "@/src/lib/client-ip";
+import { createRateLimiter } from "@/src/lib/rate-limit";
 
 const DEFAULT_MAX_SYNC_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
 const _parsedMaxBytes = Number(process.env.INSTANCE_SYNC_MAX_BYTES);
@@ -11,7 +13,14 @@ const MAX_SYNC_BODY_BYTES = Number.isFinite(_parsedMaxBytes) && _parsedMaxBytes 
   : DEFAULT_MAX_SYNC_BODY_BYTES;
 const SYNC_RATE_MAX = Number(process.env.INSTANCE_SYNC_RATE_MAX ?? 60);
 const SYNC_RATE_WINDOW_MS = Number(process.env.INSTANCE_SYNC_RATE_WINDOW_MS ?? 60_000);
-const SYNC_RATE_LIMITS = new Map<string, { count: number; windowStart: number }>();
+// Pre-authentication request limit per client address; every request counts.
+// A fixed window: up to SYNC_RATE_MAX requests, then refusals until it ends,
+// so a master syncing steadily at the limit is never refused.
+const syncRateLimiter = createRateLimiter({
+  maxAttempts: SYNC_RATE_MAX,
+  windowMs: SYNC_RATE_WINDOW_MS,
+  blockMs: "window",
+});
 
 /**
  * Timing-safe token comparison to prevent timing attacks
@@ -23,36 +32,6 @@ function secureTokenCompare(a: string, b: string): boolean {
   const digestA = createHash("sha256").update(a, "utf8").digest();
   const digestB = createHash("sha256").update(b, "utf8").digest();
   return timingSafeEqual(digestA, digestB);
-}
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const parts = forwarded.split(",");
-    return parts[parts.length - 1]?.trim() || "unknown";
-  }
-  const real = request.headers.get("x-real-ip");
-  if (real) {
-    return real.trim();
-  }
-  return "unknown";
-}
-
-function checkSyncRateLimit(key: string): { blocked: boolean; retryAfterMs?: number } {
-  const now = Date.now();
-  const entry = SYNC_RATE_LIMITS.get(key);
-
-  if (!entry || entry.windowStart + SYNC_RATE_WINDOW_MS <= now) {
-    SYNC_RATE_LIMITS.set(key, { count: 1, windowStart: now });
-    return { blocked: false };
-  }
-
-  if (entry.count >= SYNC_RATE_MAX) {
-    return { blocked: true, retryAfterMs: entry.windowStart + SYNC_RATE_WINDOW_MS - now };
-  }
-
-  entry.count += 1;
-  return { blocked: false };
 }
 
 function isString(value: unknown): value is string {
@@ -317,7 +296,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Instance is not configured as a slave" }, { status: 403 });
   }
 
-  const rateLimit = checkSyncRateLimit(getClientIp(request));
+  const clientIp = getClientIp(request.headers);
+  const rateLimit = syncRateLimiter.isRateLimited(clientIp);
   if (rateLimit.blocked) {
     const retryAfterSeconds = rateLimit.retryAfterMs ? Math.ceil(rateLimit.retryAfterMs / 1000) : 60;
     return NextResponse.json(
@@ -325,6 +305,7 @@ export async function POST(request: NextRequest) {
       { status: 429, headers: { "Retry-After": retryAfterSeconds.toString() } }
     );
   }
+  syncRateLimiter.registerAttempt(clientIp);
 
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";

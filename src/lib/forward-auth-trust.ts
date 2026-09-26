@@ -18,6 +18,13 @@ export const FORWARD_AUTH_PROXY_PROOF_HEADER = "X-CPM-Forward-Auth-Proof";
 export const FORWARD_AUTH_PROXY_HOST_ID_HEADER = "X-CPM-Proxy-Host-Id";
 
 /**
+ * Set by the verify endpoint on 401/403 responses: the portal's `rd` value for
+ * the request being verified, already encoded for a query string.  The
+ * generated Caddy route places it into the portal redirect it issues.
+ */
+export const FORWARD_AUTH_PORTAL_TARGET_HEADER = "X-CPM-Portal-Target";
+
+/**
  * Host header syntax accepted from Caddy: LDH labels (optionally with a
  * trailing dot) or a bracketed IPv6 literal, plus an optional port.  Anything
  * else — percent-encoding, non-ASCII, IPv4 shorthands — could be normalized by
@@ -79,6 +86,33 @@ export function getTrustedForwardAuthOrigin(headers: Headers): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Encode a value for a query string.  Everything encodeURIComponent escapes
+ * stays escaped except "/", ":", "?" and "=", which are unambiguous inside a
+ * query value and keep the portal URL readable.  "&", "#", "+" and "%" are
+ * always escaped, so the value decodes back to exactly the input.
+ */
+function encodeQueryValue(value: string): string {
+  return encodeURIComponent(value).replace(/%(?:2F|3A|3F|3D)/g, (escaped) =>
+    decodeURIComponent(escaped)
+  );
+}
+
+/**
+ * The portal `rd` value (query-encoded) for the request Caddy is verifying:
+ * the proof-checked forwarded origin plus X-Forwarded-Uri.  Null when the
+ * request is not a well-formed Caddy subrequest; Caddy then falls back to a
+ * target it escapes itself.
+ */
+export function getForwardAuthPortalTarget(headers: Headers): string | null {
+  const origin = getTrustedForwardAuthOrigin(headers);
+  if (!origin) return null;
+  // Caddy sends the origin-form request URI, which is printable ASCII.
+  const uri = headers.get("x-forwarded-uri") ?? "";
+  if (!/^\/[\x21-\x7e]*$/.test(uri)) return null;
+  return encodeQueryValue(`${origin}${uri}`);
 }
 
 /** The proxy-host ID pinned by the generated Caddy route, or null. */

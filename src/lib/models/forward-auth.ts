@@ -29,18 +29,58 @@ export type ForwardAuthAudience = {
   proxyHostId: number;
 };
 
-function parseForwardAuthUrl(rawUrl: string): URL | null {
+/** Parse an http(s) URL without credentials, whatever its port. */
+function parseForwardAuthUrlAnyPort(rawUrl: string): URL | null {
   try {
     const parsed = new URL(rawUrl);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
     if (parsed.username || parsed.password) return null;
-    // Caddy routes by hostname only, so a non-default port is accepted only
-    // when the operator declared it as an external forward-auth port.
-    if (parsed.port && !config.forwardAuthAllowedPorts.has(parsed.port)) return null;
     return parsed;
   } catch {
     return null;
   }
+}
+
+/**
+ * Caddy routes by hostname only, so a non-default port is accepted only when
+ * the operator declared it as an external forward-auth port.
+ */
+function isForwardAuthPortAllowed(parsed: URL): boolean {
+  return !parsed.port || config.forwardAuthAllowedPorts.has(parsed.port);
+}
+
+function parseForwardAuthUrl(rawUrl: string): URL | null {
+  const parsed = parseForwardAuthUrlAnyPort(rawUrl);
+  return parsed && isForwardAuthPortAllowed(parsed) ? parsed : null;
+}
+
+// Ports reported in the current window, so each one is logged once per window.
+// The cap bounds the log volume when clients probe many ports of a protected
+// hostname; the window restarts hourly, so ports crowded out by such probing
+// are still reported later.
+let reportedDisallowedPorts = new Set<string>();
+let reportWindowStartedAt = 0;
+const MAX_REPORTED_DISALLOWED_PORTS = 32;
+const DISALLOWED_PORT_REPORT_WINDOW_MS = 60 * 60 * 1000;
+
+function reportDisallowedPort(hostname: string, port: string): void {
+  const now = Date.now();
+  if (now < reportWindowStartedAt || now - reportWindowStartedAt >= DISALLOWED_PORT_REPORT_WINDOW_MS) {
+    reportedDisallowedPorts = new Set();
+    reportWindowStartedAt = now;
+  }
+  if (
+    reportedDisallowedPorts.has(port) ||
+    reportedDisallowedPorts.size >= MAX_REPORTED_DISALLOWED_PORTS
+  ) {
+    return;
+  }
+  reportedDisallowedPorts.add(port);
+  console.warn(
+    `[forward-auth] Rejected ${hostname}:${port} because port ${port} is not listed in ` +
+      `FORWARD_AUTH_ALLOWED_PORTS. If forward-auth protected sites are served on port ${port}, ` +
+      `add it to FORWARD_AUTH_ALLOWED_PORTS (comma-separated) and recreate the web container (docker compose up -d).`
+  );
 }
 
 function audienceMatchesUrl(audience: ForwardAuthAudience, parsed: URL): boolean {
@@ -563,11 +603,16 @@ async function findForwardAuthProxyHost(host: string) {
 export async function resolveForwardAuthAudience(
   targetUrl: string,
 ): Promise<ForwardAuthAudience | null> {
-  const parsed = parseForwardAuthUrl(targetUrl);
+  const parsed = parseForwardAuthUrlAnyPort(targetUrl);
   if (!parsed) return null;
 
   const proxyHost = await findForwardAuthProxyHost(parsed.hostname);
   if (!proxyHost) return null;
+
+  if (!isForwardAuthPortAllowed(parsed)) {
+    reportDisallowedPort(parsed.hostname, parsed.port);
+    return null;
+  }
 
   return {
     origin: parsed.origin,
@@ -578,6 +623,19 @@ export async function resolveForwardAuthAudience(
 
 export async function isForwardAuthDomain(host: string): Promise<boolean> {
   return !!(await findForwardAuthProxyHost(host));
+}
+
+/**
+ * The explicit port of `targetUrl` when that URL names a forward-auth host and
+ * the port is not listed in FORWARD_AUTH_ALLOWED_PORTS, otherwise null.  Such
+ * a URL can never be signed in to; the portal uses this to say why.
+ */
+export async function getDisallowedForwardAuthPort(targetUrl: string): Promise<string | null> {
+  const parsed = parseForwardAuthUrlAnyPort(targetUrl);
+  if (!parsed || isForwardAuthPortAllowed(parsed)) return null;
+  if (!(await findForwardAuthProxyHost(parsed.hostname))) return null;
+  reportDisallowedPort(parsed.hostname, parsed.port);
+  return parsed.port;
 }
 
 // ── Cleanup ──────────────────────────────────────────────────────────

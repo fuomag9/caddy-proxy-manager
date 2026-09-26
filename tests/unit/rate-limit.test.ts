@@ -125,3 +125,88 @@ describe('rate-limit table bound', () => {
     expect(isRateLimited('ip:flood-0').blocked).toBe(false);
   });
 });
+
+describe('createRateLimiter', () => {
+  it('keeps a separate table per limiter', async () => {
+    const { createRateLimiter } = await import('@/src/lib/rate-limit');
+    const limiter = createRateLimiter({ maxAttempts: 2, windowMs: 60_000, blockMs: 60_000 });
+    limiter.registerAttempt('shared-key');
+    expect(limiter.registerAttempt('shared-key').blocked).toBe(true);
+    expect(limiter.isRateLimited('shared-key').blocked).toBe(true);
+    // The default limiter has not seen this key.
+    expect(isRateLimited('shared-key').blocked).toBe(false);
+  });
+
+  it('blocks on the maxAttempts-th attempt, including a limit of one', async () => {
+    const { createRateLimiter } = await import('@/src/lib/rate-limit');
+    const once = createRateLimiter({ maxAttempts: 1, windowMs: 60_000, blockMs: 60_000 });
+    expect(once.registerAttempt('k').blocked).toBe(true);
+    expect(once.isRateLimited('k').blocked).toBe(true);
+  });
+
+  it('bounds its table by maxKeys and keeps active blocks', async () => {
+    const { createRateLimiter } = await import('@/src/lib/rate-limit');
+    const limiter = createRateLimiter({ maxAttempts: 2, windowMs: 60_000, blockMs: 60_000, maxKeys: 10 });
+    limiter.registerAttempt('blocked');
+    limiter.registerAttempt('blocked');
+    for (let i = 0; i < 50; i++) limiter.registerAttempt(`flood-${i}`);
+    expect(limiter.isRateLimited('blocked').blocked).toBe(true);
+    // flood-0 was evicted, so one more attempt starts a fresh count.
+    expect(limiter.registerAttempt('flood-0').blocked).toBe(false);
+  });
+});
+
+describe('createRateLimiter reserveAttempt', () => {
+  it('counts held attempts towards the limit until they are given back', async () => {
+    const { createRateLimiter } = await import('@/src/lib/rate-limit');
+    const limiter = createRateLimiter({ maxAttempts: 3, windowMs: 60_000, blockMs: 60_000 });
+    limiter.registerAttempt('k');
+    const first = limiter.reserveAttempt('k');
+    const second = limiter.reserveAttempt('k');
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    // One failure plus two attempts in flight reach the limit of 3.
+    expect(limiter.reserveAttempt('k')).toBeNull();
+    // Holding a place is not a failure.
+    expect(limiter.isRateLimited('k').blocked).toBe(false);
+
+    first!();
+    first!();
+    const third = limiter.reserveAttempt('k');
+    expect(third).not.toBeNull();
+    expect(limiter.reserveAttempt('k')).toBeNull();
+    second!();
+    third!();
+    expect(limiter.reserveAttempt('other')).not.toBeNull();
+  });
+
+  it('refuses a blocked key', async () => {
+    const { createRateLimiter } = await import('@/src/lib/rate-limit');
+    const limiter = createRateLimiter({ maxAttempts: 2, windowMs: 60_000, blockMs: 60_000 });
+    limiter.registerAttempt('k');
+    limiter.registerAttempt('k');
+    expect(limiter.reserveAttempt('k')).toBeNull();
+  });
+});
+
+describe('createRateLimiter with blockMs "window"', () => {
+  it('refuses only until the current window ends', async () => {
+    const { createRateLimiter } = await import('@/src/lib/rate-limit');
+    const limiter = createRateLimiter({ maxAttempts: 3, windowMs: 60_000, blockMs: 'window' });
+    const start = 1_000_000;
+    const now = vi.spyOn(Date, 'now');
+
+    now.mockReturnValue(start);
+    expect(limiter.registerAttempt('k').blocked).toBe(false);
+    now.mockReturnValue(start + 20_000);
+    expect(limiter.registerAttempt('k').blocked).toBe(false);
+    now.mockReturnValue(start + 40_000);
+    expect(limiter.registerAttempt('k')).toEqual({ blocked: true, retryAfterMs: 20_000 });
+
+    now.mockReturnValue(start + 59_000);
+    expect(limiter.isRateLimited('k')).toEqual({ blocked: true, retryAfterMs: 1_000 });
+    now.mockReturnValue(start + 60_000);
+    expect(limiter.isRateLimited('k').blocked).toBe(false);
+    expect(limiter.registerAttempt('k').blocked).toBe(false);
+  });
+});
