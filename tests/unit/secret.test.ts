@@ -62,27 +62,13 @@ describe('secret', () => {
     expect(encrypted2).toBe(encrypted);
   });
 
-  const savedEnv: Record<string, string | undefined> = {};
-
-  /** Set an env var until the end of the test; the first call saves the original. */
+  /** Set (or with undefined, unset) an env var until the end of the test. */
   function withEnv(key: string, value: string | undefined) {
-    if (!(key in savedEnv)) savedEnv[key] = process.env[key];
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
-    }
+    vi.stubEnv(key, value);
   }
 
   afterEach(() => {
-    for (const [key, value] of Object.entries(savedEnv)) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-      delete savedEnv[key];
-    }
+    vi.unstubAllEnvs();
     vi.resetModules();
   });
 
