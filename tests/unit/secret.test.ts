@@ -62,28 +62,37 @@ describe('secret', () => {
     expect(encrypted2).toBe(encrypted);
   });
 
-  describe('failure diagnostics (SESSION_SECRET changed)', () => {
-    const savedEnv: Record<string, string | undefined> = {};
+  const savedEnv: Record<string, string | undefined> = {};
 
-    function withEnv(key: string, value: string | undefined) {
-      savedEnv[key] = process.env[key];
+  /** Set an env var until the end of the test; the first call saves the original. */
+  function withEnv(key: string, value: string | undefined) {
+    if (!(key in savedEnv)) savedEnv[key] = process.env[key];
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedEnv)) {
       if (value === undefined) {
         delete process.env[key];
       } else {
         process.env[key] = value;
       }
+      delete savedEnv[key];
     }
+    vi.resetModules();
+  });
 
-    afterEach(() => {
-      for (const [key, value] of Object.entries(savedEnv)) {
-        if (value === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = value;
-        }
-      }
-      vi.resetModules();
-    });
+  /** A fresh copy of the module that sees the current environment. */
+  async function loadSecretModule() {
+    vi.resetModules();
+    return await import('@/src/lib/secret');
+  }
+
+  describe('failure diagnostics (SESSION_SECRET changed)', () => {
 
     it('grace period expired: error includes context, cause and recovery hint', async () => {
       withEnv('SESSION_SECRET', 'a'.repeat(32));
@@ -117,6 +126,95 @@ describe('secret', () => {
       expect(() => second.decryptSecret(encrypted, 'certificate "my-cert"')).toThrow(/certificate "my-cert"/);
       expect(() => second.decryptSecret(encrypted)).toThrow(/HKDF\).*legacy/);
       expect(() => second.decryptSecret(encrypted)).toThrow(/SESSION_SECRET changed/);
+      expect(() => second.decryptSecret(encrypted)).toThrow(/set SESSION_SECRET_PREVIOUS/);
+    });
+  });
+
+  describe('previous secrets (SESSION_SECRET rotation)', () => {
+    const OLD_SECRET = 'old-secret-that-was-rotated-away-0123456789';
+    const NEW_SECRET = 'new-secret-after-the-rotation-9876543210abc';
+
+    it('decrypts with any SESSION_SECRET_PREVIOUS entry but encrypts only with the current key', async () => {
+      withEnv('SESSION_SECRET', OLD_SECRET);
+      const before = await loadSecretModule();
+      const stored = before.encryptSecret('dns-api-token');
+
+      withEnv('SESSION_SECRET', NEW_SECRET);
+      withEnv('SESSION_SECRET_PREVIOUS', `unrelated-secret-abcdefghijklmnopqrstuvwxyz,${OLD_SECRET}`);
+      const after = await loadSecretModule();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(after.decryptSecret(stored)).toBe('dns-api-token');
+      // Synced values on a slave are not re-encrypted at startup, so the
+      // warning must not promise that.
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(/Keep SESSION_SECRET_PREVIOUS set/));
+      expect(warn).not.toHaveBeenCalledWith(expect.stringMatching(/on the next start/));
+      warn.mockRestore();
+
+      // A value encrypted now does not decrypt with the old secret alone.
+      const fresh = after.encryptSecret('new-token');
+      withEnv('SESSION_SECRET', OLD_SECRET);
+      withEnv('SESSION_SECRET_PREVIOUS', undefined);
+      const oldOnly = await loadSecretModule();
+      expect(() => oldOnly.decryptSecret(fresh)).toThrow(/Failed to decrypt/);
+    });
+
+    it('decrypts values stored under a rejected placeholder secret without configuration', async () => {
+      withEnv('SESSION_SECRET', 'your-secure-session-secret-here-min-32-chars');
+      const before = await loadSecretModule();
+      const stored = before.encryptSecret('client-secret');
+
+      withEnv('SESSION_SECRET', NEW_SECRET);
+      withEnv('SESSION_SECRET_PREVIOUS', undefined);
+      const after = await loadSecretModule();
+      expect(after.decryptSecret(stored)).toBe('client-secret');
+    });
+
+    it('still fails for a key that is neither current nor previous', async () => {
+      withEnv('SESSION_SECRET', OLD_SECRET);
+      const before = await loadSecretModule();
+      const stored = before.encryptSecret('token');
+
+      withEnv('SESSION_SECRET', NEW_SECRET);
+      withEnv('SESSION_SECRET_PREVIOUS', 'some-other-secret-abcdefghijklmnopqrstuvwxyz');
+      const after = await loadSecretModule();
+      expect(() => after.decryptSecret(stored)).toThrow(/SESSION_SECRET_PREVIOUS/);
+    });
+
+    it('reencryptSecret re-encrypts only values that need a previous key', async () => {
+      withEnv('SESSION_SECRET', OLD_SECRET);
+      const before = await loadSecretModule();
+      const stored = before.encryptSecret('private-key');
+
+      withEnv('SESSION_SECRET', NEW_SECRET);
+      withEnv('SESSION_SECRET_PREVIOUS', OLD_SECRET);
+      const after = await loadSecretModule();
+      const current = after.encryptSecret('already-current');
+
+      expect(after.reencryptSecret('')).toBeNull();
+      expect(after.reencryptSecret('plaintext-value')).toBeNull();
+      expect(after.reencryptSecret(current)).toBeNull();
+
+      const rotated = after.reencryptSecret(stored);
+      expect(rotated).not.toBeNull();
+      expect(rotated).not.toBe(stored);
+      expect(after.reencryptSecret(rotated!)).toBeNull();
+
+      // The re-encrypted value no longer needs the previous secret.
+      withEnv('SESSION_SECRET_PREVIOUS', undefined);
+      const newOnly = await loadSecretModule();
+      expect(newOnly.decryptSecret(rotated!)).toBe('private-key');
+      expect(() => newOnly.decryptSecret(stored)).toThrow(/Failed to decrypt/);
+    });
+
+    it('reencryptSecret throws when no key decrypts the value', async () => {
+      withEnv('SESSION_SECRET', OLD_SECRET);
+      const before = await loadSecretModule();
+      const stored = before.encryptSecret('token');
+
+      withEnv('SESSION_SECRET', NEW_SECRET);
+      withEnv('SESSION_SECRET_PREVIOUS', undefined);
+      const after = await loadSecretModule();
+      expect(() => after.reencryptSecret(stored, 'instance "slave" API token')).toThrow(/instance "slave" API token/);
     });
   });
 });
