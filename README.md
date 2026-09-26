@@ -22,11 +22,14 @@ This project provides a web UI for Caddy Server, eliminating the need to manuall
 git clone https://github.com/fuomag9/caddy-proxy-manager.git
 cd caddy-proxy-manager
 cp .env.example .env
-# Edit .env with your credentials
+# Fill in SESSION_SECRET, ADMIN_PASSWORD and CLICKHOUSE_PASSWORD
+# (generate the secrets with: openssl rand -base64 32)
 docker compose up -d
 ```
 
 Access at `http://localhost:3000/login`
+
+Upgrading an existing installation? Read the [Upgrade Notes](#upgrade-notes) first.
 
 Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, caddy-logs).
 
@@ -71,8 +74,9 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `SESSION_SECRET` | Session encryption key (32+ chars) | None | **Yes** |
-| `ADMIN_USERNAME` | Admin login username | `admin` | **Yes** |
+| `SESSION_SECRET` | Session encryption key (32+ chars). Also encrypts stored secrets | None | **Yes** |
+| `SESSION_SECRET_PREVIOUS` | Earlier `SESSION_SECRET` values (comma-separated), only used to decrypt stored secrets after a rotation. See [Rotating SESSION_SECRET](#rotating-session_secret) | None | No |
+| `ADMIN_USERNAME` | Admin login username: 3–255 characters from `A-Z a-z 0-9 _ . @ -` (the login page refuses others and ignores case) | `admin` | **Yes** |
 | `ADMIN_PASSWORD` | Admin password (see requirements below) | `admin` (dev only) | **Yes** |
 | `BASE_URL` | Public URL where users access the dashboard.<br/>**Required for OAuth** - must match redirect URI | `http://localhost:3000` | **Yes** (if using OAuth) |
 | `CADDY_API_URL` | Caddy Admin API endpoint | `http://caddy:2019` (prod)<br/>`http://localhost:2019` (dev) | No |
@@ -81,6 +85,8 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `LOGIN_MAX_ATTEMPTS` | Max login attempts before rate limit | `5` | No |
 | `LOGIN_WINDOW_MS` | Rate limit window in milliseconds | `300000` (5 min) | No |
 | `LOGIN_BLOCK_MS` | Rate limit block duration in milliseconds | `900000` (15 min) | No |
+| `FORWARD_AUTH_ALLOWED_PORTS` | Non-standard ports (comma-separated, e.g. `8443`) on which browsers reach forward-auth protected sites | None | No (required for such ports) |
+| `TRUSTED_CLIENT_IP_HEADER` | Header holding the real client IP for the portal login and sync endpoint rate limits (e.g. `cf-connecting-ip` behind a CDN). Leave unset when Caddy is the outermost proxy; set it only if every route to CPM overwrites that header. See [Login rate limits](#login-rate-limits) | None (rightmost `X-Forwarded-For`) | No |
 | `OAUTH_ENABLED` | Enable OAuth2/OIDC authentication | `false` | No |
 | `OAUTH_PROVIDER_NAME` | Display name for OAuth provider | `OAuth2` | No |
 | `OAUTH_CLIENT_ID` | OAuth2 client ID | None | No |
@@ -101,19 +107,52 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `INSTANCE_SLAVES` | JSON array of slave instances for the master to push to (tokens must be 32+ characters) | None | No |
 | `INSTANCE_SYNC_INTERVAL` | Periodic sync interval in seconds (`0` = disabled) | `0` | No |
 | `INSTANCE_SYNC_ALLOW_HTTP` | Allow sync over HTTP (for internal Docker networks) | `false` | No |
+| `INSTANCE_SYNC_TIMEOUT_MS` | Master only: time limit for one sync request to a slave, including the slave's apply (clamped to `5000`–`300000`) | `60000` (60 s) | No |
 | `CLICKHOUSE_URL` | ClickHouse HTTP endpoint for analytics | `http://clickhouse:8123` | No |
 | `CLICKHOUSE_USER` | ClickHouse username | `cpm` | No |
 | `CLICKHOUSE_PASSWORD` | ClickHouse password (`openssl rand -base64 32`). Required when the `clickhouse` profile is active. | None | No (required if analytics enabled) |
 | `CLICKHOUSE_DB` | ClickHouse database name | `analytics` | No |
 
 **Production Requirements:**
-- `SESSION_SECRET`: 32+ characters (`openssl rand -base64 32`)
-- `ADMIN_PASSWORD`: 12+ chars with uppercase, lowercase, numbers, and special characters
+- `SESSION_SECRET`: 32+ characters (`openssl rand -base64 32`), not an example value from the documentation
+- `ADMIN_PASSWORD`: 12+ chars with uppercase, lowercase, numbers, and special characters, not an example password from the documentation
 
 Development mode (`NODE_ENV=development`) allows default `admin`/`admin` credentials.
 
 ---
 
+## Upgrade Notes
+
+Pull the new images and recreate the containers with `docker compose pull && docker compose up -d`. (`docker compose restart` does not re-read `.env`.)
+
+### Upgrading from v1.12.0 or earlier
+
+**Check before upgrading:**
+
+- **Example secrets are rejected.** The web container refuses to start when `SESSION_SECRET` is a shipped placeholder (including the old `.env.example` value `your-secure-session-secret-here-min-32-chars`) or `ADMIN_PASSWORD` is an example password from an earlier README or `.env.example`. Generate a new secret with `openssl rand -base64 32`. Stored secrets encrypted under the placeholder are re-encrypted automatically on the next start, so nothing has to be re-entered. With instance sync, the master and each slave can generate their own (see the next item). `.env.example` now leaves `SESSION_SECRET`, `ADMIN_PASSWORD` and `CLICKHOUSE_PASSWORD` empty.
+- **Instance sync: upgrade slaves before the master.** A master on this release sends the secrets inside synced settings (DNS provider credentials) decrypted over the authenticated sync channel, as it already did for certificate private keys, and each slave encrypts them with its own `SESSION_SECRET`, so master and slaves no longer need to share it. A slave still on v1.12.0 or earlier keeps working but stores those credentials in plaintext until it is upgraded (its next start or sync after the upgrade encrypts them). A master still on v1.12.0 or earlier sends them encrypted with its own `SESSION_SECRET`, so while it does, every slave needs the master's secret as its `SESSION_SECRET` or in `SESSION_SECRET_PREVIOUS`; otherwise the slave cannot decrypt them and applying the synced config fails. Nothing is needed while the master uses the old placeholder secret, since values encrypted under it always decrypt.
+- **Forward auth on a non-standard port.** If browsers reach forward-auth protected sites as `host:8443` (Caddy published as `8443:443`, or NAT), set `FORWARD_AUTH_ALLOWED_PORTS=8443`. Otherwise existing forward-auth sessions stop validating, the portal shows *"This site is served on port 8443, which is not allowed for forward authentication…"*, and the web container logs `[forward-auth] Rejected host:8443 … FORWARD_AUTH_ALLOWED_PORTS`.
+- **CA private keys stay on the master.** CA private keys are now encrypted at rest with `SESSION_SECRET` and are no longer synced; the first sync removes the copies older versions stored on slaves. Slaves keep validating client certificates, but a slave promoted to master cannot issue certificates from the existing CAs. Back up the master's database together with its `SESSION_SECRET`.
+- **WAF custom directives.** Rules that read files or change the Caddy process (`@pmFromFile`, `@ipMatchFromFile`, `@inspectFile`, `@validateSchema`, `setenv`, `ctl:ruleEngine`, …), lines whose structure Coraza cannot parse, and rules reusing the `id:` of an earlier rule are no longer sent to Caddy. Stored rules are kept but left out of the generated config, and the web container logs `[waf] <source>: N custom directive line(s) are not sent to Caddy and have no effect: …`. Operator names and other rule content are not validated, so a typo such as `@contians` still reaches Caddy and makes it refuse the whole config. See [WAF](#waf-web-application-firewall) for the full list.
+- **Host placeholders are literal.** In default responses, error pages, path-block bodies and redirect rule targets, `{env.*}`, `{system.*}` and `{file.*}` are now sent as written. Request placeholders such as `{http.request.uri}` and `{http.request.host}` still expand, so rewrite e.g. `https://{env.PRIMARY_DOMAIN}{http.request.uri}` with a literal host.
+- **Database file permissions.** On startup the SQLite database and its `-journal`/`-wal`/`-shm` files lose their world permission bits. Owner and group bits are unchanged, so a host backup job in the files' group keeps working; one running as an unrelated user no longer can.
+
+**Behaviour changes:**
+
+- **Admin credentials** from the environment are applied when the admin is created and whenever `ADMIN_USERNAME`/`ADMIN_PASSWORD` change, no longer on every start (see [User Roles](#user-roles)). On the first start after upgrading, a stored admin password that differs from `ADMIN_PASSWORD` (and is not `admin` or a documented example) is kept, since it was probably changed in the UI, and a warning is logged. Change `ADMIN_PASSWORD` again and recreate the web container (`docker compose up -d`) to force it. A changed `ADMIN_USERNAME` is still applied on that start, and re-applying unchanged credentials does not re-activate a disabled primary admin.
+- **Passwords.** The password policy (12+ characters, upper- and lowercase, a digit and a special character) now applies to every way of setting a password: admin-created users (dashboard and `POST /api/v1/users`), password changes, and Better Auth self-registration (`AUTH_ALLOW_SELF_REGISTRATION=true`) and reset. Changing or setting a password signs out the user's other dashboard sessions and all their forward-auth sessions. API tokens are kept; revoke them under **Profile → API Tokens** if needed. Adding a first password to an OAuth-only account requires a sign-in within the last 10 minutes. The user can then sign in at `/login` with the **Sign-in username** shown on the Profile page, a username made from their email address (see the next item).
+- **Sign-in usernames.** The login page signs in by username only, ignoring case. CPM gives each account a username made from its email: the lowercased email when it is 3–255 characters from `A-Z a-z 0-9 _ . @ -`; otherwise each run of other characters becomes `-` (`alice+cpm@example.com` → `alice-cpm@example.com`, `+alice@example.com` → `-alice@example.com`). When that is another account's username or email, `-2`, `-3`, … is added before the `@`. Accounts with a password whose stored username the login page cannot use (older releases could store an email with `+`, or a mixed-case username) get one on startup, and when their password or profile is changed; working usernames are never changed. OAuth-only accounts get one when they set a password. The Profile page shows it as **Sign-in username** and `/api/v1/users` responses include it as `username`; tell users whose username differs from their email. If every candidate is taken, the Profile page asks the user to have an administrator change their email address.
+- **Unlinking OAuth** requires a working username/password sign-in. Users who set a password on an older version must change it once before the **Unlink** button appears.
+- **Better Auth self-service endpoints** that CPM does not use are disabled: `/api/auth/update-user`, `/change-password`, `/change-email`, `/delete-user`, `/unlink-account`, `/update-session`, `/verify-password` and `/is-username-available`. Use the Profile page or `/api/v1/` instead. With `AUTH_ALLOW_OAUTH_REGISTRATION=false`, an OAuth sign-in can no longer create an account even if the client asks for sign-up.
+- **Portal login rate limits** no longer trust a client-sent `X-Real-IP`, and now also count failures per account. See [Login rate limits](#login-rate-limits) and `TRUSTED_CLIENT_IP_HEADER`.
+- **Forward-auth header stripping.** Client-supplied identity headers are now removed in every `-`/`_` spelling (`X_CPM_User`, `Remote_User`, …), so upstreams that fold `_` into `-` (CGI/WSGI) cannot read forged ones. Authentik identity headers are stripped on every route that reaches the upstream. For Authentik and generic forward auth, `Authorization`, `Proxy-Authorization` and `Cookie` are no longer stripped before authentication, even when listed in the copy headers: clients' own credentials reach excluded paths, access-list basic auth and the outpost again, and the auth server's values still replace them.
+- **Instance sync.** The master no longer follows redirects from a slave, applies `INSTANCE_SYNC_TIMEOUT_MS` to each request (default 60 s; reported as *"Sync timed out"*), and requires the slave's acknowledgement (a login page in front of a slave is reported as *"Slave did not acknowledge the sync (unexpected response)"*). `INSTANCE_SLAVES` entries go through the same URL checks as instances added in the UI, and invalid ones are skipped with the warning `Skipping INSTANCE_SLAVES entry <index>: <reason>`. Instance URLs containing `?` or `#` are rejected.
+- **DNS provider credentials** stored in plaintext (saved through `PUT /api/v1/settings/dns-provider`, a Cloudflare token migrated from the legacy `cloudflare` setting, and the legacy `cloudflare` setting itself) are encrypted on startup, which logs `Encrypted N DNS provider credential(s) that were stored in plaintext`.
+- **WAF events.** Credential header values (`Authorization`, `Cookie`, `Set-Cookie`, API-key and token headers, …) and the cookie or credential values that rule messages echo are stored as `[redacted]`. Events stored before the upgrade are not scrubbed; they expire with the analytics retention.
+
+**New optional environment variables:** `SESSION_SECRET_PREVIOUS`, `FORWARD_AUTH_ALLOWED_PORTS`, `TRUSTED_CLIENT_IP_HEADER` and `INSTANCE_SYNC_TIMEOUT_MS` (see [Environment Variables](#environment-variables)). `docker-compose.yml` passes them to the web container.
+
+---
 
 ## Security
 
@@ -134,6 +173,18 @@ docker compose up -d
 **Limitations:**
 - In-memory rate limiting (not suitable for multi-instance deployments)
 
+### Rotating SESSION_SECRET
+
+`SESSION_SECRET` also encrypts stored secrets: DNS provider credentials, OAuth client secrets and tokens, imported certificate keys, CA private keys and instance sync tokens. To rotate it:
+
+1. Set `SESSION_SECRET` to the new value and `SESSION_SECRET_PREVIOUS` to the old one (comma-separated if there are several).
+2. Recreate the web container (`docker compose up -d`). On startup every stored secret, including a slave's synced settings, is re-encrypted with the new `SESSION_SECRET` (logged as `Re-encrypted N stored secret(s) with the current SESSION_SECRET`); `SESSION_SECRET_PREVIOUS` is only ever used to decrypt.
+3. Remove `SESSION_SECRET_PREVIOUS` after one successful start. This applies to slaves too, unless their master runs v1.12.0 or earlier (see below).
+
+A value that no key decrypts is left as stored and logged as `[secret] … cannot be decrypted with SESSION_SECRET or SESSION_SECRET_PREVIOUS`, followed by `N stored secret(s) listed above could not be decrypted…`; re-enter it in the UI, or set `SESSION_SECRET_PREVIOUS` to the secret it was stored with. OAuth sign-in tokens that no key decrypts are cleared instead (`Cleared N stored OAuth sign-in token(s)…`), since CPM does not use them and the next OAuth sign-in stores new ones. Values stored under an old example `SESSION_SECRET` are re-encrypted without any extra configuration. If a CA private key can no longer be decrypted, issuing a client certificate fails with *"The CA private key cannot be decrypted with the current SESSION_SECRET…"*; certificates already issued keep working, because only the CA certificate is needed to validate them.
+
+With instance sync, the master and each slave can use their own `SESSION_SECRET` and rotate it independently: the master sends synced secrets (DNS provider credentials, certificate private keys) decrypted over the authenticated sync channel, and each slave encrypts them with its own key. A synced setting the master itself cannot decrypt is sent as stored, and the master logs `Instance sync: setting <path> cannot be decrypted with SESSION_SECRET or SESSION_SECRET_PREVIOUS; sending it as stored` once per value, not on every sync. A master on v1.12.0 or earlier sends DNS provider credentials encrypted with its own `SESSION_SECRET` instead, so while it does, every slave must keep the master's secret as `SESSION_SECRET` or in `SESSION_SECRET_PREVIOUS`, or applying the synced config fails (values encrypted under the old placeholder secret always decrypt).
+
 ---
 
 ## User Roles
@@ -151,7 +202,7 @@ CPM has three roles with increasing privileges:
 | Create and manage own API tokens | Yes | Yes | Yes |
 | Access role-appropriate REST API endpoints (`/api/v1/`) | Yes | Yes | Yes |
 
-New users default to the **user** role. The initial admin account is created from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` environment variables. A password later changed in the UI is kept across restarts; changing `ADMIN_USERNAME` or `ADMIN_PASSWORD` in the environment re-applies them to that account on the next start (and restores its admin role), which is the recovery path for a lost admin password.
+New users default to the **user** role. The initial admin account is created from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` environment variables. They are applied again only when they change, so a password later changed in the UI is kept across restarts. To recover a lost admin password, change `ADMIN_PASSWORD` (or `ADMIN_USERNAME`) and recreate the web container (`docker compose up -d`; `docker compose restart` keeps the old values): this resets the primary admin's password, restores its admin role, re-activates it if it was disabled, and, when the password changed, signs out all of its dashboard and forward-auth sessions.
 
 API tokens can only be created from an authenticated dashboard session; an
 existing bearer token cannot mint replacement credentials. Viewer and user
@@ -168,6 +219,8 @@ Caddy automatically obtains Let's Encrypt certificates for all proxy hosts.
 **DNS-01 Challenge** (optional): Configure a DNS provider in **Settings → DNS Providers** for wildcard certificates and environments where ports 80/443 are not public. Supported providers: Cloudflare, Route 53, DigitalOcean, Duck DNS, Hetzner, Vultr, Porkbun, GoDaddy, Namecheap, OVH, IONOS, Linode, Njalla, netcup, Spaceship, deSEC, Dynu, acme-dns, Infomaniak, ClouDNS, and RFC2136 (BIND/TSIG). Credentials are encrypted at rest with AES-256-GCM. You can override the DNS provider per certificate.
 
 **Custom Certificates** (optional): Import your own certificates via the Certificates page. Private keys are encrypted at rest with AES-256-GCM, migrated from legacy plaintext storage on startup, and treated as write-only by ordinary API responses and browser payloads.
+
+**Built-in CA** (mTLS): CA private keys are encrypted at rest the same way and never leave the master (see [Instance Sync](#instance-sync)). Back them up with the database and `SESSION_SECRET`.
 
 ---
 
@@ -217,10 +270,12 @@ Analytics is enabled via the `clickhouse` Docker Compose profile. The default `.
 
 ```env
 COMPOSE_PROFILES=clickhouse
-CLICKHOUSE_PASSWORD=your-clickhouse-password   # openssl rand -base64 32
+CLICKHOUSE_PASSWORD=
 ```
 
-Then start (or restart) the stack:
+Set `CLICKHOUSE_PASSWORD` to a generated value (`openssl rand -base64 32`); compose refuses to start the `clickhouse` profile while it is empty.
+
+Then start (or recreate) the stack:
 
 ```bash
 docker compose up -d
@@ -261,10 +316,22 @@ Enable globally in **WAF → Settings**, then optionally override per proxy host
 
 **Rule suppression** — suppress noisy rules globally or per host from the event detail drawer or the Suppressed Rules tab.
 
-**Custom directives** — any ModSecurity SecLang syntax is accepted, e.g.:
+**Custom directives** — `SecRule`, `SecAction`, `SecMarker` and `SecDefaultAction` lines (plus the request body limit directives) are accepted, e.g.:
 ```
-SecRule REQUEST_URI "@beginsWith /api/" "id:9001,phase:1,ctl:ruleEngine=Off,nolog"
+SecRule REQUEST_URI "@beginsWith /admin/" "id:9001,phase:1,deny,status:403,log,msg:'Admin path blocked'"
 ```
+
+Lines that could read files, run programs or switch the WAF off are not sent to Caddy, nor are some that would make Caddy refuse the whole config:
+
+- `Include`, rule-engine and rule-mutation directives (`SecRuleEngine`, `SecRuleRemoveById`, `SecRuleUpdateActionById`, …)
+- the operators `@pmFromFile`/`@pmf`, `@ipMatchFromFile`/`@ipMatchF`, `@inspectFile` and `@validateSchema`. The data-file operators are allowed with a single `@owasp_crs/<name>.data` argument when the CRS is loaded for that host or the global handler. The operator must use Coraza's exact, case-sensitive spelling (`@pmFromFile`, `@pmf`, `@ipMatchFromFile`, `@ipMatchF`; `@pmfromfile` or `@PMF` is dropped), and `<name>.data` must be one of the 21 data files shipped with coraza-coreruleset v4.25.0 (e.g. `unix-shell.data`, `scanners-user-agents.data`)
+- the `setenv` action and `ctl:ruleEngine`, in any spacing or quoting
+- `SecRule`/`SecAction`/`SecDefaultAction` lines whose structure Coraza cannot parse (e.g. a `SecRule` without a quoted operator), and any directive continued over several lines with a trailing `\` (write each directive on one line)
+- a rule whose `id:` an earlier rule already uses, including a merge-mode host rule that reuses a global rule id (the global directives come first), since Coraza refuses duplicate ids. Ids that clash with OWASP CRS rules are not checked, so avoid 900000–999999 and the 2000xx ids of `coraza.conf-recommended` when the CRS is loaded
+
+Operator names and other rule content are not validated: a typo such as `@contians` still reaches Caddy, which then refuses the whole config.
+
+When one rule of a chain is dropped, the whole chain is dropped. Rules stored before these checks existed are not deleted: they are left out of the generated config and reported in the web container log (`[waf] <source>: N custom directive line(s) are not sent to Caddy…`). Saving a proxy host or the global WAF settings (dashboard or `PUT /api/v1/settings/waf`) is rejected only for lines the save newly drops, including turning **Load OWASP CRS** off while a rule reads an `@owasp_crs/` file, so a stored rule does not block unrelated edits. A merge-mode host that inherits the global CRS setting is not re-checked when the global CRS is turned off; its `@owasp_crs/` rules are then only reported in the log.
 
 ---
 
@@ -287,9 +354,11 @@ INSTANCE_SYNC_TOKEN=<64-hex-character-token>
 
 Sync tokens shorter than 32 characters, longer than 512 characters, or padded with whitespace are rejected.
 
-Synced data: proxy hosts, certificates, access lists, and settings. User accounts are **not** synced.
+Synced data: proxy hosts, certificates, access lists, and settings. User accounts are **not** synced. CA certificates are synced without their private keys: slaves validate client certificates but cannot issue them, so back up the master's database and `SESSION_SECRET`.
 
-Use HTTPS slave URLs in production. Set `INSTANCE_SYNC_ALLOW_HTTP=true` only for internal Docker networks.
+Certificate private keys and the secrets inside synced settings (DNS provider credentials) travel decrypted over the authenticated sync channel, and each slave encrypts them with its own `SESSION_SECRET`, so master and slaves do not need to share it. A master on v1.12.0 or earlier still sends DNS provider credentials encrypted with its own key; see [Rotating SESSION_SECRET](#rotating-session_secret).
+
+Use HTTPS slave URLs in production. Set `INSTANCE_SYNC_ALLOW_HTTP=true` only for internal Docker networks. Slave URLs (from the UI, the API or `INSTANCE_SLAVES`) must not contain credentials, a query string or a fragment; invalid `INSTANCE_SLAVES` entries are skipped with a warning. The master does not follow redirects, and a request that exceeds `INSTANCE_SYNC_TIMEOUT_MS` (default 60 s) is reported as *"Sync timed out"*; the slave may still finish applying the config.
 
 See the [Environment Variables Reference](https://github.com/fuomag9/caddy-proxy-manager/wiki/Environment-Variables-Reference) for all `INSTANCE_*` options.
 
@@ -304,6 +373,8 @@ Configure **Settings → Default Response** to preserve Caddy's native behavior 
 - an aborted connection with no HTTP response (the Caddy equivalent of an nginx `444`).
 
 Configured proxy hosts always take precedence over this catch-all. For HTTPS, Caddy can only send the response after TLS succeeds; an unknown hostname or direct-IP request may fail the certificate handshake first.
+
+Request placeholders such as `{http.request.uri}` and `{http.request.host}` are expanded in the body, headers and redirect target. Host placeholders (`{env.*}`, `{system.*}`, `{file.*}`) are sent literally, here and in error pages, path-block bodies and redirect rules.
 
 ---
 
@@ -397,6 +468,21 @@ Create groups on the **Groups** page to organise users. When you grant a group a
 ### Per-host access control
 
 Each forward-auth-protected host has its own access list of allowed users and/or groups. Access is separate from the user's role — even admins must be explicitly granted access.
+
+### Non-standard ports
+
+Protected sites are expected on the default ports 80/443. If browsers reach them on another port (e.g. Caddy published as `8443:443`), list it in `FORWARD_AUTH_ALLOWED_PORTS` (comma-separated) and recreate the web container (`docker compose up -d`). Logins, redirects and sessions on any other non-default port are refused, and the web container logs a warning naming the port.
+
+### Login rate limits
+
+Portal logins use `LOGIN_MAX_ATTEMPTS`, `LOGIN_WINDOW_MS` and `LOGIN_BLOCK_MS`:
+
+- `LOGIN_MAX_ATTEMPTS` failures from one client block that client, and `LOGIN_MAX_ATTEMPTS` failures from one client against one account block that client for that account, for `LOGIN_BLOCK_MS`. IPv6 clients are counted per /64 prefix.
+- Failures against one account from all clients combined are counted over one hour (or `LOGIN_WINDOW_MS` if longer) from the first failure. Reaching the ceiling blocks the account for `LOGIN_BLOCK_MS`. The ceiling is `LOGIN_MAX_ATTEMPTS` × (⌈window ÷ min(`LOGIN_WINDOW_MS`, `LOGIN_BLOCK_MS`)⌉ + 1), and at least 10 × `LOGIN_MAX_ATTEMPTS`: 65 with the defaults, more than one client can reach under its own limits. A successful login clears the client's own counters but not this one.
+- One client cannot lock an account, but a few together can: with the defaults each can make about 48 failures per hour (4 per 5-minute window) without being blocked, so e.g. a dual-stack host (IPv4 plus IPv6) or two /64s can reach the account ceiling. This is inherent to a per-account limit.
+- Attempts still being checked count towards every limit; extra concurrent attempts get `429`.
+
+The client address is the rightmost `X-Forwarded-For` entry, which is the real client when clients connect to Caddy directly (Caddy is the outermost proxy in front of CPM). When port 3000 is reached directly, clients control that header and the per-IP limits are only best effort, so expose the portal (`BASE_URL`) through Caddy or another proxy that overwrites `X-Forwarded-For` rather than publishing port 3000 to untrusted networks. Behind a CDN, the rightmost entry is the CDN edge: set `TRUSTED_CLIENT_IP_HEADER` (e.g. `cf-connecting-ip`), but only if the origin accepts connections from the CDN alone, since clients could otherwise forge the header. Leave it unset when Caddy is the outermost proxy, because Caddy passes `X-Real-IP` and `CF-Connecting-IP` through unchanged. The same client address is used for the rate limit of the slave sync endpoint.
 
 ---
 
