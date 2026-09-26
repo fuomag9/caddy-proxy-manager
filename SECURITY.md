@@ -45,6 +45,7 @@ Our CI/CD pipeline implements multiple security layers:
 ### Dependency Management
 
 - Automated dependency updates via Dependabot
+- Only patch and minor updates of the application's JavaScript (Bun) packages, in PRs opened by Dependabot itself, are approved and merged automatically; major versions, GitHub Actions, Go modules (the Caddy build and its plugins) and container images wait for a maintainer's review
 - Security alerts enabled
 - Regular security audits
 

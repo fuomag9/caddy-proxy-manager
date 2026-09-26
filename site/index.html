@@ -102,7 +102,7 @@
         <div class="card">
           <div class="card-icon">🔒</div>
           <h3>Auto HTTPS &amp; mTLS</h3>
-          <p>Automatic TLS via ACME with Let&apos;s Encrypt and Cloudflare DNS-01. Built-in CA for mutual TLS with role-based path access control.</p>
+          <p>Automatic TLS via ACME with Let&apos;s Encrypt and DNS-01 through 20+ DNS providers. Built-in CA for mutual TLS with role-based path access control.</p>
         </div>
         <div class="card">
           <div class="card-icon">📈</div>
@@ -132,7 +132,7 @@
         <div class="card">
           <div class="card-icon">🔄</div>
           <h3>Instance Sync</h3>
-          <p>Master/slave configuration sync for multi-instance deployments. Push proxy hosts, certs, and settings to replicas on every change.</p>
+          <p>Master/slave configuration sync for multi-instance deployments. Push proxy hosts, certs, and settings to replicas on every change, with secrets sealed to each replica&apos;s pinned key.</p>
         </div>
         <div class="card">
           <div class="card-icon">📋</div>
@@ -150,7 +150,7 @@
           <div class="spotlight-text">
             <div class="eyebrow">Traffic Intelligence</div>
             <h2>See every request,<br>in real time.</h2>
-            <p>Charts, protocol breakdown, country heatmaps, user agent breakdowns, and a paginated blocked-request log. Filter by host or pick any time range — all powered by ClickHouse with 90-day retention.</p>
+            <p>Charts, protocol breakdown, country heatmaps, user agent breakdowns, and a paginated blocked-request log. Filter by host or pick any time range — all powered by ClickHouse with configurable retention (30 days by default).</p>
           </div>
           <div class="spotlight-image">
             <img src="assets/screenshots/analytics-top.png" alt="Analytics dashboard" loading="lazy" />
@@ -202,7 +202,7 @@
           <div class="spotlight-text">
             <div class="eyebrow">Security</div>
             <h2>WAF protection,<br>zero config.</h2>
-            <p>Enable the Coraza-powered WAF with OWASP Core Rule Set in one click. View blocked and detected events, suppress noisy rules globally or per host, and add custom SecLang directives.</p>
+            <p>Enable the Coraza-powered WAF with OWASP Core Rule Set in one click. View blocked and detected events with credentials redacted, suppress noisy rules globally or per host, and add custom SecLang rules, checked before they reach Caddy.</p>
           </div>
           <div class="spotlight-image">
             <img src="assets/screenshots/waf.png" alt="WAF Events" loading="lazy" />
@@ -252,7 +252,7 @@
           <div class="code-line"><span class="command">git clone https://github.com/fuomag9/caddy-proxy-manager.git</span></div>
           <div class="code-line"><span class="command">cd caddy-proxy-manager && cp .env.example .env</span></div>
           <div class="code-line">&nbsp;</div>
-          <div class="code-line"><span class="comment"># Configure the environment</span></div>
+          <div class="code-line"><span class="comment"># Set SESSION_SECRET, ADMIN_PASSWORD and CLICKHOUSE_PASSWORD</span></div>
           <div class="code-line"><span class="command">nano .env</span></div>
           <div class="code-line">&nbsp;</div>
           <div class="code-line"><span class="comment"># Start</span></div>

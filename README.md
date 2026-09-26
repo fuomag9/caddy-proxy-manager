@@ -31,7 +31,7 @@ Access at `http://localhost:3000/login`
 
 Upgrading an existing installation? Read the [Upgrade Notes](#upgrade-notes) first.
 
-Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, caddy-logs).
+Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, caddy-logs, geoip-data, clickhouse-data, acme-ca).
 
 ---
 
@@ -82,9 +82,9 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `CADDY_API_URL` | Caddy Admin API endpoint | `http://caddy:2019` (prod)<br/>`http://localhost:2019` (dev) | No |
 | `DATABASE_URL` | SQLite database URL | `file:/app/data/caddy-proxy-manager.db` | No |
 | `CERTS_DIRECTORY` | Certificate storage directory | `./data/certs` | No |
-| `LOGIN_MAX_ATTEMPTS` | Max login attempts before rate limit | `5` | No |
-| `LOGIN_WINDOW_MS` | Rate limit window in milliseconds | `300000` (5 min) | No |
-| `LOGIN_BLOCK_MS` | Rate limit block duration in milliseconds | `900000` (15 min) | No |
+| `LOGIN_MAX_ATTEMPTS` | Failed attempts that trigger a block: per client (and per account) for forward-auth portal logins, per user for password changes and OAuth account linking, where starting a link counts every attempt (see [Login rate limits](#login-rate-limits)) | `5` | No |
+| `LOGIN_WINDOW_MS` | Window in which those failures are counted, in milliseconds | `300000` (5 min) | No |
+| `LOGIN_BLOCK_MS` | How long a block lasts, in milliseconds | `900000` (15 min) | No |
 | `FORWARD_AUTH_ALLOWED_PORTS` | Non-standard ports (comma-separated, e.g. `8443`) on which browsers reach forward-auth protected sites | None | No (required for such ports) |
 | `TRUSTED_CLIENT_IP_HEADER` | Header holding the real client IP for the portal login and sync endpoint rate limits (e.g. `cf-connecting-ip` behind a CDN). Leave unset when Caddy is the outermost proxy; set it only if every route to CPM overwrites that header. See [Login rate limits](#login-rate-limits) | None (rightmost `X-Forwarded-For`) | No |
 | `OAUTH_ENABLED` | Enable OAuth2/OIDC authentication | `false` | No |
@@ -99,19 +99,26 @@ Data persists in Docker volumes (caddy-manager-data, caddy-data, caddy-config, c
 | `AUTH_TRUST_HOST` | Trust the Host header for URL construction (only behind proxies that rewrite Host) | `false` | No |
 | `AUTH_ALLOW_SELF_REGISTRATION` | Allow public email/password account registration | `false` | No |
 | `AUTH_ALLOW_OAUTH_REGISTRATION` | Allow first-time OAuth/OIDC identities to create user accounts | `false` | No |
-| `AUTH_RATE_LIMIT_ENABLED` | Enable Better Auth rate limiting | `true` | No |
-| `AUTH_RATE_LIMIT_WINDOW` | Rate limit window in seconds | `60` | No |
+| `AUTH_ALLOW_OAUTH_ROLE_FROM_CLAIMS` | Let an OAuth IdP's profile claims set a new user's role and status (otherwise `user`/`active`) | `false` | No |
+| `AUTH_RATE_LIMIT_ENABLED` | Enable Better Auth's per-client rate limiting of `/api/auth` requests, dashboard sign-in included | `true` | No |
+| `AUTH_RATE_LIMIT_WINDOW` | Better Auth rate limit window in seconds. Sign-in and sign-up keep Better Auth's built-in limit of 3 requests per 10 seconds | `60` | No |
 | `AUTH_RATE_LIMIT_MAX` | Max requests per window | `5` | No |
 | `INSTANCE_MODE` | Instance role: `standalone`, `master`, or `slave` | `standalone` | No |
-| `INSTANCE_SYNC_TOKEN` | Bearer token slaves use to authenticate sync requests (32+ characters) | None | No (required if `slave`) |
-| `INSTANCE_SLAVES` | JSON array of slave instances for the master to push to (tokens must be 32+ characters). An entry may pin the slave's sync key with `syncPublicKey` or `syncKeyId`; see [Sync key pinning](#sync-key-pinning) | None | No |
-| `INSTANCE_SYNC_INTERVAL` | Periodic sync interval in seconds (`0` = disabled) | `0` | No |
+| `INSTANCE_SYNC_TOKEN` | Bearer token slaves use to authenticate sync requests (32–512 characters, no surrounding whitespace) | None | No (required if `slave`) |
+| `INSTANCE_SLAVES` | JSON array of slave instances for the master to push to (same token rules). An entry may pin the slave's sync key with `syncPublicKey` or `syncKeyId`; see [Sync key pinning](#sync-key-pinning) | None | No |
+| `INSTANCE_SYNC_INTERVAL` | Periodic sync interval in seconds (`0` = disabled, minimum `30`) | `0` | No |
 | `INSTANCE_SYNC_ALLOW_HTTP` | Allow sync over HTTP (for internal Docker networks) | `false` | No |
 | `INSTANCE_SYNC_TIMEOUT_MS` | Master only: time limit for one sync request to a slave, including the slave's apply (clamped to `5000`–`300000`) | `60000` (60 s) | No |
+| `INSTANCE_SYNC_RATE_MAX` | Slave only: requests per client address and window to `/api/instances/sync`, counted separately for syncs and key requests | `60` | No |
+| `INSTANCE_SYNC_RATE_WINDOW_MS` | Slave only: window of that limit in milliseconds | `60000` | No |
+| `INSTANCE_SYNC_MAX_BYTES` | Slave only: largest sync payload accepted, in bytes | `10485760` (10 MiB) | No |
 | `CLICKHOUSE_URL` | ClickHouse HTTP endpoint for analytics | `http://clickhouse:8123` | No |
 | `CLICKHOUSE_USER` | ClickHouse username | `cpm` | No |
 | `CLICKHOUSE_PASSWORD` | ClickHouse password (`openssl rand -base64 32`). Required when the `clickhouse` profile is active. | None | No (required if analytics enabled) |
 | `CLICKHOUSE_DB` | ClickHouse database name | `analytics` | No |
+| `CLICKHOUSE_RETENTION_DAYS` | Days analytics events are kept (see [Analytics](#analytics)) | `30` | No |
+
+With the stock `docker-compose.yml`, the web container only receives the variables listed in the `web` service's `environment`; a value in `.env` for any other variable in this table has no effect until you add it there (for example `INSTANCE_MODE: ${INSTANCE_MODE:-}`; an empty value leaves the mode to the Settings page). Give numeric variables their documented default rather than an empty one, e.g. `LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}`: an empty value is read as 0.
 
 **Production Requirements:**
 - `SESSION_SECRET`: 32+ characters (`openssl rand -base64 32`), not an example value from the documentation
@@ -134,23 +141,23 @@ Pull the new images and recreate the containers with `docker compose pull && doc
 - **Proxies in front of a slave** must pass `GET` as well as `POST` on `/api/instances/sync`, with the `Authorization` header and the query string, and must not cache the `GET` reply. The master uses it to fetch the slave's sync key before every sync. A proxy that answers `GET` with `405` makes an upgraded slave look like an older release (previous item); any other refusal fails the sync with *"Sync key request failed with HTTP <status>"*.
 - **Forward auth on a non-standard port.** If browsers reach forward-auth protected sites as `host:8443` (Caddy published as `8443:443`, or NAT), set `FORWARD_AUTH_ALLOWED_PORTS=8443`. Otherwise existing forward-auth sessions stop validating, the portal shows *"This site is served on port 8443, which is not allowed for forward authentication…"*, and the web container logs `[forward-auth] Rejected host:8443 … FORWARD_AUTH_ALLOWED_PORTS`.
 - **CA private keys stay on the master.** CA private keys are now encrypted at rest with `SESSION_SECRET` and are no longer synced; the first sync removes the copies older versions stored on slaves. Slaves keep validating client certificates, but a slave promoted to master cannot issue certificates from the existing CAs. Back up the master's database together with its `SESSION_SECRET`.
-- **WAF custom directives.** Rules that read files or change the Caddy process (`@pmFromFile`, `@ipMatchFromFile`, `@inspectFile`, `@validateSchema`, `setenv`, `ctl:ruleEngine`, …), lines whose structure Coraza cannot parse, and rules reusing the `id:` of an earlier rule are no longer sent to Caddy. Stored rules are kept but left out of the generated config, and the web container logs `[waf] <source>: N custom directive line(s) are not sent to Caddy and have no effect: …`. Operator names and other rule content are not validated, so a typo such as `@contians` still reaches Caddy and makes it refuse the whole config. See [WAF](#waf-web-application-firewall) for the full list.
+- **WAF custom directives.** More lines are no longer sent to Caddy: rules using operators that read files or run programs (`@pmFromFile`, `@ipMatchFromFile`, `@inspectFile`, `@validateSchema`; the data-file operators still work with the embedded `@owasp_crs/*.data` files), the `setenv` action, `ctl:ruleEngine` in any spacing or quoting, lines whose structure Coraza cannot parse, the rest of a chain or multi-line directive when one of its lines is dropped, and rules reusing the `id:` of an earlier rule. Stored rules are kept but left out of the generated config, and the web container logs `[waf] <source>: N custom directive line(s) are not sent to Caddy and have no effect: …`. Operator names and other rule content are not validated, so a typo such as `@contians` still reaches Caddy and makes it refuse the whole config. See [WAF](#waf-web-application-firewall) for the full list.
 - **Host placeholders are literal.** In default responses, error pages, path-block bodies and redirect rule targets, `{env.*}`, `{system.*}` and `{file.*}` are now sent as written. Request placeholders such as `{http.request.uri}` and `{http.request.host}` still expand, so rewrite e.g. `https://{env.PRIMARY_DOMAIN}{http.request.uri}` with a literal host.
 - **Database file permissions.** On startup the SQLite database and its `-journal`/`-wal`/`-shm` files lose their world permission bits. Owner and group bits are unchanged, so a host backup job in the files' group keeps working; one running as an unrelated user no longer can.
 
 **Behaviour changes:**
 
 - **Admin credentials** from the environment are applied when the admin is created and whenever `ADMIN_USERNAME`/`ADMIN_PASSWORD` change, no longer on every start (see [User Roles](#user-roles)). On the first start after upgrading, a stored admin password that differs from `ADMIN_PASSWORD` (and is not `admin` or a documented example) is kept, since it was probably changed in the UI, and a warning is logged. Change `ADMIN_PASSWORD` again and recreate the web container (`docker compose up -d`) to force it. A changed `ADMIN_USERNAME` is still applied on that start, and re-applying unchanged credentials does not re-activate a disabled primary admin.
-- **Passwords.** The password policy (12+ characters, upper- and lowercase, a digit and a special character) now applies to every way of setting a password: admin-created users (dashboard and `POST /api/v1/users`), password changes, and Better Auth self-registration (`AUTH_ALLOW_SELF_REGISTRATION=true`) and reset. Changing or setting a password signs out the user's other dashboard sessions and all their forward-auth sessions. API tokens are kept; revoke them under **Profile → API Tokens** if needed. Adding a first password to an OAuth-only account requires a sign-in within the last 10 minutes. The user can then sign in at `/login` with the **Sign-in username** shown on the Profile page, a username made from their email address (see the next item).
+- **Passwords.** The password policy (12–256 characters, upper- and lowercase, a digit and a special character) now applies to every way of setting a password: admin-created users (dashboard and `POST /api/v1/users`), password changes, and Better Auth self-registration (`AUTH_ALLOW_SELF_REGISTRATION=true`) and reset. Changing or setting a password signs out the user's other dashboard sessions and all their forward-auth sessions. API tokens are kept; revoke them under **Profile → API Tokens** if needed. Adding a first password to an OAuth-only account requires a sign-in within the last 10 minutes. The user can then sign in at `/login` with the **Sign-in username** shown on the Profile page, a username made from their email address (see the next item).
 - **Sign-in usernames.** The login page signs in by username only, ignoring case. CPM gives each account a username made from its email: the lowercased email when it is 3–255 characters from `A-Z a-z 0-9 _ . @ -`; otherwise each run of other characters becomes `-` (`alice+cpm@example.com` → `alice-cpm@example.com`, `+alice@example.com` → `-alice@example.com`). When that is another account's username or email, `-2`, `-3`, … is added before the `@`. Accounts with a password whose stored username the login page cannot use (older releases could store an email with `+`, or a mixed-case username) get one on startup, and when their password or profile is changed; working usernames are never changed. OAuth-only accounts get one when they set a password. The Profile page shows it as **Sign-in username** and `/api/v1/users` responses include it as `username`; tell users whose username differs from their email. If every candidate is taken, the Profile page asks the user to have an administrator change their email address.
 - **Unlinking OAuth** requires a working username/password sign-in. Users who set a password on an older version must change it once before the **Unlink** button appears.
 - **Better Auth self-service endpoints** that CPM does not use are disabled: `/api/auth/update-user`, `/change-password`, `/change-email`, `/delete-user`, `/unlink-account`, `/update-session`, `/verify-password` and `/is-username-available`. Use the Profile page or `/api/v1/` instead. With `AUTH_ALLOW_OAUTH_REGISTRATION=false`, an OAuth sign-in can no longer create an account even if the client asks for sign-up.
 - **Deleting a user** also deletes their sessions, API tokens, sign-in methods, pending OAuth links, forward-auth sessions and grants, and group memberships; what they owned or created and their audit log entries are kept without a user (see [User Roles](#user-roles)). Older releases deleted only the user row; on startup, the rows those deletions left behind are removed (logged as `Cleared rows left by deleted user id(s) <ids>`), so a new account that gets a deleted user's id (the primary admin is always id 1) does not inherit their API tokens, sessions or OAuth links. Nothing needs to be done.
 - **Portal login rate limits** no longer trust a client-sent `X-Real-IP`, and now also count failures per account. See [Login rate limits](#login-rate-limits) and `TRUSTED_CLIENT_IP_HEADER`.
-- **Forward-auth header stripping.** Client-supplied identity headers are now removed in every `-`/`_` spelling (`X_CPM_User`, `Remote_User`, …), so upstreams that fold `_` into `-` (CGI/WSGI) cannot read forged ones. Authentik identity headers are stripped on every route that reaches the upstream. For Authentik and generic forward auth, `Authorization`, `Proxy-Authorization` and `Cookie` are no longer stripped before authentication, even when listed in the copy headers: clients' own credentials reach excluded paths, access-list basic auth and the outpost again, and the auth server's values still replace them.
+- **Forward-auth header stripping.** Client-supplied identity headers are now removed in every `-`/`_` spelling (`X_CPM_User`, `Remote_User`, …), so upstreams that fold `-` and `_` into one name (CGI/WSGI) cannot read forged ones. Authentik copy headers are now stripped too, on every route that reaches the upstream, excluded and unprotected paths included. `Authorization`, `Proxy-Authorization` and `Cookie` are never stripped, even when listed in the copy headers (generic forward auth used to strip them): clients' own credentials reach excluded paths, access-list basic auth and the auth server, and a value the auth server returns still replaces them.
 - **Instance sync.** The master no longer follows redirects from a slave, applies `INSTANCE_SYNC_TIMEOUT_MS` to each request (default 60 s; reported as *"Sync timed out"*), and requires the slave's acknowledgement. A login page in front of a slave is reported as *"Slave returned an invalid sync key"*, or *"Sync key request failed with HTTP 302"* when it redirects. `INSTANCE_SLAVES` entries go through the same URL checks as instances added in the UI, and invalid ones are skipped with the warning `Skipping INSTANCE_SLAVES entry <index>: <reason>`. Instance URLs containing `?` or `#` are rejected. Before each sync the master fetches the slave's sync key, so a wrong token or a URL that does not reach CPM now shows as *"Sync key request failed with HTTP 401"* or *"… HTTP 404"*. New slave-side errors are listed under [Instance Sync](#instance-sync).
-- **Instance sync key pinning.** The master pins each slave's sync key on its first sealed sync and from then on seals only to that key (see [Sync key pinning](#sync-key-pinning)). A slave that comes back with another key, for example reinstalled with a new `SESSION_SECRET`, fails to sync with *"Slave sync key changed; verify the slave, then pin its new key or reset its key pin"* until its new key is pinned on the master. When rotating a slave's `SESSION_SECRET`, keep the old value in the slave's `SESSION_SECRET_PREVIOUS` until the master has synced to it once (see [Rotating SESSION_SECRET](#rotating-session_secret)). After downgrading a slave to v1.12.0 or earlier, reset its key pin, or its syncs fail with *"Sync key request failed with HTTP 405"*.
-- **DNS provider credentials** stored in plaintext (saved through `PUT /api/v1/settings/dns-provider`, a Cloudflare token migrated from the legacy `cloudflare` setting, and the legacy `cloudflare` setting itself) are encrypted on startup, which logs `Encrypted N DNS provider credential(s) that were stored in plaintext`.
+- **Instance sync key pinning.** The master pins each slave's sync key the first time the slave presents one and from then on seals only to that key (see [Sync key pinning](#sync-key-pinning)). A slave that comes back with another key, for example reinstalled with a new `SESSION_SECRET`, fails to sync with *"Slave sync key changed; verify the slave, then pin its new key or reset its key pin"* until its new key is pinned on the master. When rotating a slave's `SESSION_SECRET`, keep the old value in the slave's `SESSION_SECRET_PREVIOUS` until the master has synced to it once (see [Rotating SESSION_SECRET](#rotating-session_secret)). After downgrading a slave to v1.12.0 or earlier, reset its key pin, or its syncs fail with *"Sync key request failed with HTTP 405"*.
+- **DNS provider credentials** that older releases stored in plaintext (saved through `PUT /api/v1/settings/dns-provider`, a Cloudflare token migrated from the legacy `cloudflare` setting, and the legacy `cloudflare` setting itself) are encrypted on startup, which logs `Encrypted N DNS provider credential(s) that were stored in plaintext`. The REST API and the legacy setting now store them encrypted, as the dashboard does.
 - **WAF events.** Credential header values (`Authorization`, `Cookie`, `Set-Cookie`, API-key and token headers, …) and the cookie or credential values that rule messages echo are stored as `[redacted]`. Events stored before the upgrade are not scrubbed; they expire with the analytics retention.
 
 **New optional environment variables:** `SESSION_SECRET_PREVIOUS`, `FORWARD_AUTH_ALLOWED_PORTS`, `TRUSTED_CLIENT_IP_HEADER` and `INSTANCE_SYNC_TIMEOUT_MS` (see [Environment Variables](#environment-variables)). `docker-compose.yml` passes them to the web container.
@@ -159,9 +166,10 @@ Pull the new images and recreate the containers with `docker compose pull && doc
 
 ## Security
 
-- Production enforces strong passwords (12+ chars, mixed case, numbers, special characters)
-- 32+ character session secrets required
-- Login rate limiting: 5 attempts per 60 seconds
+- Strong passwords (12–256 characters, mixed case, numbers, special characters) for every account; in production the web container also refuses to start with a weak or example `ADMIN_PASSWORD`
+- 32+ character session secrets required in production; known example values are rejected
+- Stored secrets (DNS provider credentials, OAuth client secrets, certificate and CA private keys, instance sync tokens) are encrypted at rest with a key derived from `SESSION_SECRET`
+- Rate limiting: dashboard sign-in through Better Auth (3 requests per 10 seconds per client address; `AUTH_RATE_LIMIT_*` for its other endpoints), and forward-auth portal logins, password changes and OAuth account linking through `LOGIN_*` (see [Login rate limits](#login-rate-limits))
 - Audit trail for all configuration changes
 - Supports OAuth2/OIDC for SSO
 
@@ -243,9 +251,9 @@ Geo blocking is configured per proxy host. It requires MaxMind GeoLite2 database
 |------|---------|-------------|
 | Country | `DE` | ISO 3166-1 alpha-2 country code |
 | Continent | `EU` | `AF`, `AN`, `AS`, `EU`, `NA`, `OC`, `SA` |
-| ASN | `24940` | Autonomous System Number |
-| CIDR | `91.98.150.0/24` | IP range in CIDR notation |
-| IP | `91.98.150.103` | Exact IP address |
+| ASN | `64496` | Autonomous System Number |
+| CIDR | `203.0.113.0/24` | IP range in CIDR notation |
+| IP | `203.0.113.10` | Exact IP address |
 
 Rules can be **block** or **allow**. Allow rules take precedence over block rules — you can block an entire continent and then allow specific IPs or ASNs through.
 
@@ -325,6 +333,8 @@ Enable globally in **WAF → Settings**, then optionally override per proxy host
 
 **Rule suppression** — suppress noisy rules globally or per host from the event detail drawer or the Suppressed Rules tab.
 
+**Event log** — credential header values (`Authorization`, `Cookie`, `Set-Cookie`, API-key and token headers, …) and the cookie or credential values that rule messages echo are stored as `[redacted]`.
+
 **Custom directives** — `SecRule`, `SecAction`, `SecMarker` and `SecDefaultAction` lines (plus the request body limit directives) are accepted, e.g.:
 ```
 SecRule REQUEST_URI "@beginsWith /admin/" "id:9001,phase:1,deny,status:403,log,msg:'Admin path blocked'"
@@ -346,7 +356,7 @@ When one rule of a chain is dropped, the whole chain is dropped. Rules stored be
 
 ## Instance Sync
 
-Run a master instance that pushes configuration to one or more slaves on every change.
+Run a master instance that pushes configuration to one or more slaves on every change. Set the mode in **Settings → Instance Sync**, or with the variables below in the web container's environment (add them to the `web` service in `docker-compose.yml`; see [Environment Variables](#environment-variables)).
 
 ```bash
 # Generate once, then configure the same 64-character value on both sides.
@@ -363,13 +373,13 @@ INSTANCE_SYNC_TOKEN=<64-hex-character-token>
 
 Sync tokens shorter than 32 characters, longer than 512 characters, or padded with whitespace are rejected.
 
-Synced data: proxy hosts, certificates, access lists, and settings. User accounts are **not** synced. CA certificates are synced without their private keys: slaves validate client certificates but cannot issue them, so back up the master's database and `SESSION_SECRET`.
+Synced data: proxy hosts, L4 proxy hosts, certificates, CA and issued client certificates, access lists, and settings. User accounts are **not** synced. CA certificates are synced without their private keys: slaves validate client certificates but cannot issue them, so back up the master's database and `SESSION_SECRET`.
 
 **Sealed secrets.** Before every sync the master fetches the slave's sync public key and a single-use nonce with an authenticated `GET /api/instances/sync` (same bearer token as the sync). It seals certificate private keys and the secrets inside synced settings (DNS provider credentials) to that key (X25519, HKDF-SHA256, AES-256-GCM), and the slave opens them and stores them encrypted with its own `SESSION_SECRET`. The slave derives the key from its `SESSION_SECRET`, so there is nothing to configure and master and slaves do not need to share a secret.
 
 - Anything that reads request bodies on the way to a slave (a TLS-terminating proxy, CDN or tunnel in front of it, request body logging, or a passive observer of a sync over HTTP) sees these secrets only as ciphertext; the rest of the configuration is not sealed. Each sealed secret is bound to the nonce and to the exact payload it came with, so a captured sync body cannot be replayed or changed (for example to point an acme-dns `server_url` elsewhere) to get its secrets onto a slave, even by someone who also has the sync token.
 - Sealing does not stop anyone holding the sync token from pushing a configuration of their own. The master pins each slave's key (see [Sync key pinning](#sync-key-pinning) below), so after the first sync it refuses a different key an active attacker presents, but the first sync trusts whatever key answers unless the key was pinned beforehand. Over plain HTTP the token is still exposed, so HTTPS is still required.
-- Proxies in front of a slave must pass `GET` as well as `POST` on `/api/instances/sync`, with the `Authorization` header and the query string, and must not cache the `GET` reply (it is sent with `Cache-Control: no-store`). The master sends `GET /api/instances/sync?challenge=<fresh key>`, and the slave uses the challenge for its rotation proofs (below); without it syncs still work, but a rotated slave is not re-pinned automatically. A challenge that is not a usable key gets `400` *"Invalid sync key challenge"*, reported on the master as *"Sync key request failed with HTTP 400"*. Key requests have their own rate limit, with the same limits as syncs, so they do not use up the sync budget.
+- Proxies in front of a slave must pass `GET` as well as `POST` on `/api/instances/sync`, with the `Authorization` header and the query string, and must not cache the `GET` reply (it is sent with `Cache-Control: no-store`). The master sends `GET /api/instances/sync?challenge=<fresh key>`, and the slave uses the challenge for its rotation proofs (below); without it syncs still work, but a rotated slave is not re-pinned automatically. A challenge that is not a usable key gets `400` *"Invalid sync key challenge"*, reported on the master as *"Sync key request failed with HTTP 400"*. Key requests have their own rate limit, with the same limits as syncs (`INSTANCE_SYNC_RATE_MAX` requests per `INSTANCE_SYNC_RATE_WINDOW_MS` per client address, 60 per minute by default), so they do not use up the sync budget.
 - A nonce is kept in the slave process's memory for 10 minutes, so the key request and the sync must reach the same process, as they always do with a single CPM web container.
 - A slave on v1.12.0 or earlier answers the key request with `405`. The master then sends what older masters sent: certificate private keys unsealed and DNS provider credentials encrypted with the master's `SESSION_SECRET`, which that slave needs as its own `SESSION_SECRET`. It logs `Instance sync: slave "<name>" does not publish a sync key (older release)…` once per slave. This applies only to slaves without a pinned key: once a slave has a pin, a `405` fails the sync (see [Sync key pinning](#sync-key-pinning)). A `404` always fails the sync (*"Sync key request failed with HTTP 404"*); it usually means a wrong base URL, or a proxy or virtual host answering instead of CPM.
 
@@ -383,7 +393,7 @@ The slave's Settings page shows why a sealed sync was refused (the master report
 
 Both 409s clear on the next sync. A key reply the master cannot use, a low-order public key included, is reported as *"Slave returned an invalid sync key"* and is never pinned.
 
-Use HTTPS slave URLs in production. Set `INSTANCE_SYNC_ALLOW_HTTP=true` only for internal Docker networks; it exposes the sync token to anyone on the path. Slave URLs (from the UI, the API or `INSTANCE_SLAVES`) must not contain credentials, a query string or a fragment; invalid `INSTANCE_SLAVES` entries are skipped with a warning. The master does not follow redirects, and a request that exceeds `INSTANCE_SYNC_TIMEOUT_MS` (default 60 s) is reported as *"Sync timed out"*; the slave may still finish applying the config.
+Use HTTPS slave URLs in production. Set `INSTANCE_SYNC_ALLOW_HTTP=true` only for internal Docker networks; it exposes the sync token to anyone on the path. Slave URLs (from the UI, the API or `INSTANCE_SLAVES`) must not contain credentials, a query string or a fragment; `INSTANCE_SLAVES` entries with an invalid URL are skipped with a warning; entries with a missing name or URL, or a token that breaks the rules above, are skipped without one. The master does not follow redirects, and a request that exceeds `INSTANCE_SYNC_TIMEOUT_MS` (default 60 s) is reported as *"Sync timed out"*; the slave may still finish applying the config.
 
 See the [Environment Variables Reference](https://github.com/fuomag9/caddy-proxy-manager/wiki/Environment-Variables-Reference) for all `INSTANCE_*` options.
 
@@ -522,7 +532,7 @@ Portal logins use `LOGIN_MAX_ATTEMPTS`, `LOGIN_WINDOW_MS` and `LOGIN_BLOCK_MS`:
 - One client cannot lock an account, but a few together can: with the defaults each can make about 48 failures per hour (4 per 5-minute window) without being blocked, so e.g. a dual-stack host (IPv4 plus IPv6) or two /64s can reach the account ceiling. This is inherent to a per-account limit.
 - Attempts still being checked count towards every limit; extra concurrent attempts get `429`.
 
-The client address is the rightmost `X-Forwarded-For` entry, which is the real client when clients connect to Caddy directly (Caddy is the outermost proxy in front of CPM). When port 3000 is reached directly, clients control that header and the per-IP limits are only best effort, so expose the portal (`BASE_URL`) through Caddy or another proxy that overwrites `X-Forwarded-For` rather than publishing port 3000 to untrusted networks. Behind a CDN, the rightmost entry is the CDN edge: set `TRUSTED_CLIENT_IP_HEADER` (e.g. `cf-connecting-ip`), but only if the origin accepts connections from the CDN alone, since clients could otherwise forge the header. Leave it unset when Caddy is the outermost proxy, because Caddy passes `X-Real-IP` and `CF-Connecting-IP` through unchanged. The same client address is used for the rate limit of the slave sync endpoint.
+The client address is the rightmost `X-Forwarded-For` entry, which is the real client when clients connect to Caddy directly (Caddy is the outermost proxy in front of CPM). When port 3000 is reached directly, clients control that header and the per-IP limits are only best effort, so expose the portal (`BASE_URL`) through Caddy or another proxy that overwrites `X-Forwarded-For` rather than publishing port 3000 to untrusted networks (`docker-compose.yml` publishes it on all interfaces as `3000:3000`; change that to `127.0.0.1:3000:3000`, or block it in the `DOCKER-USER` chain or an external firewall; ufw and other host INPUT rules do not apply to Docker-published ports). Behind a CDN, the rightmost entry is the CDN edge: set `TRUSTED_CLIENT_IP_HEADER` (e.g. `cf-connecting-ip`), but only if the origin accepts connections from the CDN alone, since clients could otherwise forge the header. Leave it unset when Caddy is the outermost proxy, because Caddy passes `X-Real-IP` and `CF-Connecting-IP` through unchanged. The same client address is used for the rate limit of the slave sync endpoint.
 
 ---
 
