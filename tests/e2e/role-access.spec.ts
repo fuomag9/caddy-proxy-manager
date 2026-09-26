@@ -101,7 +101,7 @@ async function loginAs(
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 
-  // The login client does router.replace('/') on success — wait for that
+  // The login client does a full-page window.location.replace('/') on success — wait for that
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 60_000 });
   await page.close();
   return context;

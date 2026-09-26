@@ -142,11 +142,15 @@ export async function createAccessList(input: AccessListInput, actorUserId: numb
   }
 
   if (input.users && input.users.length > 0) {
+    // Async hashing keeps a bulk create from blocking the event loop (and with
+    // it forward-auth checks) for the whole batch.
+    const users = input.users;
+    const hashes = await Promise.all(users.map((account) => bcrypt.hash(account.password, 10)));
     await db.insert(accessListEntries).values(
-      input.users.map((account) => ({
+      users.map((account, index) => ({
         accessListId: accessList.id,
         username: account.username,
-        passwordHash: bcrypt.hashSync(account.password, 10),
+        passwordHash: hashes[index],
         createdAt: now,
         updatedAt: now
       }))
@@ -210,7 +214,7 @@ export async function addAccessListEntry(
   }
 
   const now = nowIso();
-  const hash = bcrypt.hashSync(entry.password, 10);
+  const hash = await bcrypt.hash(entry.password, 10);
   await db.insert(accessListEntries).values({
     accessListId,
     username: entry.username,

@@ -1,4 +1,5 @@
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { genericOAuth, username } from "better-auth/plugins";
 import db, { sqlite } from "./db";
 import * as schema from "./db/schema";
@@ -11,6 +12,8 @@ import {
   CREDENTIAL_ACCOUNT_ISSUER,
   resolveOAuthAccountIssuer,
 } from "./account-issuer";
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, passwordPolicyMessage } from "./password-policy";
+import { LOGIN_USERNAME_MAX_LENGTH, LOGIN_USERNAME_MIN_LENGTH, isValidLoginUsername } from "./login-username";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cachedAuth: any = null;
@@ -122,6 +125,30 @@ export function enforceSafeUserDefaults<T extends object>(user: T): T & { role: 
   return { ...user, role: "user", status: "active" };
 }
 
+/**
+ * Better Auth endpoints left enabled that set a password from the request
+ * body, mapped to the body field carrying it. /sign-up/email is live when
+ * AUTH_ALLOW_SELF_REGISTRATION is on; /reset-password is reachable but has no
+ * way to issue tokens while no sendResetPassword is configured.
+ */
+const PASSWORD_SETTING_FIELDS = new Map<string, string>([
+  ["/sign-up/email", "password"],
+  ["/reset-password", "newPassword"],
+]);
+
+/** Applies CPM's password policy to the Better Auth endpoints above. */
+const enforcePasswordPolicy = createAuthMiddleware(async (ctx) => {
+  const field = PASSWORD_SETTING_FIELDS.get(ctx.path);
+  if (!field) return;
+  const password = (ctx.body as Record<string, unknown> | undefined)?.[field];
+  // A missing or non-string value is rejected by the endpoint's own validation.
+  if (typeof password !== "string") return;
+  const policyError = passwordPolicyMessage(password);
+  if (policyError) {
+    throw new APIError("BAD_REQUEST", { message: policyError });
+  }
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createAuth(): any {
   const oauthConfigs = loadProvidersSync();
@@ -196,6 +223,8 @@ function createAuth(): any {
     emailAndPassword: {
       enabled: true,
       disableSignUp: !config.auth.allowSelfRegistration,
+      minPasswordLength: MIN_PASSWORD_LENGTH,
+      maxPasswordLength: MAX_PASSWORD_LENGTH,
       password: {
         async hash(password: string) {
           const bcrypt = await import("bcryptjs");
@@ -206,6 +235,9 @@ function createAuth(): any {
           return await bcrypt.default.compare(password, hash);
         },
       },
+    },
+    hooks: {
+      before: enforcePasswordPolicy,
     },
     databaseHooks: {
       user: {
@@ -368,8 +400,9 @@ function createAuth(): any {
       // expects `email?: any`. The mismatch surfaces in some environments and not others, so
       // the cast keeps the typecheck stable across local and Docker builds.
       username({
-        maxUsernameLength: 255,
-        usernameValidator: (username) => /^[a-zA-Z0-9_.@-]+$/.test(username),
+        minUsernameLength: LOGIN_USERNAME_MIN_LENGTH,
+        maxUsernameLength: LOGIN_USERNAME_MAX_LENGTH,
+        usernameValidator: isValidLoginUsername,
       }) as unknown as BetterAuthPlugin,
       genericOAuth({ config: oauthConfigs }),
     ],

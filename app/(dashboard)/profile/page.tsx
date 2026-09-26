@@ -1,5 +1,5 @@
 import { requireUser, getCurrentSessionId } from "@/src/lib/auth";
-import { getUserById, listUserOAuthProviders } from "@/src/lib/models/user";
+import { getPasswordSignInStatus, getUserById, getUserPasswordHash, listUserOAuthProviders } from "@/src/lib/models/user";
 import { getProviderDisplayList } from "@/src/lib/models/oauth-providers";
 import { listApiTokens } from "@/src/lib/models/api-tokens";
 import { listUserSessions } from "@/src/lib/models/sessions";
@@ -19,11 +19,13 @@ export default async function ProfilePage() {
   // informational users.provider/subject columns are only a projection (#261).
   const linkedProviders = await listUserOAuthProviders(userId);
 
-  const [enabledProviders, apiTokens, userSessions, currentSessionId] = await Promise.all([
+  const [enabledProviders, apiTokens, userSessions, currentSessionId, passwordHash, passwordSignIn] = await Promise.all([
     getProviderDisplayList(),
     listApiTokens(userId),
     listUserSessions(userId),
     getCurrentSessionId(),
+    getUserPasswordHash(user),
+    getPasswordSignInStatus(userId),
   ]);
 
   const sessions = userSessions.map((s) => ({ ...s, current: s.id === currentSessionId }));
@@ -35,7 +37,11 @@ export default async function ProfilePage() {
     name: user.name,
     provider: user.provider,
     subject: user.subject,
-    hasPassword: !!user.passwordHash,
+    hasPassword: !!passwordHash,
+    // Same check the unlink-oauth route makes, so the unlink button only shows
+    // when the login page would still let the user in; otherwise the reason.
+    signInUsername: passwordSignIn.username,
+    passwordSignInBlocker: passwordSignIn.blocker,
     role: user.role,
     avatarUrl: user.avatarUrl,
   };

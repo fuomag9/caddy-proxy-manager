@@ -40,9 +40,8 @@ export default async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
   // Allow public routes. They get the same security headers as authenticated
-  // pages: after a password login the browser moves on to the dashboard
-  // without reloading the document, so the /login document's policy is the
-  // one that stays in force.
+  // pages as defense in depth. After a credential login the login page loads
+  // the dashboard as a new document, which gets its own policy and nonce.
   if (
     pathname === "/login" ||
     pathname === "/portal" ||

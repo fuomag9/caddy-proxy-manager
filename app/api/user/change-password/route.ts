@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, checkSameOrigin, getCurrentSessionInfo } from "@/src/lib/auth";
-import { getUserById, updateUserPassword } from "@/src/lib/models/user";
-import { revokeOtherUserSessions } from "@/src/lib/models/sessions";
-import { deleteUserForwardAuthSessions } from "@/src/lib/models/forward-auth";
+import { changeUserPassword, getUserById, getUserPasswordHash } from "@/src/lib/models/user";
 import { createAuditEvent } from "@/src/lib/models/audit";
 import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
 import bcrypt from "bcryptjs";
@@ -49,11 +47,12 @@ export async function POST(request: NextRequest) {
     }
 
     const currentSession = await getCurrentSessionInfo(request);
+    const currentHash = await getUserPasswordHash(user);
 
     // An account without a password (OAuth-only) has no current password to
     // prove, so adding one requires a recent sign-in instead: a stolen,
     // long-lived session must not be able to attach a durable credential.
-    if (!user.passwordHash) {
+    if (!currentHash) {
       const signedInAt = currentSession?.createdAt.getTime() ?? NaN;
       if (!(Date.now() - signedInAt <= RECENT_SIGN_IN_MS)) {
         return NextResponse.json(
@@ -61,18 +60,15 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
-    }
-
-    // If user has a password, verify current password
-    if (user.passwordHash) {
-      if (!currentPassword) {
+    } else {
+      if (typeof currentPassword !== "string" || !currentPassword) {
         return NextResponse.json(
           { error: "Current password is required" },
           { status: 400 }
         );
       }
 
-      const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      const isValid = await bcrypt.compare(currentPassword, currentHash);
       if (!isValid) {
         registerFailedAttempt(rateLimitKey);
         return NextResponse.json(
@@ -85,29 +81,32 @@ export async function POST(request: NextRequest) {
     // Password verified successfully — reset rate limit counter
     resetAttempts(rateLimitKey);
 
-    // Hash new password
     const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
-    // Update password
-    await updateUserPassword(userId, newPasswordHash);
+    // Set the password and end every other sign-in (other management sessions
+    // and all forward-auth sessions) in one transaction. The caller's current
+    // session stays so they are not logged out; when it cannot be identified,
+    // every session ends.
+    await changeUserPassword(userId, newPasswordHash, currentSession?.id ?? null);
 
-    // End every other sign-in: other management sessions and all forward-auth
-    // sessions. The caller's current session stays so they are not logged out.
-    await revokeOtherUserSessions(userId, currentSession?.id ?? null);
-    await deleteUserForwardAuthSessions(userId);
-
-    // Audit log
-    await createAuditEvent({
-      userId,
-      action: user.passwordHash ? "password_changed" : "password_set",
-      entityType: "user",
-      entityId: userId,
-      summary: user.passwordHash ? "User changed their password" : "User set a password",
-    });
+    // The password has changed at this point, so a failure to audit it is
+    // logged rather than reported to the user as a failed change.
+    try {
+      await createAuditEvent({
+        userId,
+        action: currentHash ? "password_changed" : "password_set",
+        entityType: "user",
+        entityId: userId,
+        summary: currentHash ? "User changed their password" : "User set a password",
+      });
+    } catch (error) {
+      console.error("Failed to audit password change:", error);
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Password updated successfully"
+      message:
+        "Password updated. Your other sessions have been signed out. API tokens are not affected; revoke them under API Tokens if needed.",
     });
   } catch (error) {
     console.error("Password change error:", error);
