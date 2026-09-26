@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import db, { nowIso } from "./db";
 import { accessListEntries, accessLists, caCertificates, certificates, issuedClientCertificates, l4ProxyHosts, proxyHosts, settings as settingsTable } from "./db/schema";
 import { encryptCloudflareSettingToken, getSetting, setSetting } from "./settings";
@@ -5,7 +6,23 @@ import { instanceBaseUrlValidationError, recordInstanceSyncResult, updateInstanc
 import { decryptSecret, encryptSecret, isEncryptedSecret, reencryptSecret } from "./secret";
 import { encryptDnsProviderSettingCredentials } from "./dns-providers";
 import { sanitizeStoredCertificateProviderOptions } from "./certificate-provider-options";
-import { SYNC_NOT_ACKNOWLEDGED_ERROR, SYNC_TIMED_OUT_ERROR, sanitizeInstanceSyncError } from "./instance-sync-error";
+import {
+  SYNC_INVALID_KEY_ERROR,
+  SYNC_NOT_ACKNOWLEDGED_ERROR,
+  SYNC_TIMED_OUT_ERROR,
+  sanitizeInstanceSyncError,
+} from "./instance-sync-error";
+import {
+  SEALED_SYNC_SECRET_PREFIX,
+  SyncSealError,
+  consumeSyncNonce,
+  getSyncPublicKey,
+  isSyncNonce,
+  openSyncSecret,
+  parseSyncPublicKeyResponse,
+  sealSyncSecret,
+  type SyncSealTarget,
+} from "./sync-crypto";
 import { applyL4Ports, getL4PortsDiff } from "./l4-ports";
 import {
   assertValidInstanceSyncToken,
@@ -43,6 +60,19 @@ export type SyncPayload = {
    * older masters, which sent secrets as stored (encrypted with their key).
    */
   settings_secret_paths?: SettingPath[];
+  /**
+   * Key id of the slave key that the secrets in this payload (the strings at
+   * settings_secret_paths and the certificate private keys) are sealed to;
+   * see sync-crypto.ts. Absent when they travel unsealed: to slaves from
+   * older releases, and in payloads from older masters.
+   */
+  secrets_sealed_key_id?: string;
+  /**
+   * The single-use nonce the slave issued with its key. Sent with
+   * secrets_sealed_key_id; the sealed secrets are bound to it and to the rest
+   * of the payload (see sealSyncPayload).
+   */
+  secrets_sealed_nonce?: string;
   data: {
     certificates: Array<typeof certificates.$inferSelect>;
     caCertificates: Array<typeof caCertificates.$inferSelect>;
@@ -340,10 +370,12 @@ const reportedUndecryptableSettingPaths = new Set<string>();
 /**
  * Replace every encrypted string in a setting value with its plaintext and
  * record where it was in `decryptedPaths`, so a slave does not need the
- * master's SESSION_SECRET: the slave encrypts the strings at those paths with
- * its own key (see encryptSyncedSettingSecrets). A value no key here decrypts
- * is sent as stored, as older releases sent every value, and reported once
- * per process.
+ * master's SESSION_SECRET: the strings at those paths are sealed to each
+ * slave's key for transport (see sealSyncPayload), and the slave encrypts
+ * them with its own key (see encryptSyncedSettingSecrets). Slaves from older
+ * releases get them encrypted with this instance's key instead (see
+ * legacySyncPayload). A value no key here decrypts is sent as stored, as
+ * older releases sent every value, and reported once per process.
  */
 function decryptSettingSecrets(key: string, value: unknown, decryptedPaths: SettingPath[]): unknown {
   return mapSettingStrings(value, [key], (item, path) => {
@@ -402,6 +434,139 @@ function encryptSyncedSettingSecrets(key: string, value: unknown, secretPaths: S
   return encrypted;
 }
 
+/** Where a secret sits in a sync payload. */
+type SyncSecretPlace = Array<string | number>;
+
+/**
+ * Apply `transform` to every secret in a payload: the strings at
+ * `secretPaths` (see parseSettingSecretPaths) and the certificate private
+ * keys. Everything else, key order included, is kept.
+ */
+function mapSyncSecrets(
+  payload: SyncPayload,
+  secretPaths: Set<string>,
+  transform: (value: string, place: SyncSecretPlace) => string
+): SyncPayload {
+  const settings = Object.fromEntries(
+    Object.entries(payload.settings).map(([group, value]) => [
+      group,
+      mapSettingStrings(value, [group], (item, path) =>
+        secretPaths.has(JSON.stringify(path)) ? transform(item, ["settings", ...path]) : item
+      ),
+    ])
+  ) as SyncSettings;
+
+  return {
+    ...payload,
+    settings,
+    data: {
+      ...payload.data,
+      certificates: payload.data.certificates.map((certificate) => ({
+        ...certificate,
+        privateKeyPem: certificate.privateKeyPem
+          ? transform(certificate.privateKeyPem, ["data", "certificates", certificate.id, "privateKeyPem"])
+          : certificate.privateKeyPem,
+      })),
+    },
+  };
+}
+
+/**
+ * SHA-256 of a sealed payload as serialized, with every sealed value replaced
+ * by the bare prefix. It covers the key id, the slave's nonce and everything
+ * sent alongside the secrets.
+ */
+function sealedPayloadDigest(payload: SyncPayload, secretPaths: Set<string>): string {
+  const outline = mapSyncSecrets(payload, secretPaths, () => SEALED_SYNC_SECRET_PREFIX);
+  return createHash("sha256").update(JSON.stringify(outline)).digest("hex");
+}
+
+/**
+ * Associated data for one sealed secret: the payload digest and the secret's
+ * place. A sealed value therefore opens only at its place, in the payload it
+ * was sealed in; with the nonce, only once.
+ */
+function syncSecretAad(payloadDigest: string, place: SyncSecretPlace): string {
+  return JSON.stringify([payloadDigest, ...place]);
+}
+
+/**
+ * The payload for one slave, with every secret sealed to that slave's key:
+ * the strings at settings_secret_paths and the certificate private keys.
+ */
+function sealSyncPayload(payload: SyncPayload, target: SyncSealTarget): SyncPayload {
+  const secretPaths = parseSettingSecretPaths(payload.settings_secret_paths);
+  const addressed: SyncPayload = {
+    ...payload,
+    secrets_sealed_key_id: target.keyId,
+    secrets_sealed_nonce: target.nonce,
+  };
+  const digest = sealedPayloadDigest(addressed, secretPaths);
+  return mapSyncSecrets(addressed, secretPaths, (value, place) =>
+    sealSyncSecret(value, target.publicKey, syncSecretAad(digest, place))
+  );
+}
+
+/**
+ * The payload for a slave from an older release, which cannot open sealed
+ * values and stores settings as sent: the settings secrets encrypted with
+ * this instance's key, as older masters sent them (a slave that shares
+ * SESSION_SECRET can use them), and without settings_secret_paths.
+ * Certificate private keys stay decrypted, as older masters sent them.
+ */
+function legacySyncPayload(payload: SyncPayload): SyncPayload {
+  const secretPaths = parseSettingSecretPaths(payload.settings_secret_paths);
+  const settings = Object.fromEntries(
+    Object.entries(payload.settings).map(([group, value]) => [
+      group,
+      mapSettingStrings(value, [group], (item, path) =>
+        secretPaths.has(JSON.stringify(path)) ? encryptSecret(item) : item
+      ),
+    ])
+  ) as SyncSettings;
+  const legacy: SyncPayload = { ...payload, settings };
+  delete legacy.settings_secret_paths;
+  return legacy;
+}
+
+/**
+ * Open the secrets of a payload sealed to this instance's key. The payload's
+ * nonce is used up first, whatever the outcome. Every path in
+ * settings_secret_paths must hold a sealed string, no other setting string
+ * may look sealed, and every certificate private key must be sealed;
+ * otherwise, or when the payload was sealed to another key, its nonce is
+ * unknown, expired or used, or anything fails to open, this throws
+ * SyncSealError, so a sealed value is never stored.
+ */
+function openSealedSyncPayload(payload: SyncPayload): SyncPayload {
+  const nonce = payload.secrets_sealed_nonce;
+  const fresh = isSyncNonce(nonce) && consumeSyncNonce(nonce);
+  if (payload.secrets_sealed_key_id !== getSyncPublicKey().keyId) throw new SyncSealError("key_mismatch");
+  if (!fresh) throw new SyncSealError("stale");
+
+  const listedPaths: unknown = payload.settings_secret_paths ?? [];
+  const secretPaths = parseSettingSecretPaths(listedPaths);
+  if (!Array.isArray(listedPaths) || secretPaths.size !== listedPaths.length) {
+    throw new SyncSealError("malformed");
+  }
+  let listedStrings = 0;
+  for (const [group, value] of Object.entries(payload.settings)) {
+    // Unlisted strings are left as they are: they are part of the digest every
+    // sealed value is bound to, so a sealed value moved to one cannot open.
+    mapSettingStrings(value, [group], (item, path) => {
+      if (secretPaths.has(JSON.stringify(path))) listedStrings++;
+      return item;
+    });
+  }
+  // A listed path that holds no string would not be opened.
+  if (listedStrings !== secretPaths.size) throw new SyncSealError("malformed");
+
+  const digest = sealedPayloadDigest(payload, secretPaths);
+  return mapSyncSecrets(payload, secretPaths, (value, place) =>
+    openSyncSecret(value, syncSecretAad(digest, place))
+  );
+}
+
 export async function buildSyncPayload(): Promise<SyncPayload> {
   const [certRows, caCertRows, issuedClientCertRows, accessListRows, accessEntryRows, proxyRows, l4Rows] = await Promise.all([
     db.select().from(certificates),
@@ -430,8 +595,9 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
     default_response: await getSetting("default_response"),
     forward_auth: await getSetting("forward_auth"),
   };
-  // Secrets inside settings (DNS provider credentials) travel decrypted over
-  // the authenticated sync channel, like certificate private keys below.
+  // Secrets inside settings (DNS provider credentials) are decrypted here,
+  // like certificate private keys below, and sealed to each slave's key
+  // before sending (see syncToSlave).
   const settingsSecretPaths: SettingPath[] = [];
   const settings = Object.fromEntries(
     Object.entries(storedSettings).map(([key, value]) => [key, decryptSettingSecrets(key, value, settingsSecretPaths)])
@@ -445,8 +611,8 @@ export async function buildSyncPayload(): Promise<SyncPayload> {
   const sanitizedCertificates = certRows.map((row) => ({
     ...row,
     providerOptions: sanitizeStoredCertificateProviderOptions(row.providerOptions),
-    // Transport the operational value over the authenticated sync channel;
-    // the slave re-encrypts it with its own SESSION_SECRET before storage.
+    // The operational value, sealed to each slave's key for transport (see
+    // syncToSlave); the slave re-encrypts it with its own SESSION_SECRET.
     privateKeyPem: row.privateKeyPem ? decryptSecret(row.privateKeyPem, "instance sync certificate private key") : null,
     createdBy: null
   }));
@@ -494,20 +660,67 @@ function isTimeoutError(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { name?: unknown }).name === "TimeoutError";
 }
 
+type SlaveSyncFailure = { ok: false; error: string; status?: number };
+type SlaveSyncResult = { ok: true } | SlaveSyncFailure;
+
+function slaveSyncUrl(baseUrl: string): string {
+  return `${baseUrl.replace(/\/$/, "")}/api/instances/sync`;
+}
+
+/**
+ * Fetch a slave's sync public key and a nonce, with the safeguards of the
+ * sync POST (no redirects, bounded in time, fixed error messages). A slave
+ * from an older release exports no GET handler for the sync route, so Next.js
+ * answers 405: `key` is then null. Any other reply without a key, a 404
+ * included, is a failure.
+ */
+async function fetchSlaveSyncKey(
+  baseUrl: string,
+  token: string
+): Promise<{ ok: true; key: SyncSealTarget | null } | SlaveSyncFailure> {
+  try {
+    const response = await fetch(slaveSyncUrl(baseUrl), {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      redirect: "manual",
+      signal: AbortSignal.timeout(getSyncRequestTimeoutMs()),
+    });
+    if (response.status === 405) {
+      return { ok: true, key: null };
+    }
+    if (response.status < 200 || response.status >= 300) {
+      return { ok: false, error: `Sync key request failed with HTTP ${response.status}`, status: response.status };
+    }
+    const body = await response.json().catch((error: unknown) => {
+      if (isTimeoutError(error)) throw error;
+      return null;
+    });
+    const key = parseSyncPublicKeyResponse(body);
+    return key
+      ? { ok: true, key }
+      : { ok: false, error: SYNC_INVALID_KEY_ERROR, status: response.status };
+  } catch (error) {
+    return { ok: false, error: isTimeoutError(error) ? SYNC_TIMED_OUT_ERROR : "Sync request failed" };
+  }
+}
+
 /**
  * POST the sync payload to one slave. Redirects are not followed (the body
- * carries decrypted key material and must only reach the configured URL), the
- * request is bounded in time, and only a 2xx `{ ok: true }` reply from a CPM
- * slave counts as success. Failures carry a fixed message that is safe to
- * store and show (see instance-sync-error.ts).
+ * carries key material, unsealed for slaves from older releases, and must
+ * only reach the configured URL), the request is bounded in time, and only a
+ * 2xx `{ ok: true }` reply from a CPM slave counts as success. Failures carry
+ * a fixed message that is safe to store and show (see instance-sync-error.ts).
  */
 async function postSyncPayload(
   baseUrl: string,
   token: string,
   payload: SyncPayload
-): Promise<{ ok: true } | { ok: false; error: string; status?: number }> {
+): Promise<SlaveSyncResult> {
   try {
-    const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/instances/sync`, {
+    const response = await fetch(slaveSyncUrl(baseUrl), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -530,6 +743,57 @@ async function postSyncPayload(
   } catch (error) {
     return { ok: false, error: isTimeoutError(error) ? SYNC_TIMED_OUT_ERROR : "Sync request failed" };
   }
+}
+
+/**
+ * Slaves that have published a sync key to this process. They never get the
+ * legacy payload again: a later 405 on the key request (a downgrade, or
+ * something else answering at the slave's address) fails the sync instead.
+ */
+const sealingSlaves = new Set<string>();
+/** Slaves already reported as receiving the legacy payload. */
+const reportedLegacySlaves = new Set<string>();
+
+/**
+ * Sync one slave: fetch its key, seal the payload's secrets to it and POST
+ * the result. A slave from an older release, which has no key endpoint, gets
+ * the legacy payload (see legacySyncPayload), unless it has published a key
+ * before; that is reported once per slave. Slaves are told apart by `id` and
+ * base URL.
+ */
+async function syncToSlave(
+  slave: { id: string; name: string; baseUrl: string; token: string },
+  payload: SyncPayload
+): Promise<SlaveSyncResult> {
+  const slaveKey = JSON.stringify([slave.id, slave.baseUrl]);
+  const keyResult = await fetchSlaveSyncKey(slave.baseUrl, slave.token);
+  if (!keyResult.ok) return keyResult;
+
+  if (!keyResult.key) {
+    if (sealingSlaves.has(slaveKey)) {
+      return { ok: false, error: "Sync key request failed with HTTP 405", status: 405 };
+    }
+    if (!reportedLegacySlaves.has(slaveKey)) {
+      reportedLegacySlaves.add(slaveKey);
+      console.warn(
+        `Instance sync: slave "${slave.name}" does not publish a sync key (older release); ` +
+        "sending certificate private keys unsealed over the authenticated sync channel and settings " +
+        "secrets encrypted with this instance's SESSION_SECRET. Upgrade the slave to seal them."
+      );
+    }
+    return postSyncPayload(slave.baseUrl, slave.token, legacySyncPayload(payload));
+  }
+  sealingSlaves.add(slaveKey);
+
+  let sealed: SyncPayload;
+  try {
+    sealed = sealSyncPayload(payload, keyResult.key);
+  } catch (error) {
+    // A well-formed key the key exchange rejects (a low-order point).
+    if (!(error instanceof SyncSealError)) throw error;
+    return { ok: false, error: SYNC_INVALID_KEY_ERROR };
+  }
+  return postSyncPayload(slave.baseUrl, slave.token, sealed);
 }
 
 export async function syncInstances(): Promise<{ total: number; success: number; failed: number; skippedHttp: number }> {
@@ -587,7 +851,10 @@ export async function syncInstances(): Promise<{ total: number; success: number;
         return { ok: false, skippedHttp: true };
       }
 
-      const result = await postSyncPayload(instance.baseUrl, token, payload);
+      const result = await syncToSlave(
+        { id: `instance:${instance.id}`, name: instance.name, baseUrl: instance.baseUrl, token },
+        payload
+      );
       if (result.ok) {
         await recordInstanceSyncResult(instance.id, { ok: true });
         return { ok: true, skippedHttp: false };
@@ -606,7 +873,10 @@ export async function syncInstances(): Promise<{ total: number; success: number;
         return { ok: false, skippedHttp: true };
       }
 
-      const result = await postSyncPayload(instance.url, instance.token, payload);
+      const result = await syncToSlave(
+        { id: `env:${instance.name}`, name: instance.name, baseUrl: instance.url, token: instance.token },
+        payload
+      );
       if (result.ok) {
         console.log(`Sync to env-configured instance "${instance.name}" succeeded`);
         return { ok: true, skippedHttp: false };
@@ -647,7 +917,15 @@ export async function runPeriodicInstanceSync(): Promise<Awaited<ReturnType<type
   }
 }
 
-export async function applySyncPayload(payload: SyncPayload) {
+/**
+ * Store a sync payload as this slave's configuration. Secrets sealed to this
+ * instance's key are opened before anything is written; a payload that does
+ * not open throws SyncSealError and changes nothing.
+ */
+export async function applySyncPayload(received: SyncPayload) {
+  const payload = received.secrets_sealed_key_id === undefined && received.secrets_sealed_nonce === undefined
+    ? received
+    : openSealedSyncPayload(received);
   const syncedSettings: Array<[string, unknown]> = [
     ["general", payload.settings.general],
     ["acme", payload.settings.acme ?? null],

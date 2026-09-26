@@ -1,6 +1,10 @@
 export const GENERIC_INSTANCE_SYNC_ERROR = "Previous synchronization failed";
 export const SYNC_TIMED_OUT_ERROR = "Sync timed out";
 export const SYNC_NOT_ACKNOWLEDGED_ERROR = "Slave did not acknowledge the sync (unexpected response)";
+export const SYNC_INVALID_KEY_ERROR = "Slave returned an invalid sync key";
+export const SYNC_SEALED_KEY_MISMATCH_ERROR = "Sync payload was sealed for a different key; retry";
+export const SYNC_SEALED_STALE_ERROR = "Sync payload was sealed for an expired or already used key request; retry";
+export const SYNC_SEALED_OPEN_FAILED_ERROR = "Sealed secrets in the sync payload could not be opened";
 
 const SAFE_SYNC_ERRORS = new Set([
   "Stored token could not be decrypted",
@@ -9,6 +13,10 @@ const SAFE_SYNC_ERRORS = new Set([
   "Sync request failed",
   SYNC_TIMED_OUT_ERROR,
   SYNC_NOT_ACKNOWLEDGED_ERROR,
+  SYNC_INVALID_KEY_ERROR,
+  SYNC_SEALED_KEY_MISMATCH_ERROR,
+  SYNC_SEALED_STALE_ERROR,
+  SYNC_SEALED_OPEN_FAILED_ERROR,
   "Failed to apply synchronized configuration",
 ]);
 
@@ -18,7 +26,7 @@ const SAFE_SYNC_ERRORS = new Set([
  */
 export function sanitizeInstanceSyncError(error: string | null | undefined): string | null {
   if (!error) return null;
-  if (SAFE_SYNC_ERRORS.has(error) || /^Sync failed with HTTP [1-5][0-9]{2}$/.test(error)) {
+  if (SAFE_SYNC_ERRORS.has(error) || /^Sync (?:key request )?failed with HTTP [1-5][0-9]{2}$/.test(error)) {
     return error;
   }
   return GENERIC_INSTANCE_SYNC_ERROR;

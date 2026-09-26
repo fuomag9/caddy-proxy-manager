@@ -433,62 +433,83 @@ describe('syncInstances transport', () => {
     });
   }
 
+  type Reply = () => Response | Promise<Response>;
+
+  /** A slave from an older release has no GET handler for the sync route. */
+  const noKeyEndpoint: Reply = () => new Response(null, { status: 405 });
+
+  /**
+   * Stub fetch as a slave: `sync` answers the sync POST and `key` the key
+   * request that precedes it (sealing is covered in instance-sync-sealed.test.ts).
+   */
+  function stubSlave(sync: Reply, key: Reply = noKeyEndpoint) {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) =>
+      init?.method === 'POST' ? sync() : key()
+    );
+  }
+
+  const timeoutError = () => new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+
   it('does not follow redirects and records a redirect as a failure', async () => {
     await addSlave();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(null, { status: 307, headers: { location: 'http://elsewhere.example/' } })
-    );
+    const redirect = () => new Response(null, { status: 307, headers: { location: 'http://elsewhere.example/' } });
+    const fetchSpy = stubSlave(redirect);
 
     const result = await syncInstances();
 
     expect(result).toMatchObject({ success: 0, failed: 1 });
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const init = fetchSpy.mock.calls[0][1] as RequestInit;
-    expect(init.redirect).toBe('manual');
-    expect(init.signal).toBeInstanceOf(AbortSignal);
-    const [row] = await ctx.db.query.instances.findMany();
-    expect(row.lastSyncError).toContain('307');
+    expect(fetchSpy.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'POST']);
+    for (const [, init] of fetchSpy.mock.calls) {
+      expect(init?.redirect).toBe('manual');
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+    expect((await ctx.db.query.instances.findMany())[0].lastSyncError).toBe('Sync failed with HTTP 307');
+
+    // A redirected key request stops the sync before the payload is sent.
+    fetchSpy.mockClear();
+    fetchSpy.mockImplementation(async () => redirect());
+    expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+    expect(fetchSpy.mock.calls.map(([, init]) => init?.method)).toEqual(['GET']);
+    expect((await listInstances())[0].lastSyncError).toBe('Sync key request failed with HTTP 307');
     fetchSpy.mockRestore();
   });
 
   it('requires an { ok: true } reply, not just a 2xx status', async () => {
     await addSlave();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('<html>login</html>', { status: 200, headers: { 'content-type': 'text/html' } })
-    );
+    let reply: Reply = () => new Response('<html>login</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    const fetchSpy = stubSlave(() => reply());
     expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
     const [instance] = await listInstances();
     expect(instance.lastSyncError).toBe('Slave did not acknowledge the sync (unexpected response)');
 
-    fetchSpy.mockResolvedValue(Response.json({ ok: true }));
+    reply = () => Response.json({ ok: true });
     expect(await syncInstances()).toMatchObject({ success: 1, failed: 0 });
     expect((await listInstances())[0].lastSyncError).toBeNull();
     fetchSpy.mockRestore();
   });
 
-  it('records a timed-out request as "Sync timed out"', async () => {
+  it.each(['GET', 'POST'])('records a timed-out %s request as "Sync timed out"', async (method) => {
     await addSlave();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(
-      new DOMException('The operation was aborted due to timeout', 'TimeoutError')
-    );
+    let failure: Error = timeoutError();
+    const fail: Reply = () => { throw failure; };
+    const fetchSpy = method === 'GET' ? stubSlave(() => Response.json({ ok: true }), fail) : stubSlave(fail);
 
     expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
     expect((await listInstances())[0].lastSyncError).toBe('Sync timed out');
 
-    fetchSpy.mockRejectedValue(new TypeError('fetch failed'));
+    failure = new TypeError('fetch failed');
     await syncInstances();
     expect((await listInstances())[0].lastSyncError).toBe('Sync request failed');
     fetchSpy.mockRestore();
   });
 
-  it('records a timeout while reading the reply body as "Sync timed out"', async () => {
+  it.each(['GET', 'POST'])('records a timeout while reading the %s reply body as "Sync timed out"', async (method) => {
     await addSlave();
-    const body = new ReadableStream({
-      start(controller) {
-        controller.error(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
-      },
-    });
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
+    const failingBody: Reply = () => new Response(
+      new ReadableStream({ start(controller) { controller.error(timeoutError()); } }),
+      { status: 200 },
+    );
+    const fetchSpy = method === 'GET' ? stubSlave(() => Response.json({ ok: true }), failingBody) : stubSlave(failingBody);
 
     expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
     expect((await listInstances())[0].lastSyncError).toBe('Sync timed out');
@@ -499,11 +520,13 @@ describe('syncInstances transport', () => {
     await addSlave();
     process.env.INSTANCE_SYNC_TIMEOUT_MS = '120000';
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
+    const fetchSpy = stubSlave(() => Response.json({ ok: true }));
 
     await syncInstances();
 
-    expect(timeoutSpy).toHaveBeenCalledWith(120_000);
+    // The key request and the sync each get the full limit.
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(timeoutSpy.mock.calls).toEqual([[120_000], [120_000]]);
     fetchSpy.mockRestore();
     timeoutSpy.mockRestore();
   });
@@ -520,14 +543,15 @@ describe('syncInstances transport', () => {
       { name: ' spaced ', url: ' https://spaced-slave.example.com/ ', token },
     ]);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ ok: true }));
+    const fetchSpy = stubSlave(() => Response.json({ ok: true }));
 
     expect(getEnvSlaveInstances()).toEqual([
       { name: 'good', url: 'https://good-slave.example.com', token },
       { name: 'spaced', url: 'https://spaced-slave.example.com/', token },
     ]);
     expect(await syncInstances()).toMatchObject({ total: 2, success: 2 });
-    expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([
+    const posted = fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST').map(([url]) => String(url));
+    expect(posted).toEqual([
       'https://good-slave.example.com/api/instances/sync',
       'https://spaced-slave.example.com/api/instances/sync',
     ]);
@@ -544,22 +568,24 @@ describe('syncInstances transport', () => {
   it('skips a periodic tick while the previous periodic sync is still running', async () => {
     await addSlave();
     let reply!: (response: Response) => void;
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
-      () => new Promise<Response>((resolve) => { reply = resolve; })
-    );
+    let holdSync = true;
+    const fetchSpy = stubSlave(() => holdSync
+      ? new Promise<Response>((resolve) => { reply = resolve; })
+      : Response.json({ ok: true }));
 
     const first = runPeriodicInstanceSync();
-    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    // The key request, then the sync request that is still waiting.
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
 
     expect(await runPeriodicInstanceSync()).toBeNull();
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
 
     reply(Response.json({ ok: true }));
     expect(await first).toMatchObject({ total: 1, success: 1 });
 
-    fetchSpy.mockResolvedValue(Response.json({ ok: true }));
+    holdSync = false;
     expect(await runPeriodicInstanceSync()).toMatchObject({ total: 1, success: 1 });
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
     fetchSpy.mockRestore();
   });
 
@@ -568,7 +594,7 @@ describe('syncInstances transport', () => {
     process.env.INSTANCE_SLAVES = JSON.stringify([
       { name: 'env', url: 'https://env-slave.example.com', token: STRONG_TOKEN },
     ]);
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
+    const fetchSpy = stubSlave(() => Response.json({ ok: true }));
     const querySpy = vi.spyOn(ctx.db.query.instances, 'findMany').mockRejectedValueOnce(new Error('db down'));
 
     await expect(runPeriodicInstanceSync()).rejects.toThrow('db down');
