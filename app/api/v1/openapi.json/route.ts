@@ -1018,15 +1018,183 @@ const spec = {
       },
     },
     "/api/v1/instances/{id}": {
+      put: {
+        tags: ["Instances"],
+        summary: "Update an instance",
+        description:
+          "Changes the name, base URL, sync token or enabled flag; fields left out are kept. A new token keeps the sync key pin. " +
+          "A base URL that reaches another sync endpoint removes the pin of the old one, unless another instance or an INSTANCE_SLAVES entry uses it.",
+        operationId: "updateInstance",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/InstanceUpdate" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Instance updated",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Instance" },
+              },
+            },
+          },
+          "400": { $ref: "#/components/responses/BadRequest" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "403": { $ref: "#/components/responses/Forbidden" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
       delete: {
         tags: ["Instances"],
         summary: "Delete an instance",
+        description:
+          "Also removes the sync key pin of the instance's base URL, unless another instance or an INSTANCE_SLAVES entry uses the same URL. " +
+          "To change an instance's name or token, update it instead: that keeps its sync key pin. An instance added again, or moved to a new base URL, is pinned on first use.",
         operationId: "deleteInstance",
         parameters: [{ $ref: "#/components/parameters/IdPath" }],
         responses: {
           "200": { $ref: "#/components/responses/Ok" },
           "401": { $ref: "#/components/responses/Unauthorized" },
           "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+    },
+    "/api/v1/instances/{id}/sync-key-pin": {
+      put: {
+        tags: ["Instances"],
+        summary: "Pin an instance's sync key",
+        description:
+          "Pins the given sync public key for the instance's base URL, replacing any pin (source \"manual\"), so syncs are sealed to that key only. " +
+          "Read the key from the slave itself (its Settings page, or GET /api/v1/instances/sync-key there) over a channel you trust. " +
+          "Unlike a reset, this leaves no sync that trusts whatever key answers. Instances and INSTANCE_SLAVES entries with the same URL share the pin.",
+        operationId: "pinInstanceSyncKey",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/SyncKeyPinInput" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "The new pin",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SyncKeyPin" } } },
+          },
+          "400": { $ref: "#/components/responses/BadRequest" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "403": { $ref: "#/components/responses/Forbidden" },
+          "404": { $ref: "#/components/responses/NotFound" },
+        },
+      },
+      delete: {
+        tags: ["Instances"],
+        summary: "Reset an instance's sync key pin",
+        description:
+          "Removes the sync key pinned for the instance's base URL, so the next sync pins whatever key the slave presents, without a rotation proof. " +
+          "Until a key is pinned again, a slave that answers the key request with HTTP 405 (v1.12.0 or earlier) receives the legacy payload, with certificate private keys unsealed. " +
+          "Only reset after verifying that the slave was re-keyed on purpose (compare with GET /api/v1/instances/sync-key on the slave); pinning the slave's new key with PUT avoids both risks. " +
+          "Instances and INSTANCE_SLAVES entries with the same URL share the pin.",
+        operationId: "resetInstanceSyncKeyPin",
+        parameters: [{ $ref: "#/components/parameters/IdPath" }],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "403": { $ref: "#/components/responses/Forbidden" },
+          "404": { description: "Instance not found, or no sync key is pinned for it", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
+      },
+    },
+    "/api/v1/instances/sync-key-pins": {
+      get: {
+        tags: ["Instances"],
+        summary: "List sync key pins",
+        description:
+          "The slave sync keys this master has pinned, by normalized slave base URL, with the instances and INSTANCE_SLAVES entries that sync to each URL. " +
+          "INSTANCE_SLAVES entries with a syncKeyId are checked against it instead of the stored pin.",
+        operationId: "listSyncKeyPins",
+        responses: {
+          "200": {
+            description: "Sync key pins",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/SyncKeyPinListing" },
+                },
+              },
+            },
+          },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "403": { $ref: "#/components/responses/Forbidden" },
+        },
+      },
+      put: {
+        tags: ["Instances"],
+        summary: "Pin the sync key of a slave URL",
+        description:
+          "Like PUT /api/v1/instances/{id}/sync-key-pin, by slave base URL: for INSTANCE_SLAVES entries, and for slaves not added yet.",
+        operationId: "pinSyncKey",
+        parameters: [{ $ref: "#/components/parameters/SyncKeyPinUrl" }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/SyncKeyPinInput" },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "The new pin",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/SyncKeyPin" } } },
+          },
+          "400": { $ref: "#/components/responses/BadRequest" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "403": { $ref: "#/components/responses/Forbidden" },
+        },
+      },
+      delete: {
+        tags: ["Instances"],
+        summary: "Reset the sync key pin of a slave URL",
+        description:
+          "Like DELETE /api/v1/instances/{id}/sync-key-pin, by slave base URL: for INSTANCE_SLAVES entries, and pins no slave uses any more.",
+        operationId: "resetSyncKeyPin",
+        parameters: [{ $ref: "#/components/parameters/SyncKeyPinUrl" }],
+        responses: {
+          "200": { $ref: "#/components/responses/Ok" },
+          "400": { $ref: "#/components/responses/BadRequest" },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "403": { $ref: "#/components/responses/Forbidden" },
+          "404": { description: "No sync key is pinned for the URL", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+        },
+      },
+    },
+    "/api/v1/instances/sync-key": {
+      get: {
+        tags: ["Instances"],
+        summary: "Get this instance's sync key",
+        description:
+          "The sync public key this instance presents as a slave (derived from its SESSION_SECRET). Compare it with the key a master pinned for this slave, " +
+          "or pin it on the master (PUT /api/v1/instances/{id}/sync-key-pin there). Compare the full publicKey where it matters: the keyId is a 64-bit fingerprint.",
+        operationId: "getInstanceSyncKey",
+        responses: {
+          "200": {
+            description: "Sync public key",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/InstanceSyncKey" },
+              },
+            },
+          },
+          "401": { $ref: "#/components/responses/Unauthorized" },
+          "403": { $ref: "#/components/responses/Forbidden" },
         },
       },
     },
@@ -1549,6 +1717,16 @@ const spec = {
         required: true,
         schema: { type: "integer" },
         description: "Resource ID",
+      },
+      SyncKeyPinUrl: {
+        name: "url",
+        in: "query",
+        required: true,
+        schema: { type: "string" },
+        example: "https://replica.example.com",
+        description:
+          "The slave base URL, compared after normalization (lowercase scheme and host, no default port, dot segments or trailing slashes); " +
+          "the url GET /api/v1/instances/sync-key-pins lists works as is",
       },
     },
     responses: {
@@ -2313,10 +2491,119 @@ const spec = {
           hasToken: { type: "boolean" },
           lastSyncAt: { type: ["string", "null"], format: "date-time" },
           lastSyncError: { type: ["string", "null"] },
+          syncKeyPin: {
+            oneOf: [{ $ref: "#/components/schemas/SyncKeyPin" }, { type: "null" }],
+            description: "The sync key pinned for the instance's base URL; null until a sync pins one",
+          },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
         },
-        required: ["id", "name", "baseUrl", "enabled", "hasToken", "createdAt", "updatedAt"],
+        required: ["id", "name", "baseUrl", "enabled", "hasToken", "syncKeyPin", "createdAt", "updatedAt"],
+      },
+      SyncKeyPin: {
+        type: "object",
+        description: "A slave sync key pinned by this master (trust on first use, or set by an admin)",
+        properties: {
+          keyId: {
+            type: "string",
+            pattern: "^([0-9a-f]{16})?$",
+            example: "3f9a1c0b7d2e4a65",
+            description: "The first 16 hex characters of the SHA-256 of the public key; empty for an unreadable pin",
+          },
+          publicKey: {
+            type: "string",
+            description: "Raw 32-byte X25519 public key, base64; empty for an unreadable pin",
+          },
+          pinnedAt: { type: "string", description: "When the key was pinned (ISO 8601); empty or as stored for an unreadable pin" },
+          source: {
+            type: "string",
+            examples: ["first-use", "rotation", "manual", "unreadable"],
+            description:
+              "first-use: the first key the slave presented; rotation: a new key the slave proved with the previously pinned one; " +
+              "manual: set by an admin; unreadable: a stored pin this release cannot read (for example one written by a newer release), " +
+              "which matches no key, so syncs to the slave fail until the pin is replaced or reset. Other values, from other releases, are kept as stored.",
+          },
+        },
+        required: ["keyId", "publicKey", "pinnedAt", "source"],
+      },
+      SyncKeyPinInput: {
+        type: "object",
+        properties: {
+          publicKey: {
+            type: "string",
+            pattern: "^[A-Za-z0-9+/]{43}=$",
+            description: "The slave's sync public key (raw 32-byte X25519, base64), as the slave's Settings page and GET /api/v1/instances/sync-key show it",
+          },
+        },
+        required: ["publicKey"],
+      },
+      SyncKeyPinListing: {
+        allOf: [
+          { $ref: "#/components/schemas/SyncKeyPin" },
+          {
+            type: "object",
+            properties: {
+              url: { type: "string", example: "https://replica.example.com", description: "Normalized slave base URL the pin is kept under" },
+              slaves: {
+                type: "array",
+                description: "Instances and INSTANCE_SLAVES entries that sync to the URL",
+                items: {
+                  oneOf: [
+                    {
+                      type: "object",
+                      properties: {
+                        type: { type: "string", enum: ["instance"] },
+                        id: { type: "integer" },
+                        name: { type: "string" },
+                      },
+                      required: ["type", "id", "name"],
+                    },
+                    {
+                      type: "object",
+                      properties: {
+                        type: { type: "string", enum: ["env"] },
+                        name: { type: "string" },
+                        syncKeyId: {
+                          type: ["string", "null"],
+                          description: "The entry's syncKeyId (derived from syncPublicKey when only that is set); when set, sync checks it instead of the stored pin",
+                        },
+                        syncPublicKey: {
+                          type: ["string", "null"],
+                          description: "The entry's syncPublicKey; when set, sync compares the full key instead of the stored pin",
+                        },
+                      },
+                      required: ["type", "name", "syncKeyId", "syncPublicKey"],
+                    },
+                  ],
+                },
+              },
+            },
+            required: ["url", "slaves"],
+          },
+        ],
+      },
+      InstanceSyncKey: {
+        type: "object",
+        properties: {
+          keyId: { type: "string", pattern: "^[0-9a-f]{16}$", example: "3f9a1c0b7d2e4a65" },
+          publicKey: { type: "string", description: "Raw 32-byte X25519 public key, base64" },
+        },
+        required: ["keyId", "publicKey"],
+      },
+      InstanceUpdate: {
+        type: "object",
+        description: "Fields to change; the others are kept",
+        properties: {
+          name: { type: "string", minLength: 1, example: "Slave 1" },
+          baseUrl: { type: "string", example: "https://slave.example.com:3000" },
+          apiToken: {
+            type: "string",
+            minLength: 32,
+            maxLength: 512,
+            description: "New sync token for the slave instance",
+          },
+          enabled: { type: "boolean" },
+        },
       },
       InstanceInput: {
         type: "object",

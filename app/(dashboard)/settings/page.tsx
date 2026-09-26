@@ -2,7 +2,8 @@ import SettingsClient from "./SettingsClient";
 import { getGeneralSettings, getAcmeSettings, getAuthentikSettings, getForwardAuthSettings, getMetricsSettings, getLoggingSettings, getDnsSettings, getDnsProviderSettings, getSetting, getUpstreamDnsResolutionSettings, getGeoBlockSettings, getErrorPagesSettings, getTrustedProxiesSettings, getDefaultResponseSettings } from "@/src/lib/settings";
 import { getInstanceMode, getSlaveLastSync, getSlaveMasterToken, isInstanceModeFromEnv, isSyncTokenFromEnv, getEnvSlaveInstances } from "@/src/lib/instance-sync";
 import { toEnvSlaveInstanceView } from "@/src/lib/instance-sync-view";
-import { listInstances } from "@/src/lib/models/instances";
+import { listInstances, listSyncKeyPinsWithSlaves, withSyncKeyPins } from "@/src/lib/models/instances";
+import { getSyncPublicKey } from "@/src/lib/sync-crypto";
 import { listOAuthProviders } from "@/src/lib/models/oauth-providers";
 import { DNS_PROVIDERS } from "@/src/lib/dns-providers";
 import { config } from "@/src/lib/config";
@@ -57,8 +58,17 @@ export default async function SettingsPage() {
 
   const instances = instanceMode === "master" ? await listInstances() : [];
   const envInstances = instanceMode === "master"
-    ? getEnvSlaveInstances().map(toEnvSlaveInstanceView)
+    ? await withSyncKeyPins(getEnvSlaveInstances().map(toEnvSlaveInstanceView))
     : [];
+  // Pins of URLs no slave syncs to any more (for example an INSTANCE_SLAVES
+  // entry that was removed); a slave added at such a URL inherits the pin.
+  const orphanSyncKeyPins = instanceMode === "master"
+    ? (await listSyncKeyPinsWithSlaves())
+      .filter((pin) => pin.slaves.length === 0)
+      .map(({ url, keyId, publicKey, pinnedAt, source }) => ({ url, keyId, publicKey, pinnedAt, source }))
+    : [];
+  // Set exactly in slave mode.
+  const ownSyncKey = instanceMode === "slave" ? getSyncPublicKey() : null;
 
   return (
     <SettingsClient
@@ -95,12 +105,14 @@ export default async function SettingsPage() {
           trustedProxies: overrideTrustedProxies !== null,
           defaultResponse: overrideDefaultResponse !== null
         },
-        slave: instanceMode === "slave" ? {
+        slave: ownSyncKey ? {
           hasToken: Boolean(slaveToken),
           lastSyncAt: slaveLastSync?.at ?? null,
-          lastSyncError: slaveLastSync?.error ?? null
+          lastSyncError: slaveLastSync?.error ?? null,
+          syncKeyId: ownSyncKey.keyId,
+          syncPublicKey: ownSyncKey.publicKey.toString("base64")
         } : null,
-        master: instanceMode === "master" ? { instances, envInstances } : null
+        master: instanceMode === "master" ? { instances, envInstances, orphanSyncKeyPins } : null
       }}
     />
   );
