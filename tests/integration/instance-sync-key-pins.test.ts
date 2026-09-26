@@ -204,7 +204,8 @@ describe('sync key pin store', () => {
     // Writes for other slaves keep them as stored; deleting one removes it.
     await setSyncKeyPin('https://another.example.com', { publicKey: KEY_B, source: 'first-use' });
     expect(await deleteSyncKeyPin('https://not-an-object.example.com')).toBe(true);
-    const { 'https://not-an-object.example.com': _deleted, ...kept } = malformed;
+    const kept: Record<string, unknown> = { ...malformed };
+    delete kept['https://not-an-object.example.com'];
     expect(JSON.parse((await storedRow())!.value)).toMatchObject(JSON.parse(JSON.stringify(kept)));
     expect(JSON.parse((await storedRow())!.value)).not.toHaveProperty(['https://not-an-object.example.com']);
 
