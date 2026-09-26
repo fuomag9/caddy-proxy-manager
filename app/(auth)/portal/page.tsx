@@ -1,17 +1,24 @@
 import { auth } from "@/src/lib/auth";
 import { getProviderDisplayList } from "@/src/lib/models/oauth-providers";
-import { isForwardAuthDomain, createRedirectIntent } from "@/src/lib/models/forward-auth";
+import {
+  isForwardAuthDomain,
+  createRedirectIntent,
+  getDisallowedForwardAuthPort,
+} from "@/src/lib/models/forward-auth";
 import PortalLoginForm from "./PortalLoginForm";
 
 interface PortalPageProps {
-  searchParams: Promise<{ rd?: string; rid?: string }>;
+  searchParams: Promise<{ rd?: string | string[]; rid?: string | string[] }>;
 }
 
 export default async function PortalPage({ searchParams }: PortalPageProps) {
   const params = await searchParams;
-  const redirectUri = params.rd ?? "";
+  // A repeated parameter arrives as an array.  CPM never produces one, so it
+  // is rejected rather than resolved by picking one of the values.
+  const repeatedParam = Array.isArray(params.rd) || Array.isArray(params.rid);
+  const redirectUri = typeof params.rd === "string" ? params.rd : "";
   // After OAuth callback, the portal is loaded with ?rid= (the opaque ID we created earlier)
-  const existingRid = params.rid ?? "";
+  const existingRid = typeof params.rid === "string" ? params.rid : "";
 
   // Two entry modes:
   // 1. Fresh from Caddy redirect: ?rd=<full-url> → validate, store server-side, create rid
@@ -20,8 +27,11 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
   // ignored, so a rid smuggled through the protected URL's own query string
   // cannot replace the target the browser was actually sent from.
   let targetDomain = "";
-  let rid = redirectUri ? "" : existingRid;
-  if (!rid && redirectUri) {
+  let errorMessage: string | null = null;
+  let rid = redirectUri || repeatedParam ? "" : existingRid;
+  if (repeatedParam) {
+    errorMessage = "This sign-in link is invalid. Open the site you were trying to reach again.";
+  } else if (!rid && redirectUri) {
     try {
       const parsed = new URL(redirectUri);
       if (
@@ -29,9 +39,16 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
         await isForwardAuthDomain(parsed.hostname)
       ) {
         targetDomain = parsed.hostname;
-        // Store the redirect URI server-side. The client only gets an opaque ID,
-        // so a tampered ?rd= parameter cannot influence the final redirect target.
-        rid = await createRedirectIntent(redirectUri);
+        const disallowedPort = await getDisallowedForwardAuthPort(redirectUri);
+        if (disallowedPort) {
+          errorMessage =
+            `This site is served on port ${disallowedPort}, which is not allowed for forward ` +
+            "authentication. Ask the administrator to add it to FORWARD_AUTH_ALLOWED_PORTS.";
+        } else {
+          // Store the redirect URI server-side. The client only gets an opaque ID,
+          // so a tampered ?rd= parameter cannot influence the final redirect target.
+          rid = await createRedirectIntent(redirectUri);
+        }
       }
     } catch {
       // invalid URL — portal will show a generic message
@@ -44,8 +61,9 @@ export default async function PortalPage({ searchParams }: PortalPageProps) {
   return (
     <PortalLoginForm
       rid={rid}
-      hasRedirect={!!redirectUri || !!existingRid}
+      hasRedirect={!!redirectUri || !!existingRid || repeatedParam}
       targetDomain={targetDomain}
+      errorMessage={errorMessage}
       enabledProviders={enabledProviders}
       existingSession={session ? { userId: session.user.id, name: session.user.name ?? null, email: session.user.email ?? null } : null}
     />

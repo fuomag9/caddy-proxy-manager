@@ -64,10 +64,11 @@ import { type GeoBlockMode, type WafHostConfig, type MtlsConfig, type RedirectRu
 import { buildClientAuthentication, groupMtlsDomainsByCaSet, buildMtlsRbacSubroutes, buildFingerprintCelExpression, buildValidClientCertCelExpression, resolveAllowedFingerprints, type MtlsAccessRuleLike } from "./caddy-mtls";
 import { buildRoleFingerprintMap, buildCertFingerprintMap, buildRoleCertIdMap } from "./models/mtls-roles";
 import { getAccessRulesForHosts } from "./models/mtls-access-rules";
-import { buildWafHandlerEntry, resolveEffectiveWaf } from "./caddy-waf";
+import { buildWafHandlerEntry, resolveEffectiveWaf, wafDirectiveSource } from "./caddy-waf";
 import {
   FORWARD_AUTH_PROXY_PROOF_HEADER,
   FORWARD_AUTH_PROXY_HOST_ID_HEADER,
+  FORWARD_AUTH_PORTAL_TARGET_HEADER,
   getForwardAuthProxyProof,
 } from "./forward-auth-trust";
 import { decryptSecret } from "./secret";
@@ -194,6 +195,72 @@ const DEFAULT_AUTHELIA_FORWARD_AUTH_HEADERS = [
 /** RFC 7230 token — copy/bypass header names are interpolated into Caddy
  * placeholders and matcher keys, so free-form text must never reach them. */
 const FA_HEADER_NAME_RE = /^[!#$%&'*+\-.^_`|~0-9A-Za-z-]+$/;
+
+/**
+ * Placeholder for a header of the forward-auth subrequest's response.  Caddy
+ * registers these under Go's canonical header name ("X-Cpm-User") and the
+ * lookup is case-sensitive, so any other spelling would never resolve.
+ */
+function authResponseHeaderPlaceholder(headerName: string): string {
+  const canonical = headerName
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join("-");
+  return `{http.reverse_proxy.header.${canonical}}`;
+}
+
+/**
+ * Standard request-credential headers.  They carry the client's own
+ * credentials, not an identity assertion, and excluded paths, access-list
+ * basic auth and the auth server itself may need them, so the identity-header
+ * strip leaves them alone.  On protected routes the copy step still overwrites
+ * them whenever the auth server returns them.
+ */
+const CLIENT_CREDENTIAL_HEADERS = new Set(["authorization", "proxy-authorization", "cookie"]);
+
+/** Beyond this many separators only the uniform spellings are enumerated. */
+const MAX_ENUMERATED_HEADER_SEPARATORS = 6;
+
+/**
+ * Every spelling of `name` that mixes "-" and "_" at its separators, starting
+ * with `name` itself (X-CPM-User, X_CPM-User, X-CPM_User, X_CPM_User).
+ */
+function headerSeparatorSpellings(name: string): string[] {
+  const parts = name.split(/[-_]/);
+  const separators = parts.length - 1;
+  if (separators > MAX_ENUMERATED_HEADER_SEPARATORS) {
+    return [name, parts.join("-"), parts.join("_")];
+  }
+  const spellings = [name];
+  for (let mask = 0; mask < 1 << separators; mask++) {
+    let spelling = parts[0];
+    for (let i = 1; i < parts.length; i++) {
+      spelling += (mask & (1 << (i - 1)) ? "_" : "-") + parts[i];
+    }
+    spellings.push(spelling);
+  }
+  return spellings;
+}
+
+/**
+ * A `headers` handler deleting client-supplied copies of the identity headers
+ * that the auth server vouches for.  Caddy deletes by Go's canonical header
+ * name, which covers letter case but treats "-" and "_" as different
+ * characters, while CGI/WSGI-style upstreams fold both into one variable
+ * (HTTP_X_CPM_USER).  So each name is deleted in every mix of the two
+ * separators.
+ */
+function buildIdentityHeaderStripHandler(headerNames: readonly string[]): Record<string, unknown> | null {
+  const names = new Map<string, string>();
+  for (const name of headerNames) {
+    if (CLIENT_CREDENTIAL_HEADERS.has(name.toLowerCase().replace(/_/g, "-"))) continue;
+    for (const spelling of headerSeparatorSpellings(name)) {
+      const key = spelling.toLowerCase();
+      if (!names.has(key)) names.set(key, spelling);
+    }
+  }
+  return names.size > 0 ? { handler: "headers", request: { delete: [...names.values()] } } : null;
+}
 
 type MtlsMeta = {
   enabled?: boolean;
@@ -931,7 +998,13 @@ async function buildProxyRoutes(
       meta.waf
     );
     if (effectiveWaf?.enabled && effectiveWaf.mode !== 'Off') {
-      handlers.unshift(buildWafHandlerEntry(effectiveWaf, Boolean(row.allowWebsocket)));
+      handlers.unshift(
+        buildWafHandlerEntry(
+          effectiveWaf,
+          Boolean(row.allowWebsocket),
+          wafDirectiveSource(options.globalWaf ?? null, meta.waf, `proxy host "${row.name}" (${domains.join(", ")})`)
+        )
+      );
     }
 
     if (row.hstsEnabled) {
@@ -1228,13 +1301,14 @@ async function buildProxyRoutes(
 
       // Add header copying for each configured header
       for (const headerName of authentik.copyHeaders) {
+        const placeholder = authResponseHeaderPlaceholder(headerName);
         handleResponseRoutes.push({
           handle: [
             {
               handler: "headers",
               request: {
                 set: {
-                  [headerName]: [`{http.reverse_proxy.header.${headerName}}`]
+                  [headerName]: [placeholder]
                 }
               }
             } as Record<string, unknown>
@@ -1244,7 +1318,7 @@ async function buildProxyRoutes(
               not: [
                 {
                   vars: {
-                    [`{http.reverse_proxy.header.${headerName}}`]: [""]
+                    [placeholder]: [""]
                   }
                 }
               ]
@@ -1302,10 +1376,7 @@ async function buildProxyRoutes(
       // every route that reaches the upstream. The copy step above only sets a
       // header when the outpost response carries a non-empty value, and
       // unprotected routes never consult the outpost at all.
-      const authentikStripHandler: Record<string, unknown> | null =
-        authentik.copyHeaders.length > 0
-          ? { handler: "headers", request: { delete: [...authentik.copyHeaders] } }
-          : null;
+      const authentikStripHandler = buildIdentityHeaderStripHandler(authentik.copyHeaders);
       const akHandlers: Record<string, unknown>[] = authentikStripHandler
         ? [authentikStripHandler, ...handlers]
         : handlers;
@@ -1481,10 +1552,7 @@ async function buildProxyRoutes(
       // routes the copy step only overwrites a header when the verify
       // response value is non-empty. Same class of fix as the X-CPM-*
       // stripping below (SECURITY-AUDIT H1).
-      const faStripHandler: Record<string, unknown> | null =
-        forwardAuth.copyHeaders.length > 0
-          ? { handler: "headers", request: { delete: [...forwardAuth.copyHeaders] } }
-          : null;
+      const faStripHandler = buildIdentityHeaderStripHandler(forwardAuth.copyHeaders);
       const faHandlers = faStripHandler ? [faStripHandler, ...handlers] : handlers;
 
       const browserMatcher: Record<string, unknown> = {
@@ -1640,12 +1708,7 @@ async function buildProxyRoutes(
         // when the verify response value is non-empty (e.g. a user in no group
         // returns an empty X-CPM-Groups, which would otherwise leave the
         // client's forged value intact).
-        const cpmStripHeadersHandler: Record<string, unknown> = {
-          handler: "headers",
-          request: {
-            delete: [...CPM_COPY_HEADERS]
-          }
-        };
+        const cpmStripHeadersHandler = buildIdentityHeaderStripHandler(CPM_COPY_HEADERS)!;
         // Prepend the strip handler to the shared handler chain for all CPM
         // forward-auth routes.
         const cpmHandlers = [cpmStripHeadersHandler, ...handlers];
@@ -1655,22 +1718,47 @@ async function buildProxyRoutes(
           { handle: [{ handler: "vars" }] }
         ];
         for (const headerName of CPM_COPY_HEADERS) {
+          const placeholder = authResponseHeaderPlaceholder(headerName);
           cpmHandleResponseRoutes.push({
             handle: [
               {
                 handler: "headers",
                 request: {
-                  set: { [headerName]: [`{http.reverse_proxy.header.${headerName}}`] }
+                  set: { [headerName]: [placeholder] }
                 }
               } as Record<string, unknown>
             ],
             match: [
               {
-                not: [{ vars: { [`{http.reverse_proxy.header.${headerName}}`]: [""] } }]
+                not: [{ vars: { [placeholder]: [""] } }]
               }
             ]
           });
         }
+
+        // Redirect to the portal on 401/403.  The verify endpoint supplies the
+        // protected URL already encoded for the portal's query string, so "&",
+        // "#", "+" and "%" in it survive.  Should the header be missing, the
+        // second route escapes the whole request URI itself.
+        const portalTargetPlaceholder = authResponseHeaderPlaceholder(FORWARD_AUTH_PORTAL_TARGET_HEADER);
+        const portalRedirect = (location: string): Record<string, unknown> => ({
+          handler: "static_response",
+          status_code: 302,
+          headers: { Location: [location] }
+        });
+        const cpmPortalRedirectRoutes: Record<string, unknown>[] = [
+          {
+            match: [{ not: [{ vars: { [portalTargetPlaceholder]: [""] } }] }],
+            handle: [portalRedirect(`${config.baseUrl}/portal?rd=${portalTargetPlaceholder}`)]
+          },
+          {
+            handle: [
+              portalRedirect(
+                `${config.baseUrl}/portal?rd={http.request.scheme}://{http.request.hostport}{http.request.uri_escaped}`
+              )
+            ]
+          }
+        ];
 
         // Forward auth handler — subrequest to CPM verify endpoint
         const cpmForwardAuthHandler: Record<string, unknown> = {
@@ -1699,21 +1787,7 @@ async function buildProxyRoutes(
             },
             {
               match: { status_code: [401, 403] },
-              routes: [
-                {
-                  handle: [
-                    {
-                      handler: "static_response",
-                      status_code: 302,
-                      headers: {
-                        Location: [
-                          `${config.baseUrl}/portal?rd={http.request.scheme}://{http.request.hostport}{http.request.uri}`
-                        ]
-                      }
-                    }
-                  ]
-                }
-              ]
+              routes: cpmPortalRedirectRoutes
             }
           ],
           trusted_proxies: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fd00::/8", "::1/128"]
@@ -3259,13 +3333,14 @@ function buildGenericForwardAuthHandler(cfg: ForwardAuthRouteConfig, api401: boo
     { handle: [{ handler: "vars" }] }
   ];
   for (const headerName of cfg.copyHeaders) {
+    const placeholder = authResponseHeaderPlaceholder(headerName);
     handleResponseRoutes.push({
       handle: [
         {
           handler: "headers",
           request: {
             set: {
-              [headerName]: [`{http.reverse_proxy.header.${headerName}}`]
+              [headerName]: [placeholder]
             }
           }
         }
@@ -3275,7 +3350,7 @@ function buildGenericForwardAuthHandler(cfg: ForwardAuthRouteConfig, api401: boo
           not: [
             {
               vars: {
-                [`{http.reverse_proxy.header.${headerName}}`]: [""]
+                [placeholder]: [""]
               }
             }
           ]
