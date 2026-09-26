@@ -43,11 +43,21 @@ vi.mock('../../src/lib/db', async () => {
 });
 
 // These imports must come AFTER vi.mock to pick up the mocked module.
-import { buildSyncPayload, applySyncPayload, getSlaveLastSync, syncInstances, type SyncPayload } from '../../src/lib/instance-sync';
+import {
+  buildSyncPayload,
+  applySyncPayload,
+  getEnvSlaveInstances,
+  getSlaveLastSync,
+  getSyncRequestTimeoutMs,
+  runPeriodicInstanceSync,
+  syncInstances,
+  type SyncPayload,
+} from '../../src/lib/instance-sync';
 import * as schema from '../../src/lib/db/schema';
 import { decryptSecret, encryptSecret, isEncryptedSecret } from '../../src/lib/secret';
-import { listInstances } from '../../src/lib/models/instances';
+import { createInstance, listInstances, updateInstance } from '../../src/lib/models/instances';
 import { setSetting } from '../../src/lib/settings';
+import { ApiValidationError } from '../../src/lib/api-errors';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -126,6 +136,7 @@ beforeEach(async () => {
   delete process.env.INSTANCE_MODE;
   delete process.env.INSTANCE_SLAVES;
   delete process.env.INSTANCE_SYNC_ALLOW_HTTP;
+  delete process.env.INSTANCE_SYNC_TIMEOUT_MS;
   await clearTables();
   cleanTmpDir();
 });
@@ -446,10 +457,147 @@ describe('syncInstances transport', () => {
       new Response('<html>login</html>', { status: 200, headers: { 'content-type': 'text/html' } })
     );
     expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+    const [instance] = await listInstances();
+    expect(instance.lastSyncError).toBe('Slave did not acknowledge the sync (unexpected response)');
 
     fetchSpy.mockResolvedValue(Response.json({ ok: true }));
     expect(await syncInstances()).toMatchObject({ success: 1, failed: 0 });
+    expect((await listInstances())[0].lastSyncError).toBeNull();
     fetchSpy.mockRestore();
+  });
+
+  it('records a timed-out request as "Sync timed out"', async () => {
+    await addSlave();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new DOMException('The operation was aborted due to timeout', 'TimeoutError')
+    );
+
+    expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+    expect((await listInstances())[0].lastSyncError).toBe('Sync timed out');
+
+    fetchSpy.mockRejectedValue(new TypeError('fetch failed'));
+    await syncInstances();
+    expect((await listInstances())[0].lastSyncError).toBe('Sync request failed');
+    fetchSpy.mockRestore();
+  });
+
+  it('records a timeout while reading the reply body as "Sync timed out"', async () => {
+    await addSlave();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.error(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
+
+    expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+    expect((await listInstances())[0].lastSyncError).toBe('Sync timed out');
+    fetchSpy.mockRestore();
+  });
+
+  it('bounds each request with INSTANCE_SYNC_TIMEOUT_MS', async () => {
+    await addSlave();
+    process.env.INSTANCE_SYNC_TIMEOUT_MS = '120000';
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
+
+    await syncInstances();
+
+    expect(timeoutSpy).toHaveBeenCalledWith(120_000);
+    fetchSpy.mockRestore();
+    timeoutSpy.mockRestore();
+  });
+
+  it('skips INSTANCE_SLAVES entries with an invalid base URL without logging the token or URL', async () => {
+    process.env.INSTANCE_MODE = 'master';
+    const token = 'env-slave-token-secret-sentinel-0123456789';
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'query', url: 'https://query-slave.example.com/?x=1', token },
+      { name: 'bare-query', url: 'https://bare-slave.example.com/?', token },
+      { name: 'creds', url: 'https://user:pass@creds-slave.example.com', token },
+      { name: 'ftp', url: 'ftp://ftp-slave.example.com', token },
+      { name: 'good', url: 'https://good-slave.example.com', token },
+      { name: ' spaced ', url: ' https://spaced-slave.example.com/ ', token },
+    ]);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ ok: true }));
+
+    expect(getEnvSlaveInstances()).toEqual([
+      { name: 'good', url: 'https://good-slave.example.com', token },
+      { name: 'spaced', url: 'https://spaced-slave.example.com/', token },
+    ]);
+    expect(await syncInstances()).toMatchObject({ total: 2, success: 2 });
+    expect(fetchSpy.mock.calls.map(([url]) => String(url))).toEqual([
+      'https://good-slave.example.com/api/instances/sync',
+      'https://spaced-slave.example.com/api/instances/sync',
+    ]);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('INSTANCE_SLAVES entry 0'));
+    const logged = JSON.stringify(warnSpy.mock.calls);
+    expect(logged).not.toContain(token);
+    expect(logged).not.toContain('slave.example.com');
+    expect(logged).not.toContain('pass');
+    warnSpy.mockRestore();
+    fetchSpy.mockRestore();
+  });
+
+  it('skips a periodic tick while the previous periodic sync is still running', async () => {
+    await addSlave();
+    let reply!: (response: Response) => void;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () => new Promise<Response>((resolve) => { reply = resolve; })
+    );
+
+    const first = runPeriodicInstanceSync();
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+
+    expect(await runPeriodicInstanceSync()).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    reply(Response.json({ ok: true }));
+    expect(await first).toMatchObject({ total: 1, success: 1 });
+
+    fetchSpy.mockResolvedValue(Response.json({ ok: true }));
+    expect(await runPeriodicInstanceSync()).toMatchObject({ total: 1, success: 1 });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    fetchSpy.mockRestore();
+  });
+
+  it('releases the periodic guard when a sync throws', async () => {
+    process.env.INSTANCE_MODE = 'master';
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'env', url: 'https://env-slave.example.com', token: STRONG_TOKEN },
+    ]);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
+    const querySpy = vi.spyOn(ctx.db.query.instances, 'findMany').mockRejectedValueOnce(new Error('db down'));
+
+    await expect(runPeriodicInstanceSync()).rejects.toThrow('db down');
+    querySpy.mockRestore();
+
+    expect(await runPeriodicInstanceSync()).toMatchObject({ total: 1, success: 1 });
+    fetchSpy.mockRestore();
+  });
+});
+
+describe('getSyncRequestTimeoutMs', () => {
+  it.each([
+    [undefined, 60_000],
+    ['', 60_000],
+    ['abc', 60_000],
+    ['-5', 60_000],
+    ['1.5', 60_000],
+    ['0', 60_000],
+    ['000', 60_000],
+    ['1000', 5_000],
+    ['90000', 90_000],
+    [' 90000 ', 90_000],
+    ['300000', 300_000],
+    ['420000', 300_000],
+    ['99999999', 300_000],
+  ])('INSTANCE_SYNC_TIMEOUT_MS=%j -> %i', (value, expected) => {
+    if (value === undefined) delete process.env.INSTANCE_SYNC_TIMEOUT_MS;
+    else process.env.INSTANCE_SYNC_TIMEOUT_MS = value;
+    expect(getSyncRequestTimeoutMs()).toBe(expected);
   });
 });
 
@@ -461,12 +609,35 @@ describe('instance base URL validation', () => {
     ['ftp://slave.example.com', /https/],
     ['https://user:pass@slave.example.com', /credentials/],
     ['https://slave.example.com/?x=1', /query/],
+    ['https://slave.example.com/?', /query/],
+    ['https://slave.example.com#', /query/],
+    ['https://slave.example.com/cpm#top', /query/],
     ['not a url', /valid URL/],
   ])('%s', async (url, expected) => {
     const { instanceBaseUrlValidationError } = await import('../../src/lib/models/instances');
     const error = instanceBaseUrlValidationError(url);
     if (expected === null) expect(error).toBeNull();
     else expect(error).toMatch(expected);
+  });
+
+  const TOKEN = 'a'.repeat(48);
+
+  it.each(['ftp://slave.example.com', 'https://slave.example.com/?', 'https://user:pass@slave.example.com'])(
+    'createInstance rejects %s',
+    async (baseUrl) => {
+      await expect(createInstance({ name: 'Bad', baseUrl, apiToken: TOKEN })).rejects.toBeInstanceOf(ApiValidationError);
+      expect(await ctx.db.query.instances.findMany()).toHaveLength(0);
+    },
+  );
+
+  it('updateInstance rejects an invalid base URL and keeps the stored one', async () => {
+    const instance = await createInstance({ name: 'Good', baseUrl: 'https://slave.example.com', apiToken: TOKEN });
+
+    await expect(updateInstance(instance.id, { baseUrl: 'https://slave.example.com#' }))
+      .rejects.toBeInstanceOf(ApiValidationError);
+
+    const [row] = await ctx.db.query.instances.findMany();
+    expect(row.baseUrl).toBe('https://slave.example.com');
   });
 });
 

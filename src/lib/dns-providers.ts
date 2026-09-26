@@ -494,7 +494,8 @@ export function redactLegacyCloudflareSettingsForApi(settings: {
 
 /**
  * Encrypt password-type credential fields for storage.
- * Non-password fields and already-encrypted values are left unchanged.
+ * Non-password fields, non-string values and already-encrypted values are
+ * left unchanged.
  */
 export function encryptProviderCredentials(
   providerName: string,
@@ -505,27 +506,65 @@ export function encryptProviderCredentials(
 
   const result = { ...credentials };
   for (const field of def.fields) {
-    if (field.type === "password" && result[field.key] && !isEncryptedSecret(result[field.key])) {
-      result[field.key] = encryptSecret(result[field.key]);
+    const value: unknown = result[field.key];
+    if (field.type === "password" && typeof value === "string" && value && !isEncryptedSecret(value)) {
+      result[field.key] = encryptSecret(value);
     }
   }
   return result;
 }
 
 /**
- * Decrypt password-type credential fields for use in Caddy config.
+ * Encrypt the password fields of a whole dns_provider setting value, in the
+ * multi-provider format ({ providers, default }) and in the single-provider
+ * format of older releases ({ provider, credentials }). Anything else is
+ * returned unchanged.
+ */
+export function encryptDnsProviderSettingCredentials(value: unknown): unknown {
+  if (!isJsonObject(value)) return value;
+  // Credential maps are typed as string maps; encryptProviderCredentials
+  // leaves non-string values alone.
+  if (isJsonObject(value.providers)) {
+    return {
+      ...value,
+      providers: Object.fromEntries(
+        Object.entries(value.providers).map(([provider, credentials]) => [
+          provider,
+          isJsonObject(credentials)
+            ? encryptProviderCredentials(provider, credentials as Record<string, string>)
+            : credentials,
+        ])
+      ),
+    };
+  }
+  if (typeof value.provider === "string" && isJsonObject(value.credentials)) {
+    return {
+      ...value,
+      credentials: encryptProviderCredentials(value.provider, value.credentials as Record<string, string>),
+    };
+  }
+  return value;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Decrypt credentials for use in Caddy config. Every encrypted value is
+ * decrypted, not only the fields this release's registry marks as password:
+ * a master on another release may have encrypted a field this registry does
+ * not know (a renamed field or a newer provider), and a slave stores synced
+ * values encrypted exactly where the master had them encrypted.
  */
 export function decryptProviderCredentials(
   providerName: string,
   credentials: Record<string, string>
 ): Record<string, string> {
-  const def = getProviderDefinition(providerName);
-  if (!def) return credentials;
-
   const result = { ...credentials };
-  for (const field of def.fields) {
-    if (field.type === "password" && result[field.key] && isEncryptedSecret(result[field.key])) {
-      result[field.key] = decryptSecret(result[field.key], `DNS provider "${providerName}" credential "${field.key}"`);
+  for (const [key, value] of Object.entries(result)) {
+    if (typeof value === "string" && isEncryptedSecret(value)) {
+      result[key] = decryptSecret(value, `DNS provider "${providerName}" credential "${key}"`);
     }
   }
   return result;

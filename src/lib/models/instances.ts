@@ -55,9 +55,10 @@ export async function listInstances(): Promise<Instance[]> {
  */
 export function instanceBaseUrlValidationError(baseUrl: unknown): string | null {
   if (typeof baseUrl !== "string" || !baseUrl.trim()) return "Base URL is required";
+  const trimmed = baseUrl.trim();
   let parsed: URL;
   try {
-    parsed = new URL(baseUrl.trim());
+    parsed = new URL(trimmed);
   } catch {
     return "Base URL must be a valid URL";
   }
@@ -65,7 +66,10 @@ export function instanceBaseUrlValidationError(baseUrl: unknown): string | null 
     return "Base URL must use https (or http with INSTANCE_SYNC_ALLOW_HTTP=true)";
   }
   if (parsed.username || parsed.password) return "Base URL must not contain credentials";
-  if (parsed.search || parsed.hash) return "Base URL must not contain a query string or fragment";
+  // Checked on the raw string: the URL parser reports a bare trailing "?" or
+  // "#" as an empty search/hash, but the sync path would still be appended
+  // after it.
+  if (/[?#]/.test(trimmed)) return "Base URL must not contain a query string or fragment";
   return null;
 }
 

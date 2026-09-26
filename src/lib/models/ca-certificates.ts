@@ -6,6 +6,21 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { ApiConflictError } from "../api-errors";
 import { decryptSecret, encryptSecret, isEncryptedSecret } from "../secret";
 
+export const CA_PRIVATE_KEY_UNAVAILABLE_MESSAGE =
+  "The CA private key cannot be decrypted with the current SESSION_SECRET. " +
+  "Restore the previous secret via SESSION_SECRET_PREVIOUS or create a new CA.";
+
+/**
+ * The stored CA signing key exists but cannot be decrypted, typically because
+ * SESSION_SECRET changed. The message is safe to show to admins and API clients.
+ */
+export class CaPrivateKeyUnavailableError extends ApiConflictError {
+  constructor() {
+    super(CA_PRIVATE_KEY_UNAVAILABLE_MESSAGE);
+    this.name = "CaPrivateKeyUnavailableError";
+  }
+}
+
 function encryptCaPrivateKey(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed ? encryptSecret(trimmed) : null;
@@ -53,11 +68,21 @@ export async function listCaCertificates(): Promise<CaCertificate[]> {
   return rows.map(parseCaCertificate);
 }
 
+/**
+ * Returns the decrypted CA signing key, or null when none is stored. Throws
+ * CaPrivateKeyUnavailableError when a key is stored but cannot be decrypted.
+ */
 export async function getCaCertificatePrivateKey(id: number): Promise<string | null> {
   const cert = await db.query.caCertificates.findFirst({
     where: (table, { eq }) => eq(table.id, id)
   });
-  return cert?.privateKeyPem ? decryptSecret(cert.privateKeyPem, `CA certificate ${id} private key`) : null;
+  if (!cert?.privateKeyPem) return null;
+  try {
+    return decryptSecret(cert.privateKeyPem, `CA certificate ${id} private key`);
+  } catch {
+    console.error(`Failed to decrypt the private key of CA certificate ${id}; SESSION_SECRET may have changed`);
+    throw new CaPrivateKeyUnavailableError();
+  }
 }
 
 /**
