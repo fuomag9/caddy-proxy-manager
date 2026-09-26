@@ -4,7 +4,7 @@ import { config, DEFAULT_ADMIN_PASSWORD, DISALLOWED_ADMIN_PASSWORDS } from "./co
 import { users, accounts, settings } from "./db/schema";
 import { and, eq } from "drizzle-orm";
 import { CREDENTIAL_ACCOUNT_ISSUER } from "./account-issuer";
-import { changeUserPassword } from "./models/user";
+import { changeUserPassword, deleteOrphanedUserReferences } from "./models/user";
 
 const BCRYPT_COST = 12;
 
@@ -67,6 +67,8 @@ async function isKnownPublicPassword(hash: string): Promise<boolean> {
  * Ensures the admin user from environment variables exists in the database.
  * This is called during application startup.
  * The password from environment variables is hashed and stored securely.
+ * Before that, it clears rows left under the ids of deleted users, so neither
+ * the primary admin nor any later user inherits them.
  */
 
 //Todo: this could probably be handled better, especially for the adminid.
@@ -75,6 +77,11 @@ export async function ensureAdminUser(): Promise<void> {
   const adminEmail = `${config.adminUsername}@localhost`;
   const provider = "credentials";
   const subject = config.adminUsername;
+
+  const clearedUserIds = await deleteOrphanedUserReferences();
+  if (clearedUserIds.length > 0) {
+    console.log(`Cleared rows left by deleted user id(s) ${clearedUserIds.join(", ")}`);
+  }
 
   // Check if admin user already exists
   const existingUser = await db.query.users.findFirst({
