@@ -100,9 +100,10 @@ import {
   getWafSettings, saveWafSettings,
   getTrustedProxiesSettings, saveTrustedProxiesSettings,
   getDefaultResponseSettings, saveDefaultResponseSettings,
-  getDnsProviderSettings,
+  getDnsProviderSettings, saveDnsProviderSettings,
   getSetting, setSetting, clearSetting,
 } from '@/src/lib/settings';
+import { decryptSecret, isEncryptedSecret } from '@/src/lib/secret';
 import { getInstanceMode, setInstanceMode, getSlaveMasterToken, setSlaveMasterToken } from '@/src/lib/instance-sync';
 import { applyCaddyConfig } from '@/src/lib/caddy';
 import { requireApiAdmin } from '@/src/lib/api-auth';
@@ -901,6 +902,21 @@ describe('GET waf settings', () => {
   });
 });
 
+describe('PUT dns-provider settings', () => {
+  it('stores provider credentials encrypted', async () => {
+    const mockSaveDnsProvider = vi.mocked(saveDnsProviderSettings);
+    mockSaveDnsProvider.mockResolvedValue(undefined);
+
+    const body = { providers: { cloudflare: { api_token: 'plain-cloudflare-token' } }, default: 'cloudflare' };
+    const response = await PUT(createMockRequest({ method: 'PUT', body }), { params: Promise.resolve({ group: 'dns-provider' }) });
+
+    expect(response.status).toBe(200);
+    const token = mockSaveDnsProvider.mock.calls.at(-1)?.[0]?.providers.cloudflare?.api_token ?? '';
+    expect(isEncryptedSecret(token)).toBe(true);
+    expect(decryptSecret(token)).toBe('plain-cloudflare-token');
+  });
+});
+
 describe('PUT waf settings', () => {
   it('saves waf settings and applies caddy config', async () => {
     mockSaveWaf.mockResolvedValue(undefined);
@@ -913,6 +929,27 @@ describe('PUT waf settings', () => {
     expect(data).toEqual({ ok: true });
     expect(mockSaveWaf).toHaveBeenCalledWith(body);
     expect(mockApplyCaddyConfig).toHaveBeenCalled();
+  });
+
+  it('keeps accepting a stored directive the filter now drops, but rejects a newly added one', async () => {
+    const legacy = 'SecRule ARGS "@pmFromFile /etc/hosts" "id:1,deny"';
+    mockGetWaf.mockResolvedValue({ enabled: true, mode: 'On', load_owasp_crs: true, custom_directives: legacy, excluded_rule_ids: [] } as any);
+    mockSaveWaf.mockResolvedValue(undefined);
+
+    const unchanged = { enabled: true, mode: 'DetectionOnly', load_owasp_crs: true, custom_directives: legacy, excluded_rule_ids: [] };
+    const ok = await PUT(createMockRequest({ method: 'PUT', body: unchanged }), { params: Promise.resolve({ group: 'waf' }) });
+    expect(ok.status).toBe(200);
+    expect(mockSaveWaf).toHaveBeenCalledWith(unchanged);
+
+    mockSaveWaf.mockClear();
+    const added = 'SecRule ARGS "@ipMatchFromFile /etc/blocklist" "id:2,deny"';
+    const body = { ...unchanged, custom_directives: `${legacy}\n${added}` };
+    const rejected = await PUT(createMockRequest({ method: 'PUT', body }), { params: Promise.resolve({ group: 'waf' }) });
+    const data = await rejected.json();
+    expect(rejected.status).toBe(400);
+    expect(data.error).toContain(added);
+    expect(data.error).not.toContain('/etc/hosts');
+    expect(mockSaveWaf).not.toHaveBeenCalled();
   });
 });
 

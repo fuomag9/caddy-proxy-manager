@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { parseBodyLimitMib } from "@/src/lib/caddy-waf";
+import { customDirectivesError, parseBodyLimitMib } from "@/src/lib/caddy-waf";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
 import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
 import { clearSetting, getSetting, saveCloudflareSettings, getDnsProviderSettings, saveDnsProviderSettings, saveGeneralSettings, saveAcmeSettings, saveAuthentikSettings, saveForwardAuthSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveErrorPagesSettings, saveTrustedProxiesSettings, saveDefaultResponseSettings, type DefaultResponseSettings } from "@/src/lib/settings";
@@ -1193,13 +1193,24 @@ async function updateWafSettingsActionUnlocked(_prevState: ActionResult | null, 
     const customDirectives = typeof formData.get("wafCustomDirectives") === "string"
       ? (formData.get("wafCustomDirectives") as string).trim()
       : "";
+    const existing = await getWafSettings();
+    // Same check as the per-host WAF config: reject lines this save newly
+    // drops from the generated config (a new line, or one the CRS setting now
+    // drops), while a stored rule a later release started dropping doesn't
+    // block saving unrelated fields (buildWafHandler still leaves it out and
+    // logs it).
+    const directiveError = customDirectivesError(
+      customDirectives,
+      { crsLoaded: loadOwasp },
+      { directives: existing?.custom_directives, options: { crsLoaded: Boolean(existing?.load_owasp_crs) } }
+    );
+    if (directiveError) return { success: false, message: directiveError };
     const rawExcl = formData.get("wafExcludedRuleIds");
     let excluded_rule_ids: number[];
     if (rawExcl !== null) {
       excluded_rule_ids = (JSON.parse(rawExcl as string) as unknown[])
         .filter((x): x is number => Number.isInteger(x) && (x as number) > 0);
     } else {
-      const existing = await getWafSettings();
       excluded_rule_ids = existing?.excluded_rule_ids ?? [];
     }
 
