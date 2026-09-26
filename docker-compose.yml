@@ -22,6 +22,9 @@ services:
       # Generate with: openssl rand -base64 32
       # SECURITY: You MUST set this to a unique value in production!
       SESSION_SECRET: ${SESSION_SECRET:?ERROR - SESSION_SECRET is required}
+      # Earlier SESSION_SECRET values (comma-separated), only used to decrypt
+      # stored secrets after a rotation (see .env.example)
+      SESSION_SECRET_PREVIOUS: ${SESSION_SECRET_PREVIOUS:-}
 
       # Caddy API endpoint (internal communication)
       CADDY_API_URL: ${CADDY_API_URL:-http://caddy:2019}
@@ -38,6 +41,11 @@ services:
 
       # Extra external ports for forward-auth protected sites (see .env.example)
       FORWARD_AUTH_ALLOWED_PORTS: ${FORWARD_AUTH_ALLOWED_PORTS:-}
+
+      # Header carrying the real client IP for per-IP login rate limits, e.g.
+      # behind a CDN; leave unset when Caddy is the outermost proxy and set it
+      # only behind a proxy that always overwrites it (see .env.example)
+      TRUSTED_CLIENT_IP_HEADER: ${TRUSTED_CLIENT_IP_HEADER:-}
 
       # REQUIRED: Admin credentials for login
       # SECURITY: You MUST set these to secure values in production!
@@ -59,6 +67,9 @@ services:
       OAUTH_TOKEN_URL: ${OAUTH_TOKEN_URL:-}
       OAUTH_USERINFO_URL: ${OAUTH_USERINFO_URL:-}
       OAUTH_ALLOW_AUTO_LINKING: ${OAUTH_ALLOW_AUTO_LINKING:-false}
+
+      # Instance sync (master): time limit in ms for one sync request to a slave
+      INSTANCE_SYNC_TIMEOUT_MS: ${INSTANCE_SYNC_TIMEOUT_MS:-60000}
 
       # ClickHouse analytics database (optional — omit CLICKHOUSE_PASSWORD to disable analytics)
       CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}

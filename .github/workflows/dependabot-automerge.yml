@@ -20,18 +20,16 @@ jobs:
         id: metadata
         uses: dependabot/fetch-metadata@v3
 
-      # Auto-merge only patch/minor updates of application packages. Major
-      # versions, GitHub Actions, Go modules (the Caddy build and its plugins)
-      # and container images change security-critical code paths and wait for
-      # a human review.
+      # Auto-merge only patch/minor updates of the application's Bun packages
+      # (fetch-metadata reports the ecosystem from the branch name,
+      # dependabot/bun/...). Major versions, GitHub Actions, Go modules (the
+      # Caddy build and its plugins), container images and any ecosystem added
+      # to dependabot.yml later wait for a human review.
       - name: Auto-approve the PR
         if: >-
+          steps.metadata.outputs.package-ecosystem == 'bun' &&
           (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-minor') &&
-          steps.metadata.outputs.package-ecosystem != 'github_actions' &&
-          steps.metadata.outputs.package-ecosystem != 'go_modules' &&
-          steps.metadata.outputs.package-ecosystem != 'gomod' &&
-          steps.metadata.outputs.package-ecosystem != 'docker'
+           steps.metadata.outputs.update-type == 'version-update:semver-minor')
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -39,12 +37,9 @@ jobs:
 
       - name: Enable auto-merge
         if: >-
+          steps.metadata.outputs.package-ecosystem == 'bun' &&
           (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-           steps.metadata.outputs.update-type == 'version-update:semver-minor') &&
-          steps.metadata.outputs.package-ecosystem != 'github_actions' &&
-          steps.metadata.outputs.package-ecosystem != 'go_modules' &&
-          steps.metadata.outputs.package-ecosystem != 'gomod' &&
-          steps.metadata.outputs.package-ecosystem != 'docker'
+           steps.metadata.outputs.update-type == 'version-update:semver-minor')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
