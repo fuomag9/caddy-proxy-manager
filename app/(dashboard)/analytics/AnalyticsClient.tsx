@@ -24,6 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatDateTimeUtc } from '@/src/lib/date-format';
+import { toSafeChartLabel } from '@/src/lib/chart-labels';
 
 // ── Dynamic imports (browser-only) ────────────────────────────────────────────
 
@@ -483,14 +484,14 @@ export default function AnalyticsClient() {
     ...DARK_CHART,
     chart: { ...DARK_CHART.chart, type: 'donut', id: 'protocols' },
     colors: ['#3b82f6', '#8b5cf6', '#06b6d4', '#f59e0b'],
-    labels: protocols.map(p => p.proto),
+    labels: protocols.map(p => toSafeChartLabel(p.proto)),
     legend: { position: 'bottom', labels: { colors: '#94a3b8' } },
     dataLabels: { style: { colors: ['#fff'] } },
     plotOptions: { pie: { donut: { size: '65%' } } },
   };
   const donutSeries = protocols.map(p => p.count);
 
-  const uaNames = userAgents.map(u => parseUA(u.userAgent));
+  const uaNames = userAgents.map(u => toSafeChartLabel(parseUA(u.userAgent)));
   const barOptions: ApexOptions = {
     ...DARK_CHART,
     chart: { ...DARK_CHART.chart, type: 'bar', id: 'ua' },

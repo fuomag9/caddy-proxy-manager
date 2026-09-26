@@ -11,6 +11,9 @@ import type { TestDb } from '../helpers/db';
 
 const ctx = vi.hoisted(() => ({ db: null as unknown as TestDb }));
 
+// Non-default external ports must be declared explicitly; these tests use two.
+process.env.FORWARD_AUTH_ALLOWED_PORTS = '8443, 9443';
+
 vi.mock('../../src/lib/db', async () => {
   const { createTestDb } = await import('../helpers/db');
   const schemaModule = await import('../../src/lib/db/schema');
@@ -41,12 +44,16 @@ import {
   createExchangeCode,
   createForwardAuthSession,
   createRedirectIntent,
+  getDisallowedForwardAuthPort,
   redeemExchangeCode,
   resolveForwardAuthAudience,
   validateForwardAuthSession,
 } from '../../src/lib/models/forward-auth';
 import { GET as forwardAuthCallback } from '../../app/api/forward-auth/callback/route';
+import { GET as forwardAuthVerify } from '../../app/api/forward-auth/verify/route';
 import {
+  FORWARD_AUTH_PORTAL_TARGET_HEADER,
+  FORWARD_AUTH_PROXY_HOST_ID_HEADER,
   FORWARD_AUTH_PROXY_PROOF_HEADER,
   getForwardAuthProxyProof,
   getTrustedForwardAuthOrigin,
@@ -102,13 +109,43 @@ async function setupAuthorizedWildcard() {
   return { user, host };
 }
 
-function proxyHeaders(origin: string, proof = getForwardAuthProxyProof()): HeadersInit {
+function proxyHeaders(origin: string, proof = getForwardAuthProxyProof(), proxyHostId?: number): HeadersInit {
   const target = new URL(origin);
   return {
     'x-forwarded-proto': target.protocol.slice(0, -1),
     'x-forwarded-host': target.host,
     [FORWARD_AUTH_PROXY_PROOF_HEADER]: proof,
+    ...(proxyHostId !== undefined ? { [FORWARD_AUTH_PROXY_HOST_ID_HEADER]: String(proxyHostId) } : {}),
   };
+}
+
+function rawProxyHeaders(proto: string, rawHost: string, proxyHostId?: number): HeadersInit {
+  return {
+    'x-forwarded-proto': proto,
+    'x-forwarded-host': rawHost,
+    [FORWARD_AUTH_PROXY_PROOF_HEADER]: getForwardAuthProxyProof(),
+    ...(proxyHostId !== undefined ? { [FORWARD_AUTH_PROXY_HOST_ID_HEADER]: String(proxyHostId) } : {}),
+  };
+}
+
+async function insertExactHost(domain: string) {
+  const timestamp = now();
+  const [host] = await ctx.db.insert(schema.proxyHosts).values({
+    name: `Exact ${domain}`,
+    domains: JSON.stringify([domain]),
+    upstreams: JSON.stringify(['backend2:8080']),
+    sslForced: true,
+    hstsEnabled: true,
+    hstsSubdomains: false,
+    allowWebsocket: true,
+    preserveHostHeader: true,
+    skipHttpsHostnameValidation: false,
+    enabled: true,
+    meta: JSON.stringify({ cpm_forward_auth: { enabled: true } }),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  }).returning();
+  return host;
 }
 
 async function createCode(userId: number, target: string) {
@@ -219,17 +256,17 @@ describe('trusted Caddy callback boundary', () => {
   });
 
   it('rejects a disclosed code at a different Caddy-served wildcard origin without consuming it', async () => {
-    const { user } = await setupAuthorizedWildcard();
+    const { user, host } = await setupAuthorizedWildcard();
     const target = 'https://private.example.com/dashboard';
     const { rawCode } = await createCode(user.id, target);
 
     const attackerRequest = new NextRequest(`http://localhost/api/forward-auth/callback?code=${rawCode}`, {
-      headers: proxyHeaders('https://evil.example.com'),
+      headers: proxyHeaders('https://evil.example.com', undefined, host.id),
     });
     expect((await forwardAuthCallback(attackerRequest)).status).toBe(401);
 
     const legitimateRequest = new NextRequest(`http://localhost/api/forward-auth/callback?code=${rawCode}`, {
-      headers: proxyHeaders('https://private.example.com'),
+      headers: proxyHeaders('https://private.example.com', undefined, host.id),
     });
     const response = await forwardAuthCallback(legitimateRequest);
     expect(response.status).toBe(302);
@@ -273,11 +310,218 @@ describe('trusted Caddy callback boundary', () => {
     }
 
     // Caddy's `host` placeholder intentionally omits the port. The audience
-    // and redirect handoff must use `hostport` so legitimate :8443 origins
+    // and the portal redirect (built by verify from X-Forwarded-Host, or by
+    // Caddy's fallback) must use `hostport` so legitimate :8443 origins
     // survive the generated configuration unchanged.
     const serialized = JSON.stringify(document);
     expect(serialized).toContain(
-      '://{http.request.hostport}{http.request.uri}'
+      '://{http.request.hostport}{http.request.uri_escaped}'
     );
+  });
+});
+
+describe('forwarded host must match the route Caddy chose', () => {
+  it.each([
+    ['percent-encoded label', '%61pp.example.com'],
+    ['percent-encoded dot', 'x%2eapp.example.com'],
+    ['raw UTF-8 bytes', '\xEF\xBD\x81pp.example.com'],
+    ['percent-encoded UTF-8', '%EF%BD%81pp.example.com'],
+    ['IPv4 shorthand', '127.1'],
+    ['multiple values', 'app.example.com, evil.example.com'],
+  ])('rejects a %s', (_caseName, rawHost) => {
+    expect(getTrustedForwardAuthOrigin(new Headers(rawProxyHeaders('https', rawHost) as Record<string, string>))).toBeNull();
+  });
+
+  it('accepts a plain hostname regardless of case', () => {
+    expect(getTrustedForwardAuthOrigin(new Headers(rawProxyHeaders('https', 'App.Example.com')))).toBe(
+      'https://app.example.com',
+    );
+  });
+
+  it('refuses a callback whose origin resolves to a different proxy host than the pinned route', async () => {
+    const { user, host: wildcard } = await setupAuthorizedWildcard();
+    const exact = await insertExactHost('app.example.com');
+    await ctx.db.insert(schema.forwardAuthAccess).values({
+      proxyHostId: exact.id, userId: user.id, groupId: null, createdAt: now(),
+    });
+    const target = 'https://app.example.com/';
+    const { rawCode } = await createCode(user.id, target);
+
+    // Routed through the wildcard host's Caddy route, but claiming the exact host.
+    const crossRouted = new NextRequest(`http://localhost/api/forward-auth/callback?code=${rawCode}`, {
+      headers: proxyHeaders('https://app.example.com', undefined, wildcard.id),
+    });
+    expect((await forwardAuthCallback(crossRouted)).status).toBe(401);
+
+    const unpinned = new NextRequest(`http://localhost/api/forward-auth/callback?code=${rawCode}`, {
+      headers: proxyHeaders('https://app.example.com'),
+    });
+    expect((await forwardAuthCallback(unpinned)).status).toBe(401);
+
+    const [exchange] = await ctx.db.select().from(schema.forwardAuthExchanges);
+    expect(exchange.used).toBe(false);
+
+    const legitimate = new NextRequest(`http://localhost/api/forward-auth/callback?code=${rawCode}`, {
+      headers: proxyHeaders('https://app.example.com', undefined, exact.id),
+    });
+    expect((await forwardAuthCallback(legitimate)).status).toBe(302);
+  });
+
+  it('pins each generated subrequest to its own proxy host id', async () => {
+    const { host } = await setupAuthorizedWildcard();
+    const serialized = JSON.stringify(await buildCaddyDocument());
+    expect(serialized).toContain(`"${FORWARD_AUTH_PROXY_HOST_ID_HEADER}":["${host.id}"]`);
+  });
+});
+
+describe('non-default forward-auth ports', () => {
+  it('rejects redirect targets on undeclared ports', async () => {
+    await setupAuthorizedWildcard();
+    await expect(resolveForwardAuthAudience('https://private.example.com:9999')).resolves.toBeNull();
+    await expect(createRedirectIntent('https://private.example.com:9999/')).rejects.toThrow();
+    await expect(resolveForwardAuthAudience('https://private.example.com:8443')).resolves.not.toBeNull();
+    await expect(resolveForwardAuthAudience('https://private.example.com:443')).resolves.not.toBeNull();
+  });
+});
+
+describe('undeclared forward-auth ports are reported', () => {
+  it('warns once per port, naming FORWARD_AUTH_ALLOWED_PORTS, only for forward-auth hosts', async () => {
+    await setupAuthorizedWildcard();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await expect(resolveForwardAuthAudience('https://private.example.com:7001/')).resolves.toBeNull();
+      await expect(createRedirectIntent('https://private.example.com:7001/x')).rejects.toThrow();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain('FORWARD_AUTH_ALLOWED_PORTS');
+      expect(String(warn.mock.calls[0][0])).toContain('7001');
+
+      await resolveForwardAuthAudience('https://other.example.com:7002/');
+      expect(warn).toHaveBeenCalledTimes(2);
+      expect(String(warn.mock.calls[1][0])).toContain('7002');
+
+      // Not a forward-auth host, a declared port, or a default port: silent.
+      await resolveForwardAuthAudience('https://unrelated.test:7003/');
+      await resolveForwardAuthAudience('https://private.example.com:8443/');
+      await resolveForwardAuthAudience('https://private.example.com:443/');
+      expect(warn).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('reports a port again in the next hour, even after probing filled the cap', async () => {
+    await setupAuthorizedWildcard();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      // Far from any earlier test's window, so this one starts empty.
+      vi.setSystemTime(new Date('2099-01-01T00:00:00Z'));
+      for (let port = 7100; port < 7132; port++) {
+        await resolveForwardAuthAudience(`https://private.example.com:${port}/`);
+      }
+      expect(warn).toHaveBeenCalledTimes(32);
+      await resolveForwardAuthAudience('https://private.example.com:7200/');
+      expect(warn).toHaveBeenCalledTimes(32);
+
+      vi.setSystemTime(new Date('2099-01-01T00:59:59Z'));
+      await resolveForwardAuthAudience('https://private.example.com:7200/');
+      expect(warn).toHaveBeenCalledTimes(32);
+
+      vi.setSystemTime(new Date('2099-01-01T01:00:00Z'));
+      await resolveForwardAuthAudience('https://private.example.com:7200/');
+      expect(warn).toHaveBeenCalledTimes(33);
+      expect(String(warn.mock.calls[32][0])).toContain('port 7200');
+      await resolveForwardAuthAudience('https://private.example.com:7100/');
+      expect(warn).toHaveBeenCalledTimes(34);
+    } finally {
+      vi.useRealTimers();
+      warn.mockRestore();
+    }
+  });
+
+  it('identifies a forward-auth URL rejected only because of its port', async () => {
+    await setupAuthorizedWildcard();
+    await expect(getDisallowedForwardAuthPort('https://private.example.com:7004/app?x=1')).resolves.toBe('7004');
+    await expect(getDisallowedForwardAuthPort('https://private.example.com:8443/')).resolves.toBeNull();
+    await expect(getDisallowedForwardAuthPort('https://private.example.com/')).resolves.toBeNull();
+    await expect(getDisallowedForwardAuthPort('https://unrelated.test:7004/')).resolves.toBeNull();
+    await expect(getDisallowedForwardAuthPort('javascript:alert(1)')).resolves.toBeNull();
+    await expect(getDisallowedForwardAuthPort('https://user:pw@private.example.com:7004/')).resolves.toBeNull();
+  });
+});
+
+describe('verify endpoint portal target', () => {
+  function verifyRequest(headers: HeadersInit) {
+    return new NextRequest('http://localhost/api/forward-auth/verify', { headers });
+  }
+
+  it('returns the protected URL encoded so its query string survives the portal round trip', async () => {
+    const { host } = await setupAuthorizedWildcard();
+    const uri = '/search?q=a%26b&page=2&tag=c++&rd=https://evil.test/&rid=abc#frag';
+    const response = await forwardAuthVerify(verifyRequest({
+      ...proxyHeaders('https://private.example.com', undefined, host.id),
+      'x-forwarded-uri': uri,
+    }));
+
+    expect(response.status).toBe(401);
+    const target = response.headers.get(FORWARD_AUTH_PORTAL_TARGET_HEADER);
+    expect(target).toBeTruthy();
+    expect(target).not.toMatch(/[&#+ ]/);
+    expect(target).toContain('https://private.example.com/search?q=');
+
+    // Parsed exactly as the portal's query string is.
+    const params = new URLSearchParams(`rd=${target}`);
+    expect(params.getAll('rd')).toEqual([`https://private.example.com${uri}`]);
+    expect(params.has('rid')).toBe(false);
+  });
+
+  it('sends the target on 403 and for undeclared ports, so the portal can explain the port', async () => {
+    const { user, host } = await setupAuthorizedWildcard();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const portRejected = await forwardAuthVerify(verifyRequest({
+        ...proxyHeaders('https://private.example.com:7005', undefined, host.id),
+        'x-forwarded-uri': '/',
+      }));
+      expect(portRejected.status).toBe(401);
+      expect(new URLSearchParams(`rd=${portRejected.headers.get(FORWARD_AUTH_PORTAL_TARGET_HEADER)}`).get('rd')).toBe(
+        'https://private.example.com:7005/'
+      );
+      expect(warn.mock.calls.some(([message]) => String(message).includes('FORWARD_AUTH_ALLOWED_PORTS'))).toBe(true);
+    } finally {
+      warn.mockRestore();
+    }
+
+    // A signed-in user without access to the host gets a 403 with the target.
+    await ctx.db.delete(schema.forwardAuthAccess);
+    const { rawCode, audience } = await createCode(user.id, 'https://private.example.com/');
+    const redeemed = await redeemExchangeCode(rawCode, audience);
+    const forbidden = await forwardAuthVerify(verifyRequest({
+      ...proxyHeaders('https://private.example.com', undefined, host.id),
+      'x-forwarded-uri': '/admin',
+      cookie: `_cpm_fa=${redeemed!.rawSessionToken}`,
+    }));
+    expect(forbidden.status).toBe(403);
+    expect(forbidden.headers.get(FORWARD_AUTH_PORTAL_TARGET_HEADER)).toBe('https://private.example.com/admin');
+  });
+
+  it('sends no target without the proxy proof or for a non origin-form URI', async () => {
+    const { host } = await setupAuthorizedWildcard();
+    const direct = await forwardAuthVerify(verifyRequest({
+      'x-forwarded-proto': 'https',
+      'x-forwarded-host': 'private.example.com',
+      'x-forwarded-uri': '/',
+    }));
+    expect(direct.status).toBe(401);
+    expect(direct.headers.get(FORWARD_AUTH_PORTAL_TARGET_HEADER)).toBeNull();
+
+    for (const uri of ['*', 'https://evil.test/', '']) {
+      const response = await forwardAuthVerify(verifyRequest({
+        ...proxyHeaders('https://private.example.com', undefined, host.id),
+        'x-forwarded-uri': uri,
+      }));
+      expect(response.status).toBe(401);
+      expect(response.headers.get(FORWARD_AUTH_PORTAL_TARGET_HEADER)).toBeNull();
+    }
   });
 });

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/src/lib/models/user', () => ({
   listUsers: vi.fn(),
+  createUser: vi.fn(),
   getUserById: vi.fn(),
   updateUserProfile: vi.fn(),
   updateUserRole: vi.fn(),
@@ -28,9 +29,9 @@ vi.mock('@/src/lib/api-auth', () => {
   };
 });
 
-import { GET as listGET } from '@/app/api/v1/users/route';
+import { GET as listGET, POST as createPOST } from '@/app/api/v1/users/route';
 import { GET as getGET, PUT } from '@/app/api/v1/users/[id]/route';
-import { listUsers, getUserById, updateUserProfile } from '@/src/lib/models/user';
+import { listUsers, createUser, getUserById, updateUserProfile } from '@/src/lib/models/user';
 import { requireApiAdmin, requireApiUser } from '@/src/lib/api-auth';
 
 const mockListUsers = vi.mocked(listUsers);
@@ -156,5 +157,27 @@ describe('PUT /api/v1/users/[id]', () => {
 
     expect(response.status).toBe(404);
     expect(data.error).toBe('Not found');
+  });
+});
+
+describe('POST /api/v1/users password policy', () => {
+  it.each(['x', 'alllowercase1!', 'NoDigitsHere!!', 'NoSpecial12345', 'Sh0rt!'])(
+    'rejects a weak password (%s)',
+    async (password) => {
+      const response = await createPOST(
+        createMockRequest({ method: 'POST', body: { email: 'new@example.com', password, role: 'admin' } })
+      );
+      expect(response.status).toBe(400);
+      expect(vi.mocked(createUser)).not.toHaveBeenCalled();
+    }
+  );
+
+  it('creates a user with a compliant password', async () => {
+    vi.mocked(createUser).mockResolvedValue({ ...sampleUser, id: 2, email: 'new@example.com' } as any);
+    const response = await createPOST(
+      createMockRequest({ method: 'POST', body: { email: 'new@example.com', password: 'Compliant-Pass-2026' } })
+    );
+    expect(response.status).toBe(201);
+    expect(await response.json()).not.toHaveProperty('passwordHash');
   });
 });

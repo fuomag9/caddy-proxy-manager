@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth, checkSameOrigin } from "@/src/lib/auth";
-import { getUserById, updateUserPassword } from "@/src/lib/models/user";
+import { auth, checkSameOrigin, getCurrentSessionInfo } from "@/src/lib/auth";
+import { changeUserPassword, getUserById, getUserPasswordHash } from "@/src/lib/models/user";
 import { createAuditEvent } from "@/src/lib/models/audit";
 import { isRateLimited, registerFailedAttempt, resetAttempts } from "@/src/lib/rate-limit";
 import bcrypt from "bcryptjs";
+import { passwordPolicyMessage } from "@/src/lib/password-policy";
+
+// How recent a sign-in must be to add a first password to an account.
+const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   const originCheck = checkSameOrigin(request);
@@ -29,27 +33,10 @@ export async function POST(request: NextRequest) {
     const { currentPassword, newPassword } = body;
 
     // Enforce password complexity matching production admin password requirements
-    if (!newPassword || newPassword.length < 12) {
-      return NextResponse.json(
-        { error: "New password must be at least 12 characters long" },
-        { status: 400 }
-      );
-    }
-    const complexityErrors: string[] = [];
-    if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword)) {
-      complexityErrors.push("must include both uppercase and lowercase letters");
-    }
-    if (!/[0-9]/.test(newPassword)) {
-      complexityErrors.push("must include at least one number");
-    }
-    if (!/[^A-Za-z0-9]/.test(newPassword)) {
-      complexityErrors.push("must include at least one special character");
-    }
-    if (complexityErrors.length > 0) {
-      return NextResponse.json(
-        { error: `Password ${complexityErrors.join(", ")}` },
-        { status: 400 }
-      );
+    const policyError =
+      typeof newPassword === "string" ? passwordPolicyMessage(newPassword, "New password") : "New password is required";
+    if (policyError) {
+      return NextResponse.json({ error: policyError }, { status: 400 });
     }
 
     const userId = Number(session.user.id);
@@ -59,16 +46,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // If user has a password, verify current password
-    if (user.passwordHash) {
-      if (!currentPassword) {
+    const currentSession = await getCurrentSessionInfo(request);
+    const currentHash = await getUserPasswordHash(user);
+
+    // An account without a password (OAuth-only) has no current password to
+    // prove, so adding one requires a recent sign-in instead: a stolen,
+    // long-lived session must not be able to attach a durable credential.
+    if (!currentHash) {
+      const signedInAt = currentSession?.createdAt.getTime() ?? NaN;
+      if (!(Date.now() - signedInAt <= RECENT_SIGN_IN_MS)) {
+        return NextResponse.json(
+          { error: "Please sign in again before setting a password." },
+          { status: 403 }
+        );
+      }
+    } else {
+      if (typeof currentPassword !== "string" || !currentPassword) {
         return NextResponse.json(
           { error: "Current password is required" },
           { status: 400 }
         );
       }
 
-      const isValid = bcrypt.compareSync(currentPassword, user.passwordHash);
+      const isValid = await bcrypt.compare(currentPassword, currentHash);
       if (!isValid) {
         registerFailedAttempt(rateLimitKey);
         return NextResponse.json(
@@ -81,24 +81,32 @@ export async function POST(request: NextRequest) {
     // Password verified successfully — reset rate limit counter
     resetAttempts(rateLimitKey);
 
-    // Hash new password
-    const newPasswordHash = bcrypt.hashSync(newPassword, 12);
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
-    // Update password
-    await updateUserPassword(userId, newPasswordHash);
+    // Set the password and end every other sign-in (other management sessions
+    // and all forward-auth sessions) in one transaction. The caller's current
+    // session stays so they are not logged out; when it cannot be identified,
+    // every session ends.
+    await changeUserPassword(userId, newPasswordHash, currentSession?.id ?? null);
 
-    // Audit log
-    await createAuditEvent({
-      userId,
-      action: user.passwordHash ? "password_changed" : "password_set",
-      entityType: "user",
-      entityId: userId,
-      summary: user.passwordHash ? "User changed their password" : "User set a password",
-    });
+    // The password has changed at this point, so a failure to audit it is
+    // logged rather than reported to the user as a failed change.
+    try {
+      await createAuditEvent({
+        userId,
+        action: currentHash ? "password_changed" : "password_set",
+        entityType: "user",
+        entityId: userId,
+        summary: currentHash ? "User changed their password" : "User set a password",
+      });
+    } catch (error) {
+      console.error("Failed to audit password change:", error);
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Password updated successfully"
+      message:
+        "Password updated. Your other sessions have been signed out. API tokens are not affected; revoke them under API Tokens if needed.",
     });
   } catch (error) {
     console.error("Password change error:", error);

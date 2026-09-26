@@ -8,19 +8,23 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
+import { passwordPolicyMessage } from "@/src/lib/password-policy";
 import {
   createUserAction,
   updateUserRoleAction,
   updateUserStatusAction,
   updateUserInfoAction,
   deleteUserAction,
+  type UserActionResult,
 } from "./actions";
 
 type UserEntry = {
   id: number;
   email: string;
+  username?: string | null;
   name: string | null;
   role: "admin" | "user" | "viewer";
   provider: string | null;
@@ -46,12 +50,35 @@ const STATUS_COLORS: Record<string, string> = {
   disabled: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30",
 };
 
+/**
+ * Runs a user Server Action and returns its error message, or null on
+ * success. A rejected call (network failure, lost admin session) becomes
+ * `fallback` so the page shows it instead of crashing.
+ */
+async function runUserAction(action: () => Promise<UserActionResult>, fallback: string): Promise<string | null> {
+  try {
+    const result = await action();
+    return result.ok ? null : result.error;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function UsersClient({ users }: Props) {
   const router = useRouter();
   const [editUserId, setEditUserId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [createRole, setCreateRole] = useState<UserEntry["role"]>("user");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [createPending, setCreatePending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const closeCreate = () => {
+    setShowCreate(false);
+    setCreateRole("user");
+    setCreateError(null);
+  };
 
   const filtered = search
     ? users.filter(
@@ -79,25 +106,55 @@ export default function UsersClient({ users }: Props) {
         <span className="text-sm text-muted-foreground ml-auto">
           {filtered.length} user{filtered.length !== 1 ? "s" : ""}
         </span>
-        <Button onClick={() => setShowCreate(!showCreate)} variant="outline" size="sm">
+        <Button onClick={() => (showCreate ? closeCreate() : setShowCreate(true))} variant="outline" size="sm">
           <Plus className="h-4 w-4 mr-1" />
           Create User
         </Button>
       </div>
 
+      {actionError && (
+        <Alert variant="destructive">
+          <AlertDescription className="flex justify-between items-center">
+            {actionError}
+            <Button variant="ghost" size="sm" onClick={() => setActionError(null)} className="h-auto p-0 text-xs">Dismiss</Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {showCreate && (
         <Card>
           <CardContent className="pt-4">
             <form
-              action={async (formData) => {
+              // onSubmit rather than a form action: a form action resets the
+              // fields when it finishes, which would clear them on an error.
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const formData = new FormData(event.currentTarget);
                 formData.set("role", createRole);
-                await createUserAction(formData);
-                setShowCreate(false);
-                setCreateRole("user");
+                // Mirrors the server-side policy so most mistakes show up without a round trip.
+                const policyError = passwordPolicyMessage(String(formData.get("password") ?? ""));
+                if (policyError) {
+                  setCreateError(policyError);
+                  return;
+                }
+                setCreateError(null);
+                setCreatePending(true);
+                const error = await runUserAction(() => createUserAction(formData), "Failed to create user");
+                setCreatePending(false);
+                if (error) {
+                  setCreateError(error);
+                  return;
+                }
+                closeCreate();
                 router.refresh();
               }}
               className="flex flex-col gap-3"
             >
+              {createError && (
+                <Alert variant="destructive" data-testid="create-error">
+                  <AlertDescription>{createError}</AlertDescription>
+                </Alert>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="create-email">Email</Label>
@@ -122,12 +179,12 @@ export default function UsersClient({ users }: Props) {
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="create-password">Password</Label>
-                  <Input id="create-password" name="password" type="password" placeholder="Min 8 characters" required minLength={8} data-testid="create-password" />
+                  <Input id="create-password" name="password" type="password" placeholder="Min 12 chars, upper/lower, number, symbol" required minLength={12} data-testid="create-password" />
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button type="submit" size="sm">Create</Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCreate(false)}>
+                <Button type="submit" size="sm" disabled={createPending}>Create</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={closeCreate}>
                   Cancel
                 </Button>
               </div>
@@ -162,7 +219,10 @@ export default function UsersClient({ users }: Props) {
                 <UserRow
                   user={user}
                   onEdit={() => setEditUserId(user.id)}
-                  onRefresh={() => router.refresh()}
+                  onDone={(error) => {
+                    setActionError(error);
+                    router.refresh();
+                  }}
                 />
               )}
             </CardContent>
@@ -176,11 +236,12 @@ export default function UsersClient({ users }: Props) {
 function UserRow({
   user,
   onEdit,
-  onRefresh,
+  onDone,
 }: {
   user: UserEntry;
   onEdit: () => void;
-  onRefresh: () => void;
+  /** Called after an action with its error message, or null on success. */
+  onDone: (error: string | null) => void;
 }) {
   const isDisabled = user.status !== "active";
 
@@ -202,6 +263,12 @@ function UserRow({
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="truncate">{user.email}</span>
+          {user.username && user.username !== user.email.toLowerCase() && (
+            <>
+              <span>·</span>
+              <span className="truncate" title="Username">{user.username}</span>
+            </>
+          )}
           <span>·</span>
           <span>{user.provider}</span>
         </div>
@@ -218,8 +285,7 @@ function UserRow({
             title="Disable user"
             onClick={async () => {
               if (confirm(`Disable user "${user.name ?? user.email}"?`)) {
-                await updateUserStatusAction(user.id, "disabled");
-                onRefresh();
+                onDone(await runUserAction(() => updateUserStatusAction(user.id, "disabled"), "Failed to disable user"));
               }
             }}
           >
@@ -232,8 +298,7 @@ function UserRow({
             className="h-7 w-7 text-muted-foreground hover:text-emerald-500"
             title="Enable user"
             onClick={async () => {
-              await updateUserStatusAction(user.id, "active");
-              onRefresh();
+              onDone(await runUserAction(() => updateUserStatusAction(user.id, "active"), "Failed to enable user"));
             }}
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -255,8 +320,7 @@ function UserRow({
           title="Delete user"
           onClick={async () => {
             if (confirm(`Permanently delete user "${user.name ?? user.email}"? This cannot be undone.`)) {
-              await deleteUserAction(user.id);
-              onRefresh();
+              onDone(await runUserAction(() => deleteUserAction(user.id), "Failed to delete user"));
             }
           }}
         >
@@ -277,6 +341,8 @@ function EditUserRow({
   onSave: () => void;
 }) {
   const [role, setRole] = useState(user.role);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   return (
     <div className="flex flex-col gap-3">
@@ -284,11 +350,26 @@ function EditUserRow({
         <Pencil className="h-4 w-4" />
         Editing {user.name ?? user.email}
       </div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       <form
-        action={async (formData) => {
-          await updateUserInfoAction(user.id, formData);
-          if (role !== user.role) {
-            await updateUserRoleAction(user.id, role);
+        // onSubmit keeps the entered values when the save fails.
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const formData = new FormData(event.currentTarget);
+          setError(null);
+          setPending(true);
+          let failure = await runUserAction(() => updateUserInfoAction(user.id, formData), "Failed to update user");
+          if (!failure && role !== user.role) {
+            failure = await runUserAction(() => updateUserRoleAction(user.id, role), "Failed to update user role");
+          }
+          setPending(false);
+          if (failure) {
+            setError(failure);
+            return;
           }
           onSave();
         }}
@@ -326,7 +407,7 @@ function EditUserRow({
           </Select>
         </div>
         <div className="sm:col-span-3 flex gap-2">
-          <Button type="submit" size="sm">Save</Button>
+          <Button type="submit" size="sm" disabled={pending}>Save</Button>
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
         </div>
       </form>

@@ -3,9 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
 import { applyCaddyConfig } from "@/src/lib/caddy";
-import { parseBodyLimitMib } from "@/src/lib/caddy-waf";
+import { customDirectivesError, parseBodyLimitMib } from "@/src/lib/caddy-waf";
 import { getInstanceMode, getSlaveMasterToken, setInstanceMode, setSlaveMasterToken, syncInstances } from "@/src/lib/instance-sync";
-import { createInstance, deleteInstance, updateInstance } from "@/src/lib/models/instances";
+import {
+  createInstance,
+  deleteInstance,
+  describeSyncKeyPin,
+  pinInstanceSyncKey,
+  pinSyncKey,
+  resetInstanceSyncKeyPin,
+  resetSyncKeyPin,
+  updateInstance,
+} from "@/src/lib/models/instances";
 import { clearSetting, getSetting, saveCloudflareSettings, getDnsProviderSettings, saveDnsProviderSettings, saveGeneralSettings, saveAcmeSettings, saveAuthentikSettings, saveForwardAuthSettings, saveMetricsSettings, saveLoggingSettings, saveDnsSettings, saveUpstreamDnsResolutionSettings, saveGeoBlockSettings, saveWafSettings, getWafSettings, saveErrorPagesSettings, saveTrustedProxiesSettings, saveDefaultResponseSettings, type DefaultResponseSettings } from "@/src/lib/settings";
 import { listProxyHosts, updateProxyHost, sanitizeErrorPageRules } from "@/src/lib/models/proxy-hosts";
 import { getWafRuleMessages } from "@/src/lib/models/waf-events";
@@ -17,6 +26,7 @@ import {
   MIN_INSTANCE_SYNC_TOKEN_LENGTH,
 } from "@/src/lib/instance-sync-token";
 import { withSettingsUpdateLock } from "@/src/lib/settings-update-lock";
+import { ApiClientError } from "@/src/lib/api-errors";
 
 type ActionResult = {
   success: boolean;
@@ -750,7 +760,7 @@ export async function createSlaveInstanceAction(_prevState: ActionResult | null,
 }
 
 export async function deleteSlaveInstanceAction(formData: FormData): Promise<void> {
-  await requireAdmin();
+  const session = await requireAdmin();
   const mode = await getInstanceMode();
   if (mode !== "master") {
     return;
@@ -759,8 +769,128 @@ export async function deleteSlaveInstanceAction(formData: FormData): Promise<voi
   if (Number.isNaN(id)) {
     return;
   }
-  await deleteInstance(id);
+  await deleteInstance(id, Number(session.user.id));
   revalidatePath("/settings");
+}
+
+/**
+ * Update a slave instance's name, base URL or token (left blank, the token is
+ * kept), so changing them never needs removing the instance and its sync key
+ * pin. A new base URL releases the pin of the old one (see updateInstance).
+ */
+export async function updateSlaveInstanceAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireAdmin();
+    const mode = await getInstanceMode();
+    if (mode !== "master") {
+      return { success: false, message: "Instance mode must be set to master to manage slaves" };
+    }
+    const id = Number(formData.get("instanceId"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return { success: false, message: "Invalid slave" };
+    }
+    const name = String(formData.get("name") ?? "").trim();
+    const baseUrl = String(formData.get("baseUrl") ?? "").trim().replace(/\/$/, "");
+    const apiToken = String(formData.get("apiToken") ?? "").trim();
+    if (!name || !baseUrl) {
+      return { success: false, message: "Name and base URL are required" };
+    }
+    if (apiToken) {
+      const validation = validateSyncToken(apiToken);
+      if (!validation.valid) {
+        return { success: false, message: validation.error };
+      }
+    }
+    await updateInstance(id, { name, baseUrl, ...(apiToken ? { apiToken } : {}) }, Number(session.user.id));
+    revalidatePath("/settings");
+    return { success: true, message: `Slave instance "${name}" updated` };
+  } catch (error) {
+    console.error("Failed to update slave instance:", error);
+    return {
+      success: false,
+      message: error instanceof ApiClientError ? error.message : "Failed to update slave instance"
+    };
+  }
+}
+
+/** The slave a sync key pin form is about: an instance by `instanceId`, else a slave URL by `slaveUrl`. */
+function syncKeyPinTarget(formData: FormData): { instanceId: number } | { slaveUrl: string } | null {
+  const rawInstanceId = formData.get("instanceId");
+  if (rawInstanceId !== null) {
+    const instanceId = Number(rawInstanceId);
+    return Number.isInteger(instanceId) && instanceId > 0 ? { instanceId } : null;
+  }
+  const slaveUrl = String(formData.get("slaveUrl") ?? "").trim();
+  return slaveUrl ? { slaveUrl } : null;
+}
+
+/**
+ * Reset a slave's sync key pin, so the next sync pins the key the slave
+ * presents: an instance's by `instanceId`, an INSTANCE_SLAVES entry's (or a
+ * pin no slave uses) by `slaveUrl`.
+ */
+export async function resetSlaveSyncKeyPinAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireAdmin();
+    const mode = await getInstanceMode();
+    if (mode !== "master") {
+      return { success: false, message: "Instance mode must be set to master to manage slaves" };
+    }
+    const actorUserId = Number(session.user.id);
+    const target = syncKeyPinTarget(formData);
+    if (!target) {
+      return { success: false, message: "Invalid slave" };
+    }
+    const pin = "instanceId" in target
+      ? await resetInstanceSyncKeyPin(target.instanceId, actorUserId)
+      : await resetSyncKeyPin(target.slaveUrl, actorUserId);
+    revalidatePath("/settings");
+    const described = describeSyncKeyPin(pin);
+    return {
+      success: true,
+      message: `${described[0].toUpperCase()}${described.slice(1)} reset. The next sync pins the key the slave ` +
+        "presents; use Sync now, then check the new key id against the slave's.",
+    };
+  } catch (error) {
+    console.error("Failed to reset slave sync key pin:", error);
+    return {
+      success: false,
+      message: error instanceof ApiClientError ? error.message : "Failed to reset sync key pin"
+    };
+  }
+}
+
+/**
+ * Pin the sync public key an admin read from a slave (its Settings page, or
+ * GET /api/v1/instances/sync-key there): an instance's by `instanceId`, an
+ * INSTANCE_SLAVES entry's by `slaveUrl`. Replaces any pin, with no sync that
+ * trusts whatever key answers.
+ */
+export async function pinSlaveSyncKeyAction(_prevState: ActionResult | null, formData: FormData): Promise<ActionResult> {
+  try {
+    const session = await requireAdmin();
+    const mode = await getInstanceMode();
+    if (mode !== "master") {
+      return { success: false, message: "Instance mode must be set to master to manage slaves" };
+    }
+    const actorUserId = Number(session.user.id);
+    const target = syncKeyPinTarget(formData);
+    if (!target) {
+      return { success: false, message: "Invalid slave" };
+    }
+    const publicKey = String(formData.get("publicKey") ?? "").trim();
+    const pin = "instanceId" in target
+      ? await pinInstanceSyncKey(target.instanceId, publicKey, actorUserId)
+      : await pinSyncKey(target.slaveUrl, publicKey, actorUserId);
+    revalidatePath("/settings");
+    return { success: true, message: `Sync key ${pin.keyId} pinned. Syncs are sealed to this key only.` };
+  } catch (error) {
+    console.error("Failed to pin slave sync key:", error);
+    return {
+      success: false,
+      message: error instanceof ApiClientError ? error.message : "Failed to pin sync key"
+    };
+  }
 }
 
 export async function toggleSlaveInstanceAction(formData: FormData): Promise<void> {
@@ -1193,13 +1323,24 @@ async function updateWafSettingsActionUnlocked(_prevState: ActionResult | null, 
     const customDirectives = typeof formData.get("wafCustomDirectives") === "string"
       ? (formData.get("wafCustomDirectives") as string).trim()
       : "";
+    const existing = await getWafSettings();
+    // Same check as the per-host WAF config: reject lines this save newly
+    // drops from the generated config (a new line, or one the CRS setting now
+    // drops), while a stored rule a later release started dropping doesn't
+    // block saving unrelated fields (buildWafHandler still leaves it out and
+    // logs it).
+    const directiveError = customDirectivesError(
+      customDirectives,
+      { crsLoaded: loadOwasp },
+      { directives: existing?.custom_directives, options: { crsLoaded: Boolean(existing?.load_owasp_crs) } }
+    );
+    if (directiveError) return { success: false, message: directiveError };
     const rawExcl = formData.get("wafExcludedRuleIds");
     let excluded_rule_ids: number[];
     if (rawExcl !== null) {
       excluded_rule_ids = (JSON.parse(rawExcl as string) as unknown[])
         .filter((x): x is number => Number.isInteger(x) && (x as number) > 0);
     } else {
-      const existing = await getWafSettings();
       excluded_rule_ids = existing?.excluded_rule_ids ?? [];
     }
 

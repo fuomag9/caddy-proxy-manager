@@ -110,8 +110,16 @@ const ENDPOINTS: Endpoint[] = [
   // instances
   { method: 'GET', path: '/instances', auth: 'admin' },
   { method: 'POST', path: '/instances', auth: 'admin', body: { name: 'x', baseUrl: 'http://x.test', apiToken: 'x' } },
+  { method: 'PUT', path: '/instances/999', auth: 'admin', body: { name: 'x' } },
   { method: 'DELETE', path: '/instances/999', auth: 'admin' },
   { method: 'POST', path: '/instances/sync', auth: 'admin' },
+  // An invalid public key: an admin gets 404/400, so nothing is ever pinned.
+  { method: 'PUT', path: '/instances/999/sync-key-pin', auth: 'admin', body: {} },
+  { method: 'DELETE', path: '/instances/999/sync-key-pin', auth: 'admin' },
+  { method: 'GET', path: '/instances/sync-key-pins', auth: 'admin' },
+  { method: 'PUT', path: '/instances/sync-key-pins?url=http%3A%2F%2Fx.test', auth: 'admin', body: {} },
+  { method: 'DELETE', path: '/instances/sync-key-pins?url=http%3A%2F%2Fx.test', auth: 'admin' },
+  { method: 'GET', path: '/instances/sync-key', auth: 'admin' },
 
   // forward-auth-sessions
   { method: 'GET', path: '/forward-auth-sessions', auth: 'admin' },

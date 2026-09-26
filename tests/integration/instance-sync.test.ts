@@ -43,11 +43,22 @@ vi.mock('../../src/lib/db', async () => {
 });
 
 // These imports must come AFTER vi.mock to pick up the mocked module.
-import { buildSyncPayload, applySyncPayload, getSlaveLastSync, syncInstances, type SyncPayload } from '../../src/lib/instance-sync';
+import {
+  buildSyncPayload,
+  applySyncPayload,
+  getEnvSlaveInstances,
+  getSlaveLastSync,
+  getSyncRequestTimeoutMs,
+  runPeriodicInstanceSync,
+  syncInstances,
+  type SyncPayload,
+} from '../../src/lib/instance-sync';
 import * as schema from '../../src/lib/db/schema';
 import { decryptSecret, encryptSecret, isEncryptedSecret } from '../../src/lib/secret';
-import { listInstances } from '../../src/lib/models/instances';
+import { createInstance, listInstances, updateInstance } from '../../src/lib/models/instances';
 import { setSetting } from '../../src/lib/settings';
+import { ApiValidationError } from '../../src/lib/api-errors';
+import { getSyncPublicKey } from '../../src/lib/sync-crypto';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -126,6 +137,7 @@ beforeEach(async () => {
   delete process.env.INSTANCE_MODE;
   delete process.env.INSTANCE_SLAVES;
   delete process.env.INSTANCE_SYNC_ALLOW_HTTP;
+  delete process.env.INSTANCE_SYNC_TIMEOUT_MS;
   await clearTables();
   cleanTmpDir();
 });
@@ -209,6 +221,17 @@ describe('buildSyncPayload', () => {
     });
     const payload = await buildSyncPayload();
     expect(payload.settings.default_response).toEqual({ mode: 'respond', status: 404, body: 'Not Found' });
+  });
+
+  it('does not include CA private keys', async () => {
+    const now = nowIso();
+    await ctx.db.insert(schema.caCertificates).values({
+      name: 'Signing CA', certificatePem: 'CERT', privateKeyPem: encryptSecret('CA-KEY'), createdAt: now, updatedAt: now,
+    });
+    const payload = await buildSyncPayload();
+    expect(payload.data.caCertificates).toHaveLength(1);
+    expect(payload.data.caCertificates[0].privateKeyPem).toBeNull();
+    expect(JSON.stringify(payload)).not.toContain('CA-KEY');
   });
 
   it('includes generated_at as an ISO date string', async () => {
@@ -395,6 +418,312 @@ describe('syncInstances token policy', () => {
 // applySyncPayload
 // ---------------------------------------------------------------------------
 
+describe('syncInstances transport', () => {
+  const STRONG_TOKEN = 'a'.repeat(48);
+
+  async function addSlave() {
+    process.env.INSTANCE_MODE = 'master';
+    const now = nowIso();
+    await ctx.db.insert(schema.instances).values({
+      name: 'Slave',
+      baseUrl: 'https://slave.example.com',
+      apiToken: encryptSecret(STRONG_TOKEN),
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  type Reply = () => Response | Promise<Response>;
+
+  /** A slave from an older release has no GET handler for the sync route. */
+  const noKeyEndpoint: Reply = () => new Response(null, { status: 405 });
+
+  /**
+   * Stub fetch as a slave: `sync` answers the sync POST and `key` the key
+   * request that precedes it (sealing is covered in instance-sync-sealed.test.ts).
+   */
+  function stubSlave(sync: Reply, key: Reply = noKeyEndpoint) {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) =>
+      init?.method === 'POST' ? sync() : key()
+    );
+  }
+
+  const timeoutError = () => new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+
+  it('does not follow redirects and records a redirect as a failure', async () => {
+    await addSlave();
+    const redirect = () => new Response(null, { status: 307, headers: { location: 'http://elsewhere.example/' } });
+    const fetchSpy = stubSlave(redirect);
+
+    const result = await syncInstances();
+
+    expect(result).toMatchObject({ success: 0, failed: 1 });
+    expect(fetchSpy.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'POST']);
+    for (const [, init] of fetchSpy.mock.calls) {
+      expect(init?.redirect).toBe('manual');
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+    }
+    expect((await ctx.db.query.instances.findMany())[0].lastSyncError).toBe('Sync failed with HTTP 307');
+
+    // A redirected key request stops the sync before the payload is sent.
+    fetchSpy.mockClear();
+    fetchSpy.mockImplementation(async () => redirect());
+    expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+    expect(fetchSpy.mock.calls.map(([, init]) => init?.method)).toEqual(['GET']);
+    expect((await listInstances())[0].lastSyncError).toBe('Sync key request failed with HTTP 307');
+    fetchSpy.mockRestore();
+  });
+
+  it('requires an { ok: true } reply, not just a 2xx status', async () => {
+    await addSlave();
+    let reply: Reply = () => new Response('<html>login</html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    const fetchSpy = stubSlave(() => reply());
+    expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+    const [instance] = await listInstances();
+    expect(instance.lastSyncError).toBe('Slave did not acknowledge the sync (unexpected response)');
+
+    reply = () => Response.json({ ok: true });
+    expect(await syncInstances()).toMatchObject({ success: 1, failed: 0 });
+    expect((await listInstances())[0].lastSyncError).toBeNull();
+    fetchSpy.mockRestore();
+  });
+
+  it.each(['GET', 'POST'])('records a timed-out %s request as "Sync timed out"', async (method) => {
+    await addSlave();
+    let failure: Error = timeoutError();
+    const fail: Reply = () => { throw failure; };
+    const fetchSpy = method === 'GET' ? stubSlave(() => Response.json({ ok: true }), fail) : stubSlave(fail);
+
+    expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+    expect((await listInstances())[0].lastSyncError).toBe('Sync timed out');
+
+    failure = new TypeError('fetch failed');
+    await syncInstances();
+    expect((await listInstances())[0].lastSyncError).toBe('Sync request failed');
+    fetchSpy.mockRestore();
+  });
+
+  it.each(['GET', 'POST'])('records a timeout while reading the %s reply body as "Sync timed out"', async (method) => {
+    await addSlave();
+    const failingBody: Reply = () => new Response(
+      new ReadableStream({ start(controller) { controller.error(timeoutError()); } }),
+      { status: 200 },
+    );
+    const fetchSpy = method === 'GET' ? stubSlave(() => Response.json({ ok: true }), failingBody) : stubSlave(failingBody);
+
+    expect(await syncInstances()).toMatchObject({ success: 0, failed: 1 });
+    expect((await listInstances())[0].lastSyncError).toBe('Sync timed out');
+    fetchSpy.mockRestore();
+  });
+
+  it('bounds each request with INSTANCE_SYNC_TIMEOUT_MS', async () => {
+    await addSlave();
+    process.env.INSTANCE_SYNC_TIMEOUT_MS = '120000';
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+    const fetchSpy = stubSlave(() => Response.json({ ok: true }));
+
+    await syncInstances();
+
+    // The key request and the sync each get the full limit.
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(timeoutSpy.mock.calls).toEqual([[120_000], [120_000]]);
+    fetchSpy.mockRestore();
+    timeoutSpy.mockRestore();
+  });
+
+  it('skips INSTANCE_SLAVES entries with an invalid base URL without logging the token or URL', async () => {
+    process.env.INSTANCE_MODE = 'master';
+    const token = 'env-slave-token-secret-sentinel-0123456789';
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'query', url: 'https://query-slave.example.com/?x=1', token },
+      { name: 'bare-query', url: 'https://bare-slave.example.com/?', token },
+      { name: 'creds', url: 'https://user:pass@creds-slave.example.com', token },
+      { name: 'ftp', url: 'ftp://ftp-slave.example.com', token },
+      { name: 'good', url: 'https://good-slave.example.com', token },
+      { name: ' spaced ', url: ' https://spaced-slave.example.com/ ', token },
+    ]);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fetchSpy = stubSlave(() => Response.json({ ok: true }));
+
+    expect(getEnvSlaveInstances()).toEqual([
+      { name: 'good', url: 'https://good-slave.example.com', token },
+      { name: 'spaced', url: 'https://spaced-slave.example.com/', token },
+    ]);
+    expect(await syncInstances()).toMatchObject({ total: 2, success: 2 });
+    const posted = fetchSpy.mock.calls.filter(([, init]) => init?.method === 'POST').map(([url]) => String(url));
+    expect(posted).toEqual([
+      'https://good-slave.example.com/api/instances/sync',
+      'https://spaced-slave.example.com/api/instances/sync',
+    ]);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('INSTANCE_SLAVES entry 0'));
+    const logged = JSON.stringify(warnSpy.mock.calls);
+    expect(logged).not.toContain(token);
+    expect(logged).not.toContain('slave.example.com');
+    expect(logged).not.toContain('pass');
+    warnSpy.mockRestore();
+    fetchSpy.mockRestore();
+  });
+
+  it('reads syncKeyId from INSTANCE_SLAVES and skips entries with an invalid one', async () => {
+    const token = 'env-slave-token-secret-sentinel-0123456789';
+    const url = 'https://pinned-slave.example.com';
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'pinned', url, token, syncKeyId: '0123456789abcdef' },
+      { name: 'unpinned', url, token, syncKeyId: null },
+      { name: 'uppercase', url, token, syncKeyId: '0123456789ABCDEF' },
+      { name: 'short', url, token, syncKeyId: '0123456789abcde' },
+      { name: 'number', url, token, syncKeyId: 1234567890123456 },
+      { name: 'empty', url, token, syncKeyId: '' },
+    ]);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(getEnvSlaveInstances()).toEqual([
+      { name: 'pinned', url, token, syncKeyId: '0123456789abcdef' },
+      { name: 'unpinned', url, token },
+    ]);
+    const warnings = warnSpy.mock.calls.map((call) => String(call[0]));
+    expect(warnings).toEqual([2, 3, 4, 5].map((index) =>
+      `Skipping INSTANCE_SLAVES entry ${index}: syncKeyId must be a sync key id (16 lowercase hex characters)`));
+    const logged = JSON.stringify(warnSpy.mock.calls);
+    expect(logged).not.toContain(token);
+    expect(logged).not.toContain('pinned-slave.example.com');
+    warnSpy.mockRestore();
+  });
+
+  it('reads syncPublicKey from INSTANCE_SLAVES, sets syncKeyId from it, and skips entries with an invalid one', async () => {
+    const token = 'env-slave-token-secret-sentinel-0123456789';
+    const url = 'https://pinned-slave.example.com';
+    const { publicKey, keyId } = getSyncPublicKey();
+    const encoded = publicKey.toString('base64');
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'full', url, token, syncPublicKey: encoded },
+      { name: 'both', url, token, syncPublicKey: encoded, syncKeyId: keyId },
+      { name: 'unpinned', url, token, syncPublicKey: null },
+      { name: 'mismatched', url, token, syncPublicKey: encoded, syncKeyId: '0123456789abcdef' },
+      { name: 'base64url', url, token, syncPublicKey: publicKey.toString('base64url') },
+      { name: 'short', url, token, syncPublicKey: Buffer.alloc(31, 1).toString('base64') },
+      { name: 'low-order', url, token, syncPublicKey: Buffer.alloc(32).toString('base64') },
+    ]);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    expect(getEnvSlaveInstances()).toEqual([
+      { name: 'full', url, token, syncKeyId: keyId, syncPublicKey: encoded },
+      { name: 'both', url, token, syncKeyId: keyId, syncPublicKey: encoded },
+      { name: 'unpinned', url, token },
+    ]);
+    expect(warnSpy.mock.calls.map((call) => String(call[0]))).toEqual([
+      'Skipping INSTANCE_SLAVES entry 3: syncKeyId is not the key id of syncPublicKey',
+      ...[4, 5, 6].map((index) =>
+        `Skipping INSTANCE_SLAVES entry ${index}: syncPublicKey must be a sync public key (base64 of 32 bytes)`),
+    ]);
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain(token);
+    warnSpy.mockRestore();
+  });
+
+  it('skips a periodic tick while the previous periodic sync is still running', async () => {
+    await addSlave();
+    let reply!: (response: Response) => void;
+    let holdSync = true;
+    const fetchSpy = stubSlave(() => holdSync
+      ? new Promise<Response>((resolve) => { reply = resolve; })
+      : Response.json({ ok: true }));
+
+    const first = runPeriodicInstanceSync();
+    // The key request, then the sync request that is still waiting.
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+
+    expect(await runPeriodicInstanceSync()).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+
+    reply(Response.json({ ok: true }));
+    expect(await first).toMatchObject({ total: 1, success: 1 });
+
+    holdSync = false;
+    expect(await runPeriodicInstanceSync()).toMatchObject({ total: 1, success: 1 });
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
+    fetchSpy.mockRestore();
+  });
+
+  it('releases the periodic guard when a sync throws', async () => {
+    process.env.INSTANCE_MODE = 'master';
+    process.env.INSTANCE_SLAVES = JSON.stringify([
+      { name: 'env', url: 'https://env-slave.example.com', token: STRONG_TOKEN },
+    ]);
+    const fetchSpy = stubSlave(() => Response.json({ ok: true }));
+    const querySpy = vi.spyOn(ctx.db.query.instances, 'findMany').mockRejectedValueOnce(new Error('db down'));
+
+    await expect(runPeriodicInstanceSync()).rejects.toThrow('db down');
+    querySpy.mockRestore();
+
+    expect(await runPeriodicInstanceSync()).toMatchObject({ total: 1, success: 1 });
+    fetchSpy.mockRestore();
+  });
+});
+
+describe('getSyncRequestTimeoutMs', () => {
+  it.each([
+    [undefined, 60_000],
+    ['', 60_000],
+    ['abc', 60_000],
+    ['-5', 60_000],
+    ['1.5', 60_000],
+    ['0', 60_000],
+    ['000', 60_000],
+    ['1000', 5_000],
+    ['90000', 90_000],
+    [' 90000 ', 90_000],
+    ['300000', 300_000],
+    ['420000', 300_000],
+    ['99999999', 300_000],
+  ])('INSTANCE_SYNC_TIMEOUT_MS=%j -> %i', (value, expected) => {
+    if (value === undefined) delete process.env.INSTANCE_SYNC_TIMEOUT_MS;
+    else process.env.INSTANCE_SYNC_TIMEOUT_MS = value;
+    expect(getSyncRequestTimeoutMs()).toBe(expected);
+  });
+});
+
+describe('instance base URL validation', () => {
+  it.each([
+    ['https://slave.example.com', null],
+    ['http://10.0.0.5:3000/cpm', null],
+    ['file:///etc/passwd', /https/],
+    ['ftp://slave.example.com', /https/],
+    ['https://user:pass@slave.example.com', /credentials/],
+    ['https://slave.example.com/?x=1', /query/],
+    ['https://slave.example.com/?', /query/],
+    ['https://slave.example.com#', /query/],
+    ['https://slave.example.com/cpm#top', /query/],
+    ['not a url', /valid URL/],
+  ])('%s', async (url, expected) => {
+    const { instanceBaseUrlValidationError } = await import('../../src/lib/models/instances');
+    const error = instanceBaseUrlValidationError(url);
+    if (expected === null) expect(error).toBeNull();
+    else expect(error).toMatch(expected);
+  });
+
+  const TOKEN = 'a'.repeat(48);
+
+  it.each(['ftp://slave.example.com', 'https://slave.example.com/?', 'https://user:pass@slave.example.com'])(
+    'createInstance rejects %s',
+    async (baseUrl) => {
+      await expect(createInstance({ name: 'Bad', baseUrl, apiToken: TOKEN })).rejects.toBeInstanceOf(ApiValidationError);
+      expect(await ctx.db.query.instances.findMany()).toHaveLength(0);
+    },
+  );
+
+  it('updateInstance rejects an invalid base URL and keeps the stored one', async () => {
+    const instance = await createInstance({ name: 'Good', baseUrl: 'https://slave.example.com', apiToken: TOKEN });
+
+    await expect(updateInstance(instance.id, { baseUrl: 'https://slave.example.com#' }))
+      .rejects.toBeInstanceOf(ApiValidationError);
+
+    const [row] = await ctx.db.query.instances.findMany();
+    expect(row.baseUrl).toBe('https://slave.example.com');
+  });
+});
+
 describe('applySyncPayload', () => {
   /** Build a minimal valid payload (all data empty, all settings null). */
   function emptyPayload(): SyncPayload {
@@ -426,6 +755,19 @@ describe('applySyncPayload', () => {
       },
     };
   }
+
+  it('never accepts a CA signing key over sync', async () => {
+    const now = nowIso();
+    const payload = emptyPayload();
+    payload.data.caCertificates = [{
+      id: 1, name: 'Master CA', certificatePem: 'CERT', privateKeyPem: 'KEY-FROM-MASTER',
+      createdBy: null, createdAt: now, updatedAt: now,
+    }];
+    await applySyncPayload(payload);
+    const [row] = await ctx.db.select().from(schema.caCertificates);
+    expect(row.certificatePem).toBe('CERT');
+    expect(row.privateKeyPem).toBeNull();
+  });
 
   it('runs without error on an empty payload', async () => {
     await expect(applySyncPayload(emptyPayload())).resolves.toBeUndefined();
@@ -595,6 +937,27 @@ describe('applySyncPayload', () => {
     });
     expect(row).toBeDefined();
     expect(JSON.parse(row!.value)).toEqual({ primaryDomain: 'example.com' });
+  });
+
+  it('applies settings and tables atomically', async () => {
+    const now = nowIso();
+    const host = {
+      id: 1, name: 'Dup', domains: JSON.stringify(['dup.example.com']), upstreams: JSON.stringify(['backend:8080']),
+      certificateId: null, accessListId: null, ownerUserId: null, sslForced: false, hstsEnabled: false,
+      hstsSubdomains: false, allowWebsocket: false, preserveHostHeader: false, skipHttpsHostnameValidation: false,
+      meta: null, enabled: true, createdAt: now, updatedAt: now,
+    };
+    const payload = emptyPayload();
+    payload.settings.general = { primaryDomain: 'should-not-land.example.com' };
+    // Duplicate primary keys make the table inserts fail part-way.
+    payload.data.proxyHosts = [host, { ...host }];
+
+    await expect(applySyncPayload(payload)).rejects.toThrow();
+
+    const row = await ctx.db.query.settings.findFirst({
+      where: (t, { eq }) => eq(t.key, 'synced:general'),
+    });
+    expect(row).toBeUndefined();
   });
 
   it('stores synced ACME settings with synced: prefix', async () => {

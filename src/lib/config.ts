@@ -2,10 +2,22 @@ import { assertValidInstanceSyncToken } from "./instance-sync-token";
 
 const DEV_SECRET = "dev-secret-change-in-production-12345678901234567890123456789012";
 const DEFAULT_ADMIN_USERNAME = "admin";
-const DEFAULT_ADMIN_PASSWORD = "admin";
-const DISALLOWED_SESSION_SECRETS = new Set([
+export const DEFAULT_ADMIN_PASSWORD = "admin";
+// Publicly known values: rejected at startup, and still tried as decryption
+// keys (never for encryption) so data stored under them can be re-encrypted.
+export const DISALLOWED_SESSION_SECRETS: ReadonlySet<string> = new Set([
   "change-me-in-production",
-  "dev-secret-change-in-production-12345678901234567890123456789012"
+  "dev-secret-change-in-production-12345678901234567890123456789012",
+  // Placeholders shipped in .env.example / documentation
+  "your-secure-session-secret-here-min-32-chars",
+]);
+// Example passwords from current and earlier .env.example / README versions;
+// they satisfy the complexity rules, so they must be rejected explicitly.
+export const DISALLOWED_ADMIN_PASSWORDS: ReadonlySet<string> = new Set([
+  "Your-Secure-P@ssw0rd-Here!",
+  "YourStr0ng-P@ssw0rd123!",
+  "YourStr0ng-P@ssw0rd!",
+  "Your-Str0ng-P@ssw0rd!",
 ]);
 const DEFAULT_CADDY_URL = process.env.NODE_ENV === "development" ? "http://localhost:2019" : "http://caddy:2019";
 const MIN_SESSION_SECRET_LENGTH = 32;
@@ -14,9 +26,13 @@ const MIN_ADMIN_PASSWORD_LENGTH = 12;
 const isProduction = process.env.NODE_ENV === "production";
 const isNodeRuntime = process.env.NEXT_RUNTIME === "nodejs";
 const isDevelopment = process.env.NODE_ENV === "development";
-// Only enforce strict validation in actual production runtime, not during build
+// Only enforce strict validation in actual production runtime, not during build.
+// Next inlines NODE_ENV in the built app ("production" for next build,
+// "development" for next dev), so there this is the same as NODE_ENV=production.
+// Treating every non-development NODE_ENV as production is defense in depth for
+// code that runs outside a Next bundle.
 const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build" || !process.env.NEXT_RUNTIME;
-const isRuntimeProduction = isProduction && isNodeRuntime && !isBuildPhase;
+const isRuntimeProduction = !isDevelopment && isNodeRuntime && !isBuildPhase;
 
 function resolveSessionSecret(): string {
   const rawSecret = process.env.SESSION_SECRET ?? null;
@@ -55,7 +71,9 @@ function resolveSessionSecret(): string {
     if (DISALLOWED_SESSION_SECRETS.has(secret)) {
       throw new Error(
         "SESSION_SECRET is using a known insecure placeholder value. " +
-        "Generate a secure secret with: openssl rand -base64 32"
+        "Generate a secure secret with: openssl rand -base64 32. " +
+        "Stored secrets encrypted under the placeholder are re-encrypted with the new secret automatically on the next start. " +
+        "For any other SESSION_SECRET rotation, put the old value in SESSION_SECRET_PREVIOUS."
       );
     }
     if (secret.length < MIN_SESSION_SECRET_LENGTH) {
@@ -103,6 +121,10 @@ function resolveAdminCredentials() {
     if (!rawPassword || password === DEFAULT_ADMIN_PASSWORD) {
       errors.push(
         "ADMIN_PASSWORD must be set to a custom value in production (not 'admin')"
+      );
+    } else if (DISALLOWED_ADMIN_PASSWORDS.has(password)) {
+      errors.push(
+        "ADMIN_PASSWORD is an example value from the documentation; choose your own password"
       );
     } else {
       if (password.length < MIN_ADMIN_PASSWORD_LENGTH) {
@@ -157,9 +179,26 @@ function getSessionSecret() {
   return _sessionSecret;
 }
 
+/**
+ * SESSION_SECRET_PREVIOUS: earlier session secrets (comma-separated) that may
+ * still decrypt stored values after a rotation. They are never used to
+ * encrypt. The whole value is also kept as one entry, in case a secret itself
+ * contains a comma.
+ */
+function resolvePreviousSessionSecrets(): string[] {
+  const raw = process.env.SESSION_SECRET_PREVIOUS?.trim();
+  if (!raw) return [];
+  const entries = [raw, ...raw.split(",").map((entry) => entry.trim())];
+  return [...new Set(entries.filter(Boolean))];
+}
+
 export const config = {
   get sessionSecret() {
     return getSessionSecret();
+  },
+  /** Read on each access so tests can vary it. */
+  get previousSessionSecrets(): string[] {
+    return resolvePreviousSessionSecrets();
   },
   caddyApiUrl: process.env.CADDY_API_URL ?? DEFAULT_CADDY_URL,
   // Auto-recovery of the Caddy configuration on drift (restart/recreation).
@@ -196,6 +235,21 @@ export const config = {
     allowAutoLinking: process.env.OAUTH_ALLOW_AUTO_LINKING === "true",
   },
   forwardAuthInternalUrl: process.env.FORWARD_AUTH_INTERNAL_URL ?? null,
+  /**
+   * Non-default external ports (e.g. "8443") on which forward-auth protected
+   * hosts are served. Redirect targets and callback origins on any other
+   * non-default port are rejected, because Caddy matches hosts without regard
+   * to the port. Read on each access so tests can vary it.
+   */
+  get forwardAuthAllowedPorts(): Set<string> {
+    return new Set(
+      (process.env.FORWARD_AUTH_ALLOWED_PORTS ?? "")
+        .split(",")
+        .map((port) => port.trim())
+        .filter((port) => /^[1-9]\d{0,4}$/.test(port) && Number(port) <= 65535)
+        .map((port) => String(Number(port)))
+    );
+  },
 };
 
 /**

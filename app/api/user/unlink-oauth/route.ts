@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth, checkSameOrigin } from "@/src/lib/auth";
-import { getUserById } from "@/src/lib/models/user";
+import { getPasswordSignInUsername, getUserById } from "@/src/lib/models/user";
 import { createAuditEvent } from "@/src/lib/models/audit";
 import db from "@/src/lib/db";
 import { accounts } from "@/src/lib/db/schema";
@@ -23,8 +23,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Must have a password before unlinking OAuth
-    if (!user.passwordHash) {
+    // The login page must still work without OAuth: a username and a password
+    // on the credential account, which is what that page checks.
+    if (!(await getPasswordSignInUsername(userId))) {
       return NextResponse.json(
         { error: "Cannot unlink OAuth: You must set a password first" },
         { status: 400 }

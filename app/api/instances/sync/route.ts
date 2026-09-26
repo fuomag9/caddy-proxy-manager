@@ -3,6 +3,21 @@ import { createHash, timingSafeEqual } from "crypto";
 import { applyCaddyConfig } from "@/src/lib/caddy";
 import { extractL4ListenPort, isReservedL4Port } from "@/src/lib/l4-reserved-ports";
 import { applySyncPayload, getInstanceMode, getSlaveMasterToken, setSlaveLastSync, SyncPayload } from "@/src/lib/instance-sync";
+import {
+  SYNC_SEALED_KEY_MISMATCH_ERROR,
+  SYNC_SEALED_OPEN_FAILED_ERROR,
+  SYNC_SEALED_STALE_ERROR,
+} from "@/src/lib/instance-sync-error";
+import {
+  SYNC_KEY_CHALLENGE_PARAM,
+  SyncSealError,
+  createSyncKeyResponse,
+  isSyncKeyId,
+  isSyncNonce,
+  type SyncPublicKeyResponse,
+} from "@/src/lib/sync-crypto";
+import { getClientIp } from "@/src/lib/client-ip";
+import { createRateLimiter, type RateLimiter } from "@/src/lib/rate-limit";
 
 const DEFAULT_MAX_SYNC_BODY_BYTES = 10 * 1024 * 1024; // 10 MB
 const _parsedMaxBytes = Number(process.env.INSTANCE_SYNC_MAX_BYTES);
@@ -11,7 +26,21 @@ const MAX_SYNC_BODY_BYTES = Number.isFinite(_parsedMaxBytes) && _parsedMaxBytes 
   : DEFAULT_MAX_SYNC_BODY_BYTES;
 const SYNC_RATE_MAX = Number(process.env.INSTANCE_SYNC_RATE_MAX ?? 60);
 const SYNC_RATE_WINDOW_MS = Number(process.env.INSTANCE_SYNC_RATE_WINDOW_MS ?? 60_000);
-const SYNC_RATE_LIMITS = new Map<string, { count: number; windowStart: number }>();
+// Pre-authentication request limit per client address; every request counts.
+// A fixed window: up to SYNC_RATE_MAX requests, then refusals until it ends,
+// so a master syncing steadily at the limit is never refused. The master
+// fetches the key before each sync, so key requests have a limiter of their
+// own and do not use up the syncs.
+const syncRateLimiter = createRateLimiter({
+  maxAttempts: SYNC_RATE_MAX,
+  windowMs: SYNC_RATE_WINDOW_MS,
+  blockMs: "window",
+});
+const keyRateLimiter = createRateLimiter({
+  maxAttempts: SYNC_RATE_MAX,
+  windowMs: SYNC_RATE_WINDOW_MS,
+  blockMs: "window",
+});
 
 /**
  * Timing-safe token comparison to prevent timing attacks
@@ -23,36 +52,6 @@ function secureTokenCompare(a: string, b: string): boolean {
   const digestA = createHash("sha256").update(a, "utf8").digest();
   const digestB = createHash("sha256").update(b, "utf8").digest();
   return timingSafeEqual(digestA, digestB);
-}
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const parts = forwarded.split(",");
-    return parts[parts.length - 1]?.trim() || "unknown";
-  }
-  const real = request.headers.get("x-real-ip");
-  if (real) {
-    return real.trim();
-  }
-  return "unknown";
-}
-
-function checkSyncRateLimit(key: string): { blocked: boolean; retryAfterMs?: number } {
-  const now = Date.now();
-  const entry = SYNC_RATE_LIMITS.get(key);
-
-  if (!entry || entry.windowStart + SYNC_RATE_WINDOW_MS <= now) {
-    SYNC_RATE_LIMITS.set(key, { count: 1, windowStart: now });
-    return { blocked: false };
-  }
-
-  if (entry.count >= SYNC_RATE_MAX) {
-    return { blocked: true, retryAfterMs: entry.windowStart + SYNC_RATE_WINDOW_MS - now };
-  }
-
-  entry.count += 1;
-  return { blocked: false };
 }
 
 function isString(value: unknown): value is string {
@@ -288,6 +287,25 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
     return false;
   }
 
+  // A sealed payload carries a key id and a nonce, and must say exactly where
+  // its sealed settings secrets are. Unsealed payloads keep the lenient
+  // handling of settings_secret_paths.
+  if (p.secrets_sealed_key_id !== undefined || p.secrets_sealed_nonce !== undefined) {
+    if (!isSyncKeyId(p.secrets_sealed_key_id)) {
+      return false;
+    }
+    if (!isSyncNonce(p.secrets_sealed_nonce)) {
+      return false;
+    }
+    if (
+      p.settings_secret_paths !== undefined &&
+      !validateArray(p.settings_secret_paths, (path): path is unknown[] =>
+        Array.isArray(path) && path.length > 0 && path.every((part) => isString(part) || isNumber(part)))
+    ) {
+      return false;
+    }
+  }
+
   // Validate data has required array properties
   const data = p.data;
   if (data === null || typeof data !== "object") {
@@ -311,13 +329,18 @@ function isValidSyncPayload(payload: unknown): payload is SyncPayload {
   );
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * Slave mode, the request limit and the master's bearer token. Returns the
+ * refusal, or null when the request may proceed.
+ */
+async function refuseUnauthorizedSyncRequest(request: NextRequest, limiter: RateLimiter): Promise<NextResponse | null> {
   const mode = await getInstanceMode();
   if (mode !== "slave") {
     return NextResponse.json({ error: "Instance is not configured as a slave" }, { status: 403 });
   }
 
-  const rateLimit = checkSyncRateLimit(getClientIp(request));
+  const clientIp = getClientIp(request.headers);
+  const rateLimit = limiter.isRateLimited(clientIp);
   if (rateLimit.blocked) {
     const retryAfterSeconds = rateLimit.retryAfterMs ? Math.ceil(rateLimit.retryAfterMs / 1000) : 60;
     return NextResponse.json(
@@ -325,6 +348,7 @@ export async function POST(request: NextRequest) {
       { status: 429, headers: { "Retry-After": retryAfterSeconds.toString() } }
     );
   }
+  limiter.registerAttempt(clientIp);
 
   const authHeader = request.headers.get("authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
@@ -333,6 +357,34 @@ export async function POST(request: NextRequest) {
   if (!expected || !secureTokenCompare(token, expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  return null;
+}
+
+/**
+ * This slave's public key, which the master seals the secrets in the sync
+ * payload to, and a single-use nonce for that payload (see
+ * src/lib/sync-crypto.ts). Authenticated like the sync; the master fetches
+ * both before every sync. With `?challenge=` (masters that pin slave keys
+ * send one), the reply also carries a rotation proof from each key derived
+ * from SESSION_SECRET_PREVIOUS; a challenge that is not a usable X25519
+ * public key gets 400 and no nonce.
+ */
+export async function GET(request: NextRequest) {
+  const refusal = await refuseUnauthorizedSyncRequest(request, keyRateLimiter);
+  if (refusal) return refusal;
+  let body: SyncPublicKeyResponse;
+  try {
+    body = createSyncKeyResponse(request.nextUrl.searchParams.get(SYNC_KEY_CHALLENGE_PARAM));
+  } catch (error) {
+    if (!(error instanceof SyncSealError) || error.code !== "invalid_challenge") throw error;
+    return NextResponse.json({ error: "Invalid sync key challenge" }, { status: 400 });
+  }
+  return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
+}
+
+export async function POST(request: NextRequest) {
+  const refusal = await refuseUnauthorizedSyncRequest(request, syncRateLimiter);
+  if (refusal) return refusal;
 
   let payload: unknown;
   try {
@@ -383,7 +435,19 @@ export async function POST(request: NextRequest) {
     await applyCaddyConfig();
     await setSlaveLastSync({ ok: true });
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof SyncSealError) {
+      // Nothing was written. A payload sealed to a previous key (this slave's
+      // SESSION_SECRET changed after the master fetched the key) or with a
+      // nonce this process no longer holds (it restarted, the nonce expired
+      // or was used) gets 409: the master's next sync fetches both again.
+      const retry = error.code === "key_mismatch" || error.code === "stale";
+      const message = error.code === "key_mismatch"
+        ? SYNC_SEALED_KEY_MISMATCH_ERROR
+        : error.code === "stale" ? SYNC_SEALED_STALE_ERROR : SYNC_SEALED_OPEN_FAILED_ERROR;
+      await setSlaveLastSync({ ok: false, error: message });
+      return NextResponse.json({ error: message }, { status: retry ? 409 : 400 });
+    }
     // This value is persisted and later serialized into the settings browser;
     // keep it operationally useful but independent of exception internals.
     await setSlaveLastSync({ ok: false, error: "Failed to apply synchronized configuration" });

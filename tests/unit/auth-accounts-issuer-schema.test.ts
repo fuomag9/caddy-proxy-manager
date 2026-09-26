@@ -199,7 +199,7 @@ describe('Better Auth schema contract for accounts.issuer (#283)', () => {
       args: { body: Record<string, unknown> }
     ) => Promise<{ user?: { email?: string; id?: string } | null }>;
     const signedUp = await signUpEmail({
-      body: { email: 'fresh@example.com', password: 'fresh-user-password-123', name: 'Fresh', username: 'fresh' },
+      body: { email: 'fresh@example.com', password: 'Fresh-User-Password-123', name: 'Fresh', username: 'fresh' },
     });
     expect(signedUp?.user?.email).toBe('fresh@example.com');
 
@@ -216,7 +216,7 @@ describe('Better Auth schema contract for accounts.issuer (#283)', () => {
     expect(freshAccount?.issuer).toBe('local:credential'); // derived by the hook
 
     const signedIn = await auth.api.signInEmail({
-      body: { email: 'fresh@example.com', password: 'fresh-user-password-123' },
+      body: { email: 'fresh@example.com', password: 'Fresh-User-Password-123' },
     });
     expect(signedIn?.user?.email).toBe('fresh@example.com');
   });

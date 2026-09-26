@@ -1,3 +1,5 @@
+import { escapeHostPlaceholders } from "./caddy-utils";
+
 export type DefaultResponseMode = "caddy" | "respond" | "redirect" | "abort";
 
 export type DefaultResponseSettings = {
@@ -125,10 +127,18 @@ export function normalizeDefaultResponseSettings(value: unknown): DefaultRespons
 
 function caddyHeaders(headers: Record<string, string> | undefined): Record<string, string[]> | undefined {
   if (!headers) return undefined;
-  return Object.fromEntries(Object.entries(headers).map(([name, value]) => [name, [value]]));
+  return Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [name, [escapeHostPlaceholders(value)]])
+  );
 }
 
-/** Build the final matcher-less route for CPM's main HTTP server. */
+/**
+ * Build the final matcher-less route for CPM's main HTTP server.
+ *
+ * Request placeholders ({http.*}) in the body, header values and redirect
+ * target are expanded by Caddy as usual; host placeholders ({env.*},
+ * {system.*}, {file.*}) are escaped and served literally.
+ */
 export function buildDefaultResponseRoute(
   settings: DefaultResponseSettings | null | undefined
 ): CaddyDefaultResponseRoute | null {
@@ -146,13 +156,13 @@ export function buildDefaultResponseRoute(
     for (const name of Object.keys(headers)) {
       if (name.toLowerCase() === "location") delete headers[name];
     }
-    headers.Location = [settings.redirectUrl ?? ""];
+    headers.Location = [escapeHostPlaceholders(settings.redirectUrl ?? "")];
   }
 
   const handler: Record<string, unknown> = {
     handler: "static_response",
     status_code: settings.status,
-    ...(settings.mode === "respond" && settings.body ? { body: settings.body } : {}),
+    ...(settings.mode === "respond" && settings.body ? { body: escapeHostPlaceholders(settings.body) } : {}),
     ...(Object.keys(headers).length > 0 ? { headers } : {}),
   };
 

@@ -1,6 +1,6 @@
 const isDev = process.env.NODE_ENV === "development";
 
-/** Build the nonce-based policy used by authenticated application pages. */
+/** Build the nonce-based policy applied to every page the proxy matches. */
 export function buildCsp(nonce: string): string {
   const directives = [
     "default-src 'self'",
@@ -15,6 +15,9 @@ export function buildCsp(nonce: string): string {
     "worker-src 'self' blob:",
     "connect-src 'self'",
     "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "form-action 'self'",
   ];
   return directives.join("; ");
 }

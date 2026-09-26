@@ -4,6 +4,27 @@ import { applyCaddyConfig } from "../caddy";
 import { caCertificates, issuedClientCertificates, mtlsCertificateRoles, proxyHosts } from "../db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
 import { ApiConflictError } from "../api-errors";
+import { decryptSecret, encryptSecret, isEncryptedSecret } from "../secret";
+
+export const CA_PRIVATE_KEY_UNAVAILABLE_MESSAGE =
+  "The CA private key cannot be decrypted with the current SESSION_SECRET. " +
+  "Restore the previous secret via SESSION_SECRET_PREVIOUS or create a new CA.";
+
+/**
+ * The stored CA signing key exists but cannot be decrypted, typically because
+ * SESSION_SECRET changed. The message is safe to show to admins and API clients.
+ */
+export class CaPrivateKeyUnavailableError extends ApiConflictError {
+  constructor() {
+    super(CA_PRIVATE_KEY_UNAVAILABLE_MESSAGE);
+    this.name = "CaPrivateKeyUnavailableError";
+  }
+}
+
+function encryptCaPrivateKey(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? encryptSecret(trimmed) : null;
+}
 
 function tryParseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -47,11 +68,41 @@ export async function listCaCertificates(): Promise<CaCertificate[]> {
   return rows.map(parseCaCertificate);
 }
 
+/**
+ * Returns the decrypted CA signing key, or null when none is stored. Throws
+ * CaPrivateKeyUnavailableError when a key is stored but cannot be decrypted.
+ */
 export async function getCaCertificatePrivateKey(id: number): Promise<string | null> {
   const cert = await db.query.caCertificates.findFirst({
     where: (table, { eq }) => eq(table.id, id)
   });
-  return cert?.privateKeyPem ?? null;
+  if (!cert?.privateKeyPem) return null;
+  try {
+    return decryptSecret(cert.privateKeyPem, `CA certificate ${id} private key`);
+  } catch {
+    console.error(`Failed to decrypt the private key of CA certificate ${id}; SESSION_SECRET may have changed`);
+    throw new CaPrivateKeyUnavailableError();
+  }
+}
+
+/**
+ * Encrypt CA private keys stored in plaintext by older releases. Idempotent,
+ * so a restored legacy backup is repaired on the next startup.
+ */
+export async function migrateLegacyCaPrivateKeys(): Promise<number> {
+  const rows = await db
+    .select({ id: caCertificates.id, privateKeyPem: caCertificates.privateKeyPem })
+    .from(caCertificates);
+  let migrated = 0;
+  for (const row of rows) {
+    if (!row.privateKeyPem || isEncryptedSecret(row.privateKeyPem)) continue;
+    await db
+      .update(caCertificates)
+      .set({ privateKeyPem: encryptSecret(row.privateKeyPem) })
+      .where(eq(caCertificates.id, row.id));
+    migrated += 1;
+  }
+  return migrated;
 }
 
 export async function getCaCertificate(id: number): Promise<CaCertificate | null> {
@@ -68,7 +119,7 @@ export async function createCaCertificate(input: CaCertificateInput, actorUserId
     .values({
       name: input.name.trim(),
       certificatePem: input.certificatePem.trim(),
-      privateKeyPem: input.privateKeyPem?.trim() ?? null,
+      privateKeyPem: encryptCaPrivateKey(input.privateKeyPem),
       createdBy: actorUserId,
       createdAt: now,
       updatedAt: now
@@ -102,7 +153,7 @@ export async function updateCaCertificate(id: number, input: Partial<CaCertifica
     .set({
       name: input.name?.trim() ?? existing.name,
       certificatePem: input.certificatePem?.trim() ?? existing.certificatePem,
-      ...(input.privateKeyPem !== undefined ? { privateKeyPem: input.privateKeyPem?.trim() ?? null } : {}),
+      ...(input.privateKeyPem !== undefined ? { privateKeyPem: encryptCaPrivateKey(input.privateKeyPem) } : {}),
       updatedAt: now
     })
     .where(eq(caCertificates.id, id));

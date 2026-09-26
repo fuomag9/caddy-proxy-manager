@@ -88,12 +88,24 @@ export async function getSession(): Promise<Session | null> {
  * the "current" session and to exclude it from "revoke other sessions".
  */
 export async function getCurrentSessionId(req?: NextRequest): Promise<number | null> {
+  return (await getCurrentSessionInfo(req))?.id ?? null;
+}
+
+/**
+ * The caller's current better-auth session id and creation time, or null when
+ * there is no session-cookie auth. The creation time tells how recently the
+ * user actually signed in (it does not move when the session is refreshed).
+ */
+export async function getCurrentSessionInfo(
+  req?: NextRequest
+): Promise<{ id: number; createdAt: Date } | null> {
   const hdrs = req ? req.headers : (await import("next/headers")).headers();
   const resolvedHeaders = hdrs instanceof Promise ? await hdrs : hdrs;
   try {
     const result = await getAuth().api.getSession({ headers: resolvedHeaders });
-    const id = result?.session?.id;
-    return id != null ? Number(id) : null;
+    const session = result?.session;
+    if (session?.id == null) return null;
+    return { id: Number(session.id), createdAt: new Date(session.createdAt) };
   } catch {
     return null;
   }

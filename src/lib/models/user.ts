@@ -1,16 +1,43 @@
 import db, { nowIso, toIso } from "../db";
-import { users, accounts, oauthProviders } from "../db/schema";
-import { and, count, desc, eq, ne } from "drizzle-orm";
+import {
+  users,
+  accounts,
+  oauthProviders,
+  sessions,
+  verifications,
+  pendingOAuthLinks,
+  accessLists,
+  certificates,
+  caCertificates,
+  issuedClientCertificates,
+  proxyHosts,
+  l4ProxyHosts,
+  apiTokens,
+  auditEvents,
+  mtlsRoles,
+  mtlsAccessRules,
+  groups,
+  groupMembers,
+  forwardAuthAccess,
+  forwardAuthSessions,
+  forwardAuthExchanges,
+} from "../db/schema";
+import * as schema from "../db/schema";
+import { and, count, desc, eq, inArray, is, isNotNull, ne, notInArray, or, sql } from "drizzle-orm";
+import { SQLiteTable, getTableConfig } from "drizzle-orm/sqlite-core";
 import { deleteUserForwardAuthSessions } from "./forward-auth";
 import {
   CREDENTIAL_ACCOUNT_ISSUER,
   resolveOAuthAccountIssuer,
 } from "../account-issuer";
+import { isUsableSignInUsername, loginUsernameCandidates } from "../login-username";
 
 export type User = {
   id: number;
   email: string;
   name: string | null;
+  /** What the user types as username on the login page (see loginUsernameCandidates). */
+  username: string | null;
   passwordHash: string | null;
   role: "admin" | "user" | "viewer";
   provider: string | null;
@@ -28,6 +55,7 @@ function parseDbUser(user: DbUser): User {
     id: user.id,
     email: user.email,
     name: user.name,
+    username: user.username,
     passwordHash: user.passwordHash,
     role: user.role as "admin" | "user" | "viewer",
     provider: user.provider,
@@ -92,85 +120,320 @@ export async function createUser(data: {
   const role = data.role ?? "user";
   const email = data.email.trim().toLowerCase();
   const provider = data.provider === "credential" ? "credentials" : data.provider;
-  const username = data.username ?? email;
-  const displayUsername = data.displayUsername ?? data.name ?? email.split("@")[0];
 
-  const [user] = await db
-    .insert(users)
-    .values({
-      email,
-      name: data.name ?? null,
-      passwordHash: data.passwordHash ?? null,
-      role,
-      provider,
-      subject: data.subject,
-      avatarUrl: data.avatarUrl ?? null,
-      status: "active",
-      username,
-      displayUsername,
-      createdAt: now,
-      updatedAt: now
-    })
-    .returning();
+  // One synchronous transaction, so no other account can take the username
+  // between picking it and inserting the user.
+  const user = db.transaction((tx) => {
+    const username = data.username ?? allocateLoginUsername(tx, null, email);
+    const displayUsername = data.displayUsername ?? data.name ?? email.split("@")[0];
+    const row = tx
+      .insert(users)
+      .values({
+        email,
+        name: data.name ?? null,
+        passwordHash: data.passwordHash ?? null,
+        role,
+        provider,
+        subject: data.subject,
+        avatarUrl: data.avatarUrl ?? null,
+        status: "active",
+        username,
+        displayUsername,
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning()
+      .get();
 
-  if (provider === "credentials" && data.passwordHash) {
-    await db.insert(accounts).values({
-      userId: user.id,
-      issuer: CREDENTIAL_ACCOUNT_ISSUER,
-      accountId: user.id.toString(),
-      providerId: "credential",
-      password: data.passwordHash,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
+    if (provider === "credentials" && data.passwordHash) {
+      tx.insert(accounts).values({
+        userId: row.id,
+        issuer: CREDENTIAL_ACCOUNT_ISSUER,
+        accountId: row.id.toString(),
+        providerId: "credential",
+        password: data.passwordHash,
+        createdAt: now,
+        updatedAt: now,
+      }).run();
+    }
+    return row;
+  });
 
   return parseDbUser(user);
 }
 
+/**
+ * Updates the email, name and avatar. A user with a password the login page
+ * cannot find them by (see signInNameRepair) is given a username made from
+ * the resulting email, so an administrator editing the account, or changing
+ * an email no username could be made from, lets them sign in again.
+ */
 export async function updateUserProfile(userId: number, data: { email?: string; name?: string | null; avatarUrl?: string | null }): Promise<User | null> {
-  const current = await getUserById(userId);
-  if (!current) {
-    return null;
-  }
-
   const now = nowIso();
-  const [updated] = await db
-    .update(users)
-    .set({
-      email: data.email ?? current.email,
-      name: data.name ?? current.name,
-      avatarUrl: data.avatarUrl ?? current.avatarUrl,
-      updatedAt: now
-    })
-    .where(eq(users.id, userId))
-    .returning();
+  const updated = db.transaction((tx) => {
+    const current = tx.select().from(users).where(eq(users.id, userId)).get();
+    if (!current) return null;
+    const email = data.email ?? current.email;
+    const name = data.name ?? current.name;
+    return tx
+      .update(users)
+      .set({
+        email,
+        name,
+        avatarUrl: data.avatarUrl ?? current.avatarUrl,
+        ...signInNameRepair(tx, { ...current, email, name }),
+        updatedAt: now
+      })
+      .where(eq(users.id, userId))
+      .returning()
+      .get();
+  });
 
   return updated ? parseDbUser(updated) : null;
 }
 
-export async function updateUserPassword(userId: number, passwordHash: string): Promise<void> {
-  const now = nowIso();
-  await db
-    .update(users)
-    .set({
-      passwordHash,
-      updatedAt: now
-    })
-    .where(eq(users.id, userId));
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type DbReader = Pick<DbTransaction, "select">;
 
-  // Also update the Better Auth credential account so the new password takes effect there too
-  await db
-    .update(accounts)
-    .set({
-      password: passwordHash,
-      updatedAt: now,
-    })
+/** Whether the user has a password on the credential account, the one the login page checks. */
+function hasCredentialPassword(reader: DbReader, userId: number): boolean {
+  return !!reader
+    .select({ id: accounts.id })
+    .from(accounts)
     .where(and(
       eq(accounts.userId, userId),
       eq(accounts.providerId, "credential"),
-      eq(accounts.issuer, CREDENTIAL_ACCOUNT_ISSUER)
-    ));
+      isNotNull(accounts.password),
+      ne(accounts.password, "")
+    ))
+    .get();
+}
+
+type SignInNameSource = Pick<DbUser, "id" | "email" | "name" | "username" | "displayUsername">;
+type SignInName = { username: string; displayUsername: string };
+
+/** The columns that give `user` the username allocateLoginUsername picks. */
+function allocateSignInName(reader: DbReader, user: SignInNameSource): SignInName | null {
+  const username = allocateLoginUsername(reader, user.id, user.email);
+  return username
+    ? { username, displayUsername: user.displayUsername ?? user.name ?? username.split("@")[0] }
+    : null;
+}
+
+/**
+ * The columns that give a user who has a password on the credential account,
+ * but a username the login page cannot find them by, a usable one made from
+ * their email; null when neither applies or every candidate is taken. Such a
+ * username has never worked for signing in, so replacing it breaks nothing.
+ */
+function signInNameRepair(reader: DbReader, user: SignInNameSource): SignInName | null {
+  if (isUsableSignInUsername(user.username) || !hasCredentialPassword(reader, user.id)) return null;
+  return allocateSignInName(reader, user);
+}
+
+/**
+ * The first of loginUsernameCandidates(email) that no other account signs in
+ * with or has as its email address, or null when all are taken. The login
+ * page lowercases what is typed, so names are compared case-insensitively.
+ * `userId` is the account being given the name (null for one not created
+ * yet); its own username and email do not count as taken.
+ */
+function allocateLoginUsername(reader: DbReader, userId: number | null, email: string): string | null {
+  for (const candidate of loginUsernameCandidates(email)) {
+    const holder = reader
+      .select({ id: users.id })
+      .from(users)
+      .where(and(
+        or(sql`lower(${users.username}) = ${candidate}`, sql`lower(${users.email}) = ${candidate}`),
+        userId === null ? undefined : ne(users.id, userId)
+      ))
+      .get();
+    if (!holder) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Writes the password to users.passwordHash and to the Better Auth credential
+ * account, which is what the login page checks. An account without a password
+ * (OAuth-only) has no credential account yet, so one is created.
+ *
+ * The login page signs in by username. A user without one it can find (users
+ * provisioned by an OAuth sign-in have none; older accounts can hold an email
+ * it refuses, such as one with a '+') is given one made from their email by
+ * allocateLoginUsername; a usable username is kept. The SQLite driver is
+ * synchronous, so this runs inside a synchronous transaction.
+ */
+function writeUserPassword(tx: DbTransaction, userId: number, passwordHash: string, now: string): void {
+  const user = tx
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      username: users.username,
+      displayUsername: users.displayUsername,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  const signInName = user && !isUsableSignInUsername(user.username) ? allocateSignInName(tx, user) : null;
+
+  tx.update(users)
+    .set({ passwordHash, ...signInName, updatedAt: now })
+    .where(eq(users.id, userId))
+    .run();
+
+  const updated = tx
+    .update(accounts)
+    .set({ password: passwordHash, updatedAt: now })
+    .where(and(eq(accounts.userId, userId), eq(accounts.providerId, "credential")))
+    .returning({ id: accounts.id })
+    .all();
+  if (updated.length === 0) {
+    tx.insert(accounts)
+      .values({
+        userId,
+        issuer: CREDENTIAL_ACCOUNT_ISSUER,
+        accountId: userId.toString(),
+        providerId: "credential",
+        password: passwordHash,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+  }
+}
+
+/**
+ * Gives every user who has a password on the credential account, but a
+ * username the login page cannot find them by, one made from their email
+ * (see signInNameRepair). Older releases stored the email as it was, such as
+ * alice+cpm@example.com, which the login page refuses; users without OAuth
+ * could then not sign in to change anything. It needs nobody to sign in, so
+ * it suits startup. Returns the usernames it gave out; accounts whose
+ * candidates are all taken are skipped.
+ */
+export async function repairLoginUsernames(): Promise<Array<{ userId: number; username: string }>> {
+  const now = nowIso();
+  return db.transaction((tx) => {
+    const unusable = tx
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        username: users.username,
+        displayUsername: users.displayUsername,
+      })
+      .from(users)
+      .orderBy(users.id)
+      .all()
+      .filter((user) => !isUsableSignInUsername(user.username));
+    const repaired: Array<{ userId: number; username: string }> = [];
+    for (const user of unusable) {
+      const signInName = signInNameRepair(tx, user);
+      if (!signInName) continue;
+      tx.update(users).set({ ...signInName, updatedAt: now }).where(eq(users.id, user.id)).run();
+      repaired.push({ userId: user.id, username: signInName.username });
+    }
+    return repaired;
+  });
+}
+
+/**
+ * Sets a user's password and ends their other sign-ins: every management
+ * session except `keepSessionId` (the caller's, or null to end them all) and
+ * every forward-auth session. It runs as one transaction, so the password
+ * never changes without the revocation or the other way round. API tokens are
+ * separate credentials and are left alone.
+ */
+export async function changeUserPassword(
+  userId: number,
+  passwordHash: string,
+  keepSessionId: number | null
+): Promise<void> {
+  const now = nowIso();
+  db.transaction((tx) => {
+    writeUserPassword(tx, userId, passwordHash, now);
+    tx.delete(sessions)
+      .where(keepSessionId === null
+        ? eq(sessions.userId, userId)
+        : and(eq(sessions.userId, userId), ne(sessions.id, keepSessionId)))
+      .run();
+    tx.delete(forwardAuthSessions).where(eq(forwardAuthSessions.userId, userId)).run();
+  });
+}
+
+/**
+ * The hash of the user's password, or null when the account has none
+ * (OAuth-only). Accounts CPM creates keep it in users.passwordHash; Better
+ * Auth's self-registration writes it only to the credential account. The
+ * change-password route and the profile page use it to decide whether a
+ * current password has to be proven.
+ */
+export async function getUserPasswordHash(user: Pick<User, "id" | "passwordHash">): Promise<string | null> {
+  if (user.passwordHash) return user.passwordHash;
+  const credential = await db
+    .select({ password: accounts.password })
+    .from(accounts)
+    .where(and(
+      eq(accounts.userId, user.id),
+      eq(accounts.providerId, "credential"),
+      isNotNull(accounts.password)
+    ))
+    .get();
+  return credential?.password || null;
+}
+
+/**
+ * The username the user signs in with on the login page, or null when that
+ * page cannot sign them in without OAuth. It looks the user up by username and
+ * checks the password on the credential account, so both have to exist; a
+ * password kept only in users.passwordHash does not count. Unlinking OAuth,
+ * and the profile page's unlink button, go through here so the last working
+ * sign-in method cannot be removed.
+ */
+export async function getPasswordSignInUsername(userId: number): Promise<string | null> {
+  const row = await db
+    .select({ username: users.username })
+    .from(accounts)
+    .innerJoin(users, eq(users.id, accounts.userId))
+    .where(and(
+      eq(accounts.userId, userId),
+      eq(accounts.providerId, "credential"),
+      isNotNull(accounts.password),
+      ne(accounts.password, "")
+    ))
+    .get();
+  return isUsableSignInUsername(row?.username) ? row.username : null;
+}
+
+/**
+ * Why the login page cannot sign a user in with a password:
+ *  - "no-credential": it has no username and password pair for them yet. The
+ *    password is not on the credential account, or the account has no usable
+ *    username; setting or changing the password sets up both.
+ *  - "no-username": no usable username can be made from the account's email
+ *    (see allocateLoginUsername), so no password change helps. Changing the
+ *    email (updateUserProfile) gives a user with a password one right away.
+ */
+export type PasswordSignInBlocker = "no-credential" | "no-username";
+
+export type PasswordSignInStatus =
+  | { username: string; blocker: null }
+  | { username: null; blocker: PasswordSignInBlocker };
+
+/** getPasswordSignInUsername plus, when that is null, the reason. */
+export async function getPasswordSignInStatus(userId: number): Promise<PasswordSignInStatus> {
+  const username = await getPasswordSignInUsername(userId);
+  if (username) return { username, blocker: null };
+  const user = await db
+    .select({ email: users.email, username: users.username })
+    .from(users)
+    .where(eq(users.id, userId))
+    .get();
+  const canGetUsername = !!user &&
+    (isUsableSignInUsername(user.username) || allocateLoginUsername(db, userId, user.email) !== null);
+  return { username: null, blocker: canGetUsername ? "no-credential" : "no-username" };
 }
 
 /**
@@ -285,6 +548,95 @@ export async function updateUserStatus(userId: number, status: string): Promise<
   return updated ? parseDbUser(updated) : null;
 }
 
+/**
+ * The user id in the state of a Better Auth "link account" flow, as text, and
+ * null for every other verification row. Better Auth's OAuth callback links
+ * the identity to this user id without checking a session.
+ */
+const linkStateUserId = sql`case when json_valid(${verifications.value})
+  then cast(json_extract(${verifications.value}, '$.link.userId') as text) end`;
+
+/**
+ * Applies the schema's onDelete rules for a user id: deletes the rows that
+ * belong to the user (sign-ins, sign-in methods, API tokens, memberships,
+ * forward-auth grants) and clears the user from rows that only record who
+ * created or owns them. Production SQLite runs with foreign_keys off, so
+ * none of those rules fire by themselves, and a user later created with the
+ * same id (the primary admin always gets id 1) would take over whatever is
+ * left. It does not touch the users row itself.
+ */
+function deleteUserReferences(tx: DbTransaction, userId: number): void {
+  // onDelete: "cascade". Exchange codes cascade from forward-auth sessions.
+  tx.delete(forwardAuthExchanges)
+    .where(inArray(
+      forwardAuthExchanges.sessionId,
+      tx.select({ id: forwardAuthSessions.id }).from(forwardAuthSessions).where(eq(forwardAuthSessions.userId, userId))
+    ))
+    .run();
+  tx.delete(forwardAuthSessions).where(eq(forwardAuthSessions.userId, userId)).run();
+  tx.delete(forwardAuthAccess).where(eq(forwardAuthAccess.userId, userId)).run();
+  tx.delete(groupMembers).where(eq(groupMembers.userId, userId)).run();
+  tx.delete(sessions).where(eq(sessions.userId, userId)).run();
+  tx.delete(accounts).where(eq(accounts.userId, userId)).run();
+  tx.delete(pendingOAuthLinks).where(eq(pendingOAuthLinks.userId, userId)).run();
+  tx.delete(apiTokens).where(eq(apiTokens.createdBy, userId)).run();
+  tx.delete(verifications).where(sql`${linkStateUserId} = ${String(userId)}`).run();
+
+  // onDelete: "set null".
+  tx.update(auditEvents).set({ userId: null }).where(eq(auditEvents.userId, userId)).run();
+  tx.update(proxyHosts).set({ ownerUserId: null }).where(eq(proxyHosts.ownerUserId, userId)).run();
+  tx.update(l4ProxyHosts).set({ ownerUserId: null }).where(eq(l4ProxyHosts.ownerUserId, userId)).run();
+  tx.update(accessLists).set({ createdBy: null }).where(eq(accessLists.createdBy, userId)).run();
+  tx.update(certificates).set({ createdBy: null }).where(eq(certificates.createdBy, userId)).run();
+  tx.update(caCertificates).set({ createdBy: null }).where(eq(caCertificates.createdBy, userId)).run();
+  tx.update(issuedClientCertificates).set({ createdBy: null })
+    .where(eq(issuedClientCertificates.createdBy, userId)).run();
+  tx.update(mtlsRoles).set({ createdBy: null }).where(eq(mtlsRoles.createdBy, userId)).run();
+  tx.update(mtlsAccessRules).set({ createdBy: null }).where(eq(mtlsAccessRules.createdBy, userId)).run();
+  tx.update(groups).set({ createdBy: null }).where(eq(groups.createdBy, userId)).run();
+}
+
+/** Deletes the user and, in the same transaction, everything deleteUserReferences covers. */
 export async function deleteUser(userId: number): Promise<void> {
-  await db.delete(users).where(eq(users.id, userId));
+  db.transaction((tx) => {
+    deleteUserReferences(tx, userId);
+    tx.delete(users).where(eq(users.id, userId)).run();
+  });
+}
+
+/**
+ * Runs deleteUserReferences, in one transaction, for every user id that rows
+ * still reference although its users row is gone. Older releases left such
+ * rows: their deleteUser removed only the users row. The id can be handed out
+ * again, because the primary admin is always created as id 1 and rebuilding
+ * the users table (migration 0022 does) resets its AUTOINCREMENT counter to
+ * the highest remaining id, and the new user would take over the sessions,
+ * API tokens and sign-in methods. Returns the ids it cleared.
+ */
+export async function deleteOrphanedUserReferences(): Promise<number[]> {
+  // Every column the schema declares as a reference to users.id.
+  const references = (Object.values(schema) as unknown[])
+    .filter((value): value is SQLiteTable => is(value, SQLiteTable))
+    .flatMap((table) => getTableConfig(table).foreignKeys
+      .map((foreignKey) => foreignKey.reference())
+      .filter((reference) => reference.foreignTable === users)
+      .map((reference) => ({ table, column: reference.columns[0] })));
+
+  return db.transaction((tx) => {
+    const orphanIds = new Set<number>();
+    for (const { table, column } of references) {
+      const rows = tx
+        .selectDistinct({ userId: column })
+        .from(table)
+        .where(and(isNotNull(column), notInArray(column, tx.select({ id: users.id }).from(users))))
+        .all();
+      for (const { userId } of rows) orphanIds.add(Number(userId));
+    }
+    for (const userId of orphanIds) deleteUserReferences(tx, userId);
+    // Link-account states that name a user that does not exist, whatever form the id takes.
+    tx.delete(verifications)
+      .where(sql`${linkStateUserId} is not null and ${linkStateUserId} not in (select cast(${users.id} as text) from ${users})`)
+      .run();
+    return [...orphanIds].sort((a, b) => a - b);
+  });
 }

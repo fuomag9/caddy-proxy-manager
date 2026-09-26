@@ -2,7 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/src/lib/auth";
-import { createCaCertificate, deleteCaCertificate, updateCaCertificate, getCaCertificatePrivateKey } from "@/src/lib/models/ca-certificates";
+import {
+  CaPrivateKeyUnavailableError,
+  createCaCertificate,
+  deleteCaCertificate,
+  getCaCertificate,
+  getCaCertificatePrivateKey,
+  updateCaCertificate
+} from "@/src/lib/models/ca-certificates";
 import { createIssuedClientCertificate, revokeIssuedClientCertificate } from "@/src/lib/models/issued-client-certificates";
 import { X509Certificate } from "node:crypto";
 import forge from "node-forge";
@@ -103,10 +110,16 @@ export type IssuedClientCert = {
   exportAlgorithm: "3des" | "aes256";
 };
 
+/**
+ * Expected failures are returned as `{ error }` rather than thrown, because
+ * production Next.js replaces thrown server-action messages with a generic one.
+ */
+export type IssueClientCertResult = IssuedClientCert | { error: string };
+
 export async function issueClientCertificateAction(
   caCertId: number,
   formData: FormData
-): Promise<IssuedClientCert> {
+): Promise<IssueClientCertResult> {
   const session = await requireAdmin();
   const userId = Number(session.user.id);
   const commonName = String(formData.get("common_name") ?? "").trim();
@@ -115,14 +128,20 @@ export async function issueClientCertificateAction(
   const compatibilityMode = formData.get("compatibility_mode") === "on";
   const exportAlgorithm: IssuedClientCert["exportAlgorithm"] = compatibilityMode ? "3des" : "aes256";
 
-  if (!commonName) throw new Error("Common name is required");
-  if (!exportPassword) throw new Error("Export password is required");
+  if (!commonName) return { error: "Common name is required" };
+  if (!exportPassword) return { error: "Export password is required" };
 
-  const caPrivateKeyPem = await getCaCertificatePrivateKey(caCertId);
-  if (!caPrivateKeyPem) throw new Error("This CA has no stored private key — cannot issue client certificates");
+  const caCertRecord = await getCaCertificate(caCertId);
+  if (!caCertRecord) return { error: "CA certificate not found" };
 
-  const caCertRecord = await import("@/src/lib/models/ca-certificates").then(m => m.getCaCertificate(caCertId));
-  if (!caCertRecord) throw new Error("CA certificate not found");
+  let caPrivateKeyPem: string | null;
+  try {
+    caPrivateKeyPem = await getCaCertificatePrivateKey(caCertId);
+  } catch (error) {
+    if (error instanceof CaPrivateKeyUnavailableError) return { error: error.message };
+    throw error;
+  }
+  if (!caPrivateKeyPem) return { error: "This CA has no stored private key — cannot issue client certificates" };
 
   const caKey = forge.pki.privateKeyFromPem(caPrivateKeyPem);
   const caCert = forge.pki.certificateFromPem(caCertRecord.certificatePem);

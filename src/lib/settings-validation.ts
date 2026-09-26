@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { bodyLimitRangeMessage, droppedWafDirectiveMessage, filterCustomDirectives, findInvalidBodyLimitDirective, isValidBodyLimit } from "./caddy-waf";
+import { bodyLimitRangeMessage, customDirectivesError, isValidBodyLimit } from "./caddy-waf";
 import { normalizeDefaultResponseSettings } from "./caddy-default-response";
 import { getProviderDefinition, isValidDnsDuration } from "./dns-providers";
 
@@ -321,7 +321,10 @@ function validateGeoBlock(value: Record<string, unknown>): void {
   httpUrl(redirect, "geoblock.redirect_url", true);
 }
 
-function validateWaf(value: Record<string, unknown>): void {
+/** The stored global WAF settings an update replaces. */
+export type PreviousWafSettings = { custom_directives?: string | null; load_owasp_crs?: boolean } | null;
+
+function validateWaf(value: Record<string, unknown>, previous: PreviousWafSettings): void {
   onlyKeys(
     value,
     [
@@ -343,14 +346,17 @@ function validateWaf(value: Record<string, unknown>): void {
   }
   booleanValue(required(value, "load_owasp_crs", "WAF settings"), "waf.load_owasp_crs");
   const directives = stringValue(required(value, "custom_directives", "WAF settings"), "waf.custom_directives", { max: 100_000, controls: true });
-  const badDirective = findInvalidBodyLimitDirective(directives);
-  if (badDirective) {
-    invalid(`waf.custom_directives has an out-of-range body limit: "${badDirective}" — ${bodyLimitRangeMessage("the byte count")}`);
-  }
-  const { dropped } = filterCustomDirectives(directives);
-  if (dropped.length > 0) {
-    invalid(droppedWafDirectiveMessage(dropped));
-  }
+  // Only lines this update newly drops are rejected, as in the dashboard form:
+  // a stored rule that a later release started dropping must not block
+  // unrelated changes (buildWafHandler still leaves it out and logs it).
+  const directiveError = customDirectivesError(
+    directives,
+    { crsLoaded: value.load_owasp_crs === true },
+    previous
+      ? { directives: previous.custom_directives, options: { crsLoaded: Boolean(previous.load_owasp_crs) } }
+      : undefined
+  );
+  if (directiveError) invalid(directiveError);
   if (value.excluded_rule_ids !== undefined) validateNumberList(value.excluded_rule_ids, "waf.excluded_rule_ids");
   validateBodyLimits(value, "waf");
 }
@@ -411,7 +417,11 @@ export function assertSettingsPayloadSize(input: unknown): void {
 }
 
 /** Strict runtime validation for REST settings writes. */
-export function validateSettingsGroup(group: string, input: unknown): unknown {
+export function validateSettingsGroup(
+  group: string,
+  input: unknown,
+  { previousWaf = null }: { previousWaf?: PreviousWafSettings } = {}
+): unknown {
   assertSettingsPayloadSize(input);
 
   const value = record(input, `${group} settings`);
@@ -428,7 +438,7 @@ export function validateSettingsGroup(group: string, input: unknown): unknown {
     case "dns-provider": validateDnsProvider(value); break;
     case "upstream-dns": validateUpstreamDns(value); break;
     case "geoblock": validateGeoBlock(value); break;
-    case "waf": validateWaf(value); break;
+    case "waf": validateWaf(value, previousWaf); break;
     case "error-pages": validateErrorPages(value); break;
     case "default-response": validateDefaultResponse(value); break;
     default: invalid("Unknown settings group");

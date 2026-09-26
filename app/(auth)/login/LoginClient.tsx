@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { authClient } from "@/src/lib/auth-client";
 import { LogIn } from "lucide-react";
@@ -17,7 +16,6 @@ interface LoginClientProps {
 }
 
 export default function LoginClient({ enabledProviders = [] }: LoginClientProps) {
-  const router = useRouter();
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loginPending, setLoginPending] = useState(false);
   const [oauthPending, setOauthPending] = useState<string | null>(null);
@@ -58,8 +56,11 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
       return;
     }
 
-    router.replace("/");
-    router.refresh();
+    // Full navigation: the dashboard gets a fresh document (and CSP nonce)
+    // instead of running inside the login page's document. replace() keeps
+    // /login out of the history, so Back leaves the app instead of bouncing
+    // through the login page.
+    window.location.replace("/");
   };
 
   const handleOAuthSignIn = async (providerId: string) => {

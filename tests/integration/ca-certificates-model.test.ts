@@ -9,7 +9,9 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../helpers/db';
+import { encryptUnderOtherSecret } from '../helpers/encrypt-under-other-secret';
 import {
+  caCertificates,
   issuedClientCertificates,
   mtlsCertificateRoles,
   mtlsRoles,
@@ -17,7 +19,7 @@ import {
   users,
 } from '../../src/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { ApiConflictError } from '../../src/lib/api-errors';
+import { ApiClientError, ApiConflictError } from '../../src/lib/api-errors';
 
 let db: TestDb;
 
@@ -43,8 +45,15 @@ beforeEach(async () => {
   userId = user.id;
 });
 
-const { createCaCertificate, deleteCaCertificate, listCaCertificates } =
-  await import('../../src/lib/models/ca-certificates');
+const {
+  CaPrivateKeyUnavailableError,
+  createCaCertificate,
+  deleteCaCertificate,
+  getCaCertificatePrivateKey,
+  listCaCertificates,
+  migrateLegacyCaPrivateKeys,
+  updateCaCertificate,
+} = await import('../../src/lib/models/ca-certificates');
 
 function nowIso() { return new Date().toISOString(); }
 
@@ -187,5 +196,95 @@ describe('deleteCaCertificate cascade', () => {
       .from(issuedClientCertificates)
       .where(eq(issuedClientCertificates.caCertificateId, caB.id));
     expect(survivors.map(c => c.id)).toEqual([keep.id]);
+  });
+});
+
+describe('CA private key storage', () => {
+  const KEY = '-----BEGIN PRIVATE KEY-----\nc2VjcmV0\n-----END PRIVATE KEY-----';
+
+  it('stores the key encrypted and returns it decrypted to the signer', async () => {
+    const ca = await createCaCertificate({ name: 'Enc CA', certificatePem: 'CERT', privateKeyPem: KEY }, userId);
+    const [row] = await db.select().from(caCertificates).where(eq(caCertificates.id, ca.id));
+    expect(row.privateKeyPem).toMatch(/^enc:v1:/);
+    expect(row.privateKeyPem).not.toContain('c2VjcmV0');
+    expect(await getCaCertificatePrivateKey(ca.id)).toBe(KEY);
+  });
+
+  it('encrypts legacy plaintext keys idempotently', async () => {
+    const now = nowIso();
+    const [legacy] = await db.insert(caCertificates).values({
+      name: 'Legacy CA', certificatePem: 'CERT', privateKeyPem: KEY, createdAt: now, updatedAt: now,
+    }).returning();
+
+    expect(await migrateLegacyCaPrivateKeys()).toBe(1);
+    expect(await migrateLegacyCaPrivateKeys()).toBe(0);
+    const [row] = await db.select().from(caCertificates).where(eq(caCertificates.id, legacy.id));
+    expect(row.privateKeyPem).toMatch(/^enc:v1:/);
+    expect(await getCaCertificatePrivateKey(legacy.id)).toBe(KEY);
+  });
+
+  async function storedKey(id: number) {
+    const [row] = await db.select().from(caCertificates).where(eq(caCertificates.id, id));
+    return row.privateKeyPem;
+  }
+
+  it('encrypts a key set through updateCaCertificate', async () => {
+    const ca = await createCaCertificate({ name: 'Upd CA', certificatePem: 'CERT' }, userId);
+    expect(await storedKey(ca.id)).toBeNull();
+
+    const updated = await updateCaCertificate(ca.id, { privateKeyPem: `  ${KEY}\n` }, userId);
+
+    expect(updated.hasPrivateKey).toBe(true);
+    expect(await storedKey(ca.id)).toMatch(/^enc:v1:/);
+    expect(await storedKey(ca.id)).not.toContain('c2VjcmV0');
+    expect(await getCaCertificatePrivateKey(ca.id)).toBe(KEY);
+  });
+
+  it('keeps the stored key when an update omits privateKeyPem', async () => {
+    const ca = await createCaCertificate({ name: 'Keep CA', certificatePem: 'CERT', privateKeyPem: KEY }, userId);
+    const before = await storedKey(ca.id);
+
+    await updateCaCertificate(ca.id, { name: 'Renamed CA' }, userId);
+
+    expect(await storedKey(ca.id)).toBe(before);
+    expect(await getCaCertificatePrivateKey(ca.id)).toBe(KEY);
+  });
+
+  it.each([
+    ['an empty string', ''],
+    ['null', null],
+  ])('clears the stored key when updated with %s', async (_label, value) => {
+    const ca = await createCaCertificate({ name: 'Clear CA', certificatePem: 'CERT', privateKeyPem: KEY }, userId);
+
+    // The REST PUT body is untyped JSON, so null reaches the model as-is.
+    const updated = await updateCaCertificate(ca.id, { privateKeyPem: value as string }, userId);
+
+    expect(updated.hasPrivateKey).toBe(false);
+    expect(await storedKey(ca.id)).toBeNull();
+    expect(await getCaCertificatePrivateKey(ca.id)).toBeNull();
+  });
+
+  it('reports a key encrypted under another SESSION_SECRET as unavailable, with an actionable message', async () => {
+    const now = nowIso();
+    const [ca] = await db.insert(caCertificates).values({
+      name: 'Rotated CA', certificatePem: 'CERT', privateKeyPem: encryptUnderOtherSecret(KEY), createdAt: now, updatedAt: now,
+    }).returning();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const failure = getCaCertificatePrivateKey(ca.id);
+
+    await expect(failure).rejects.toBeInstanceOf(CaPrivateKeyUnavailableError);
+    await expect(failure).rejects.toBeInstanceOf(ApiClientError);
+    await expect(failure).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringMatching(/cannot be decrypted with the current SESSION_SECRET.*create a new CA/),
+    });
+    expect(JSON.stringify(errorSpy.mock.calls)).not.toContain('c2VjcmV0');
+    // A key is still stored, so the CA keeps reporting one; the failure is
+    // surfaced when the key is used.
+    expect((await listCaCertificates()).find((c) => c.id === ca.id)?.hasPrivateKey).toBe(true);
+    // The startup migration leaves the undecryptable value alone.
+    expect(await migrateLegacyCaPrivateKeys()).toBe(0);
+    errorSpy.mockRestore();
   });
 });

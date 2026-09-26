@@ -1,6 +1,7 @@
 import db, { nowIso } from "./db";
 import { settings } from "./db/schema";
 import { eq } from "drizzle-orm";
+import { encryptSecret, isEncryptedSecret } from "./secret";
 import { sanitizeErrorPageRules, type ErrorPageRule } from "./models/proxy-hosts";
 import {
   normalizeDefaultResponseSettings,
@@ -206,8 +207,20 @@ export async function getCloudflareSettings(): Promise<CloudflareSettings | null
   return await getEffectiveSetting<CloudflareSettings>("cloudflare");
 }
 
+/**
+ * The legacy cloudflare setting with its API token encrypted. Only the
+ * token's presence is ever read, but it is a live credential. Anything that is
+ * not a settings object with a plaintext token is returned unchanged.
+ */
+export function encryptCloudflareSettingToken(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const { apiToken } = value as { apiToken?: unknown };
+  if (typeof apiToken !== "string" || !apiToken || isEncryptedSecret(apiToken)) return value;
+  return { ...value, apiToken: encryptSecret(apiToken) };
+}
+
 export async function saveCloudflareSettings(settings: CloudflareSettings): Promise<void> {
-  await setSetting("cloudflare", settings);
+  await setSetting("cloudflare", encryptCloudflareSettingToken(settings));
 }
 
 export async function getGeneralSettings(): Promise<GeneralSettings | null> {

@@ -13,19 +13,33 @@ permissions:
 jobs:
   automerge:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    # Only PRs opened by Dependabot itself, not other PRs Dependabot pushed to.
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
         uses: dependabot/fetch-metadata@v3
 
+      # Auto-merge only patch/minor updates of the application's Bun packages
+      # (fetch-metadata reports the ecosystem from the branch name,
+      # dependabot/bun/...). Major versions, GitHub Actions, Go modules (the
+      # Caddy build and its plugins), container images and any ecosystem added
+      # to dependabot.yml later wait for a human review.
       - name: Auto-approve the PR
+        if: >-
+          steps.metadata.outputs.package-ecosystem == 'bun' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-minor')
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Enable auto-merge
+        if: >-
+          steps.metadata.outputs.package-ecosystem == 'bun' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-minor')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}

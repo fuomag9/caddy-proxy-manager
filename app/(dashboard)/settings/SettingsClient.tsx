@@ -12,6 +12,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -39,6 +47,9 @@ import type {
   DefaultResponseSettings,
 } from "@/lib/settings";
 import type { DnsProviderApiStatus, DnsProviderDefinition } from "@/src/lib/dns-providers";
+import type { SyncKeyPin } from "@/src/lib/instance-sync-key-pins";
+import { UNREADABLE_SYNC_KEY_PIN_SOURCE } from "@/src/lib/instance-sync-view";
+import { formatDateTimeUtc } from "@/src/lib/date-format";
 import { GeoBlockFields } from "@/components/proxy-hosts/GeoBlockFields";
 import { ErrorPagesFields } from "@/components/proxy-hosts/ErrorPagesFields";
 import OAuthProvidersSection from "./OAuthProvidersSection";
@@ -58,6 +69,9 @@ import {
   createSlaveInstanceAction,
   deleteSlaveInstanceAction,
   toggleSlaveInstanceAction,
+  updateSlaveInstanceAction,
+  pinSlaveSyncKeyAction,
+  resetSlaveSyncKeyPinAction,
   syncSlaveInstancesAction,
   updateGeoBlockSettingsAction,
   updateErrorPagesSettingsAction,
@@ -419,6 +433,10 @@ type Props = {
       hasToken: boolean;
       lastSyncAt: string | null;
       lastSyncError: string | null;
+      /** This instance's own sync key id, which the master pins. */
+      syncKeyId: string;
+      /** This instance's own sync public key (raw X25519, base64). */
+      syncPublicKey: string;
     } | null;
     master: {
       instances: Array<{
@@ -428,14 +446,26 @@ type Props = {
         enabled: boolean;
         lastSyncAt: string | null;
         lastSyncError: string | null;
+        syncKeyPin: SyncKeyPinView | null;
       }>;
       envInstances: Array<{
         name: string;
         url: string;
+        /** Set in INSTANCE_SLAVES; sync checks it instead of the stored pin. */
+        syncKeyId?: string;
+        /** Set in INSTANCE_SLAVES; sync checks it instead of the stored pin. */
+        syncPublicKey?: string;
+        syncKeyPin: SyncKeyPinView | null;
       }>;
+      /** Pins of URLs no instance or INSTANCE_SLAVES entry syncs to. */
+      orphanSyncKeyPins: Array<SyncKeyPinView & { url: string }>;
     } | null;
   };
 };
+
+type SyncKeyPinView = Pick<SyncKeyPin, "keyId" | "publicKey" | "pinnedAt" | "source">;
+
+type SyncKeyPinTarget = { instanceId: number } | { slaveUrl: string };
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -794,6 +824,15 @@ function SyncSection({
               </Button>
             </div>
           </form>
+          {instanceSync.slave && (
+            <p className="text-xs text-muted-foreground">
+              This instance&rsquo;s sync key id is{" "}
+              <span className="font-mono">{instanceSync.slave.syncKeyId}</span> and its sync public key is{" "}
+              <span className="font-mono break-all">{instanceSync.slave.syncPublicKey}</span>. The master pins
+              this key on the first sync, or an admin pastes it there under Key pin; it changes with SESSION_SECRET.
+              Compare the full key when checking a pin: the key id is only a short fingerprint.
+            </p>
+          )}
           {instanceSync.slave?.lastSyncError ? (
             <WarnAlert>
               {instanceSync.slave?.lastSyncAt
@@ -810,103 +849,537 @@ function SyncSection({
         </FormCard>
       )}
 
-      {isMaster && (
-        <FormCard title={`Slave Instances (${(instanceSync.master?.instances.length ?? 0) + (instanceSync.master?.envInstances.length ?? 0)})`}>
-          <form action={slaveInstanceFormAction} className="flex flex-col gap-3">
-            {slaveInstanceState?.message && (
-              <StatusAlert message={slaveInstanceState.message} success={slaveInstanceState.success} />
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="inst-name">Instance name</Label>
-                <Input id="inst-name" name="name" placeholder="Edge node EU-1" className="h-8 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="inst-base-url">Base URL</Label>
-                <Input id="inst-base-url" name="baseUrl" placeholder="https://slave-1.example.com" className="h-8 text-sm" />
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="inst-api-token">Slave API token</Label>
-              <Input id="inst-api-token" name="apiToken" type="password" autoComplete="new-password" className="h-8 text-sm" />
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <form action={syncFormAction}>
-                {syncState?.message && (
-                  <StatusAlert message={syncState.message} success={syncState.success} />
-                )}
-                <Button type="submit" variant="outline" size="sm">Sync now</Button>
-              </form>
-              <Button type="submit" size="sm">Add slave instance</Button>
-            </div>
-          </form>
-
-          {instanceSync.master?.instances.length === 0 && instanceSync.master?.envInstances.length === 0 && (
-            <div className="mt-3">
-              <InfoAlert>No slave instances configured yet.</InfoAlert>
-            </div>
-          )}
-
-          {instanceSync.master?.envInstances && instanceSync.master.envInstances.length > 0 && (
-            <div className="mt-3 flex flex-col gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Environment-configured (INSTANCE_SLAVES)
-              </p>
-              {instanceSync.master.envInstances.map((instance, index) => (
-                <div
-                  key={`env-${index}`}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-semibold">{instance.name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{instance.url}</p>
-                  </div>
-                  <StatusChip status="active" label="ENV" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {instanceSync.master?.instances && instanceSync.master.instances.length > 0 && (
-            <div className="mt-3 flex flex-col gap-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">UI-configured instances</p>
-              {instanceSync.master.instances.map((instance) => (
-                <div
-                  key={instance.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-semibold">{instance.name}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{instance.baseUrl}</p>
-                    <span className="text-xs text-muted-foreground">
-                      {instance.lastSyncAt ? `Last sync: ${instance.lastSyncAt}` : "No sync yet"}
-                    </span>
-                    {instance.lastSyncError && (
-                      <span className="block text-xs text-destructive">{instance.lastSyncError}</span>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <form action={toggleSlaveInstanceAction}>
-                      <input type="hidden" name="instanceId" value={instance.id} />
-                      <input type="hidden" name="enabled" value={instance.enabled ? "" : "on"} />
-                      <Button type="submit" variant="outline" size="sm" className={instance.enabled ? "text-amber-600 border-amber-500/50" : "text-emerald-600 border-emerald-500/50"}>
-                        {instance.enabled ? "Disable" : "Enable"}
-                      </Button>
-                    </form>
-                    <form action={deleteSlaveInstanceAction}>
-                      <input type="hidden" name="instanceId" value={instance.id} />
-                      <Button type="submit" variant="outline" size="sm" className="text-destructive border-destructive/50">
-                        Remove
-                      </Button>
-                    </form>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </FormCard>
+      {isMaster && instanceSync.master && (
+        <SlaveInstancesCard
+          master={instanceSync.master}
+          slaveInstanceState={slaveInstanceState}
+          slaveInstanceFormAction={slaveInstanceFormAction}
+          syncState={syncState}
+          syncFormAction={syncFormAction}
+        />
       )}
     </>
+  );
+}
+
+function SlaveInstancesCard({
+  master,
+  slaveInstanceState,
+  slaveInstanceFormAction,
+  syncState,
+  syncFormAction,
+}: {
+  master: NonNullable<Props["instanceSync"]["master"]>;
+  slaveInstanceState: { success: boolean; message?: string } | null;
+  slaveInstanceFormAction: (payload: FormData) => void;
+  syncState: { success: boolean; message?: string } | null;
+  syncFormAction: (payload: FormData) => void;
+}) {
+  // What the last key pin or edit dialog did; the dialog itself has closed.
+  const [notice, setNotice] = useState<string | null>(null);
+
+  return (
+    <FormCard title={`Slave Instances (${master.instances.length + master.envInstances.length})`}>
+      <form action={slaveInstanceFormAction} className="flex flex-col gap-3">
+        {slaveInstanceState?.message && (
+          <StatusAlert message={slaveInstanceState.message} success={slaveInstanceState.success} />
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="inst-name">Instance name</Label>
+            <Input id="inst-name" name="name" placeholder="Edge node EU-1" className="h-8 text-sm" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="inst-base-url">Base URL</Label>
+            <Input id="inst-base-url" name="baseUrl" placeholder="https://slave-1.example.com" className="h-8 text-sm" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="inst-api-token">Slave API token</Label>
+          <Input id="inst-api-token" name="apiToken" type="password" autoComplete="new-password" className="h-8 text-sm" />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <form action={syncFormAction}>
+            {syncState?.message && (
+              <StatusAlert message={syncState.message} success={syncState.success} />
+            )}
+            <Button type="submit" variant="outline" size="sm">Sync now</Button>
+          </form>
+          <Button type="submit" size="sm">Add slave instance</Button>
+        </div>
+      </form>
+
+      {notice && (
+        <div className="mt-3">
+          <StatusAlert message={notice} success />
+        </div>
+      )}
+
+      {master.instances.length === 0 && master.envInstances.length === 0 && (
+        <div className="mt-3">
+          <InfoAlert>No slave instances configured yet.</InfoAlert>
+        </div>
+      )}
+
+      {master.envInstances.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Environment-configured (INSTANCE_SLAVES)
+          </p>
+          {master.envInstances.map((instance, index) => (
+            <div
+              key={`env-${index}`}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/20 px-4 py-3"
+            >
+              <div>
+                <p className="text-sm font-semibold">{instance.name}</p>
+                <p className="text-xs text-muted-foreground font-mono">{instance.url}</p>
+                <SyncKeyPinStatus
+                  pin={instance.syncKeyPin}
+                  configuredKeyId={instance.syncKeyId}
+                  configuredFullKey={instance.syncPublicKey !== undefined}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                {!instance.syncKeyId && (
+                  <SyncKeyPinButton
+                    slaveName={instance.name}
+                    slaveUrl={instance.url}
+                    pin={instance.syncKeyPin}
+                    target={{ slaveUrl: instance.url }}
+                    onDone={setNotice}
+                  />
+                )}
+                <StatusChip status="active" label="ENV" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {master.instances.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">UI-configured instances</p>
+          {master.instances.map((instance) => (
+            <div
+              key={instance.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-4 py-3"
+            >
+              <div>
+                <p className="text-sm font-semibold">{instance.name}</p>
+                <p className="text-xs text-muted-foreground font-mono">{instance.baseUrl}</p>
+                <span className="text-xs text-muted-foreground">
+                  {instance.lastSyncAt ? `Last sync: ${instance.lastSyncAt}` : "No sync yet"}
+                </span>
+                {instance.lastSyncError && (
+                  <span className="block text-xs text-destructive">{instance.lastSyncError}</span>
+                )}
+                <SyncKeyPinStatus pin={instance.syncKeyPin} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <SyncKeyPinButton
+                  slaveName={instance.name}
+                  slaveUrl={instance.baseUrl}
+                  pin={instance.syncKeyPin}
+                  target={{ instanceId: instance.id }}
+                  onDone={setNotice}
+                />
+                <EditSlaveInstanceButton instance={instance} onDone={setNotice} />
+                <form action={toggleSlaveInstanceAction}>
+                  <input type="hidden" name="instanceId" value={instance.id} />
+                  <input type="hidden" name="enabled" value={instance.enabled ? "" : "on"} />
+                  <Button type="submit" variant="outline" size="sm" className={instance.enabled ? "text-amber-600 border-amber-500/50" : "text-emerald-600 border-emerald-500/50"}>
+                    {instance.enabled ? "Disable" : "Enable"}
+                  </Button>
+                </form>
+                <RemoveSlaveInstanceButton instance={instance} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {master.orphanSyncKeyPins.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Key pins without a slave</p>
+          <p className="text-xs text-muted-foreground">
+            No instance or INSTANCE_SLAVES entry syncs to these URLs any more. A slave added at one of them
+            inherits its pin, and its syncs fail if it presents another key.
+          </p>
+          {master.orphanSyncKeyPins.map((pin) => (
+            <div
+              key={pin.url}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed px-4 py-3"
+            >
+              <div>
+                <p className="text-xs text-muted-foreground font-mono">{pin.url}</p>
+                <SyncKeyPinStatus pin={pin} />
+              </div>
+              <SyncKeyPinButton
+                slaveName={pin.url}
+                slaveUrl={pin.url}
+                pin={pin}
+                target={{ slaveUrl: pin.url }}
+                onDone={setNotice}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </FormCard>
+  );
+}
+
+const SYNC_KEY_PIN_SOURCE_LABELS: Record<string, string> = {
+  "first-use": "first use",
+  rotation: "rotated",
+  manual: "set by an admin",
+};
+
+/** A slave's pinned sync key, or the key its INSTANCE_SLAVES entry sets. */
+function SyncKeyPinStatus({
+  pin,
+  configuredKeyId,
+  configuredFullKey = false,
+}: {
+  pin: SyncKeyPinView | null;
+  configuredKeyId?: string;
+  configuredFullKey?: boolean;
+}) {
+  if (configuredKeyId) {
+    return (
+      <span className="block text-xs text-muted-foreground">
+        Sync key <span className="font-mono">{configuredKeyId}</span> (
+        {configuredFullKey ? "full key set in INSTANCE_SLAVES" : "set in INSTANCE_SLAVES"})
+      </span>
+    );
+  }
+  if (!pin) {
+    return (
+      <span className="block text-xs text-muted-foreground">
+        Sync key not pinned yet: pinned on the next sealed sync, or pin the slave&rsquo;s key now
+      </span>
+    );
+  }
+  if (pin.source === UNREADABLE_SYNC_KEY_PIN_SOURCE) {
+    return (
+      <span className="block text-xs text-destructive">
+        The stored sync key pin cannot be read by this release; syncs fail until the slave&rsquo;s key is pinned
+        or the pin is reset
+      </span>
+    );
+  }
+  const label = SYNC_KEY_PIN_SOURCE_LABELS[pin.source] ?? pin.source;
+  const pinnedAt = Number.isNaN(Date.parse(pin.pinnedAt)) ? null : `${formatDateTimeUtc(pin.pinnedAt)} UTC`;
+  return (
+    <span className="block text-xs text-muted-foreground">
+      Sync key <span className="font-mono">{pin.keyId}</span>, pinned{pinnedAt ? ` ${pinnedAt}` : ""}
+      {` (${label})`}
+    </span>
+  );
+}
+
+function SlaveTargetInput({ target }: { target: SyncKeyPinTarget }) {
+  return "instanceId" in target
+    ? <input type="hidden" name="instanceId" value={target.instanceId} />
+    : <input type="hidden" name="slaveUrl" value={target.slaveUrl} />;
+}
+
+type ActionState = { success: boolean; message?: string } | null;
+
+/** An action for a dialog form that reports success through `onDone` (which closes the dialog). */
+function useDialogAction(
+  action: (prevState: ActionState, formData: FormData) => Promise<{ success: boolean; message?: string }>,
+  onDone: (message: string) => void
+) {
+  return useActionState(async (prevState: ActionState, formData: FormData) => {
+    const result = await action(prevState, formData);
+    if (result.success) onDone(result.message ?? "");
+    return result;
+  }, null);
+}
+
+function SyncKeyPinButton({
+  slaveName,
+  slaveUrl,
+  pin,
+  target,
+  onDone,
+}: {
+  slaveName: string;
+  slaveUrl: string;
+  pin: SyncKeyPinView | null;
+  target: SyncKeyPinTarget;
+  onDone: (message: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+        Key pin
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg">
+          {/* Mounted while open only, so each opening starts without the last result. */}
+          <SyncKeyPinDialogBody
+            slaveName={slaveName}
+            slaveUrl={slaveUrl}
+            pin={pin}
+            target={target}
+            onDone={(message) => {
+              setOpen(false);
+              onDone(message);
+            }}
+            onClose={() => setOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** Pin a key read from the slave, or reset the pin; the contents of SyncKeyPinButton's dialog. */
+export function SyncKeyPinDialogBody({
+  slaveName,
+  slaveUrl,
+  pin,
+  target,
+  onDone,
+  onClose,
+}: {
+  slaveName: string;
+  slaveUrl: string;
+  pin: SyncKeyPinView | null;
+  target: SyncKeyPinTarget;
+  onDone: (message: string) => void;
+  onClose: () => void;
+}) {
+  const [pinState, pinFormAction, pinPending] = useDialogAction(pinSlaveSyncKeyAction, onDone);
+  const [resetState, resetFormAction, resetPending] = useDialogAction(resetSlaveSyncKeyPinAction, onDone);
+  const unreadable = pin?.source === UNREADABLE_SYNC_KEY_PIN_SOURCE;
+  const pinnedKey = pin && !unreadable ? <span className="font-mono">{pin.keyId}</span> : "the stored pin";
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Sync key pin of &ldquo;{slaveName}&rdquo;</DialogTitle>
+        <DialogDescription>
+          The master seals synced certificate private keys and DNS provider credentials only to the key pinned
+          for <span className="font-mono">{slaveUrl}</span>.
+        </DialogDescription>
+      </DialogHeader>
+      <SyncKeyPinStatus pin={pin} />
+      {pin && !unreadable && (
+        <p className="text-xs text-muted-foreground">
+          Pinned public key: <span className="font-mono break-all">{pin.publicKey}</span>. Compare it with the one on
+          the slave&rsquo;s own Instance Sync settings; the key id is only a short fingerprint.
+        </p>
+      )}
+      <form action={pinFormAction} className="flex flex-col gap-2">
+        <SlaveTargetInput target={target} />
+        <Label htmlFor="sync-public-key">Slave&rsquo;s sync public key</Label>
+        <Input
+          id="sync-public-key"
+          name="publicKey"
+          placeholder="44 characters of base64"
+          autoComplete="off"
+          spellCheck={false}
+          className="h-8 font-mono text-xs"
+        />
+        <p className="text-xs text-muted-foreground">
+          Copy it from the slave&rsquo;s own Instance Sync settings, or GET /api/v1/instances/sync-key on the
+          slave, over a channel you trust, not through the connection the master syncs over. Syncs are then sealed
+          to this key only{pin ? ", in place of the current pin" : ""}.
+        </p>
+        {pinState && !pinState.success && pinState.message && (
+          <StatusAlert message={pinState.message} success={false} />
+        )}
+        <div className="flex justify-end">
+          <Button type="submit" size="sm" disabled={pinPending}>
+            Pin key
+          </Button>
+        </div>
+      </form>
+      {pin && (
+        <form action={resetFormAction} className="flex flex-col gap-2 border-t pt-4">
+          <SlaveTargetInput target={target} />
+          <p className="text-sm">
+            Resetting stops trusting {pinnedKey}. The next sync then pins whatever key answers at{" "}
+            <span className="font-mono">{slaveUrl}</span>, with no proof that it belongs to this slave: if that
+            connection is intercepted, the synced secrets are sealed to the interceptor&rsquo;s key. Until a key is
+            pinned again, anything answering there like a slave on v1.12.0 or earlier (HTTP 405) receives the
+            certificate private keys unsealed.
+          </p>
+          <p className="text-sm">
+            Only reset after verifying the slave was re-keyed on purpose, for example its SESSION_SECRET was
+            replaced without keeping the old value in SESSION_SECRET_PREVIOUS; pinning its new key above avoids
+            both risks. After the next sync, check that the pinned key matches the one on the slave&rsquo;s
+            Instance Sync settings.
+          </p>
+          {resetState && !resetState.success && resetState.message && (
+            <StatusAlert message={resetState.message} success={false} />
+          )}
+          <div className="flex justify-end">
+            <Button type="submit" variant="destructive" size="sm" disabled={resetPending}>
+              Reset key pin
+            </Button>
+          </div>
+        </form>
+      )}
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Close
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+type SlaveInstanceView = NonNullable<Props["instanceSync"]["master"]>["instances"][number];
+
+function EditSlaveInstanceButton({
+  instance,
+  onDone,
+}: {
+  instance: SlaveInstanceView;
+  onDone: (message: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+        Edit
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <EditSlaveInstanceForm
+            instance={instance}
+            onDone={(message) => {
+              setOpen(false);
+              onDone(message);
+            }}
+            onClose={() => setOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** Change an instance's name, URL or token without removing it (and its key pin). */
+export function EditSlaveInstanceForm({
+  instance,
+  onDone,
+  onClose,
+}: {
+  instance: SlaveInstanceView;
+  onDone: (message: string) => void;
+  onClose: () => void;
+}) {
+  const [state, formAction, pending] = useDialogAction(updateSlaveInstanceAction, onDone);
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <DialogHeader>
+        <DialogTitle>Edit &ldquo;{instance.name}&rdquo;</DialogTitle>
+        <DialogDescription>
+          A new token keeps the sync key pin. A base URL that reaches another endpoint removes the pin of the old
+          one, unless another slave uses it; the new URL is pinned on its next sync, or pin its key after saving.
+        </DialogDescription>
+      </DialogHeader>
+      <input type="hidden" name="instanceId" value={instance.id} />
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`edit-inst-name-${instance.id}`}>Instance name</Label>
+        <Input id={`edit-inst-name-${instance.id}`} name="name" defaultValue={instance.name} className="h-8 text-sm" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`edit-inst-base-url-${instance.id}`}>Base URL</Label>
+        <Input id={`edit-inst-base-url-${instance.id}`} name="baseUrl" defaultValue={instance.baseUrl} className="h-8 text-sm" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`edit-inst-api-token-${instance.id}`}>Slave API token</Label>
+        <Input
+          id={`edit-inst-api-token-${instance.id}`}
+          name="apiToken"
+          type="password"
+          autoComplete="new-password"
+          placeholder="Leave blank to keep the current token"
+          className="h-8 text-sm"
+        />
+      </div>
+      {state && !state.success && state.message && <StatusAlert message={state.message} success={false} />}
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending}>
+          Save
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+/** Remove an instance; one with a sync key pin only after a confirmation, since the pin goes with it. */
+function RemoveSlaveInstanceButton({ instance }: { instance: SlaveInstanceView }) {
+  const [open, setOpen] = useState(false);
+  const removeForm = (
+    <form action={deleteSlaveInstanceAction}>
+      <input type="hidden" name="instanceId" value={instance.id} />
+      <Button type="submit" variant="outline" size="sm" className="text-destructive border-destructive/50">
+        Remove
+      </Button>
+    </form>
+  );
+  if (!instance.syncKeyPin) return removeForm;
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="text-destructive border-destructive/50"
+        onClick={() => setOpen(true)}
+      >
+        Remove
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <RemovePinnedSlaveConfirmation instance={instance} onClose={() => setOpen(false)} />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export function RemovePinnedSlaveConfirmation({
+  instance,
+  onClose,
+}: {
+  instance: SlaveInstanceView;
+  onClose: () => void;
+}) {
+  return (
+    <form action={deleteSlaveInstanceAction} className="flex flex-col gap-3">
+      <DialogHeader>
+        <DialogTitle>Remove &ldquo;{instance.name}&rdquo;?</DialogTitle>
+        <DialogDescription>
+          This also removes the sync key pin of <span className="font-mono">{instance.baseUrl}</span>, unless
+          another slave uses that URL. Added again, the slave is pinned on its next sync to whatever key answers,
+          and until then anything answering there like a slave on v1.12.0 or earlier (HTTP 405) receives the
+          certificate private keys unsealed.
+        </DialogDescription>
+      </DialogHeader>
+      <p className="text-sm">To change its name or token, use Edit instead: that keeps the pin. A new base URL starts unpinned either way.</p>
+      <input type="hidden" name="instanceId" value={instance.id} />
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="destructive">
+          Remove
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }
 
@@ -1046,7 +1519,10 @@ function DefaultResponseSection({
                   className="h-8 w-28 font-mono"
                 />
               </FormRow>
-              <FormRow label="Response body" hint="Plain text, JSON, or custom HTML. Empty is allowed.">
+              <FormRow
+                label="Response body"
+                hint="Plain text, JSON, or custom HTML. Empty is allowed. Request placeholders such as {http.request.host} are expanded; {env.*}, {system.*} and {file.*} are sent literally."
+              >
                 <Textarea
                   name="body"
                   defaultValue={defaultResponse?.mode === "respond" ? defaultResponse.body ?? "" : ""}
@@ -1079,7 +1555,10 @@ function DefaultResponseSection({
                   </SelectContent>
                 </Select>
               </FormRow>
-              <FormRow label="Redirect URL" hint="Absolute, relative, and Caddy placeholder-based targets are supported.">
+              <FormRow
+                label="Redirect URL"
+                hint="Absolute and relative targets are supported. Request placeholders such as {http.request.uri} are expanded; {env.*}, {system.*} and {file.*} are sent literally."
+              >
                 <Input
                   name="redirectUrl"
                   defaultValue={defaultResponse?.mode === "redirect" ? defaultResponse.redirectUrl ?? "" : ""}

@@ -202,7 +202,7 @@ export async function verifyAndLinkOAuth(
   }
 
   // Verify password
-  const isValid = bcrypt.compareSync(password, user.passwordHash);
+  const isValid = await bcrypt.compare(password, user.passwordHash);
   if (!isValid) {
     return false;
   }

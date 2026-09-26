@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -21,8 +22,10 @@ import { authClient } from "@/src/lib/auth-client";
 import { Camera, Check, Clock, Copy, Key, Link, LogIn, Lock, LogOut, Monitor, Plus, Trash2, Unlink, User, AlertTriangle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { ApiToken } from "@/lib/models/api-tokens";
+import type { PasswordSignInBlocker } from "@/src/lib/models/user";
 import { createApiTokenAction, deleteApiTokenAction } from "../api-tokens/actions";
 import { revokeSessionAction, revokeOtherSessionsAction } from "./session-actions";
+import { passwordPolicyMessage } from "@/src/lib/password-policy";
 
 interface ActiveSession {
   id: number;
@@ -65,9 +68,34 @@ interface UserData {
   name: string | null;
   provider: string | null;
   subject: string | null;
-  passwordHash: string | null;
+  hasPassword: boolean;
+  /** The login page username, or null when the user cannot sign in there without OAuth. */
+  signInUsername: string | null;
+  /** Why signInUsername is null. */
+  passwordSignInBlocker: PasswordSignInBlocker | null;
   role: string;
   avatarUrl: string | null;
+}
+
+/**
+ * What keeps the login page from accepting the user's password and how to fix
+ * it, or null when it accepts it or the user has not set one (which needs no
+ * explanation).
+ */
+function passwordSignInProblem(user: UserData): string | null {
+  if (user.signInUsername) return null;
+  if (user.passwordSignInBlocker === "no-username") {
+    const prefix = "Your account has no username the sign-in page accepts, and none could be made from your email address, " +
+      "so a password cannot be used to sign in. Ask an administrator to change your email address";
+    // A password on the account gets its username with the new email; without one, setting it does.
+    return user.hasPassword
+      ? `${prefix}. This page then shows the username to sign in with.`
+      : `${prefix}, then set your password here.`;
+  }
+  if (user.hasPassword) {
+    return "Your password cannot be used on the sign-in page yet. Change it once here to enable password sign-in.";
+  }
+  return null;
 }
 
 interface ProfileClientProps {
@@ -80,6 +108,7 @@ interface ProfileClientProps {
 }
 
 export default function ProfileClient({ user, linkedProviders, enabledProviders, apiTokens, sessions }: ProfileClientProps) {
+  const router = useRouter();
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [unlinkDialogOpen, setUnlinkDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -99,7 +128,9 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
     return provider;
   };
 
-  const hasPassword = !!user.passwordHash;
+  const hasPassword = user.hasPassword;
+  const canUnlinkOAuth = user.signInUsername !== null;
+  const signInProblem = passwordSignInProblem(user);
   const linkedNames = linkedProviders.map((l) =>
     enabledProviders.find((p) => p.id === l.providerId)?.name ?? getProviderName(l.providerId)
   );
@@ -114,8 +145,10 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
       return;
     }
 
-    if (newPassword.length < 12) {
-      setError("Password must be at least 12 characters long");
+    // Mirrors the server-side policy so most mistakes show up without a round trip.
+    const policyError = passwordPolicyMessage(newPassword);
+    if (policyError) {
+      setError(policyError);
       return;
     }
 
@@ -139,12 +172,14 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
         return;
       }
 
-      setSuccess("Password changed successfully");
+      setSuccess(data.message || "Password changed successfully");
       setPasswordDialogOpen(false);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       setLoading(false);
+      // Picks up hasPassword for a first password and drops the revoked sessions.
+      router.refresh();
     } catch {
       setError("An error occurred while changing password");
       setLoading(false);
@@ -152,7 +187,7 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
   };
 
   const handleUnlinkOAuth = async () => {
-    if (!hasPassword) {
+    if (!canUnlinkOAuth) {
       setError("Cannot unlink OAuth: You must set a password first");
       return;
     }
@@ -427,6 +462,13 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
               </Badge>
             </div>
 
+            {user.signInUsername && (
+              <div>
+                <p className="text-sm text-muted-foreground">Sign-in username</p>
+                <p className="text-sm">{user.signInUsername}</p>
+              </div>
+            )}
+
             {hasPassword && (
               <div>
                 <p className="text-sm text-muted-foreground">Password</p>
@@ -447,18 +489,29 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
             <Separator />
 
             {hasPassword ? (
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Change your password to maintain account security</p>
-                <Button variant="outline" onClick={() => setPasswordDialogOpen(true)}>
-                  Change Password
-                </Button>
+              <div className="flex flex-col gap-3">
+                {signInProblem && (
+                  <Alert className="border-yellow-500/50 text-yellow-700 dark:text-yellow-400">
+                    <AlertDescription>{signInProblem}</AlertDescription>
+                  </Alert>
+                )}
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Change your password to maintain account security</p>
+                  <Button variant="outline" onClick={() => setPasswordDialogOpen(true)}>
+                    Change Password
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
                 <Alert className="border-yellow-500/50 text-yellow-700 dark:text-yellow-400">
                   <AlertDescription>
-                    You are using OAuth-only authentication. Setting a password will allow you to
-                    sign in with either OAuth or credentials.
+                    {signInProblem ?? (
+                      <>
+                        You are using OAuth-only authentication. Setting a password will allow you to
+                        sign in with either OAuth or credentials.
+                      </>
+                    )}
                   </AlertDescription>
                 </Alert>
                 <Button onClick={() => setPasswordDialogOpen(true)}>
@@ -557,7 +610,7 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
                       : <>Your account is linked to: {linkedNames.join(", ")}</>}
                   </p>
 
-                  {hasPassword ? (
+                  {canUnlinkOAuth ? (
                     <Button
                       variant="outline"
                       className="text-yellow-600 border-yellow-600/50"
@@ -569,7 +622,9 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
                   ) : (
                     <Alert className="border-blue-500/50 text-blue-700 dark:text-blue-400">
                       <AlertDescription>
-                        To unlink OAuth, you must first set a password as a fallback authentication method.
+                        {signInProblem
+                          ? `${signInProblem} OAuth can be unlinked once password sign-in works.`
+                          : "To unlink OAuth, you must first set a password as a fallback authentication method."}
                       </AlertDescription>
                     </Alert>
                   )}
@@ -777,7 +832,7 @@ export default function ProfileClient({ user, linkedProviders, enabledProviders,
             <DialogTitle>Unlink OAuth Account</DialogTitle>
             <DialogDescription>
               Are you sure you want to unlink your {linkedNames.join(", ")} account?
-              You will only be able to sign in with your username and password after this.
+              You will only be able to sign in with your username ({user.signInUsername}) and password after this.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

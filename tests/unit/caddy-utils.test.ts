@@ -14,6 +14,7 @@ import {
   parseUpstreamTarget,
   formatDialAddress,
   toDurationMs,
+  escapeHostPlaceholders,
 } from '@/src/lib/caddy-utils';
 
 // ---------------------------------------------------------------------------
@@ -379,5 +380,29 @@ describe('toDurationMs', () => {
 
   it('returns null for zero-duration', () => {
     expect(toDurationMs('0s')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// escapeHostPlaceholders
+// ---------------------------------------------------------------------------
+
+describe('escapeHostPlaceholders', () => {
+  it('escapes file, env and system placeholders', () => {
+    expect(escapeHostPlaceholders('<p>{file./etc/hosts}</p>')).toBe('<p>\\{file./etc/hosts}</p>');
+    expect(escapeHostPlaceholders('{env.HOME} {system.hostname}')).toBe('\\{env.HOME} \\{system.hostname}');
+  });
+
+  it('leaves request placeholders and ordinary braces alone', () => {
+    const body = 'body{margin:0} {http.request.uri} {http.error.status_code}';
+    expect(escapeHostPlaceholders(body)).toBe(body);
+  });
+
+  it('does not double-escape an already escaped brace', () => {
+    expect(escapeHostPlaceholders('\\{file.x}')).toBe('\\{file.x}');
+  });
+
+  it('escapes a placeholder nested after another brace', () => {
+    expect(escapeHostPlaceholders('{{file.x}}')).toBe('{\\{file.x}}');
   });
 });
