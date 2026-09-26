@@ -1,7 +1,9 @@
 /**
  * Password policy for CPM accounts. Shared by every path that sets a user
- * password (admin creation via dashboard or REST, self-service change), and
- * matching the production requirements enforced on ADMIN_PASSWORD.
+ * password (admin creation via dashboard or REST, self-service change, and
+ * Better Auth's self-registration and password reset), and matching the
+ * production requirements enforced on ADMIN_PASSWORD. Pure, so client
+ * components use it too to flag problems before submitting.
  */
 export const MIN_PASSWORD_LENGTH = 12;
 // bcrypt only uses the first 72 bytes; the cap just bounds hashing input.

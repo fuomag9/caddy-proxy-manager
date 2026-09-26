@@ -1,7 +1,7 @@
 /**
  * Public routes (/login, /portal, ...) get the same nonce-based CSP as the
- * dashboard. After a password login the browser keeps the /login document, so
- * that document's policy is what protects the dashboard until a reload.
+ * dashboard, as defense in depth. After a credential login the login page
+ * loads the dashboard as a new document with its own policy and nonce.
  */
 import { describe, expect, it } from 'vitest';
 import { NextRequest } from 'next/server';

@@ -57,8 +57,10 @@ export default function LoginClient({ enabledProviders = [] }: LoginClientProps)
     }
 
     // Full navigation: the dashboard gets a fresh document (and CSP nonce)
-    // instead of running inside the login page's document.
-    window.location.assign("/");
+    // instead of running inside the login page's document. replace() keeps
+    // /login out of the history, so Back leaves the app instead of bouncing
+    // through the login page.
+    window.location.replace("/");
   };
 
   const handleOAuthSignIn = async (providerId: string) => {

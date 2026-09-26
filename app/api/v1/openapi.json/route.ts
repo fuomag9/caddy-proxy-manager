@@ -2425,6 +2425,7 @@ const spec = {
         properties: {
           id: { type: "integer" },
           email: { type: "string" },
+          username: { type: ["string", "null"], description: "Stored login-page username. It can be set on an account that has no password yet; the Profile page shows whether password sign-in works" },
           name: { type: ["string", "null"] },
           role: { type: "string", enum: ["admin", "user", "viewer"] },
           provider: { type: "string", example: "credentials" },
