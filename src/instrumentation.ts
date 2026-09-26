@@ -26,6 +26,16 @@ export async function register() {
       // Don't throw - let the app start anyway, errors will surface when users try to use features
     }
 
+    // After the environment admin, so its username is taken first.
+    const { repairLoginUsernames } = await import("./lib/models/user");
+    try {
+      for (const { userId, username } of await repairLoginUsernames()) {
+        console.log(`Gave user ${userId} the sign-in username ${username}`);
+      }
+    } catch (error) {
+      console.error("Failed to repair sign-in usernames:", error);
+    }
+
     // Imported keys and provider options could contain plaintext secrets in
     // older releases. Repair them before any request handler reads the rows.
     const { migrateLegacyCertificateStorage } = await import("./lib/models/certificates");
@@ -48,6 +58,36 @@ export async function register() {
     } catch (error) {
       console.error("Failed to encrypt legacy CA private keys");
       if (process.env.NODE_ENV === "production") throw error;
+    }
+
+    // After a SESSION_SECRET rotation, re-encrypt stored secrets that only an
+    // old key (SESSION_SECRET_PREVIOUS or a rejected placeholder) decrypts,
+    // and encrypt DNS provider / Cloudflare credentials stored in plaintext, before
+    // anything reads them to build the Caddy configuration.
+    const { reencryptStoredSecrets } = await import("./lib/secret-rotation");
+    try {
+      const { reencrypted, encryptedPlaintext, failed, clearedOAuthTokens } = await reencryptStoredSecrets();
+      if (reencrypted > 0) {
+        console.log(`Re-encrypted ${reencrypted} stored secret(s) with the current SESSION_SECRET`);
+      }
+      if (encryptedPlaintext > 0) {
+        console.log(`Encrypted ${encryptedPlaintext} DNS provider credential(s) that were stored in plaintext`);
+      }
+      if (clearedOAuthTokens > 0) {
+        console.log(
+          `Cleared ${clearedOAuthTokens} stored OAuth sign-in token(s) that no key decrypts; ` +
+          "CPM does not use them and the next OAuth sign-in stores new ones"
+        );
+      }
+      if (failed > 0) {
+        console.warn(
+          `${failed} stored secret(s) listed above could not be decrypted with SESSION_SECRET or SESSION_SECRET_PREVIOUS; ` +
+          "re-enter them in the UI or set SESSION_SECRET_PREVIOUS to the secret they were stored with"
+        );
+      }
+    } catch (error) {
+      // Values that were not re-encrypted still decrypt with the fallback keys.
+      console.error("Failed to re-encrypt stored secrets:", error);
     }
 
     // Apply Caddy configuration from database on startup
@@ -124,7 +164,7 @@ export async function register() {
     }
 
     // Start periodic instance sync if configured (master mode only)
-    const { getInstanceMode, getSyncIntervalMs, syncInstances } = await import("./lib/instance-sync");
+    const { getInstanceMode, getSyncIntervalMs, runPeriodicInstanceSync } = await import("./lib/instance-sync");
     try {
       const mode = await getInstanceMode();
       const intervalMs = getSyncIntervalMs();
@@ -133,8 +173,10 @@ export async function register() {
         console.log(`Starting periodic instance sync (every ${intervalMs / 1000}s)`);
         setInterval(async () => {
           try {
-            const result = await syncInstances();
-            if (result.total > 0) {
+            const result = await runPeriodicInstanceSync();
+            if (result === null) {
+              console.warn("Periodic sync skipped: the previous sync is still running");
+            } else if (result.total > 0) {
               console.log(`Periodic sync completed: ${result.success}/${result.total} succeeded`);
             }
           } catch (error) {
