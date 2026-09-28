@@ -42,8 +42,6 @@ function parseL4LoadBalancerConfig(formData: FormData): Partial<L4LoadBalancerCo
   if (tryDuration !== null) result.tryDuration = tryDuration;
   const tryInterval = parseOptionalText(formData.get("lbTryInterval"));
   if (tryInterval !== null) result.tryInterval = tryInterval;
-  const retries = parseOptionalNumber(formData.get("lbRetries"));
-  if (retries !== null) result.retries = retries;
 
   // Active health check
   if (formData.has("lbActiveHealthEnabledPresent")) {
@@ -61,7 +59,6 @@ function parseL4LoadBalancerConfig(formData: FormData): Partial<L4LoadBalancerCo
       enabled: parseCheckbox(formData.get("lbPassiveHealthEnabled")),
       failDuration: parseOptionalText(formData.get("lbPassiveHealthFailDuration")),
       maxFails: parseOptionalNumber(formData.get("lbPassiveHealthMaxFails")),
-      unhealthyLatency: parseOptionalText(formData.get("lbPassiveHealthUnhealthyLatency")),
     };
   }
 

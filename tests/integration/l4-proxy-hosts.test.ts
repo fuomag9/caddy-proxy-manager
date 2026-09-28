@@ -210,7 +210,6 @@ describe('l4-proxy-hosts meta', () => {
         policy: 'round_robin',
         try_duration: '5s',
         try_interval: '250ms',
-        retries: 3,
         active_health_check: { enabled: true, port: 8081, interval: '10s', timeout: '5s' },
         passive_health_check: { enabled: true, fail_duration: '30s', max_fails: 5 },
       },

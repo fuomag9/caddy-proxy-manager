@@ -1935,7 +1935,6 @@ const spec = {
           policy: { type: "string", enum: ["random", "round_robin", "least_conn", "ip_hash", "first"] },
           tryDuration: { type: ["string", "null"] },
           tryInterval: { type: ["string", "null"] },
-          retries: { type: ["integer", "null"] },
           activeHealthCheck: {
             type: ["object", "null"],
             properties: {
@@ -1951,7 +1950,6 @@ const spec = {
               enabled: { type: "boolean" },
               failDuration: { type: ["string", "null"] },
               maxFails: { type: ["integer", "null"] },
-              unhealthyLatency: { type: ["string", "null"] },
             },
           },
         },

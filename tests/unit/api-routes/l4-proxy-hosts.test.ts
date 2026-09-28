@@ -184,7 +184,6 @@ describe('POST /api/v1/l4-proxy-hosts (all options)', () => {
         policy: "least_conn",
         tryDuration: "10s",
         tryInterval: "500ms",
-        retries: 2,
         activeHealthCheck: {
           enabled: true,
           port: 5432,
@@ -195,7 +194,6 @@ describe('POST /api/v1/l4-proxy-hosts (all options)', () => {
           enabled: true,
           failDuration: "30s",
           maxFails: 3,
-          unhealthyLatency: "5s",
         },
       },
       dns_resolver: {

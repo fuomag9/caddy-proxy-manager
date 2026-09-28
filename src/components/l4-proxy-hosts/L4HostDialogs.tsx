@@ -355,14 +355,6 @@ function L4HostForm({
                   }
                 />
               </FormField>
-              <FormField label="Retries" htmlFor="lbRetries">
-                <Input
-                  id="lbRetries"
-                  name="lbRetries"
-                  type="number"
-                  defaultValue={initialData?.loadBalancer?.retries ?? ""}
-                />
-              </FormField>
 
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-2">
                 Active Health Check
@@ -463,20 +455,6 @@ function L4HostForm({
                   defaultValue={
                     initialData?.loadBalancer?.passiveHealthCheck?.maxFails ??
                     ""
-                  }
-                />
-              </FormField>
-              <FormField
-                label="Unhealthy Latency"
-                htmlFor="lbPassiveHealthUnhealthyLatency"
-              >
-                <Input
-                  id="lbPassiveHealthUnhealthyLatency"
-                  name="lbPassiveHealthUnhealthyLatency"
-                  placeholder="5s"
-                  defaultValue={
-                    initialData?.loadBalancer?.passiveHealthCheck
-                      ?.unhealthyLatency ?? ""
                   }
                 />
               </FormField>

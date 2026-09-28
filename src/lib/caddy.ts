@@ -2411,6 +2411,68 @@ export async function buildTlsAutomation(
   };
 }
 
+const VALID_L4_LB_POLICIES = ["random", "round_robin", "least_conn", "ip_hash", "first"];
+
+function trimmedString(value: unknown): string | null {
+  return typeof value === "string" ? value.trim() || null : null;
+}
+
+function nonNegativeInteger(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+/**
+ * Builds the `load_balancing` / `health_checks` fields of a caddy-l4 proxy
+ * handler (layer4.handlers.proxy).
+ *
+ * caddy-l4 has its own schema, not the one of http.handlers.reverse_proxy:
+ * the policy goes under `selection` (not `selection_policy`), there is no
+ * `retries`, active checks only take port/interval/timeout and passive checks
+ * only fail_duration/max_fails. Caddy decodes module config strictly, so one
+ * HTTP-only field makes it reject the whole config (issue #301). Only fields
+ * caddy-l4 accepts are emitted; legacy `retries` / `unhealthy_latency` values
+ * still stored in older hosts' meta are ignored.
+ */
+export function buildL4LoadBalancerHandlerConfig(meta: LoadBalancerMeta | undefined | null): Record<string, unknown> {
+  if (!meta?.enabled) return {};
+
+  const result: Record<string, unknown> = {};
+
+  const policy = meta.policy && VALID_L4_LB_POLICIES.includes(meta.policy) ? meta.policy : "random";
+  const loadBalancing: Record<string, unknown> = { selection: { policy } };
+  const tryDuration = trimmedString(meta.try_duration);
+  if (tryDuration) loadBalancing.try_duration = tryDuration;
+  const tryInterval = trimmedString(meta.try_interval);
+  if (tryInterval) loadBalancing.try_interval = tryInterval;
+  result.load_balancing = loadBalancing;
+
+  const healthChecks: Record<string, unknown> = {};
+  const activeMeta = meta.active_health_check;
+  if (activeMeta?.enabled) {
+    const active: Record<string, unknown> = {};
+    const port = nonNegativeInteger(activeMeta.port);
+    if (port !== null && port > 0) active.port = port;
+    const interval = trimmedString(activeMeta.interval);
+    if (interval) active.interval = interval;
+    const timeout = trimmedString(activeMeta.timeout);
+    if (timeout) active.timeout = timeout;
+    // An empty object still enables active checks with caddy-l4's defaults.
+    healthChecks.active = active;
+  }
+  const passiveMeta = meta.passive_health_check;
+  if (passiveMeta?.enabled) {
+    const passive: Record<string, unknown> = {};
+    const failDuration = trimmedString(passiveMeta.fail_duration);
+    if (failDuration) passive.fail_duration = failDuration;
+    const maxFails = nonNegativeInteger(passiveMeta.max_fails);
+    if (maxFails !== null) passive.max_fails = maxFails;
+    if (Object.keys(passive).length > 0) healthChecks.passive = passive;
+  }
+  if (Object.keys(healthChecks).length > 0) result.health_checks = healthChecks;
+
+  return result;
+}
+
 async function buildL4Servers(): Promise<Record<string, unknown> | null> {
   const l4Hosts = await db
     .select()
@@ -2471,38 +2533,6 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
 
       // Parse per-host meta for load balancing, DNS resolver, and upstream DNS resolution
       const meta = parseJson<L4Meta>(host.meta, {});
-
-      // Load balancer config
-      const lbMeta = meta.load_balancer;
-      let lbConfig: LoadBalancerRouteConfig | null = null;
-      if (lbMeta?.enabled) {
-        lbConfig = {
-          enabled: true,
-          policy: lbMeta.policy ?? "random",
-          policyHeaderField: null,
-          policyCookieName: null,
-          policyCookieSecret: null,
-          tryDuration: lbMeta.try_duration ?? null,
-          tryInterval: lbMeta.try_interval ?? null,
-          retries: lbMeta.retries ?? null,
-          activeHealthCheck: lbMeta.active_health_check?.enabled ? {
-            enabled: true,
-            uri: null,
-            port: lbMeta.active_health_check.port ?? null,
-            interval: lbMeta.active_health_check.interval ?? null,
-            timeout: lbMeta.active_health_check.timeout ?? null,
-            status: null,
-            body: null,
-          } : null,
-          passiveHealthCheck: lbMeta.passive_health_check?.enabled ? {
-            enabled: true,
-            failDuration: lbMeta.passive_health_check.fail_duration ?? null,
-            maxFails: lbMeta.passive_health_check.max_fails ?? null,
-            unhealthyStatus: null,
-            unhealthyLatency: lbMeta.passive_health_check.unhealthy_latency ?? null,
-          } : null,
-        };
-      }
 
       // DNS resolver config
       const dnsConfig = parseDnsResolverConfig(meta.dns_resolver);
@@ -2568,12 +2598,7 @@ async function buildL4Servers(): Promise<Record<string, unknown> | null> {
       if (host.proxyProtocolVersion) {
         proxyHandler.proxy_protocol = host.proxyProtocolVersion;
       }
-      if (lbConfig) {
-        const loadBalancing = buildLoadBalancingConfig(lbConfig);
-        if (loadBalancing) proxyHandler.load_balancing = loadBalancing;
-        const healthChecks = buildHealthChecksConfig(lbConfig);
-        if (healthChecks) proxyHandler.health_checks = healthChecks;
-      }
+      Object.assign(proxyHandler, buildL4LoadBalancerHandlerConfig(meta.load_balancer));
       handlers.push(proxyHandler);
 
       route.handle = handlers;
