@@ -221,7 +221,9 @@ describe('L4 port manager entrypoint behavior (executes the real script)', () =>
     await waitUntil(() => composeUpInvocations() >= 1, 15_000);
     await waitUntil(() => readStatus()?.state === 'applied', 10_000);
     expect(output).toContain('recent apply lock found');
-    expect(existsSync(join(dataDir, '.l4-apply.lock'))).toBe(false);
+    // The script writes the "applied" status before it removes the lock, so
+    // wait for the removal instead of asserting the instant "applied" appears.
+    await waitUntil(() => !existsSync(join(dataDir, '.l4-apply.lock')), 5_000);
   }, 20_000);
 
   it('writes "applied" status when compose succeeds', async () => {
