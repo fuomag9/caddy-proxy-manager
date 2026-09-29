@@ -255,6 +255,25 @@ describe("DNS provider registry", () => {
     });
   });
 
+  it("registers INWX with the Caddy module path and credential fields", () => {
+    const provider = getProviderDefinition("inwx");
+
+    expect(provider).toMatchObject({
+      name: "inwx",
+      displayName: "INWX",
+      docsUrl: "https://github.com/caddy-dns/inwx",
+      modulePath: "github.com/caddy-dns/inwx",
+    });
+    expect(provider?.fields).toEqual([
+      { key: "username", label: "Username", type: "string", required: true },
+      { key: "password", label: "Password", type: "password", required: true },
+      { key: "shared_secret", label: "2FA Shared Secret", type: "password", required: false },
+      { key: "endpoint_url", label: "Endpoint URL", type: "string", required: false },
+      ...challengeOptionFields(),
+    ]);
+    expect(DNS_PROVIDERS.map((p) => p.name)).toContain("inwx");
+  });
+
   it("registers Infomaniak with the Caddy module path and API token field", () => {
     const provider = getProviderDefinition("infomaniak");
 

@@ -180,6 +180,9 @@ github.com/bombsimon/wsl/v4 v4.7.0 h1:1Ilm9JBPRczjyUs6hvOPKvd7VL1Q++PL8M0SXBDf+j
 github.com/bombsimon/wsl/v4 v4.7.0/go.mod h1:uV/+6BkffuzSAVYD+yGyld1AChO7/EuLrCF/8xTiapg=
 github.com/bombsimon/wsl/v5 v5.2.0 h1:PyCCwd3Q7abGs3e34IW4jLYlBS+FbsU6iK+Tb3NnDp4=
 github.com/bombsimon/wsl/v5 v5.2.0/go.mod h1:Gp8lD04z27wm3FANIUPZycXp+8huVsn0oxc+n4qfV9I=
+github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
+github.com/boombuler/barcode v1.0.2 h1:79yrbttoZrLGkL/oOI8hBrUKucwOL0oOjUgEguGMcJ4=
+github.com/boombuler/barcode v1.0.2/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/breml/bidichk v0.3.3 h1:WSM67ztRusf1sMoqH6/c4OBCUlRVTKq+CbSeo0R17sE=
 github.com/breml/bidichk v0.3.3/go.mod h1:ISbsut8OnjB367j5NseXEGGgO/th206dVa427kR8YTE=
 github.com/breml/errchkjson v0.4.1 h1:keFSS8D7A2T0haP9kzZTi7o26r7kE3vymjZNeNDRDwg=
@@ -210,6 +213,8 @@ github.com/caddy-dns/hetzner v1.0.0 h1:SQmuAGZ9EGaGtbK+bwjCygrqZmIfl88dzCtVtz/Id
 github.com/caddy-dns/hetzner v1.0.0/go.mod h1:1GE/ItlPQGbECUULXyVwA56JwEsaDHG6jHhpGZBf76Y=
 github.com/caddy-dns/infomaniak v1.0.2 h1:CjZ14Lf+8P0VzU2uUMCXSBM1q7grFGPa+1CgAAuqqJc=
 github.com/caddy-dns/infomaniak v1.0.2/go.mod h1:EEbfSyC7RHzvYpG3YMLenZZRssq0n/SJ2iQvuWqNmLg=
+github.com/caddy-dns/inwx v0.4.1 h1:xarYyeCCj1dfrM1U69Nno7GstrTNHlFKzKZKKdBGrKs=
+github.com/caddy-dns/inwx v0.4.1/go.mod h1:5Xpi42yYojkisGfLuT8ajDl5JdRcZQqeToI+n/vl6kw=
 github.com/caddy-dns/ionos v1.2.0 h1:3cX4QnoNS49AJLGAqCOz70sUorsBJCuxleegLguk11E=
 github.com/caddy-dns/ionos v1.2.0/go.mod h1:bUHqIsAjgauVCct0nbcFHAiZHswVAxgaI0aj+zoVPUA=
 github.com/caddy-dns/linode v0.8.0 h1:e6lzkrYu1A5X4RuAFT0och0DOYwSYbPIgLhjteTkrKk=
@@ -715,6 +720,8 @@ github.com/libdns/hetzner v1.0.0 h1:dFcgqTIfdiKQTqoqBBtgU9CewD8JSnB7p6BKxQ5kheM=
 github.com/libdns/hetzner v1.0.0/go.mod h1:OmuTyXMHTfy2nCqbt9KYkf0KwQSvo0ZeFGxEQSl3r2w=
 github.com/libdns/infomaniak v0.2.0 h1:TC3jP68Tnw4sAi87r1xNY4fPF5Cs5SPGbEkTWvXCmnc=
 github.com/libdns/infomaniak v0.2.0/go.mod h1:2RTkgFMLv45OPE8dwgFZKn4PKzECdVADdHdkIcbUZWE=
+github.com/libdns/inwx v0.3.1 h1:AZXlqU36Hl7RTRZf2xawxfwZ9Y120Xl0ZIozs7gsccU=
+github.com/libdns/inwx v0.3.1/go.mod h1:kUBDmTXFGY8BqpHRJOWQ+GYfFnJOeejKeJHhnVliUb8=
 github.com/libdns/ionos v1.2.0 h1:FQ2xQTBfsjc7aMArRBBCs9l48Squt76GHXbxDsqOKgw=
 github.com/libdns/ionos v1.2.0/go.mod h1:g/JYno/+VXdujTGPBDMDeCfeLF0PJyJynsCrFu+2EFQ=
 github.com/libdns/libdns v1.1.1 h1:wPrHrXILoSHKWJKGd0EiAVmiJbFShguILTg9leS/P/U=
@@ -862,6 +869,8 @@ github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRI
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/polyfloyd/go-errorlint v1.8.0 h1:DL4RestQqRLr8U4LygLw8g2DX6RN1eBJOpa2mzsrl1Q=
 github.com/polyfloyd/go-errorlint v1.8.0/go.mod h1:G2W0Q5roxbLCt0ZQbdoxQxXktTjwNyDbEaj3n7jvl4s=
+github.com/pquerna/otp v1.5.0 h1:NMMR+WrmaqXU4EzdGJEE1aUUI0AMRzsp96fFFWNPwxs=
+github.com/pquerna/otp v1.5.0/go.mod h1:dkJfzwRKNiegxyNb54X/3fLwhCynbMspSyWKnvi1AEg=
 github.com/prashantv/gostub v1.1.0 h1:BTyx3RfQjRHnUWaGF9oQos79AlQ5k8WNktv7VGvVH4g=
 github.com/prashantv/gostub v1.1.0/go.mod h1:A5zLQHz7ieHGG7is6LLXLz7I8+3LZzsrV0P1IAHhP5U=
 github.com/prometheus/client_golang v1.23.2 h1:Je96obch5RDVy3FDMndoUsjAhG5Edi49h0RJWRi/o0o=

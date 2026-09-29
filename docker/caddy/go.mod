@@ -13,6 +13,7 @@ require (
 	github.com/caddy-dns/godaddy v1.2.0
 	github.com/caddy-dns/hetzner v1.0.0
 	github.com/caddy-dns/infomaniak v1.0.2
+	github.com/caddy-dns/inwx v0.4.1
 	github.com/caddy-dns/ionos v1.2.0
 	github.com/caddy-dns/linode v0.8.0
 	github.com/caddy-dns/namecheap v1.0.0
@@ -62,6 +63,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
 	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/boombuler/barcode v1.0.2 // indirect
 	github.com/caddyserver/certmagic v0.25.4 // indirect
 	github.com/caddyserver/xcaddy v0.4.7 // indirect
 	github.com/caddyserver/zerossl v0.1.5 // indirect
@@ -129,6 +131,7 @@ require (
 	github.com/libdns/godaddy v1.1.0 // indirect
 	github.com/libdns/hetzner v1.0.0 // indirect
 	github.com/libdns/infomaniak v0.2.0 // indirect
+	github.com/libdns/inwx v0.3.1 // indirect
 	github.com/libdns/ionos v1.2.0 // indirect
 	github.com/libdns/libdns v1.1.1 // indirect
 	github.com/libdns/linode v0.5.0 // indirect
@@ -160,6 +163,7 @@ require (
 	github.com/petar-dambovaliev/aho-corasick v0.0.0-20250424160509-463d218d4745 // indirect
 	github.com/pires/go-proxyproto v0.13.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pquerna/otp v1.5.0 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.69.0 // indirect

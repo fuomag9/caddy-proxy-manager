@@ -24,6 +24,7 @@ import (
 	_ "github.com/caddy-dns/godaddy"
 	_ "github.com/caddy-dns/hetzner"
 	_ "github.com/caddy-dns/infomaniak"
+	_ "github.com/caddy-dns/inwx"
 	_ "github.com/caddy-dns/ionos"
 	_ "github.com/caddy-dns/linode"
 	_ "github.com/caddy-dns/namecheap"
